@@ -167,11 +167,10 @@ rm -f /etc/samba/debian_config
 mv -f /var/log/nmb* /var/log/samba/ 2> /dev/null || true
 mv -f /var/log/smb* /var/log/samba/ 2> /dev/null || true
 
-# Take care of the /usr/doc/ to /usr/shar/doc/ migration.
-if [ -d /usr/doc -a ! -e /usr/doc/samba -a -d /usr/share/doc/samba ]; then
-	ln -sf ../share/doc/samba /usr/doc/samba
-fi
-
 # Do this last, so we don't accidentally start the daemons if something 
 # else in the script fails above.
 rm -f /tmp/samba-was-not-running
+
+#DEBHELPER#
+
+exit 0
