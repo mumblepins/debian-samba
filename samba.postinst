@@ -32,7 +32,7 @@ if [ -d /usr/doc -a ! -e /usr/doc/samba -a -d /usr/share/doc/samba ]; then
 	ln -sf ../share/doc/samba /usr/doc/samba
 fi
 
-# Starting with Samba 2.0.7-4 the location of the WINS database, the browse
+# Starting with Samba 2.0.7-4 the WINS database, the browse
 #	database and other important run-time files are stored in
 #	/var/state/samba/ rather than in /var/samba/. The following
 #	code takes care of moving the files in the old directory to
