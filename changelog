@@ -1,6 +1,7 @@
 samba (2.2.4-1) unstable; urgency=low
 
   * Getting ready for Samba 2.2.4.
+  * include samples, exclude INSTALL from libpam-smbpass (closes: #145055)
 
  -- Eloy A. Paris <peloy@debian.org>  Thu,  2 May 2002 01:36:33 -0400
 
