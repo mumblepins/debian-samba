@@ -1,8 +1,19 @@
 samba (2.2.6-1.woody) stable; urgency=low
 
   * New upstream version.
+  * If Samba is restarted before the postinst runs,
+    /var/lib/samba/secrets.tdb will be automatically created.  Deal
+    with this appropriately in the migration.  Thanks to Jaakko Niemi
+    <liiwi@debian.org> for the report.
+  * If we're upgrading from 2.2.3a-7 or below, move the wins.dat file
+    from /var/run to /var/lib -- saving users one more loss of their WINS
+    registrations on the path to stability.
+  * Refigure character count for DOS CP->Unicode conversion of password
+    strings, fixing a potential remote and confirmed local exploit
+    (closes: #167487). Thanks to Martin Godisch <martin@godisch.de> for
+    bringing this to our attention.
 
- -- Eloy A. Paris <peloy@debian.org>  Sun, 13 Oct 2002 02:33:32 -0400
+ -- Eloy A. Paris <peloy@debian.org>  Mon,  4 Nov 2002 22:51:30 -0500
 
 samba (2.2.5-1.woody) stable; urgency=low
 
