@@ -4,6 +4,8 @@ samba (2.2.4-1) unstable; urgency=low
   * Building with POSIX ACL support (closes: #137819)
   * Include samples, exclude INSTALL from libpam-smbpass (closes: #145055)
   * Compile with --with-automount, for NIS homedir support (closes: #123396)
+  * Add a proper 'flags' field to the mount entry we write to /etc/mtab;
+    fixes a display bug with mount (closes: #140397)
 
  -- Eloy A. Paris <peloy@debian.org>  Sun,  5 May 2002 17:56:16 -0400
 
@@ -54,7 +56,7 @@ samba (2.2.3a-6) unstable; urgency=low
   * Bring our shipped smb.conf closer in line with the upstream
     defaults: don't twiddle the send/recv buffer sizes, since the Linux
     kernel already provides a much better default setting
-    (closes: #80966, #80934, #137415, #133477)
+     (closes: #80966, #80934, #137415, #133477)
   * Added libnss_wins.so to the winbind package (closes: #137201)
   * Updates to README.debian.
 
