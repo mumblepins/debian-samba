@@ -124,6 +124,8 @@ db_stop
 umask 066
 
 # FIXME: disable if ldapsam support is enabled?
+# FIXME: we don't want to pass these through the smbpasswd backend,
+# some of the faking can cause us problems!
 if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/passdb.tdb -a ! -e /etc/samba/smbpasswd ]; then
 	getent passwd | /usr/sbin/mksmbpasswd > /etc/samba/smbpasswd
 	pdbedit -i smbpasswd -e tdbsam

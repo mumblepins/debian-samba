@@ -1,3 +1,10 @@
+samba (2.999+3.0cvs20020723-2) unstable; urgency=low
+
+  * scale back the tdbsam migration support, because of undesirable
+    side-effects; now always defaults to 'no'.
+
+ -- Steve Langasek <vorlon@debian.org>  Sun, 28 Jul 2002 09:44:24 -0500
+
 samba (2.999+3.0cvs20020723-1) unstable; urgency=medium
 
   * remove spurious line from samba.config

@@ -34,7 +34,7 @@ Description: Samba's log files have moved.
 
 Template: samba/tdbsam
 Type: boolean
-Default: true
+Default: false
 Description: Move /etc/samba/smbpasswd to /etc/samba/passdb.tdb?
  Samba 3.0 introduces a newer, more complete SAM database interface
  which supersedes the /etc/samba/smbpasswd file.  Would you like your
