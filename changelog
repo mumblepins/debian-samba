@@ -2,10 +2,8 @@ samba (2.2.3-5) unstable; urgency=low
 
   * Whoops, missed a spot on the samba.postinst -- will fail badly if
     /var/state/samba/ no longer exists.  Better get this fix into the
-    next upload. ;)
+    next upload. ;) (Closes: #133088)
   * Regenerate configure only if it is older than configure.in.
-  * Forgot to include /var/state/samba/ in the samba package.
-    Closes: #133088: samba: Unable to reinstall samba.
 
  -- Eloy A. Paris <peloy@debian.org>  Sat,  9 Feb 2002 16:37:57 -0500
 
