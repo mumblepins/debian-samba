@@ -89,9 +89,9 @@ done
 
 # --- End of FHS migration code ---
 
-umask 022
-
 # ------------------------- Debconf questions start ---------------------
+
+umask 022
 
 # Run Samba as daemons or from inetd?
 db_get samba/run_mode || true
@@ -133,9 +133,9 @@ else
 fi
 
 # Start Samba: nothing wrong should happen if Samba is running from inetd
-#	and /etc/init.d/samba is run.
-
-/etc/init.d/samba start
+#	and /etc/init.d/samba is run. Check the script is executable
+#	before running it.
+[ -x /etc/init.d/samba ] && /etc/init.d/samba start
 
 # This check is a safety net: the /etc/samba/smbpasswd file must have
 #	permissions 600.

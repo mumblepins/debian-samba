@@ -1,3 +1,13 @@
+samba (2.2.3a-3) unstable; urgency=low
+
+  * Make sure /etc/init.d/samba is executable before calling it
+    in the postinst. Quickly checked all other maintainer scripts
+    to make sure we are not calling an init script if it is not
+    executable.
+    Closes: #33520, #130534, #137321.
+
+ -- Eloy A. Paris <peloy@debian.org>  Fri,  8 Mar 2002 11:13:21 -0500
+
 samba (2.2.3a-2) unstable; urgency=low
 
   * merge in debconf support:
