@@ -60,10 +60,8 @@ case "$1" in
 			# Stale PID file (nmbd was succesfully stopped),
 			# remove it (should be removed by nmbd itself IMHO.)
 			rm -f $NMBDPID
-			echo -n "nmbd "
-		else
-			echo -n "(failed to stop nmbd!) "
 		fi
+		echo -n "nmbd "
 
 		start-stop-daemon --stop --quiet --pidfile $SMBDPID
 		# Wait a little and remove stale PID file
@@ -73,10 +71,8 @@ case "$1" in
 			# Stale PID file (nmbd was succesfully stopped),
 			# remove it (should be removed by smbd itself IMHO.)
 			rm -f $SMBDPID
-			echo "smbd."
-		else
-			echo -n "(failed to stop smbd!)"
 		fi
+		echo "smbd."
 
 		;;
 	reload)
