@@ -34,7 +34,7 @@ if [ "${RET}" = "true" ]; then
 	ENCRYPT_PASSWORDS="${RET}"
 
 	TMPFILE=`mktemp -q /tmp/smb.conf.XXXXXX`
-	sed -e "s/^[[:space:]]*encrypt passwords[[:space:]]*=.*/encrypt passwords = ${ENCRYPT_PASSWORDS}/" \
+	sed -e "s/^\([[:space:]]*\)encrypt passwords[[:space:]]*=.*/\1encrypt passwords = ${ENCRYPT_PASSWORDS}/" \
 		< /etc/samba/smb.conf >${TMPFILE}
 	mv -f ${TMPFILE} /etc/samba/smb.conf
 fi
