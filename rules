@@ -101,11 +101,10 @@ clean:
 #	-$(MAKE) -C source realclean
 #	-$(MAKE) -C source clean
 	-$(MAKE) -C source distclean
-	rm -f source/bin/rpctorture
-	rm -f source/bin/debug2html
 
 	# Delete stuff left after a build that is not deleted by 'make clean'
-	rm -f source/bin/wbinfo source/bin/winbindd
+	rm -f source/bin/wbinfo source/bin/winbindd source/bin/rpctorture \
+		source/bin/debug2html
 
 	dh_clean
 
@@ -168,16 +167,9 @@ install: build
 
 	# Delete unwanted stuff leftover from "make install"
 
-	# smbrun is not longer needed by smbd, so delete its man page
-	rm $(DESTDIR)/usr/share/man/man1/smbrun.1
-
 	# The smbwrapper package is not being generated anymore, so we must
 	#	delete the related man pages.
 	rm $(DESTDIR)/usr/share/man/man1/smbsh.1
-
-	# These files are not part of the main samba package, move to where they
-	#	belong...
-	#mv $(DESTDIR)/usr/bin/smbwrapper.so debian/smbwrapper/usr/share/samba/
 
 	# Install samba-common's conffiles - they'll get moved later to their
 	#	correct place by dh_movefiles.
@@ -230,7 +222,8 @@ binary-arch: build install
 	dh_installdocs -A docs/textdocs/DIAGNOSIS.txt debian/README.build docs/README* docs/Samba-HOWTO-Collection.pdf
 	dh_installexamples
 #	dh_installmenu
-	dh_installlogrotate
+	# dh_installlogrotate is not available in Debian Potato...
+	if [ -x dh_installlogrotate ]; then dh_installlogrotate; else mkdir debian/samba/etc/logrotate.d; cp debian/samba.logrotate debian/samba/etc/logrotate.d /samba; fi
 #	dh_installemacsen
 #	dh_installpam
 	dh_installinit
