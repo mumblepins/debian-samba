@@ -60,7 +60,7 @@ done
 # guaranteed not to accidentally tromp on any files the admin thought 
 # were safe.
 if [ -d /var/state/samba ]; then
-	mv /var/state/samba/* /var/lib/samba/
+	mv /var/state/samba/* /var/lib/samba/ 2>/dev/null || true
 	rmdir /var/state/samba/
 
 	# It's not FHS, and it's probably our fault this is here,

@@ -1,3 +1,12 @@
+samba (2.2.3-6) unstable; urgency=low
+
+  * Make sure there are actual files in /var/state/samba before trying 
+    to move them (Closes: #133534, #133510).
+  * Fix up the 2.2.3 makefile so that pam_smbpass builds correctly 
+    again.
+
+ -- Steve Langasek <vorlon@debian.org>  Tue, 12 Feb 2002 09:19:29 -0600
+
 samba (2.2.3-5) unstable; urgency=low
 
   * Whoops, missed a spot on the samba.postinst -- will fail badly if

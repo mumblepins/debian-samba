@@ -1,0 +1,16 @@
+Index: Makefile.in
+===================================================================
+RCS file: /cvsroot/samba/source/Makefile.in,v
+retrieving revision 1.227.2.107
+diff -u -w -r1.227.2.107 Makefile.in
+--- Makefile.in	31 Jan 2002 21:46:34 -0000	1.227.2.107
++++ Makefile.in	11 Feb 2002 19:08:49 -0000
+@@ -363,7 +363,7 @@
+ 		lib/util_unistr.o lib/signal.o lib/talloc.o lib/ms_fnmatch.o \
+ 		lib/util_sock.o lib/smbrun.o lib/util_sec.o lib/snprintf.o \
+ 		ubiqx/ubi_sLinkList.o libsmb/smbencrypt.o libsmb/smbdes.o \
+-		$(PARAM_OBJ) $(TDB_OBJ) $(PASSDB_OBJ)
++		lib/interfaces.o $(PARAM_OBJ) $(TDB_OBJ) $(PASSDB_OBJ)
+ 
+ PAM_SMBPASS_OBJ = $(PAM_SMBPASS_OBJ_0:.o=.po)
+ LIBSMBCLIENT_PICOBJS = $(LIBSMBCLIENT_OBJ:.o=.po)
