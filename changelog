@@ -18,7 +18,7 @@ samba (2.2.4-1) unstable; urgency=low
   * /etc/init.d/samba: delete stale PID files after nmbd and smbd are
     stopped. This prevents start-stop-daemon from printing an ugly
     error message when called from '/etc/init.d/samba stop'. I prefer
-    this than running start-stop-daemon with --oknodo becayse
+    this than running start-stop-daemon with --oknodo because
     start-stop-daemon might print other important error messages that with
     --oknodo it would otherwise not print. (Closes: #102187, #109301)
 
