@@ -1,3 +1,15 @@
+samba (2.2.3a-10) stable; urgency=low
+
+  * If Samba is restarted before the postinst runs,
+    /var/lib/samba/secrets.tdb will be automatically created.  Deal
+    with this appropriately in the migration.  Thanks to Jaakko Niemi
+    <liiwi@debian.org> for the report.
+  * If we're upgrading from 2.2.3a-7 or below, move the wins.dat file
+    from /var/run to /var/lib -- saving users one more loss of their WINS
+    registrations on the path to stability.
+
+ -- Steve Langasek <vorlon@debian.org>  Wed, 16 Oct 2002 09:06:00 -0500
+
 samba (2.2.3a-9) stable; urgency=high
 
   * previous release moved secrets.tdb to /var/lib/samba, but the code
