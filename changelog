@@ -16,7 +16,7 @@ samba (2.2.3a-1) unstable; urgency=low
   * Remove man pages for findsmb because we are not providing this
     script.
     Closes: #134181 - findsmb referenced, but not included.
-  * Removed remove.patch because it is now present upstream.
+  * Removed replace.patch because it is now present upstream.
   * Added patch from Jerry Carter to fix a problem when saving
     document preferences for printing from NT clients.
 
