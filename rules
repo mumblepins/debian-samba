@@ -78,8 +78,7 @@ configure-stamp:
 		--with-utmp \
 		--with-readline \
 		--with-pam_smbpass \
-		--with-libsmbclient \
-		--with-msdfs)
+		--with-libsmbclient)
 
 	touch configure-stamp
 
@@ -102,11 +101,10 @@ clean:
 #	-$(MAKE) -C source realclean
 #	-$(MAKE) -C source clean
 	-$(MAKE) -C source distclean
-	rm -f source/bin/rpctorture
-	rm -f source/bin/debug2html
 
 	# Delete stuff left after a build that is not deleted by 'make clean'
-	rm -f source/bin/wbinfo source/bin/winbindd
+	rm -f source/bin/wbinfo source/bin/winbindd source/bin/rpctorture \
+		source/bin/debug2html
 
 	dh_clean
 
@@ -134,6 +132,7 @@ install: build
 
 	# Install other stuff not installed by "make install"
 	install -m 0755 debian/mksmbpasswd.awk $(DESTDIR)/usr/sbin/mksmbpasswd
+	install -m 0755 debian/sambaconfig $(DESTDIR)/usr/sbin/
 	install -m 0755 source/bin/pam_smbpass.so $(DESTDIR)/lib/security/
 
 	# This is only temporary, while we create new packages for winbind and friends
@@ -163,6 +162,7 @@ install: build
 	ln -s ../../../doc/samba-doc/htmldocs/using_samba $(SAMBABOOK)/usr/share/samba/swat/using_samba
 
 	# Install man pages for files without man pages in the upstream sources
+	install -m 0644 debian/sambaconfig.8 $(DESTDIR)/usr/share/man/man8/sambaconfig.8
 	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8
 
 	# Delete unwanted stuff leftover from "make install"
@@ -171,13 +171,9 @@ install: build
 	#	delete the related man pages.
 	rm $(DESTDIR)/usr/share/man/man1/smbsh.1
 
-	# These files are not part of the main samba package, move to where they
-	#	belong...
-	#mv $(DESTDIR)/usr/bin/smbwrapper.so debian/smbwrapper/usr/share/samba/
-
 	# Install samba-common's conffiles - they'll get moved later to their
 	#	correct place by dh_movefiles.
-	cp debian/smb.conf $(DESTDIR)/usr/share/samba/
+	cp debian/smb.conf $(DESTDIR)/etc/samba/
 	cp debian/samba.pamd $(DESTDIR)/etc/pam.d/samba
 
 	dh_movefiles --sourcedir=debian/samba/
@@ -193,7 +189,7 @@ binary-indep: build install
 	dh_testversion 1.1.17
 	dh_testdir
 	dh_testroot
-	dh_installdebconf
+#	dh_installdebconf
 	dh_installdocs -A docs/textdocs/DIAGNOSIS.txt debian/README.build docs/README* docs/Samba-HOWTO-Collection.pdf
 	dh_installexamples
 #	dh_installmenu
@@ -222,11 +218,12 @@ binary-arch: build install
 	dh_testversion 1.1.17
 	dh_testdir
 	dh_testroot
-	dh_installdebconf
+#	dh_installdebconf
 	dh_installdocs -A docs/textdocs/DIAGNOSIS.txt debian/README.build docs/README* docs/Samba-HOWTO-Collection.pdf
 	dh_installexamples
 #	dh_installmenu
-	dh_installlogrotate
+	# dh_installlogrotate is not available in Debian Potato...
+	if [ -x dh_installlogrotate ]; then dh_installlogrotate; else mkdir debian/samba/etc/logrotate.d; cp debian/samba.logrotate debian/samba/etc/logrotate.d/samba; fi
 #	dh_installemacsen
 #	dh_installpam
 	dh_installinit

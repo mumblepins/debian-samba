@@ -4,5 +4,3 @@ if [ "$1" = purge ]; then
 	# Remove any files left in /etc/samba/
 	rm -Rf /etc/samba/
 fi
-
-#DEBHELPER#
