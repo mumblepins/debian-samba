@@ -69,7 +69,7 @@ if [ "$samba_configured" = "no" ]; then
 	# We always run /etc/init.d/samba, even if we run Samba from inetd.
 	#	This script file takes care of handling the conflict of running
 	#	from inetd or as daemons.
-	update-rc.d samba defaults >/dev/null
+	update-rc.d samba defaults 20 19 >/dev/null
 
 	# We want to add these entries to inetd.conf commented out. Otherwise
 	#	UDP traffic could make inetd to start nmbd or smbd right during

@@ -44,11 +44,13 @@ IVARS = BASEDIR=$(DESTDIR)/usr \
 patch: patch-stamp
 patch-stamp:
 	dh_testdir
+	-chmod a+x debian/scripts/patch-source
 	if [ ! -f patch-stamp ]; then debian/scripts/patch-source; fi
 	touch patch-stamp
 
 unpatch:
 	dh_testdir
+	-chmod a+x debian/scripts/unpatch-source
 	if [ -f patch-stamp ]; then debian/scripts/unpatch-source; fi
 	rm -f patch-stamp
 

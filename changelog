@@ -5,6 +5,10 @@ samba (2.2.3-2) unstable; urgency=low
     from the Samba Team: they wanted us to clearly mark our packages
     so it is always known a user is running Samba with (possibly)
     Debian-specific patches.
+  * Change init.d killscript link to K19samba, so we stop before autofs 
+    (closes: 117327)
+  * Make our patch scripts executable in the rules file -- dpkg won't do 
+    this for us (closes: #132415).
 
  -- Steve Langasek <vorlon@debian.org>  Mon,  4 Feb 2002 09:51:00 -0600
 
