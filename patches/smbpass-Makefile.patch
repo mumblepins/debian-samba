@@ -1,10 +1,5 @@
-Index: Makefile.in
-===================================================================
-RCS file: /cvsroot/samba/source/Makefile.in,v
-retrieving revision 1.227.2.107
-diff -u -w -r1.227.2.107 Makefile.in
---- Makefile.in	31 Jan 2002 21:46:34 -0000	1.227.2.107
-+++ Makefile.in	11 Feb 2002 19:08:49 -0000
+--- samba-2.2.3.orig/source/Makefile.in
++++ samba-2.2.3/source/Makefile.in
 @@ -363,7 +363,7 @@
  		lib/util_unistr.o lib/signal.o lib/talloc.o lib/ms_fnmatch.o \
  		lib/util_sock.o lib/smbrun.o lib/util_sec.o lib/snprintf.o \
