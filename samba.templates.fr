@@ -1,0 +1,47 @@
+Template: samba/run_mode
+Type: select
+Choices: daemons, inetd
+Choices-fr: démons, inetd
+Default: daemons
+Description: How do you want to run Samba?
+ The Samba services (nmbd and smbd) can run as normal daemons or from
+ inetd. Running as daemons is the recommended approach.
+Description-fr: Comment voulez-vous lancer Samba ?
+ Les services de Samba (nmbd et smbd) peuvent s'exécuter en tant que démons
+ classiques ou bien être lancés par inetd. L'approche recommandée est qu'ils
+ s'exécutent en tant que démons.
+
+Template: samba/generate_smbpasswd
+Type: boolean
+Default: false
+Description: Generate /etc/samba/smbpasswd?
+ If this is a new installation or you do not have a /etc/samba/smbpasswd
+ file it is recommended that you say yes here. This will cause samba's
+ postinst script to generate a smbpasswd file from your current /etc/passwd
+ file. You will then need to set the passwords for each user using the
+ smbpasswd command as the conversion only transfers user names, not
+ passwords.
+Description-fr: Faut-il créer un fichier /etc/samba/smbpasswd ?
+ Pour une première installation, ou si vous n'avez pas de fichier
+ /etc/samba/smbpasswd, il est recommandé de répondre « Yes ». Le script
+ postinst de Samba créera un fichier smbpasswd à partir de votre fichier
+ /etc/passwd actuel. Vous devrez alors mettre les mots de passe de tous les
+ utilisateurs qui se servent de la commande smbpasswd, car seuls les noms
+ sont transférés, pas les mots de passe.
+
+Template: samba/log_files_moved
+Type: note
+Description: Samba's log files have moved.
+ Starting with the first packages of Samba 2.2 for Debian the log files for
+ both Samba daemons (nmbd and smbd) are now stored in /var/log/samba/. The
+ names of the files are log.nmbd and log.smbd, for nmbd and smbd
+ respectively.
+ .
+ The old log files that were in /var/log/ will be moved to the new location
+ for you.
+Description-fr: Les fichiers-journaux de Samba ont changé de place.
+ À partir des premiers paquets de Samba 2.2 pour Debian, les fichiers-journaux
+ des démons nmbd et smbd se trouvent dans /var/log/samba/. Les noms de ces
+ fichiers sont log.nmbd et log.smbd pour, respectivement, nmbd et smbd.
+ .
+ Les anciens fichiers-journaux dans /var/log/ seront mis au bon endroit.

@@ -165,7 +165,7 @@ install: build
 	#	are accessed through symlinks provided in the swat package.
 	#	Here we create the symlink for the book, and the symlinks
 	#	for the HTML files are created by the script installswat.sh.
-	ln -s ../../../doc/samba-doc/htmldocs/using_samba $(SAMBABOOK)/usr/share/samba/swat/using_samba
+	ln -s ../../doc/samba-doc/htmldocs/using_samba $(SAMBABOOK)/usr/share/samba/swat/using_samba
 
 	# Install man pages for files without man pages in the upstream sources
 	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8

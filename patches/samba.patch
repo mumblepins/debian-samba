@@ -75,7 +75,7 @@
        echo $FNAME
 -      cp $f $FNAME || echo Cannot install $FNAME. Does $USER have privileges?
 -      chmod 0644 $FNAME
-+      ln -s ../../../../doc/samba-doc/htmldocs/`basename $f` $FNAME || echo Cannot install $FNAME. Does $USER have privileges?
++      ln -s ../../../doc/samba-doc/htmldocs/`basename $f` $FNAME || echo Cannot install $FNAME. Does $USER have privileges?
 +#      chmod 0644 $FNAME
  done
  
