@@ -1,3 +1,9 @@
+samba (2.2.7a-1.woody) stable; urgency=low
+
+  * New upstream version.
+
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 11 Dec 2002 18:38:18 -0500
+
 samba (2.2.7-1.woody) stable; urgency=low
 
   * New upstream version. Security release. md4exploit.patch is no
