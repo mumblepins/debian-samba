@@ -6,6 +6,8 @@ samba (2.999+3.0cvs20020723-1) unstable; urgency=medium
   * compile in ldapsam support (closes: #146935)
   * add PRIVATEDIR to the list of vars we override for the install
     target, so Samba doesn't try to create /etc/samba (closes: #153746).
+  * fix makefile handling of LOGBASEDIR, so that logs always end up in
+    the right place (closes: 153727).
 
  -- Steve Langasek <vorlon@debian.org>  Fri, 19 Jul 2002 21:38:54 -0500
 
