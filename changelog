@@ -9,7 +9,7 @@ samba (2.2.3a-11) testing-security; urgency=high
     from /var/run to /var/lib -- saving users one more loss of their WINS
     registrations on the path to stability.
   * Refigure character count for DOS CP->Unicode conversion of password
-    strings, fixing a potential remote and confirmed local exploit
+    strings, fixing a potential remote and confirmed local buffer overflow
     (closes: #167487).  Thanks to Martin Godisch <martin@godisch.de> for
     bringing this to our attention.
 
