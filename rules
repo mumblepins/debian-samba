@@ -114,17 +114,10 @@ install: build
 	# Add here commands to install the package into debian/tmp.
 	$(MAKE) -C source install $(IVARS)
 
-	# libsmbclient is installed in usr/bin/. Move to usr/lib/.
-	mv $(DESTDIR)/usr/bin/libsmbclient.so $(DESTDIR)/usr/lib/libsmbclient.so.0.1
-	mv $(DESTDIR)/usr/bin/libsmbclient.a $(DESTDIR)/usr/lib/
-
-	# This is to comply with policy (the symlink that ldconfig would 
-	#	produce must exist in the package).
-	/sbin/ldconfig -n $(DESTDIR)/usr/lib/
-
-	# libsmbclient include file is not installed by standard
+	# libsmbclient files are not installed by the standard
 	#	'make install' - do it manually.
 	$(MAKE) -C source installclientlib $(IVARS)
+	mv $(DESTDIR)/usr/lib/libsmbclient.so $(DESTDIR)/usr/lib/libsmbclient.so.0.1
 
 	# Install other stuff not installed by "make install"
 	install -m 0755 debian/mksmbpasswd.awk $(DESTDIR)/usr/sbin/mksmbpasswd
@@ -184,6 +177,10 @@ install: build
 	#	correct place by dh_movefiles.
 	cp debian/smb.conf $(DESTDIR)/usr/share/samba/
 	cp debian/samba.pamd $(DESTDIR)/etc/pam.d/samba
+
+	# This is to comply with policy (the symlink that ldconfig would
+	#	produce must exist in the package).
+	/sbin/ldconfig -n $(DESTDIR)/usr/lib/
 
 	dh_movefiles --sourcedir=debian/samba/
 
