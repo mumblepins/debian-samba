@@ -1,3 +1,16 @@
+samba (2.2.3a-13) testing-security; urgency=high
+
+  * version bump for the testing upload
+
+ -- Steve Langasek <vorlon@debian.org>  Thu, 21 Nov 2002 20:19:15 -0600
+
+samba (2.2.3a-12) stable-security; urgency=high
+
+  * rebuild and reupload, since someone thought the last build was bad  
+    enough to set satie on fire.
+
+ -- Steve Langasek <vorlon@debian.org>  Thu, 21 Nov 2002 20:19:15 -0600
+
 samba (2.2.3a-11) testing-security; urgency=high
 
   * version bump for the testing upload
