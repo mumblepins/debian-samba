@@ -4,6 +4,8 @@ samba (2.2.4-2) unstable; urgency=low
     2.2.4-1. We don't use POSIX ACL support ourselves, so we'd
     appreciate reports from those using this feature so we can
     be sure this works.
+  * Fix the filename-matching algorithm used for smbtar's 'exclude'
+    functionality. (closes: #131571)
 
  -- Eloy A. Paris <peloy@debian.org>  Tue, 28 May 2002 11:33:51 -0400
 
