@@ -25,7 +25,7 @@ samba (2.2.3a-2) unstable; urgency=low
       + Got rid of all /etc/samba/debian_config sillyness.
       + Got rid of /etc/samba/smbpasswd conversion stuff for
         compatibility with versions of Samba < 2.0.0final-2.
-    (closes: #127959, #34408)
+    (closes: #127959, #34408, #113594)
   * make samba.postinst ignore the absence of /var/log/{s,n}mb*;
     makes for a clean upgrade path.
   * Building with MSDFS support (closes: #116793)
