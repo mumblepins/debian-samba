@@ -38,6 +38,7 @@ fi
 #	code takes care of moving the files in the old directory to
 #	the new directory.
 if [ -d /var/samba/ ]; then
+	mkdir -p /var/state/samba || true
 	mv /var/samba/* /var/state/samba/
 	rmdir /var/samba/
 fi
