@@ -1,5 +1,11 @@
 samba (2.2.3a-11) testing-security; urgency=high
 
+  * version bump for the testing upload
+
+ -- Steve Langasek <vorlon@debian.org>  Wed, 16 Oct 2002 09:06:00 -0500
+
+samba (2.2.3a-10) stable-security; urgency=high
+
   * security upload
   * If Samba is restarted before the postinst runs,
     /var/lib/samba/secrets.tdb will be automatically created.  Deal
