@@ -141,7 +141,7 @@ Package: libsmbclient-dev
 Section: devel
 Priority: extra
 Architecture: any
-Depends: libsmbclient (= ${Source-Version}), ${shlibs:Depends}
+Depends: libsmbclient (= ${Source-Version})
 Description: libsmbclient static libraries and headers
  libsmbclient allows to write applications that use the SMB protocol.
  This gives applications the ability to talk to Microsoft Windows servers

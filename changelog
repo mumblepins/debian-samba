@@ -4,6 +4,8 @@ samba (2.2.3-1) unstable; urgency=low
   * Restructured build system that provides DBS-like separation of 
     patches
   * Fix typo in smbfs description (closes: #116209).
+  * Use killall -q in logrotate.d script, to avoid spurious cron 
+    emails (closes: #130100).
 
  -- Eloy A. Paris <peloy@debian.org>  Sat,  2 Feb 2002 19:56:18 -0500
 
