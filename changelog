@@ -1,4 +1,4 @@
-samba (2.2.3a-8) woody-proposed-updates; urgency=low
+samba (2.2.3a-8) stable; urgency=low
 
   * maintainer script fixes backported from sid.
   * reorder postinst, so that installing samba-common from scratch loads
