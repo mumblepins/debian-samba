@@ -90,8 +90,8 @@ experimental.
 Samba 2.2 has experimental LDAP code. However, the official Debian
 packages have not been compiled with LDAP support for a good reason: if
 LDAP support is compiled in then the other authentication methods (PAM,
-smbpasswd, etc.) cannot be used, only LDAP will work. So, until LDAP
-cannot coexist peacefully with the other methods we will not provided
+smbpasswd, etc.) cannot be used, only LDAP will work. So, while LDAP
+cannot coexist peacefully with the other methods we will not provide
 LDAP-enabled packages. The workaround is, of course, to build your own
 packages. We can help with this if you don't know how to build packages.
 
