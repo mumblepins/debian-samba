@@ -77,7 +77,8 @@ configure-stamp:
 		--with-libsmbclient \
 		--with-winbind \
 		--with-msdfs \
-		--with-automount)
+		--with-automount \
+		--with-acl-support)
 
 	touch configure-stamp
 
