@@ -255,7 +255,7 @@ binary-arch: build install
 #	dh_installinfo
 	cp debian/winbind.lintian debian/winbind/usr/share/lintian/overrides/winbind
 	dh_undocumented
-	dh_installchangelogs -a -Nlibpam-smbpass
+	dh_installchangelogs -Nlibpam-smbpass
 	DH_OPTIONS= dh_installchangelogs -plibpam-smbpass source/pam_smbpass/CHANGELOG
 	dh_strip
 	dh_link
