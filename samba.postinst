@@ -27,11 +27,6 @@ case "$1" in
 	;;
 esac
 
-# Take care of the /usr/doc/ to /usr/shar/doc/ migration.
-if [ -d /usr/doc -a ! -e /usr/doc/samba -a -d /usr/share/doc/samba ]; then
-	ln -sf ../share/doc/samba /usr/doc/samba
-fi
-
 # Starting with Samba 2.0.7-4 the WINS database, the browse
 #	database and other important run-time files are stored in
 #	/var/state/samba/ rather than in /var/samba/. The following
@@ -247,6 +242,11 @@ fi
 # Do the same check for /var/backup/smbpasswd.bak, just in case.
 if [ -f /var/backups/smbpasswd.bak ]; then
 	chmod 600 /var/backups/smbpasswd.bak
+fi
+
+# Take care of the /usr/doc/ to /usr/shar/doc/ migration.
+if [ -d /usr/doc -a ! -e /usr/doc/samba -a -d /usr/share/doc/samba ]; then
+	ln -sf ../share/doc/samba /usr/doc/samba
 fi
 
 exit 0
