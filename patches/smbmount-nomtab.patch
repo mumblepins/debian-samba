@@ -35,7 +35,7 @@
                  case 'r':
                          mount_ro = 1;
                          break;
-@@ -271,36 +276,38 @@
+@@ -274,36 +279,38 @@
  		return -1;
  	}
  	
@@ -101,9 +101,9 @@
  
  	return 0;
  }	
---- samba-2.2.3a/source/client/smbmount.c.orig	Tue Apr  2 09:57:38 2002
-+++ samba-2.2.3a/source/client/smbmount.c	Tue Apr  2 09:58:24 2002
-@@ -52,6 +52,7 @@
+--- samba/source/client/smbmount.c.orig	2002-10-13 01:34:58.000000000 -0400
++++ samba/source/client/smbmount.c	2002-10-13 01:34:59.000000000 -0400
+@@ -50,6 +50,7 @@
  static int mount_ro;
  static unsigned mount_fmask;
  static unsigned mount_dmask;
@@ -111,7 +111,7 @@
  
  static void usage(void);
  
-@@ -253,6 +254,9 @@
+@@ -250,6 +251,9 @@
                  return;
          }
  
@@ -121,7 +121,7 @@
          if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1) {
                  DEBUG(0,("%d: Can't get "MOUNTED"~ lock file", getpid()));
                  return;
-@@ -447,6 +451,9 @@
+@@ -444,6 +448,9 @@
  	args[i++] = "-s";
  	args[i++] = svc2;
  
@@ -131,7 +131,7 @@
  	if (mount_ro) {
  		args[i++] = "-r";
  	}
-@@ -629,7 +636,7 @@
+@@ -626,7 +633,7 @@
  ****************************************************************************/
  static void usage(void)
  {
@@ -140,7 +140,7 @@
  
  	printf("Version %s\n\n",VERSION);
  
-@@ -694,8 +701,13 @@
+@@ -691,8 +698,13 @@
  	argc -= 2;
  	argv += 2;
  

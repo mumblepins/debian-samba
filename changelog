@@ -1,4 +1,66 @@
-samba (2.2.3a-8) woody-proposed-updates; urgency=low
+samba (2.2.9-1.woody) stable; urgency=low
+
+  * New upstream version.
+
+ -- Eloy A. Paris <peloy@debian.org>  Mon, 10 May 2004 12:17:11 -0400
+
+samba (2.2.8a-1.woody) stable; urgency=high
+
+  * New upsteam version. Fixes pretty bad security hole announced by
+    the Samba Team on Apr. 7, 2003. See DSA 280-1.
+
+ -- Eloy A. Paris <peloy@debian.org>  Mon,  7 Apr 2003 22:22:22 -0400
+
+samba (2.2.8-1.woody) stable; urgency=low
+
+  * New upsteam version.
+
+ -- Eloy A. Paris <peloy@debian.org>  Sun, 16 Mar 2003 11:36:08 -0500
+
+samba (2.2.7a-1.woody) stable; urgency=low
+
+  * New upstream version.
+  * Removed smbclient-xfer-speed.patch, which apparently is not needed
+    since the Samba Team paid attention to the particular variable
+    declarations this patch addressed.
+
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 11 Dec 2002 18:49:03 -0500
+
+samba (2.2.7-1.woody) stable; urgency=low
+
+  * New upstream version. Security release. md4exploit.patch is no
+    longer necessary.
+
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Nov 2002 15:07:13 -0500
+
+samba (2.2.6-1.woody) stable; urgency=low
+
+  * New upstream version.
+  * If Samba is restarted before the postinst runs,
+    /var/lib/samba/secrets.tdb will be automatically created.  Deal
+    with this appropriately in the migration.  Thanks to Jaakko Niemi
+    <liiwi@debian.org> for the report.
+  * If we're upgrading from 2.2.3a-7 or below, move the wins.dat file
+    from /var/run to /var/lib -- saving users one more loss of their WINS
+    registrations on the path to stability.
+  * Refigure character count for DOS CP->Unicode conversion of password
+    strings, fixing a potential remote and confirmed local exploit
+    (closes: #167487). Thanks to Martin Godisch <martin@godisch.de> for
+    bringing this to our attention.
+
+ -- Eloy A. Paris <peloy@debian.org>  Mon,  4 Nov 2002 22:51:30 -0500
+
+samba (2.2.5-1.woody) stable; urgency=low
+
+  * Upload latest stable Samba release to woody.
+    - includes improved NT printing support (closes: #157406)
+  * Fix the filename-matching algorithm used for smbtar's 'exclude'
+    functionality. (closes: #131571)
+  * Remove patches/srv_spoolss_nt.patch, now included upstream.
+
+ -- Steve Langasek <vorlon@debian.org>  Fri, 23 Aug 2002 17:20:08 -0500
+
+samba (2.2.3a-8) stable; urgency=low
 
   * maintainer script fixes backported from sid.
   * reorder postinst, so that installing samba-common from scratch loads
@@ -9,6 +71,8 @@ samba (2.2.3a-8) woody-proposed-updates; urgency=low
   * samba.postinst: added logic so we don't call /etc/init.d/samba if
     we are running from inetd (this prevents the stupid help message
     to be printed during package upgrades if we are running from inetd.)
+  * Fixed bug in the FHS migration path that causes nmbd to read its
+    state from one location, but write it out to another. (closes: #154210)
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Jul 2002 10:18:56 -0500
 
