@@ -31,9 +31,9 @@ Description-es: ¿Crear el fichero de contraseñas /etc/samba/smbpasswd?
  distinto del /etc/passwd donde se guarden las contraseñas de los usuarios.
  El fichero se puede crear automaticamente, aunque es necesario añadir
  las contraseñas manualmente (por usted o por el usuario) usando
- el programa `smbpasswd', y usted deber hacer arreglos para  mantener las
+ el programa `smbpasswd', y usted debe hacer arreglos para mantener las
  contraseñas al día.  Si no se crea este fichero, es imprescindible
- configurar Samba (y a lo posiblemente los ordenadores Windows) para usar
+ configurar Samba (y posiblemente los ordenadores Windows) para usar
  contraseñas no cifradas.  Véa /usr/share/doc/samba/README.Debian
  para más información.
 
