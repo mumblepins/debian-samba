@@ -13,8 +13,12 @@ samba (2.2.3-4) unstable; urgency=low
       - Corrected name of the pid file (Steve)
       - Make start-stop-daemon create a pid file for winbindd since it
         does not create one on his own.
+  * #DEBHELPER# is not needed in samba.postinst because we are adding
+    manually everything that debhelper adds automatically. In fact,
+    since we are calling update-rc.d without standard paramaters I
+    think we can't use #DEBHELPER#.
 
- -- Eloy A. Paris <peloy@debian.org>  Thu,  7 Feb 2002 13:10:03 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Thu,  7 Feb 2002 13:12:08 -0500
 
 samba (2.2.3-3) unstable; urgency=low
 
