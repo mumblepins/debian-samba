@@ -1,3 +1,12 @@
+samba (2.2.4-2) unstable; urgency=low
+
+  * Fixed thinko WRT POSIX ACL support, which we "half-enabled" in
+    2.2.4-1. We don't use POSIX ACL support ourselves, so we'd
+    appreciate reports from those using this feature so we can
+    be sure this works.
+
+ -- Eloy A. Paris <peloy@debian.org>  Tue, 28 May 2002 11:33:51 -0400
+
 samba (2.2.4-1) unstable; urgency=low
 
   * New upstream release (closes: #144713)
