@@ -21,6 +21,6 @@ fi
 [ -r /etc/default/samba ] && . /etc/default/samba
 
 # We call the init script to stop Samba only if we are running as daemons.
-[ -x /etc/init.d/samba -a "$RUNMODE" != "inetd" ] && /etc/init.d/samba stop
+[ -x /etc/init.d/samba -a "$RUN_MODE" != "inetd" ] && /etc/init.d/samba stop
 
 #DEBHELPER#
