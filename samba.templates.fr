@@ -12,22 +12,32 @@ Description-fr: Comment voulez-vous lancer Samba ?
  s'exécutent en tant que démons.
 
 Template: samba/generate_smbpasswd
-Type: boolean
+Type: boolean 
 Default: false
-Description: Generate /etc/samba/smbpasswd?
- If this is a new installation or you do not have a /etc/samba/smbpasswd
- file it is recommended that you say yes here. This will cause samba's
- postinst script to generate a smbpasswd file from your current /etc/passwd
- file. You will then need to set the passwords for each user using the
- smbpasswd command as the conversion only transfers user names, not
- passwords.
-Description-fr: Faut-il créer un fichier /etc/samba/smbpasswd ?
- Pour une première installation, ou si vous n'avez pas de fichier
- /etc/samba/smbpasswd, il est recommandé de répondre « Yes ». Le script
- postinst de Samba créera un fichier smbpasswd à partir de votre fichier
- /etc/passwd actuel. Vous devrez alors mettre les mots de passe de tous les
- utilisateurs qui se servent de la commande smbpasswd, car seuls les noms
- sont transférés, pas les mots de passe.
+Description: Create samba password file, /etc/samba/smbpasswd?
+ To be compatible with the defaults in most versions of Windows,
+ Samba must be configured to use encrypted passwords.  This requires
+ user passwords to be stored in a file separate from /etc/passwd.
+ This file can be created automatically, but the passwords must
+ be added manually (by you or the user) by running smbpasswd,
+ and you must arrange to keep it up-to-date in the future.  If
+ you do not create it, you will have to reconfigure samba
+ (and probably your client machines) to use plaintext passwords.
+ See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the
+ samba-doc package for more details.
+Description-fr: Faut-il créer un fichier /etc/samba/smbpasswd ?
+ Pour préserver la compatibilité avec le comportement par défaut de la
+ plupart des systèmes Windows, Samba doit utiliser
+ les mots de passe chiffrés. Cela exige la création d'un fichier,
+ distinct du fichier /etc/passwd, pour mettre les mots de passe des
+ utilisateurs. Ce fichier peut être créé automatiquement, mais
+ quelqu'un (vous ou l'utilisateur) devra ajouter les mots de
+ passe manuellement en utilisant la commande smbpasswd ; et vous devrez
+ maintenir à jour ce fichier. Si vous ne voulez pas créer le fichier
+ maintenant, Samba (et peut-être les ordinateurs Windows)
+ devra utiliser des mots de passe non chiffrés.
+ Voyez /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html dans le
+ paquet samba-doc pour plus de détails.
 
 Template: samba/log_files_moved
 Type: note
