@@ -9,6 +9,8 @@ samba (2.2.3a-8) woody-proposed-updates; urgency=low
   * samba.postinst: added logic so we don't call /etc/init.d/samba if
     we are running from inetd (this prevents the stupid help message
     to be printed during package upgrades if we are running from inetd.)
+  * Fixed bug in the FHS migration path that causes nmbd to read its
+    state from one location, but write it out to another. (closes: #154210)
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Jul 2002 10:18:56 -0500
 
