@@ -3,6 +3,7 @@ samba (2.2.3-1) unstable; urgency=low
   * New upstream release (closes: #131228).
   * Restructured build system that provides DBS-like separation of 
     patches
+  * Fix typo in smbfs description (closes: #116209).
 
  -- Eloy A. Paris <peloy@debian.org>  Sat,  2 Feb 2002 19:56:18 -0500
 
