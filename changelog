@@ -7,8 +7,11 @@ samba (2.2.3-3) unstable; urgency=low
     samba packages (like was the case prior to 2.2.3-3.)
   * Instead of making our patch scripts executable in the rules file
     we run them through /bin/sh.
+  * New packages: winbind, libpam-smbpass and libnss-winbind. These
+    packages have all the winbind stuff that was in the samba package
+    in 2.2.3-2 and before.
 
- -- Eloy A. Paris <peloy@debian.org>  Tue,  5 Feb 2002 00:06:41 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Tue,  5 Feb 2002 00:24:42 -0500
 
 samba (2.2.3-2) unstable; urgency=low
 

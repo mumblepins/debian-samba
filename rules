@@ -49,7 +49,6 @@ patch-stamp:
 
 unpatch:
 	dh_testdir
-	-chmod a+x debian/scripts/unpatch-source
 	if [ -f patch-stamp ]; then /bin/sh debian/scripts/unpatch-source; fi
 	rm -f patch-stamp
 
@@ -92,7 +91,8 @@ configure-stamp:
 		--with-utmp \
 		--with-readline \
 		--with-pam_smbpass \
-		--with-libsmbclient)
+		--with-libsmbclient \
+		--with-winbind)
 
 	touch configure-stamp
 
