@@ -1,3 +1,10 @@
+samba (2.2.8a-1.woody) stable; urgency=high
+
+  * New upsteam version. Fixes pretty bad security hole announced by
+    the Samba Team on Apr. 7, 2003. See DSA 280-1.
+
+ -- Eloy A. Paris <peloy@debian.org>  Mon,  7 Apr 2003 22:22:22 -0400
+
 samba (2.2.8-1.woody) stable; urgency=low
 
   * New upsteam version.
