@@ -2,7 +2,7 @@
 #
 # Pre-removal script for the Samba package for Debian GNU/Linux.
 #
-# Written by Eloy A. Paris for the Debian project.
+# $Id$
 #
 
 DEBIAN_CONFIG=/etc/samba/debian_config

@@ -8,6 +8,8 @@
 #	and stops both nmbd and smbd. So, when this script is run we
 #	know that neither nmbd nor smbd can start.
 #
+# $Id$
+#
 
 case "$1" in
 	configure)

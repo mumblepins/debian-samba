@@ -2,6 +2,8 @@
 #
 # Start/stops the Samba daemons (nmbd and smbd).
 #
+# $Id$
+#
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 DEBIAN_CONFIG=/etc/samba/debian_config
