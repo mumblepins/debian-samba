@@ -23,7 +23,8 @@ Description: Create samba password file, /etc/samba/smbpasswd?
  and you must arrange to keep it up-to-date in the future.  If
  you do not create it, you will have to reconfigure samba
  (and probably your client machines) to use plaintext passwords.
- See /usr/share/doc/samba/README.Debian for more details.
+ See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the 
+ samba-doc package for more details.
 Description-es: ¿Crear el fichero de contraseñas /etc/samba/smbpasswd?
  Para manterner compatibilidad con el comportamiento por defecto de la
  mayoria de los sistemas Windows, hay que configurar Samba para que use
@@ -34,7 +35,8 @@ Description-es: ¿Crear el fichero de contraseñas /etc/samba/smbpasswd?
  el programa `smbpasswd', y usted debe hacer arreglos para mantener las
  contraseñas al día.  Si no se crea este fichero, es imprescindible
  configurar Samba (y posiblemente los ordenadores Windows) para usar
- contraseñas no cifradas.  Véa /usr/share/doc/samba/README.Debian
+ contraseñas no cifradas.  Véa
+ /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html del paquete samba-doc
  para más información.
 
 Template: samba/log_files_moved

@@ -21,7 +21,8 @@ Description: Create samba password file, /etc/samba/smbpasswd?
  user) by running smbpasswd, and you must arrange to keep it up-to-date in
  the future.  If you do not create it, you will have to reconfigure samba
  (and probably your client machines) to use plaintext passwords. See
- /usr/share/doc/samba/README.Debian for more details.
+ See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the 
+ samba-doc package for more details.
 Description-pt_BR: Gerar o arquivo de senhas /etc/samba/smbpasswd ?
  Para compatibilidade com os padrões adotados em todas as versões
  atuais do Windows o Samba deve ser configurado para usar senhas
@@ -33,7 +34,8 @@ Description-pt_BR: Gerar o arquivo de senhas /etc/samba/smbpasswd ?
  Caso você não crie esse arquivo, você terá que reconfigurar o
  Samba (e provavelmente suas máquinas clientes) para utilização de senhas
  em texto puro. Consulte a documentação em
- /usr/share/doc/samba/README.Debian para maiores detalhes.
+ /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html do pacote samba-doc
+ para maiores detalhes.
 
 Template: samba/log_files_moved
 Type: note

@@ -18,7 +18,8 @@ Description: Create samba password file, /etc/samba/smbpasswd?
  and you must arrange to keep it up-to-date in the future.  If
  you do not create it, you will have to reconfigure samba
  (and probably your client machines) to use plaintext passwords.
- See /usr/share/doc/samba/README.Debian for more details.
+ See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the 
+ samba-doc package for more details.
 
 Template: samba/log_files_moved
 Type: note
