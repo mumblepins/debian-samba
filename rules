@@ -148,6 +148,12 @@ install: build
 	install -m 0755 debian/mksmbpasswd.awk $(DESTDIR)/usr/sbin/mksmbpasswd
 	install -m 0755 debian/sambaconfig $(DESTDIR)/usr/sbin/
 
+	# Install winbind stuff not installed by 'make install'
+	install -m 0644 source/nsswitch/libnss_winbind.so \
+		$(DESTDIR)/lib/libnss_winbind.so.2
+	install -m 0644 source/nsswitch/pam_winbind.so \
+		$(DESTDIR)/lib/security/
+
 	# pam_smbpass.so is installed by 'make install' in $(DESTDIR)/usr/bin/.
 	#	We'll move it here to $(DESTDIR)/lib/security/ and then
 	#	libpam-smbpass.files will make dh_movefiles move it to the
