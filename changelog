@@ -1,12 +1,18 @@
-samba (2.2.3-7) unstable; urgency=low
+samba (2.2.3a-1) unstable; urgency=low
 
   * Potato builds were failing because debian/rules was not creating
     debian/winbind/etc/logrotate.d/. A user having problems creating
     Potato packages brought this to my attention. dh_installlogrotate
     takes care of creating the directory for us, that's why we didn't
     notice.
+  * Removed code that converts /etc/samba/smbpasswd from an ancient
+    format to the new format of Samba 2.0.0 and later.
+    Closes: #134375.
+  * Re-organized FHS migration code in samba.postinst. Make sure we
+    don't fail when we move files that don't exist.
+    Closes: #133813 - samba: Install failed.
 
- -- Eloy A. Paris <peloy@debian.org>  Wed, 13 Feb 2002 21:38:58 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Feb 2002 12:34:17 -0500
 
 samba (2.2.3-6) unstable; urgency=low
 

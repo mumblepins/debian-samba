@@ -27,38 +27,22 @@ case "$1" in
 	;;
 esac
 
-# Starting with Samba 2.0.7-4 the WINS database, the browse
+--- Begin of migration code ---
+
+# Starting with Samba 2.2.3-4 the WINS database, the browse
 #	database and other important run-time files are stored in
-#	/var/state/samba/ rather than in /var/samba/. The following
-#	code takes care of moving the files in the old directory to
-#	the new directory.
+#	FHS-compliant directories. The following code takes care of
+#	moving the files in the old directories (/var/samba/ and
+#	/var/state/samba) to the new FHS-compliant directories.
+
 if [ -d /var/samba/ ]; then
-	mkdir -p /var/state/samba || true
-	mv /var/samba/* /var/state/samba/
+	mv /var/samba/* /var/lib/samba/ 2>/dev/null || true
 	rmdir /var/samba/
 fi
 
-# And as of Samba 2.2.3-3, all these files are now placed in their 
-# respective FHS-compliant directories.  Separate out the individual 
-# files accordingly.
-for F in browse.dat printing.tdb winbindd_cache.tdb
-do
-	if [ -e /var/state/samba/"$F" ]; then
-		mv /var/state/samba/"$F" /var/cache/samba/
-	fi
-done
-
-for F in brlock.tdb connections.tdb locking.tdb messages.tdb nmbd.pid \
-         sessionid.tdb smbd.pid unexpected.tdb 
-do
-	if [ -e /var/state/samba/"$F" ]; then
-		mv /var/state/samba/"$F" /var/run/samba/
-	fi
-done
-
-# Default for anything we don't know about is /var/lib/samba -- 
-# guaranteed not to accidentally tromp on any files the admin thought 
-# were safe.
+# Default for anything we don't know about (see next two 'for' loops)
+#	is /var/lib/samba -- guaranteed not to accidentally tromp on any 
+#	files the admin thought were safe.
 if [ -d /var/state/samba ]; then
 	mv /var/state/samba/* /var/lib/samba/ 2>/dev/null || true
 	rmdir /var/state/samba/
@@ -67,6 +51,25 @@ if [ -d /var/state/samba ]; then
 	# so delete it if we can.
 	rmdir /var/state || true
 fi
+
+# All these files are now placed in their respective FHS-compliant
+#	directories.  Separate out the individual files accordingly.
+for F in browse.dat printing.tdb winbindd_cache.tdb
+do
+	if [ -e /var/lib/samba/"$F" ]; then
+		mv /var/lib/samba/"$F" /var/cache/samba/
+	fi
+done
+
+for F in brlock.tdb connections.tdb locking.tdb messages.tdb nmbd.pid \
+         sessionid.tdb smbd.pid unexpected.tdb 
+do
+	if [ -e /var/lib/samba/"$F" ]; then
+		mv /var/lib/samba/"$F" /var/run/samba/
+	fi
+done
+
+--- End of migration code ---
 
 # Define some constants...
 DEBIAN_CONFIG=/etc/samba/debian_config
@@ -215,23 +218,6 @@ else	# if (samba_configured) ...
 
 	/etc/init.d/samba start
 fi		# if (samba_configured) ...
-
-if test "$1" = configure && dpkg --compare-versions "$2" lt 2.0.0final-2 && [ -f /etc/samba/smbpasswd ]; then
-
-	cat << EOF
-
-*** IMPORTANT ***
-
-The format of the smbpasswd file (which is used only if you are using
-encrypted passwords) is different in Samba 2.0.0 and above. I will
-convert it to the new format.
-
-EOF
-
-	mv /etc/samba/smbpasswd /etc/samba/smbpasswd.old
-	cat /etc/samba/smbpasswd.old | /usr/bin/convert_smbpasswd \
-		> /etc/samba/smbpasswd 2> /dev/null
-fi
 
 # This check is a safety net: the /etc/samba/smbpasswd file must have
 #	permissions 600.
