@@ -1,7 +1,6 @@
-diff -ur samba-2.2.3a.orig/source/printing/lpq_parse.c samba-2.2.3a/source/printing/lpq_parse.c
---- samba-2.2.3a.orig/source/printing/lpq_parse.c	Sat Feb  2 18:46:49 2002
-+++ samba-2.2.3a/source/printing/lpq_parse.c	Wed Mar 27 17:50:15 2002
-@@ -266,6 +266,9 @@
+--- samba/source/printing/lpq_parse.c.orig	2002-07-24 09:22:49.000000000 -0400
++++ samba/source/printing/lpq_parse.c	2002-10-13 01:43:10.000000000 -0400
+@@ -264,6 +264,9 @@
      buf->status = LPQ_PAUSED;
    }
  
