@@ -1,4 +1,4 @@
-samba (2.2.3a-10) stable; urgency=low
+samba (2.2.3a-10) stable; urgency=high
 
   * If Samba is restarted before the postinst runs,
     /var/lib/samba/secrets.tdb will be automatically created.  Deal
@@ -7,6 +7,10 @@ samba (2.2.3a-10) stable; urgency=low
   * If we're upgrading from 2.2.3a-7 or below, move the wins.dat file
     from /var/run to /var/lib -- saving users one more loss of their WINS
     registrations on the path to stability.
+  * Refigure character count for DOS CP->Unicode conversion of password
+    strings, fixing a potential remote and confirmed local exploit
+    (closes: #167487).  Thanks to Martin Godisch <martin@godisch.de> for
+    bringing this to our attention.
 
  -- Steve Langasek <vorlon@debian.org>  Wed, 16 Oct 2002 09:06:00 -0500
 
