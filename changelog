@@ -1,15 +1,16 @@
 samba (2.2.3a-6) unstable; urgency=low
 
-  * Call db_stop as soon as we're done with debconf in the postinst, to 
+  * Call db_stop as soon as we're done with debconf in the postinst, to
     avoid hanging bugs (closes: #137813)
-  * Ony call 'update-inetd --add' on first installation, just as we only 
+  * Ony call 'update-inetd --add' on first installation, just as we only
     call 'update-inetd --remove' on package purge.
-  * Bring our shipped smb.conf closer in line with the upstream 
-    defaults: don't twiddle the send/recv buffer sizes, since the Linux 
+  * Bring our shipped smb.conf closer in line with the upstream
+    defaults: don't twiddle the send/recv buffer sizes, since the Linux
     kernel already provides a much better default setting
-    (closes: #137415)
+    (closes: #80966, #80934, #137415)
+  * Added libnss_wins.so to the winbind package (closes: #137201)
 
- -- Steve Langasek <vorlon@debian.org>  Mon, 11 Mar 2002 10:07:02 -0600
+ -- Eloy A. Paris <peloy@debian.org>  Tue, 12 Mar 2002 10:57:40 -0500
 
 samba (2.2.3a-5) unstable; urgency=low
 
