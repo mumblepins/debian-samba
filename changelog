@@ -1,3 +1,11 @@
+samba (2.2.3a-5) unstable; urgency=low
+
+  * Having multiple workgroup lines in your smb.conf, though wacky, is 
+    perfectly valid.  Account for this in samba-common.config.
+    (closes: #137157)
+
+ -- Steve Langasek <vorlon@debian.org>  Sun, 10 Mar 2002 21:52:51 -0600
+
 samba (2.2.3a-4) unstable; urgency=low
 
   * Fixed typo in samba.postinst. Cosmetic fixes there as well.
