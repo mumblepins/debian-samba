@@ -1,3 +1,9 @@
+samba (2.2.5-3) unstable; urgency=low
+
+  * Migrate from smbpasswd to tdbsam.
+
+ -- Steve Langasek <vorlon@debian.org>  Sat, 13 Jul 2002 01:20:55 -0500
+
 samba (2.2.5-2) unstable; urgency=low
 
   * No longer ship make_printerdef, which is deprecated. (closes: #63059)

@@ -31,3 +31,13 @@ Description: Samba's log files have moved.
  .
  The old log files that were in /var/log/ will be moved to
  the new location for you.
+
+Template: samba/tdbsam
+Type: note
+Description: /etc/samba/smbpasswd is no longer used
+ Beginning with Samba 2.2.5-3, /etc/samba/smbpasswd is deprecated in
+ favor of the new, more feature-rich tdbsam backend.  Your existing
+ smbpasswd entries will be converted for you, and all of the Samba
+ tools, including /usr/bin/smbpasswd, will seamlessly integrate with the
+ new system; however, you will no longer be able to edit
+ /etc/samba/smbpasswd directly to make changes to your SAM database.

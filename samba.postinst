@@ -117,9 +117,14 @@ GENERATE_SMBPASSWD="${RET}"
 # Done with debconf now.
 db_stop
 
-if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/smbpasswd ]; then
+if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/passdb.tdb -a ! -e /etc/samba/smbpasswd ]; then
 	getent passwd | /usr/sbin/mksmbpasswd > /etc/samba/smbpasswd
 	chmod 600 /etc/samba/smbpasswd 
+fi
+
+if [ -e /etc/samba/smbpasswd -a ! -e /etc/samba/passdb.tdb ]; then
+	pdbedit -i /etc/samba/smbpasswd
+	rm /etc/samba/smbpasswd
 fi
 
 # ------------------------- Debconf questions end ---------------------
