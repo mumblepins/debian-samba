@@ -1,4 +1,4 @@
-samba (2.99-1) unstable; urgency=low
+samba (2.99.cvs.20020713-1) unstable; urgency=low
 
   * first attempt for 3.0pre.
   * only post a debconf note about moving logfiles if we're upgrading
