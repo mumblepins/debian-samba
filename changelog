@@ -1,3 +1,16 @@
+samba (3.0.4-3experimental1) experimental; urgency=low
+
+  * Doh! Color me stupid. I forgot to change the distribution to
+    "experimental".
+
+ -- Eloy A. Paris <peloy@debian.org>  Fri, 21 May 2004 23:35:30 -0400
+
+samba (3.0.4-2experimental1) unstable; urgency=low
+
+  * Upload to experimental building against the new libcupsys2-gnutls10.
+
+ -- Eloy A. Paris <peloy@debian.org>  Fri, 21 May 2004 12:51:16 -0400
+
 samba (3.0.4-1) unstable; urgency=low
 
   Eloy:
