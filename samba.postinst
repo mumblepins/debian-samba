@@ -66,6 +66,10 @@ done
 mv /var/state/samba/* /var/lib/samba/
 rmdir /var/state/samba/
 
+# It's not FHS, and it's probably our fault this is here,
+# so delete it if we can.
+rmdir /var/state || true
+
 # Define some constants...
 DEBIAN_CONFIG=/etc/samba/debian_config
 CONFIG_VERSION=1
