@@ -2387,3 +2387,30 @@ diff -ur samba-2.2.3.orig/source/smbd/lanman.c samba-2.2.3/source/smbd/lanman.c
      return(0);
    }
  
+diff -ur samba-2.2.3a-orig/source/param/loadparm.c samba-2.2.3a/source/param/loadparm.c
+--- samba-2.2.3a-orig/source/param/loadparm.c	Sun Mar 10 23:10:53 2002
++++ samba-2.2.3a/source/param/loadparm.c	Thu Mar 21 16:09:40 2002
+@@ -107,6 +107,9 @@
+ 	char *szAddPrinterCommand;
+ 	char *szDeletePrinterCommand;
+ 	char *szOs2DriverMap;
++#ifdef FHS_COMPATIBLE
++	char *szLockDirStub;
++#endif
+ 	char *szLockDir;
+ 	char *szRootdir;
+ 	char *szDefaultService;
+@@ -995,8 +998,13 @@
+ 	{"config file", P_STRING, P_GLOBAL, &Globals.szConfigFile, NULL, NULL, FLAG_HIDE},
+ 	{"preload", P_STRING, P_GLOBAL, &Globals.szAutoServices, NULL, NULL, FLAG_DOS_STRING},
+ 	{"auto services", P_STRING, P_GLOBAL, &Globals.szAutoServices, NULL, NULL, FLAG_DOS_STRING},
++#ifdef FHS_COMPATIBLE
++	{"lock dir", P_STRING, P_GLOBAL, &Globals.szLockDirStub, NULL, NULL, 0}, 
++	{"lock directory", P_STRING, P_GLOBAL, &Globals.szLockDirStub, NULL, NULL, 0},
++#else
+ 	{"lock dir", P_STRING, P_GLOBAL, &Globals.szLockDir, NULL, NULL, 0}, 
+ 	{"lock directory", P_STRING, P_GLOBAL, &Globals.szLockDir, NULL, NULL, 0},
++#endif
+ #ifdef WITH_UTMP
+ 	{"utmp directory", P_STRING, P_GLOBAL, &Globals.szUtmpDir, NULL, NULL, 0},
+ 	{"wtmp directory", P_STRING, P_GLOBAL, &Globals.szWtmpDir, NULL, NULL, 0},

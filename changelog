@@ -1,6 +1,8 @@
 samba (2.2.3a-7) unstable; urgency=low
 
   * More README.debian updates.
+  * Neutralize the smb.conf 'lock dir' directive, which doesn't mean 
+    what the FHS says it should, and causes us no end of grief.
 
  -- Eloy A. Paris <peloy@debian.org>  Thu, 14 Mar 2002 14:12:25 -0500
 
