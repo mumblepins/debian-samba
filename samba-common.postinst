@@ -18,10 +18,10 @@ fi
 
 # Is the user configuring with debconf, or he/she prefers swat/manual
 #	config?
-db_get samba/do_debconf || true
+db_get samba-common/do_debconf || true
 if [ "${RET}" = "true" ]; then
 	# Get workgroup name
-	db_get samba/workgroup || true
+	db_get samba-common/workgroup || true
 	WORKGROUP="${RET}"
 
 	TMPFILE=`mktemp -q /tmp/smb.conf.XXXXXX`
@@ -30,7 +30,7 @@ if [ "${RET}" = "true" ]; then
 	mv -f ${TMPFILE} /etc/samba/smb.conf
 
 	# Encrypt passwords?
-	db_get samba/encrypt_passwords || true
+	db_get samba-common/encrypt_passwords || true
 	ENCRYPT_PASSWORDS="${RET}"
 
 	TMPFILE=`mktemp -q /tmp/smb.conf.XXXXXX`
