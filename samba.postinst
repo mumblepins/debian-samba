@@ -67,11 +67,11 @@ done
 if [ -d /var/state/samba ]; then
 	mv /var/state/samba/* /var/lib/samba/
 	rmdir /var/state/samba/
-fi
 
-# It's not FHS, and it's probably our fault this is here,
-# so delete it if we can.
-rmdir /var/state || true
+	# It's not FHS, and it's probably our fault this is here,
+	# so delete it if we can.
+	rmdir /var/state || true
+fi
 
 # Define some constants...
 DEBIAN_CONFIG=/etc/samba/debian_config
