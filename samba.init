@@ -25,8 +25,6 @@ fi
 # Read current Samba configuration
 . $DEBIAN_CONFIG
 
-#       the Samba daemons.
-
 # If Samba is running from inetd then there is nothing to do
 if [ "$run_mode" = "from_inetd" ]; then
 	# Commented out to close bug #26884 (startup message is rather long). I
