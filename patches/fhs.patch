@@ -2267,9 +2267,8 @@ diff -ur samba-2.2.3.orig/source/nmbd/nmbd_serverlistdb.c samba-2.2.3/source/nmb
    trim_string(fname,NULL,"/");
    pstrcat(fname,"/");
    pstrcat(fname,SERVER_LIST);
-diff -ur samba-2.2.3.orig/source/nmbd/nmbd_winsserver.c samba-2.2.3/source/nmbd/nmbd_winsserver.c
---- samba-2.2.3.orig/source/nmbd/nmbd_winsserver.c	Sat Feb  2 18:46:45 2002
-+++ samba-2.2.3/source/nmbd/nmbd_winsserver.c	Tue Feb  5 14:15:42 2002
+--- samba-2.2.3a/source/nmbd/nmbd_winsserver.c.orig	2002-07-25 10:07:34.000000000 -0400
++++ samba-2.2.3a/source/nmbd/nmbd_winsserver.c	2002-07-25 10:17:19.000000000 -0400
 @@ -180,7 +180,7 @@
  
    add_samba_names_to_subnet(wins_server_subnet);
@@ -2279,6 +2278,15 @@ diff -ur samba-2.2.3.orig/source/nmbd/nmbd_winsserver.c samba-2.2.3/source/nmbd/
    {
      DEBUG(2,("initialise_wins: Can't open wins database file %s. Error was %s\n",
             WINS_LIST, strerror(errno) ));
+@@ -1596,7 +1596,7 @@
+ 	  }
+   }
+ 
+-  slprintf(fname,sizeof(fname)-1,"%s/%s", lp_lockdir(), WINS_LIST);
++  slprintf(fname,sizeof(fname)-1,"%s/%s", STATEDIR, WINS_LIST);
+   all_string_sub(fname,"//", "/", 0);
+   slprintf(fnamenew,sizeof(fnamenew)-1,"%s.%u", fname, (unsigned int)sys_getpid());
+ 
 diff -ur samba-2.2.3.orig/source/nsswitch/winbindd_cache.c samba-2.2.3/source/nsswitch/winbindd_cache.c
 --- samba-2.2.3.orig/source/nsswitch/winbindd_cache.c	Sat Feb  2 18:46:45 2002
 +++ samba-2.2.3/source/nsswitch/winbindd_cache.c	Tue Feb  5 14:14:32 2002
