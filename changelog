@@ -1,6 +1,9 @@
 samba (2.99-1) unstable; urgency=low
 
   * first attempt for 3.0pre.
+  * only post a debconf note about moving logfiles if we're upgrading
+    from a version that had the logfiles in the old location
+    (closes: #152924).
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Jul 2002 12:54:25 -0500
 
