@@ -19,8 +19,14 @@ samba (2.2.3a-1) unstable; urgency=low
   * Removed replace.patch because it is now present upstream.
   * Added patch from Jerry Carter to fix a problem when saving
     document preferences for printing from NT clients.
+  * The real winbindd daemon is a forked process so we can't use
+    --make-pidfile when calling start-stop-daemon. Fixed 
+    /etc/init.d/winbind to work around the issue. Thanks to 
+    Lin Li <linl@xandros.com> for the patience and for reporting 
+    the problems. Hopefully I got it right this time.
+  * Added some winbind defaults to the sample smb.conf.
 
- -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Feb 2002 13:49:51 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Feb 2002 18:39:03 -0500
 
 samba (2.2.3-6) unstable; urgency=low
 
