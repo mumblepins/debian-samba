@@ -1,6 +1,10 @@
 samba (2.2.3-2) unstable; urgency=low
 
-  * add support to rules for automatic updating of <version.h>.
+  * add support to debian/scripts/{patch-source,unpatch-source} for
+    automatic updating and cleaning of <version.h>. This was a request
+    from the Samba Team: they wanted us to clearly mark our packages
+    so it is always known a user is running Samba with (possibly)
+    Debian-specific patches.
 
  -- Steve Langasek <vorlon@debian.org>  Mon,  4 Feb 2002 09:51:00 -0600
 
