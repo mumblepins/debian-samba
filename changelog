@@ -25,7 +25,6 @@ samba (2.2.3a-1) unstable; urgency=low
     /etc/init.d/winbind to work around the issue. Thanks to 
     Lin Li <linl@xandros.com> for the patience and for reporting 
     the problems. Hopefully I got it right this time.
-  * Added some winbind defaults to the sample smb.conf.
 
  -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Feb 2002 18:39:03 -0500
 
