@@ -4,7 +4,7 @@ samba (2.2.3-3) unstable; urgency=low
     maintainer scripts in need of debhelpering)
   * /lib/security/pam_smbpass.so is now being included in the
     libpam-smbpass package only, and not in both the libpam-smbpass and
-    samba packages (like was the case prior to 2.2.3-3.)
+    samba packages (which was the case prior to 2.2.3-3.)
   * Instead of making our patch scripts executable in the rules file
     we run them through /bin/sh.
   * New packages: winbind, libpam-smbpass and libnss-winbind. These
