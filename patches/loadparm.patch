@@ -1,6 +1,6 @@
-diff -ur samba-2.99.cvs.20020713.orig/source/param/loadparm.c samba-2.99.cvs.20020713/source/param/loadparm.c
---- samba-2.99.cvs.20020713.orig/source/param/loadparm.c	Sat Jul 13 14:16:30 2002
-+++ samba-2.99.cvs.20020713/source/param/loadparm.c	Sat Jul 13 14:20:37 2002
+diff -uNr samba-2.999+3.0cvs20020723.orig/source/param/loadparm.c samba-2.999+3.0cvs20020723/source/param/loadparm.c
+--- samba-2.999+3.0cvs20020723.orig/source/param/loadparm.c	Thu Jul 25 10:24:04 2002
++++ samba-2.999+3.0cvs20020723/source/param/loadparm.c	Thu Jul 25 10:25:18 2002
 @@ -1065,26 +1065,26 @@
  		case PRINT_AIX:
  		case PRINT_LPRNT:
@@ -65,7 +65,7 @@ diff -ur samba-2.99.cvs.20020713.orig/source/param/loadparm.c samba-2.99.cvs.200
  			string_set(&Globals.szPrintcapname, "lpstat");
  #endif /* HAVE_CUPS */
  			break;
-@@ -1415,7 +1415,10 @@
+@@ -1418,7 +1418,10 @@
  	else
  		StrnCpy(ret, s, len);
  
