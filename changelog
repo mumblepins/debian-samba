@@ -1,3 +1,37 @@
+samba (2.2.3a-2) unstable; urgency=low
+
+  * merge in debconf support:
+    - Moved all smb.conf-related questions to samba-common (smb.conf
+      is part of the samba-common package, not the samba package.)
+    - smb.conf is not a samba-common conffile anymore since it is
+      being managed by debconf. It is ABSOLUTELY necessary to make
+      sure /etc/samba/smb.conf _NEVER_ gets overwritten by changes
+      made via debconf. In other words, any changes made by the user
+      should be honored by the debconf interface.
+    - samba.postinst now moves old log files from /var/log/ to
+      /var/log/samba/. There's a Debconf note that informs the user
+      the log files are stored now in a new location.
+    - debian/control:
+      + Make samba depend on debconf.
+    - New file debian/samba.templates.
+    - New file debian/samba.config.
+    - Re-worked debian/samba.postinst.
+      + Got rid of all /etc/samba/debian_config sillyness.
+    - remove /usr/sbin/sambaconfig; "dpkg-reconfigure samba" replaces 
+      it.
+    - Removed debian/samba.prerm.
+    - Cleaned up /etc/init.d/samba.
+      + Added infrastructure for debconf.
+      + Got rid of all /etc/samba/debian_config sillyness.
+      + Got rid of /etc/samba/smbpasswd conversion stuff for
+        compatibility with versions of Samba < 2.0.0final-2.
+    (closes: #127959, #34408)
+  * make samba.postinst ignore the absence of /var/log/{s,n}mb*;
+    makes for a clean upgrade path.
+  * Building with MSDFS support (closes: #116793)
+
+ -- Steve Langasek <vorlon@debian.org>  Tue,  5 Mar 2002 14:14:33 -0600
+
 samba (2.2.3a-1) unstable; urgency=low
 
   * New upstream version (closes: #135001)
