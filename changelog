@@ -1,5 +1,6 @@
 samba (2.2.3a-1) unstable; urgency=low
 
+  * New upstream version (closes: #135001)
   * Potato builds were failing because debian/rules was not creating
     debian/winbind/etc/logrotate.d/. A user having problems creating
     Potato packages brought this to my attention. dh_installlogrotate
