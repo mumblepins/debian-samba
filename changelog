@@ -1,7 +1,8 @@
 samba (2.2.4-1) unstable; urgency=low
 
-  * Getting ready for Samba 2.2.4.
-  * include samples, exclude INSTALL from libpam-smbpass (closes: #145055)
+  * Getting ready for Samba 2.2.4 (closes: #144713)
+  * Include samples, exclude INSTALL from libpam-smbpass (closes: #145055)
+  * Compile with --with-automount, for NIS homedir support (closes: #123396)
 
  -- Eloy A. Paris <peloy@debian.org>  Thu,  2 May 2002 01:36:33 -0400
 
