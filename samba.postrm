@@ -16,7 +16,7 @@ if [ "$1" = purge ]; then
 	rm -Rf /etc/samba/MACHINE.SID
 
 	# Remove log files
-	rm -f /var/log/[ns]mb*
+	rm -Rf /var/log/samba/
 
 	# Remove NetBIOS entries from /etc/inetd.conf
 	update-inetd --remove netbios-ssn
