@@ -114,12 +114,44 @@ mv -f ${TMPFILE} ${INITCONFFILE}
 db_get samba/generate_smbpasswd || true
 GENERATE_SMBPASSWD="${RET}"
 
+db_get samba/tdbsam || true
+PDB_MIGRATE="${RET}"
+
 # Done with debconf now.
 db_stop
 
-if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/smbpasswd ]; then
+# FIXME: disable if ldapsam support is enabled?
+if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/passdb.tdb -a ! -e /etc/samba/smbpasswd ]; then
 	getent passwd | /usr/sbin/mksmbpasswd > /etc/samba/smbpasswd
 	chmod 600 /etc/samba/smbpasswd 
+	pdbedit -i /etc/samba/smbpasswd
+	rm /etc/samba/smbpasswd
+	chmod 0600 /etc/samba/passdb.tdb
+fi
+
+if [ -e /etc/samba/smbpasswd -a ! -e /etc/samba/passdb.tdb \
+   -a "$PDB_MIGRATE" = "true" ]
+then
+	pdbedit -i /etc/samba/smbpasswd
+	rm /etc/samba/smbpasswd
+	chmod 0600 /etc/samba/passdb.tdb
+
+	# The database has been moved, now make sure we can still find it.
+	PASSDB=`grep -i '^[[:space:]]*passdb backend[[:space:]]*=' $FILE \
+	 | sed -e's/^[[:space:]]*passdb backend[[:space:]]*=[[:space:]]*//i' \
+	 | tail -1`
+	if echo "$PASSDB" | egrep -q "(^|[[:space:]])smbpasswd"; then
+		if ! echo "$PASSDB" | egrep -q "(^|[[:space:]])tdbsam"; then
+			PASSDB=`echo $PASSDB | sed -e's/\(^\|[[:space:]]\)smbpasswd/\1tdbsam/'`
+		fi
+	fi
+	if ! echo "$PASSDB" | egrep -q "(^|[[:space:]])tdbsam"; then
+		PASSDB="tdbsam $PASSDB"
+	fi
+	TMPFILE=`mktemp -q /tmp/smb.conf.XXXXXX`
+	sed -e "s/^\([[:space:]]*\)passdb backend[[:space:]]*=/\1passdb backend = ${PASSDB}/" \
+		< /etc/samba/smb.conf >${TMPFILE}
+	mv -f ${TMPFILE} /etc/samba/smb.conf
 fi
 
 # ------------------------- Debconf questions end ---------------------

@@ -178,10 +178,6 @@ install: build
 	#	pages.
 	find debian/ -name 'findsmb*' -exec rm -f {} \;
 
-	# Until we move from smbpasswd to pdb we are not shipping the
-	#	pdbedit man page.
-	find debian/ -name 'pdbedit*' -exec rm -f {} \;
-
 	# Install samba-common's conffiles - they'll get moved later to their
 	#	correct place by dh_movefiles.
 	cp debian/smb.conf $(DESTDIR)/usr/share/samba/
