@@ -1,9 +1,10 @@
 samba (2.2.5-1.woody) stable; urgency=low
 
-  * upload latest stable Samba release to woody.
+  * Upload latest stable Samba release to woody.
     - includes improved NT printing support (closes: #157406)
   * Fix the filename-matching algorithm used for smbtar's 'exclude'
     functionality. (closes: #131571)
+  * Remove patches/srv_spoolss_nt.patch, now included upstream.
 
  -- Steve Langasek <vorlon@debian.org>  Fri, 23 Aug 2002 17:20:08 -0500
 
