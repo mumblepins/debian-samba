@@ -15,6 +15,10 @@ samba (2.2.3a-7) unstable; urgency=low
     reverse order we patched them.
   * Don't depend on grep in samba.prerm to determine if Samba was
     running before the upgrade starts.
+  * Tweak the wording of debconf templates.
+  * Incorporate debconf translations for Spanish;
+    thanks to Carlos Valdivia Yagüe <valyag@hotpop.com>
+    (closes: #142657, #142659)
 
  -- Eloy A. Paris <peloy@debian.org>  Thu,  4 Apr 2002 10:35:02 -0500
 
