@@ -4,12 +4,17 @@ samba (2.2.3a-7) unstable; urgency=low
   * Neutralize the smb.conf 'lock dir' directive, which doesn't mean
     what the FHS says it should, and causes us no end of grief.
     (Closes: #122299)
-  * LPRng-handling patch so that jobs printed to recent versions of 
-    LPRng show up properly as 'done' instead of 'paused' in the Windows 
-    print queue.  Thanks to Jaroslav Serdula <serdula_jaroslav@vse.sk> 
+  * LPRng-handling patch so that jobs printed to recent versions of
+    LPRng show up properly as 'done' instead of 'paused' in the Windows
+    print queue.  Thanks to Jaroslav Serdula <serdula_jaroslav@vse.sk>
     for this patch. (Closes: #139458)
+  * Applied patch from Urban Widmark <urban@teststation.com>
+    (smbfs upstream maintainer) to add a '-n' option to smbmount
+    that does the same as mount's '-n'. (Closes: #139590)
+  * Minor tweak to unpatch-source so we unpatch sources in the
+    reverse order we patched them.
 
- -- Eloy A. Paris <peloy@debian.org>  Fri, 22 Mar 2002 09:51:56 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Tue,  2 Apr 2002 10:19:19 -0500
 
 samba (2.2.3a-6) unstable; urgency=low
 
