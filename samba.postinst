@@ -143,7 +143,7 @@ fi
 
 # Run the init script if this is a first-time install, or if it's an
 # upgrade and Samba was running before, _and_ we're not running from inetd.
-if [ ( -z "$2" -o ! -f /tmp/samba-was-not-running ) -a \
+if [ \( -z "$2" -o ! -f /tmp/samba-was-not-running \) -a \
 		"$RUN_MODE" = "daemons" ]; then
 	# Check the script is executable before running it.
 	[ -x /etc/init.d/samba ] && /etc/init.d/samba start
