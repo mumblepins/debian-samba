@@ -145,7 +145,7 @@ then
 		PASSDB="tdbsam $PASSDB"
 	fi
 	TMPFILE=`mktemp -q /tmp/smb.conf.XXXXXX`
-	sed -e "s/^\([[:space:]]*\)passdb backend[[:space:]]*=/\1passdb backend = ${PASSDB}/" \
+	sed -e "s/^\([[:space:]]*\)passdb backend[[:space:]]*=.*/\1passdb backend = ${PASSDB}/" \
 		< /etc/samba/smb.conf >${TMPFILE}
 	mv -f ${TMPFILE} /etc/samba/smb.conf
 
