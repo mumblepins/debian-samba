@@ -108,6 +108,7 @@ RUN_MODE="${RET}"
 TMPFILE=`mktemp -q /tmp/samba.config.XXXXXX`
 sed -e "s/^[[:space:]]*RUN_MODE[[:space:]]*=.*/RUN_MODE=\"${RUN_MODE}\"/" \
         < ${INITCONFFILE} >${TMPFILE}
+chmod a+r ${TMPFILE}
 mv -f ${TMPFILE} ${INITCONFFILE}
 
 # Generate a smbpasswd file?
@@ -155,6 +156,7 @@ then
 	TMPFILE=`mktemp -q /tmp/smb.conf.XXXXXX`
 	sed -e "s/^\([[:space:]]*\)passdb backend[[:space:]]*=.*/\1passdb backend = ${PASSDB}/" \
 		< /etc/samba/smb.conf >${TMPFILE}
+	chmod a+r ${TMPFILE}
 	mv -f ${TMPFILE} /etc/samba/smb.conf
 fi
 
