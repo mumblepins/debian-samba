@@ -129,12 +129,15 @@ if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/passdb.tdb -a ! -e /etc
 	rm /etc/samba/smbpasswd
 fi
 
-if [ -e /etc/samba/smbpasswd -a ! -e /etc/samba/passdb.tdb \
-   -a "$PDB_MIGRATE" = "true" ]
+umask 022
+
+if [ "$1" = "configure" -a -n "$2" -a -e /etc/samba/smbpasswd \
+     -a ! -e /etc/samba/passdb.tdb -a "$PDB_MIGRATE" = "true" ] \
+   && dpkg --compare-versions "$2" lt 2.99.cvs.20020713-2
 then
+	umask 066
 	pdbedit -i smbpasswd -e tdbsam
 	rm /etc/samba/smbpasswd
-
 	umask 022
 
 	# The database has been moved, now make sure we can still find it.
@@ -154,8 +157,6 @@ then
 		< /etc/samba/smb.conf >${TMPFILE}
 	mv -f ${TMPFILE} /etc/samba/smb.conf
 fi
-
-umask 022
 
 # ------------------------- Debconf questions end ---------------------
 
