@@ -1,3 +1,9 @@
+samba (2.99-1) unstable; urgency=low
+
+  * first attempt for 3.0pre.
+
+ -- Steve Langasek <vorlon@debian.org>  Sat, 13 Jul 2002 12:54:25 -0500
+
 samba (2.2.5-2) unstable; urgency=low
 
   * No longer ship make_printerdef, which is deprecated. (closes: #63059)

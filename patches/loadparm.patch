@@ -1,6 +1,7 @@
---- samba-2.2.5/source/param/loadparm.c.orig	Tue Jun 18 23:15:07 2002
-+++ samba-2.2.5/source/param/loadparm.c	Tue Jun 18 23:15:07 2002
-@@ -1135,26 +1135,26 @@
+diff -ur samba-2.99.cvs.20020713.orig/source/param/loadparm.c samba-2.99.cvs.20020713/source/param/loadparm.c
+--- samba-2.99.cvs.20020713.orig/source/param/loadparm.c	Sat Jul 13 14:16:30 2002
++++ samba-2.99.cvs.20020713/source/param/loadparm.c	Sat Jul 13 14:20:37 2002
+@@ -1065,26 +1065,26 @@
  		case PRINT_AIX:
  		case PRINT_LPRNT:
  		case PRINT_LPROS2:
@@ -37,8 +38,8 @@
  			break;
  
  		case PRINT_CUPS:
-@@ -1170,19 +1170,19 @@
- 			string_set(&Globals.szPrintcapname, "cups");
+@@ -1100,19 +1100,19 @@
+ 	                string_set(&Globals.szPrintcapname, "cups");
  #else
  			string_set(&sDefault.szLpqcommand,
 -			           "/usr/bin/lpstat -o %p");
@@ -64,7 +65,7 @@
  			string_set(&Globals.szPrintcapname, "lpstat");
  #endif /* HAVE_CUPS */
  			break;
-@@ -1499,7 +1499,10 @@
+@@ -1415,7 +1415,10 @@
  	else
  		StrnCpy(ret, s, len);
  
@@ -74,5 +75,5 @@
 +			StrnCpy(ret, s, len);
 +	}
  
- 	standard_sub_basic(ret);
+ 	standard_sub_basic(current_user_info.smb_name,ret,len+100);
  	return (ret);
