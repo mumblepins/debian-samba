@@ -1,3 +1,12 @@
+samba (2.2.3a-6) unstable; urgency=low
+
+  * Call db_stop as soon as we're done with debconf in the postinst, to 
+    avoid hanging bugs (closes: #137813)
+  * Ony call 'update-inetd --add' on first installation, just as we only 
+    call 'update-inetd --remove' on package purge.
+
+ -- Steve Langasek <vorlon@debian.org>  Mon, 11 Mar 2002 10:07:02 -0600
+
 samba (2.2.3a-5) unstable; urgency=low
 
   * Having multiple workgroup lines in your smb.conf, though wacky, is 

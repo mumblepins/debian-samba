@@ -107,6 +107,9 @@ mv -f ${TMPFILE} ${INITCONFFILE}
 db_get samba/generate_smbpasswd || true
 GENERATE_SMBPASSWD="${RET}"
 
+# Done with debconf now.
+db_stop
+
 if [ "${GENERATE_SMBPASSWD}" = "true" -a ! -e /etc/samba/smbpasswd ]; then
 	getent passwd | /usr/sbin/mksmbpasswd > /etc/samba/smbpasswd
 	chmod 600 /etc/samba/smbpasswd 
@@ -122,8 +125,10 @@ update-rc.d samba defaults 20 19 > /dev/null
 # We want to add these entries to inetd.conf commented out. Otherwise
 #	UDP traffic could make inetd to start nmbd or smbd right during
 #	the configuration stage.
-update-inetd --add "#<off># netbios-ns	dgram	udp	wait	root 	/usr/sbin/tcpd	/usr/sbin/nmbd -a"
-update-inetd --add "#<off># netbios-ssn	stream	tcp	nowait	root	/usr/sbin/tcpd	/usr/sbin/smbd"
+if [ "$1" = "configure" -a -z "$2" ]; then
+	update-inetd --add "#<off># netbios-ns	dgram	udp	wait	root 	/usr/sbin/tcpd	/usr/sbin/nmbd -a"
+	update-inetd --add "#<off># netbios-ssn	stream	tcp	nowait	root	/usr/sbin/tcpd	/usr/sbin/smbd"
+fi
 
 if [ "$RUN_MODE" = "daemons" ]; then
 	update-inetd --disable netbios-ns
@@ -170,5 +175,3 @@ fi
 # Do this last, so we don't accidentally start the daemons if something 
 # else in the script fails above.
 rm -f /tmp/samba-was-not-running
-
-db_stop
