@@ -1,7 +1,7 @@
 diff -uNr samba-2.2.5pre1.orig/source/Makefile.in samba-2.2.5pre1/source/Makefile.in
 --- samba-2.2.5pre1.orig/source/Makefile.in	Wed Jun 12 15:26:50 2002
 +++ samba-2.2.5pre1/source/Makefile.in	Wed Jun 12 15:30:29 2002
-@@ -84,7 +84,7 @@
+@@ -86,7 +86,7 @@
  FLAGS1 = $(CFLAGS) @FLAGS1@ -Iinclude -I$(srcdir)/include -I$(srcdir)/ubiqx -I$(srcdir)/smbwrapper $(CPPFLAGS) -DLOGFILEBASE=\"$(LOGFILEBASE)\"
  FLAGS2 = -DCONFIGFILE=\"$(CONFIGFILE)\" -DLMHOSTSFILE=\"$(LMHOSTSFILE)\"  
  FLAGS3 = -DSWATDIR=\"$(SWATDIR)\" -DSBINDIR=\"$(SBINDIR)\" -DLOCKDIR=\"$(LOCKDIR)\" -DCODEPAGEDIR=\"$(CODEPAGEDIR)\"
@@ -50,10 +50,9 @@ diff -uNr samba-2.2.5pre1.orig/source/include/config.h.in samba-2.2.5pre1/source
  #undef HAVE_GETGROUPS_TOO_MANY_EGIDS
  #undef HAVE_PASSWD_PW_COMMENT
  #undef HAVE_PASSWD_PW_AGE
-diff -uNr samba-2.2.5pre1.orig/source/include/local.h samba-2.2.5pre1/source/include/local.h
---- samba-2.2.5pre1.orig/source/include/local.h	Tue Jan 15 10:02:37 2002
-+++ samba-2.2.5pre1/source/include/local.h	Wed Jun 12 15:30:29 2002
-@@ -191,4 +191,20 @@
+--- samba-2.2.8/source/include/local.h.orig	2003-02-28 10:56:18.000000000 -0500
++++ samba-2.2.8/source/include/local.h	2003-03-16 12:29:44.000000000 -0500
+@@ -191,6 +191,22 @@
  /* Max number of jobs per print queue. */
  #define PRINT_MAX_JOBID 10000
  
@@ -73,11 +72,13 @@ diff -uNr samba-2.2.5pre1.orig/source/include/local.h samba-2.2.5pre1/source/inc
 +
 +#endif
 +
- #endif
+ /* Max number of open RPC pipes. */
+ #define MAX_OPEN_PIPES 2048
+ 
 diff -uNr samba-2.2.5pre1.orig/source/lib/util.c samba-2.2.5pre1/source/lib/util.c
 --- samba-2.2.5pre1.orig/source/lib/util.c	Mon Jun  3 21:11:11 2002
 +++ samba-2.2.5pre1/source/lib/util.c	Wed Jun 12 15:30:29 2002
-@@ -1862,6 +1862,46 @@
+@@ -1872,6 +1872,46 @@
  	return fname;
  }
  
@@ -192,7 +193,7 @@ diff -uNr samba-2.2.5pre1.orig/source/nsswitch/winbindd_idmap.c samba-2.2.5pre1/
  	char *szLockDir;
  	char *szPidDir;
  	char *szRootdir;
-@@ -1043,8 +1043,13 @@
+@@ -1046,8 +1046,13 @@
  	{"config file", P_STRING, P_GLOBAL, &Globals.szConfigFile, NULL, NULL, FLAG_HIDE},
  	{"preload", P_STRING, P_GLOBAL, &Globals.szAutoServices, NULL, NULL, FLAG_DOS_STRING},
  	{"auto services", P_STRING, P_GLOBAL, &Globals.szAutoServices, NULL, NULL, FLAG_DOS_STRING},
@@ -287,14 +288,14 @@ diff -uNr samba-2.2.5pre1.orig/source/smbd/lanman.c samba-2.2.5pre1/source/smbd/
      return(0);
    }
  
-diff -ur samba-2.2.4+5pre1.orig/source/passdb/secrets.c samba-2.2.4+5pre1/source/passdb/secrets.c
---- samba-2.2.4+5pre1.orig/source/passdb/secrets.c	Mon Mar 18 17:55:49 2002
-+++ samba-2.2.4+5pre1/source/passdb/secrets.c	Thu Jun 13 10:37:44 2002
-@@ -34,8 +34,7 @@
+--- samba-2.2.8/source/passdb/secrets.c.orig	2003-03-14 16:34:48.000000000 -0500
++++ samba-2.2.8/source/passdb/secrets.c	2003-03-16 12:35:13.000000000 -0500
+@@ -34,9 +34,7 @@
  	if (tdb)
  		return True;
  
 -	get_private_directory(fname);
+-
 -	pstrcat(fname,"/secrets.tdb");
 +	pstrcpy(fname,state_path("secrets.tdb"));
  

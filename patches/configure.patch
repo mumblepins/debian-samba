@@ -1,7 +1,7 @@
 diff -uNr samba-2.2.5pre1.orig/source/configure.in samba-2.2.5pre1/source/configure.in
 --- samba-2.2.5pre1.orig/source/configure.in	Sat Jun  8 07:55:55 2002
 +++ samba-2.2.5pre1/source/configure.in	Wed Jun 12 15:27:28 2002
-@@ -384,6 +384,28 @@
+@@ -406,6 +406,28 @@
  #endif
  }
  ], [LINUX_LFS_SUPPORT=yes], [LINUX_LFS_SUPPORT=no], [LINUX_LFS_SUPPORT=cross])
