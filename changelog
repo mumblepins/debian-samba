@@ -1,3 +1,17 @@
+samba (2.2.3a-8) woody-proposed-updates; urgency=low
+
+  * maintainer script fixes backported from sid.
+  * reorder postinst, so that installing samba-common from scratch loads
+    the debconf answers properly (closes: #151985).
+  * Look for secrets.tdb in /var/lib/samba, and handle in the postinst.
+    This is not really a config file, because users don't edit it.
+    (closes: #147429)
+  * samba.postinst: added logic so we don't call /etc/init.d/samba if
+    we are running from inetd (this prevents the stupid help message
+    to be printed during package upgrades if we are running from inetd.)
+
+ -- Steve Langasek <vorlon@debian.org>  Sat, 13 Jul 2002 10:18:56 -0500
+
 samba (2.2.3a-7) unstable; urgency=medium
 
   * More README.debian updates.
