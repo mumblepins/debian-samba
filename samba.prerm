@@ -56,7 +56,7 @@ if grep -q '^netbios-ns' /etc/inetd.conf; then
 	else
 		start-stop-daemon --stop --oknodo --user root --name smbd --quiet
 	fi
-elif [ -x /etc/init.d/samba ]; then	# Old Samba packages didn't have a
+else if [ -x /etc/init.d/samba ]; then	# Old Samba packages didn't have a
 					#	/etc/init.d/samba so we better 
 					#	check first.
 	# Samba is running as daemons. No problem here, just stop Samba...
