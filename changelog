@@ -1,3 +1,13 @@
+samba (2.2.3-7) unstable; urgency=low
+
+  * Potato builds were failing because debian/rules was not creating
+    debian/winbind/etc/logrotate.d/. A user having problems creating
+    Potato packages brought this to my attention. dh_installlogrotate
+    takes care of creating the directory for us, that's why we didn't
+    notice.
+
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 13 Feb 2002 21:38:58 -0500
+
 samba (2.2.3-6) unstable; urgency=low
 
   * Make sure there are actual files in /var/state/samba before trying 
