@@ -21,8 +21,9 @@ samba (2.2.4-1) unstable; urgency=low
     this than running start-stop-daemon with --oknodo because
     start-stop-daemon might print other important error messages that with
     --oknodo it would otherwise not print. (Closes: #102187, #109301)
+  * Patch from jerry@samba.org to fix parsing of spoolss structures.
 
- -- Eloy A. Paris <peloy@debian.org>  Mon, 13 May 2002 23:06:17 -0400
+ -- Eloy A. Paris <peloy@debian.org>  Thu, 23 May 2002 23:16:52 -0400
 
 samba (2.2.3a-7) unstable; urgency=medium
 
