@@ -17,6 +17,7 @@ samba (2.2.3-4) unstable; urgency=low
     manually everything that debhelper adds automatically. In fact,
     since we are calling update-rc.d without standard paramaters I
     think we can't use #DEBHELPER#.
+  * Fix fatal syntax error in samba.prerm.
 
  -- Steve Langasek <vorlon@debian.org>  Thu,  7 Feb 2002 13:12:08 -0500
 
