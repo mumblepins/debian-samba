@@ -50,15 +50,34 @@ case "$1" in
 		echo "."
 		;;
 	stop)
-		echo -n "Stopping Samba daemons:"
+		echo -n "Stopping Samba daemons: "
 
-		echo -n " nmbd"
 		start-stop-daemon --stop --quiet --pidfile $NMBDPID
+		# Wait a little and remove stale PID file
+		sleep 1
+		if [ -f $NMBDPID ] && ! ps h `cat $NMBDPID` > /dev/null
+		then
+			# Stale PID file (nmbd was succesfully stopped),
+			# remove it (should be removed by nmbd itself IMHO.)
+			rm -f $NMBDPID
+			echo -n "nmbd "
+		else
+			echo -n "(failed to stop nmbd!) "
+		fi
 
-		echo -n " smbd"
 		start-stop-daemon --stop --quiet --pidfile $SMBDPID
+		# Wait a little and remove stale PID file
+		sleep 1
+		if [ -f $SMBDPID ] && ! ps h `cat $SMBDPID` > /dev/null
+		then
+			# Stale PID file (nmbd was succesfully stopped),
+			# remove it (should be removed by smbd itself IMHO.)
+			rm -f $SMBDPID
+			echo "smbd."
+		else
+			echo -n "(failed to stop smbd!)"
+		fi
 
-		echo "."
 		;;
 	reload)
 		echo -n "Reloading /etc/samba/smb.conf (smbd only)"
@@ -67,19 +86,9 @@ case "$1" in
 		echo "."
 		;;
 	restart|force-reload)
-		echo -n "Restarting Samba daemons:"
-
-		echo -n " nmbd"
-		start-stop-daemon --stop --quiet --pidfile $NMBDPID
-		sleep 2
-		start-stop-daemon --start --quiet --exec /usr/sbin/nmbd -- -D
-
-		echo -n " smbd"
-		start-stop-daemon --stop --quiet --pidfile $SMBDPID
-		sleep 2
-		start-stop-daemon --start --quiet --exec /usr/sbin/smbd -- -D
-
-		echo "."
+		$0 stop
+		sleep 1
+		$0 start
 		;;
 	*)
 		echo "Usage: /etc/init.d/samba {start|stop|reload|restart|force-reload}"

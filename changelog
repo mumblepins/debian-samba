@@ -15,6 +15,12 @@ samba (2.2.4-1) unstable; urgency=low
     we are running from inetd (this prevents the stupid help message
     to be printed during package upgrades if we are running from inetd.)
   * samba.prerm: idem.
+  * /etc/init.d/samba: delete stale PID files after nmbd and smbd are
+    stopped. This prevents start-stop-daemon from printing an ugly
+    error message when called from '/etc/init.d/samba stop'. I prefer
+    this than running start-stop-daemon with --oknodo becayse
+    start-stop-daemon might print other important error messages that with
+    --oknodo it would otherwise not print. (Closes: #102187, #109301)
 
  -- Eloy A. Paris <peloy@debian.org>  Mon, 13 May 2002 23:06:17 -0400
 
