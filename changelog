@@ -10,6 +10,7 @@ samba (2.999+3.0cvs20020723-1) unstable; urgency=medium
     the right place (closes: 153727).
   * Fixed bug in the FHS migration path that causes nmbd to read its
     state from one location, but write it out to another. (closes: #154210)
+  * Make sure nmbd is always looking for wins.tdb in the same place.
 
  -- Steve Langasek <vorlon@debian.org>  Fri, 19 Jul 2002 21:38:54 -0500
 
