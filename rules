@@ -90,7 +90,6 @@ build-stamp:
 
 clean: unpatch
 	dh_testdir
-	dh_testroot
 	rm -f build-stamp configure-stamp
 
 	# Clean first the Samba package
