@@ -26,6 +26,9 @@ samba (2.2.3a-7) unstable; urgency=low
     swat packages that says that samba-doc must be installed for
     the on-line documentation to work. Thanks to Torne Wuff
     <torne@wolfpuppy.org.uk>. (Closes: #95437)
+  * 'dh_installinit -n' gives us no initscript handling -- we need to
+    handle all starting and stopping of daemons ourselves, which wasn't
+    happening in the {pre,post}rm scripts.
 
  -- Eloy A. Paris <peloy@debian.org>  Fri, 12 Apr 2002 13:12:15 -0400
 

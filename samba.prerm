@@ -16,4 +16,10 @@ then
 	fi
 fi
 
+if [ -x /etc/init.d/samba ]; then	# Old Samba packages didn't have  
+					#	/etc/init.d/samba so we'd better
+					#	check first.
+	/etc/init.d/samba stop
+fi
+
 #DEBHELPER#
