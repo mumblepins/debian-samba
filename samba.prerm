@@ -1,0 +1,19 @@
+#!/bin/sh -e
+
+# Clean up any such stale file.
+rm -f /tmp/samba-was-not-running
+
+# The smbd pid file is missing, or points to a dead process
+if [ ! -f /var/run/samba/smbd.pid ] || \
+   ! ps `cat /var/run/samba/smbd.pid` | grep -q smbd
+then
+	# The nmbd pid file is missing, or points to a dead process
+	if [ -f /var/run/samba/nmbd.pid ] || \
+	   ! ps `cat /var/run/samba/nmbd.pid` | grep -q nmbd
+	then
+		# let the postinst know not to start samba.
+		[ "$1" = "upgrade" ] && touch /tmp/samba-was-not-running
+	fi
+fi
+
+#DEBHELPER#

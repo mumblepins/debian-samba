@@ -133,9 +133,15 @@ else
 fi
 
 # Start Samba: nothing wrong should happen if Samba is running from inetd
-#	and /etc/init.d/samba is run. Check the script is executable
-#	before running it.
-[ -x /etc/init.d/samba ] && /etc/init.d/samba start
+#	and /etc/init.d/samba is run.
+
+# Run the init script if this is a first-time install, or if it's an
+# upgrade and Samba was running before.
+if [ -z "$2" -o ! -f /tmp/samba-was-not-running ]; then
+	# Check the script is executable before running it.
+	[ -x /etc/init.d/samba ] && /etc/init.d/samba start
+fi
+
 
 # This check is a safety net: the /etc/samba/smbpasswd file must have
 #	permissions 600.
@@ -160,5 +166,9 @@ mv -f /var/log/smb* /var/log/samba/ 2> /dev/null || true
 if [ -d /usr/doc -a ! -e /usr/doc/samba -a -d /usr/share/doc/samba ]; then
 	ln -sf ../share/doc/samba /usr/doc/samba
 fi
+
+# Do this last, so we don't accidentally start the daemons if something 
+# else in the script fails above.
+rm -f /tmp/samba-was-stopped
 
 db_stop
