@@ -4,6 +4,8 @@ samba (2.2.3a-9) stable; uergncy=high
     wasn't patched to look for the file there.  Get us back on track by
     patching the code.  Thanks to Mike Fedyk <mfedyk@matchmail.com> for
     catching this.
+  * Apply micropatch from Jeremy Allison that fixes w2k offline file
+    corruption bug in 2.2.3a (closes: #163668).
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 12 Oct 2002 01:49:00 -0500
 
