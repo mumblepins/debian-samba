@@ -1,3 +1,9 @@
+samba (2.2.3a-7) unstable; urgency=low
+
+  * More README.debian updates.
+
+ -- Eloy A. Paris <peloy@debian.org>  Thu, 14 Mar 2002 14:12:25 -0500
+
 samba (2.2.3a-6) unstable; urgency=low
 
   * Call db_stop as soon as we're done with debconf in the postinst, to
