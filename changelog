@@ -1,3 +1,9 @@
+samba (2.999+3.0cvs20020810-1) unstable; urgency=low
+
+  * CVS update.
+
+ -- Eloy A. Paris <peloy@debian.org>  Sat, 10 Aug 2002 23:45:25 -0400
+
 samba (2.999+3.0cvs20020723-2) unstable; urgency=low
 
   * scale back the tdbsam migration support, because of undesirable
