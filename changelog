@@ -7,7 +7,7 @@ samba (2.2.3-1) unstable; urgency=low
   * Use killall -q in logrotate.d script, to avoid spurious cron 
     emails (closes: #130100).
 
- -- Eloy A. Paris <peloy@debian.org>  Sat,  2 Feb 2002 19:56:18 -0500
+ -- Steve Langasek <vorlon@debian.org>  Sat,  2 Feb 2002 19:56:18 -0500
 
 samba (2.2.2-12) unstable; urgency=high
 
