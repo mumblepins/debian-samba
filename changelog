@@ -1,3 +1,10 @@
+samba (2.2.3a-14) stable-security; urgency=high
+
+  * Apply fix from Samba Team for CAN-2004-0815 (Samba 2.2.x &
+    3.0.x <= 3.0.5 Arbitrary File Access Vulnerability).
+
+ -- Eloy A. Paris <peloy@debian.org>  Tue, 28 Sep 2004 18:48:49 -0400
+
 samba (2.2.3a-13) stable-security; urgency=high
 
   * Apply patch from Urban Widmark <urban@teststation.com> to prevent
