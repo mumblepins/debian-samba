@@ -4,6 +4,8 @@ samba (2.99.cvs.20020713-2) unstable; urgency=medium
   * migrate from smbpasswd to tdbsam
   * re-add the pdbedit util and manpage
   * compile in ldapsam support (closes: #146935)
+  * add PRIVATEDIR to the list of vars we override for the install
+    target, so Samba doesn't try to create /etc/samba (closes: #153746).
 
  -- Steve Langasek <vorlon@debian.org>  Fri, 19 Jul 2002 21:38:54 -0500
 

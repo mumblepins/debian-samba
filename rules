@@ -38,7 +38,8 @@ IVARS = BASEDIR=$(DESTDIR)/usr \
 		INCLUDEDIR=$(DESTDIR)/usr/include \
 		SWATDIR=$(SWATDIR)/usr/share/samba/swat \
 		SAMBABOOK=$(SAMBABOOK)/usr/share/samba/swat/using_samba \
-		CODEPAGEDIR=$(DESTDIR)/usr/share/samba/
+		CODEPAGEDIR=$(DESTDIR)/usr/share/samba/ \
+		PRIVATEDIR=$(DESTDIR)/etc/samba
 
 patch: patch-stamp
 patch-stamp:
