@@ -2,6 +2,8 @@ samba (2.2.3-4) unstable; urgency=low
 
   * FHS cleanup; files in /var are now properly sorted according to 
     their nature. (Closes: #102101)
+  * Remove patches to source/configure, since we now call autoconf to 
+    regenerate this file cleanly.
 
  -- Steve Langasek <vorlon@debian.org>  Wed,  6 Feb 2002 11:18:00 -0600
 
