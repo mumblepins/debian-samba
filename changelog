@@ -6,8 +6,15 @@ samba (2.2.4-1) unstable; urgency=low
   * Compile with --with-automount, for NIS homedir support (closes: #123396)
   * Add a proper 'flags' field to the mount entry we write to /etc/mtab;
     fixes a display bug with mount (closes: #140397)
+  * Added logic to /etc/init.d/samba so a help message is printed out
+    when Samba is running from inetd _and_ we are not booting, i.e. the
+    user called the init script manually. (Closes: #139807, #140204)
+  * samba.postinst: added logic so we don't call /etc/init.d/samba if
+    we are running from inetd (this prevents the stupid help message
+    to be printed during package upgrades if we are running from inetd.)
+  * samba.prerm: idem.
 
- -- Eloy A. Paris <peloy@debian.org>  Sun,  5 May 2002 17:56:16 -0400
+ -- Eloy A. Paris <peloy@debian.org>  Mon, 13 May 2002 23:06:17 -0400
 
 samba (2.2.3a-7) unstable; urgency=medium
 
