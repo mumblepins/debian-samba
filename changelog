@@ -1,3 +1,10 @@
+samba (2.2.3-4) unstable; urgency=low
+
+  * FHS cleanup; files in /var are now properly sorted according to 
+    their nature. (Closes: #102101)
+
+ -- Steve Langasek <vorlon@debian.org>  Wed,  6 Feb 2002 11:18:00 -0600
+
 samba (2.2.3-3) unstable; urgency=low
 
   * work on lintian-cleanness in the package (wrong permissions,

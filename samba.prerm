@@ -7,8 +7,11 @@
 
 DEBIAN_CONFIG=/etc/samba/debian_config
 
-NMBDPID=/var/state/samba/nmbd.pid
-SMBDPID=/var/state/samba/smbd.pid
+NMBDPID=/var/run/samba/nmbd.pid
+SMBDPID=/var/run/samba/smbd.pid
+
+OLDNMBDPID=/var/state/samba/nmbd.pid
+OLDSMBDPID=/var/state/samba/smbd.pid
 
 # The most important thing the prerm script must do is to stop the Samba
 #	daemons (nmbd and smbd). Note that this can be tricky since Samba
@@ -39,6 +42,8 @@ if grep -q '^netbios-ns' /etc/inetd.conf; then
 	#	will handle this by testing first whether the PID file exists.
 	if [ -f $NMBDPID ]; then
 		start-stop-daemon --stop --oknodo --user root --name nmbd --quiet --pidfile $NMBDPID
+	else if [ -f $OLDNMBDPID ]; then
+		start-stop-daemon --stop --oknodo --user root --name nmbd --quiet --pidfile $OLDNMBDPID
 	else
 		start-stop-daemon --stop --oknodo --user root --name nmbd --quiet
 	fi
@@ -46,6 +51,8 @@ if grep -q '^netbios-ns' /etc/inetd.conf; then
 	# nmbd must be dead by now, now it's smbd's turn
 	if [ -f $SMBDPID ]; then
 		start-stop-daemon --stop --oknodo --user root --name smbd --quiet --pidfile $SMBDPID
+	else if [ -f $OLDSMBDPID ]; then
+		start-stop-daemon --stop --oknodo --user root --name smbd --quiet --pidfile $OLDSMBDPID
 	else
 		start-stop-daemon --stop --oknodo --user root --name smbd --quiet
 	fi

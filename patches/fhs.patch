@@ -1,0 +1,233 @@
+diff -ur samba-2.2.3.orig/source/Makefile.in samba-2.2.3/source/Makefile.in
+--- samba-2.2.3.orig/source/Makefile.in	Mon Feb  4 20:51:25 2002
++++ samba-2.2.3/source/Makefile.in	Mon Feb  4 22:50:40 2002
+@@ -79,7 +79,7 @@
+ FLAGS1 = $(CFLAGS) -Iinclude -I$(srcdir)/include -I$(srcdir)/ubiqx -I$(srcdir)/smbwrapper $(CPPFLAGS) -DLOGFILEBASE=\"$(LOGFILEBASE)\"
+ FLAGS2 = -DCONFIGFILE=\"$(CONFIGFILE)\" -DLMHOSTSFILE=\"$(LMHOSTSFILE)\"  
+ FLAGS3 = -DSWATDIR=\"$(SWATDIR)\" -DSBINDIR=\"$(SBINDIR)\" -DLOCKDIR=\"$(LOCKDIR)\" -DCODEPAGEDIR=\"$(CODEPAGEDIR)\"
+-FLAGS4 = -DDRIVERFILE=\"$(DRIVERFILE)\" -DBINDIR=\"$(BINDIR)\" 
++FLAGS4 = -DDRIVERFILE=\"$(DRIVERFILE)\" -DBINDIR=\"$(BINDIR)\" -DVARDIR=\"$(VARDIR)\"
+ FLAGS5 = $(FLAGS1) $(FLAGS2) $(FLAGS3) $(FLAGS4) -DHAVE_INCLUDES_H
+ FLAGS  = $(ISA) $(FLAGS5) $(PASSWD_FLAGS)
+ FLAGS32  = $(ISA32) $(FLAGS5) $(PASSWD_FLAGS)
+diff -ur samba-2.2.3.orig/source/acconfig.h samba-2.2.3/source/acconfig.h
+--- samba-2.2.3.orig/source/acconfig.h	Sat Feb  2 18:46:05 2002
++++ samba-2.2.3/source/acconfig.h	Mon Feb  4 22:15:44 2002
+@@ -173,3 +173,4 @@
+ #undef HAVE_DEVICE_MAJOR_FN
+ #undef HAVE_DEVICE_MINOR_FN
+ #undef HAVE_MAKEDEV_FN
++#undef FHS_COMPATIBLE
+diff -ur samba-2.2.3.orig/source/configure.in samba-2.2.3/source/configure.in
+--- samba-2.2.3.orig/source/configure.in	Mon Feb  4 20:51:25 2002
++++ samba-2.2.3/source/configure.in	Tue Feb  5 14:18:13 2002
+@@ -12,10 +12,11 @@
+ [  --with-fhs              Use FHS-compliant paths (default=no)],
+     codepagedir="\$(DATADIR)/samba/codepages"
+     configdir="${sysconfdir}/samba"
+-    lockdir="\${VARDIR}/cache/samba"
++    lockdir="\${VARDIR}/run/samba"
+     logfilebase="\${VARDIR}/log/samba"
+     privatedir="\${CONFIGDIR}/private"
+-    swatdir="\${DATADIR}/samba/swat",
++    swatdir="\${DATADIR}/samba/swat"
++    AC_DEFINE(FHS_COMPATIBLE),
+     codepagedir="\$(LIBDIR)/codepages"
+     configdir="\$(LIBDIR)"
+     lockdir="\$(VARDIR)/locks"
+diff -ur samba-2.2.3.orig/source/include/config.h.in samba-2.2.3/source/include/config.h.in
+--- samba-2.2.3.orig/source/include/config.h.in	Sat Feb  2 18:46:39 2002
++++ samba-2.2.3/source/include/config.h.in	Mon Feb  4 22:15:57 2002
+@@ -236,6 +236,7 @@
+ #undef HAVE_DEVICE_MAJOR_FN
+ #undef HAVE_DEVICE_MINOR_FN
+ #undef HAVE_MAKEDEV_FN
++#undef FHS_COMPATIBLE
+ 
+ /* The number of bytes in a int.  */
+ #undef SIZEOF_INT
+diff -ur samba-2.2.3.orig/source/include/local.h samba-2.2.3/source/include/local.h
+--- samba-2.2.3.orig/source/include/local.h	Mon Feb  4 20:51:26 2002
++++ samba-2.2.3/source/include/local.h	Tue Feb  5 14:15:15 2002
+@@ -189,4 +189,20 @@
+ /* Allocation roundup. */
+ #define SMB_ROUNDUP_ALLOCATION_SIZE 0x100000
+ 
++/* FHS-compatible directory defines */
++#ifdef FHS_COMPATIBLE
++#ifndef CACHEDIR
++#define CACHEDIR VARDIR "/cache/samba"
++#endif
++#ifndef STATEDIR
++#define STATEDIR VARDIR "/lib/samba"
++#endif
++
++#else
++
++#define CACHEDIR lp_lockdir()
++#define STATEDIR lp_lockdir()
++
++#endif
++
+ #endif
+diff -ur samba-2.2.3.orig/source/lib/util.c samba-2.2.3/source/lib/util.c
+--- samba-2.2.3.orig/source/lib/util.c	Sat Feb  2 18:46:42 2002
++++ samba-2.2.3/source/lib/util.c	Tue Feb  5 14:14:58 2002
+@@ -1780,6 +1780,47 @@
+ 	return fname;
+ }
+ 
++/*****************************************************************
++a useful function for returning a path in the Samba state directory
++ *****************************************************************/  
++char *state_path(char *name)
++{
++	static pstring fname;
++
++	pstrcpy(fname,STATEDIR);
++	trim_string(fname,"","/");
++
++	if (!directory_exist(fname,NULL)) {
++		mkdir(fname,0755);
++	}
++
++	pstrcat(fname,"/");
++	pstrcat(fname,name);
++
++	return fname;
++}
++
++/*****************************************************************
++a useful function for returning a path in the Samba cache directory
++ *****************************************************************/  
++char *cache_path(char *name)
++{
++	static pstring fname;
++
++	pstrcpy(fname,CACHEDIR);
++	trim_string(fname,"","/");
++
++	if (!directory_exist(fname,NULL)) {
++		mkdir(fname,0755);
++	}
++
++	pstrcat(fname,"/");
++	pstrcat(fname,name);
++
++	return fname;
++}
++
++
+ /*******************************************************************
+  Given a filename - get its directory name
+  NB: Returned in static storage.  Caveats:
+diff -ur samba-2.2.3.orig/source/nmbd/nmbd_serverlistdb.c samba-2.2.3/source/nmbd/nmbd_serverlistdb.c
+--- samba-2.2.3.orig/source/nmbd/nmbd_serverlistdb.c	Sat Feb  2 18:46:45 2002
++++ samba-2.2.3/source/nmbd/nmbd_serverlistdb.c	Tue Feb  5 14:03:30 2002
+@@ -348,7 +348,7 @@
+ 
+   updatecount++;
+     
+-  pstrcpy(fname,lp_lockdir());
++  pstrcpy(fname,CACHEDIR);
+   trim_string(fname,NULL,"/");
+   pstrcat(fname,"/");
+   pstrcat(fname,SERVER_LIST);
+diff -ur samba-2.2.3.orig/source/nmbd/nmbd_winsserver.c samba-2.2.3/source/nmbd/nmbd_winsserver.c
+--- samba-2.2.3.orig/source/nmbd/nmbd_winsserver.c	Sat Feb  2 18:46:45 2002
++++ samba-2.2.3/source/nmbd/nmbd_winsserver.c	Tue Feb  5 14:15:42 2002
+@@ -180,7 +180,7 @@
+ 
+   add_samba_names_to_subnet(wins_server_subnet);
+ 
+-  if((fp = sys_fopen(lock_path(WINS_LIST),"r")) == NULL)
++  if((fp = sys_fopen(state_path(WINS_LIST),"r")) == NULL)
+   {
+     DEBUG(2,("initialise_wins: Can't open wins database file %s. Error was %s\n",
+            WINS_LIST, strerror(errno) ));
+diff -ur samba-2.2.3.orig/source/nsswitch/winbindd_cache.c samba-2.2.3/source/nsswitch/winbindd_cache.c
+--- samba-2.2.3.orig/source/nsswitch/winbindd_cache.c	Sat Feb  2 18:46:45 2002
++++ samba-2.2.3/source/nsswitch/winbindd_cache.c	Tue Feb  5 14:14:32 2002
+@@ -41,7 +41,7 @@
+ {
+ 	/* Open tdb cache */
+ 
+-	if (!(cache_tdb = tdb_open_log(lock_path("winbindd_cache.tdb"), 0, 
++	if (!(cache_tdb = tdb_open_log(cache_path("winbindd_cache.tdb"), 0, 
+ 				   TDB_NOLOCK, O_RDWR | O_CREAT | O_TRUNC, 
+ 				   0600)))
+ 		DEBUG(0, ("Unable to open tdb cache - user and group caching disabled\n"));
+diff -ur samba-2.2.3.orig/source/nsswitch/winbindd_idmap.c samba-2.2.3/source/nsswitch/winbindd_idmap.c
+--- samba-2.2.3.orig/source/nsswitch/winbindd_idmap.c	Sat Feb  2 18:46:45 2002
++++ samba-2.2.3/source/nsswitch/winbindd_idmap.c	Tue Feb  5 14:20:47 2002
+@@ -215,7 +215,7 @@
+ {
+     /* Open tdb cache */
+ 
+-    if (!(idmap_tdb = tdb_open_log(lock_path("winbindd_idmap.tdb"), 0,
++    if (!(idmap_tdb = tdb_open_log(state_path("winbindd_idmap.tdb"), 0,
+                                TDB_NOLOCK, O_RDWR | O_CREAT, 0600))) {
+         DEBUG(0, ("Unable to open idmap database\n"));
+         return False;
+diff -ur samba-2.2.3.orig/source/printing/nt_printing.c samba-2.2.3/source/printing/nt_printing.c
+--- samba-2.2.3.orig/source/printing/nt_printing.c	Sat Feb  2 18:46:49 2002
++++ samba-2.2.3/source/printing/nt_printing.c	Tue Feb  5 14:13:24 2002
+@@ -240,24 +240,24 @@
+ 	if (tdb_drivers && tdb_printers && tdb_forms && local_pid == sys_getpid())
+ 		return True;
+  
+-	tdb_drivers = tdb_open_log(lock_path("ntdrivers.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++	tdb_drivers = tdb_open_log(state_path("ntdrivers.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+ 	if (!tdb_drivers) {
+ 		DEBUG(0,("nt_printing_init: Failed to open nt drivers database %s (%s)\n",
+-			lock_path("ntdrivers.tdb"), strerror(errno) ));
++			state_path("ntdrivers.tdb"), strerror(errno) ));
+ 		return False;
+ 	}
+  
+-	tdb_printers = tdb_open_log(lock_path("ntprinters.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++	tdb_printers = tdb_open_log(state_path("ntprinters.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+ 	if (!tdb_printers) {
+ 		DEBUG(0,("nt_printing_init: Failed to open nt printers database %s (%s)\n",
+-			lock_path("ntprinters.tdb"), strerror(errno) ));
++			state_path("ntprinters.tdb"), strerror(errno) ));
+ 		return False;
+ 	}
+  
+-	tdb_forms = tdb_open_log(lock_path("ntforms.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++	tdb_forms = tdb_open_log(state_path("ntforms.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+ 	if (!tdb_forms) {
+ 		DEBUG(0,("nt_printing_init: Failed to open nt forms database %s (%s)\n",
+-			lock_path("ntforms.tdb"), strerror(errno) ));
++			state_path("ntforms.tdb"), strerror(errno) ));
+ 		return False;
+ 	}
+  
+diff -ur samba-2.2.3.orig/source/printing/printing.c samba-2.2.3/source/printing/printing.c
+--- samba-2.2.3.orig/source/printing/printing.c	Sat Feb  2 18:46:49 2002
++++ samba-2.2.3/source/printing/printing.c	Tue Feb  5 14:17:19 2002
+@@ -54,7 +54,7 @@
+ 	char *sversion = "INFO/version";
+ 
+ 	if (tdb && local_pid == sys_getpid()) return True;
+-	tdb = tdb_open_log(lock_path("printing.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++	tdb = tdb_open_log(cache_path("printing.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+ 	if (!tdb) {
+ 		DEBUG(0,("print_backend_init: Failed to open printing backend database. Error = [%s]\n",
+ 				 tdb_errorstr(tdb)));
+diff -ur samba-2.2.3.orig/source/rpc_server/srv_srvsvc_nt.c samba-2.2.3/source/rpc_server/srv_srvsvc_nt.c
+--- samba-2.2.3.orig/source/rpc_server/srv_srvsvc_nt.c	Sat Feb  2 18:46:52 2002
++++ samba-2.2.3/source/rpc_server/srv_srvsvc_nt.c	Tue Feb  5 14:20:08 2002
+@@ -127,10 +127,10 @@
+  
+ 	if (share_tdb && local_pid == sys_getpid())
+ 		return True;
+-	share_tdb = tdb_open_log(lock_path("share_info.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++	share_tdb = tdb_open_log(state_path("share_info.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+ 	if (!share_tdb) {
+ 		DEBUG(0,("Failed to open share info database %s (%s)\n",
+-			lock_path("share_info.tdb"), strerror(errno) ));
++			state_path("share_info.tdb"), strerror(errno) ));
+ 		return False;
+ 	}
+  

@@ -8,8 +8,8 @@
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 DEBIAN_CONFIG=/etc/samba/debian_config
 
-NMBDPID=/var/state/samba/nmbd.pid
-SMBDPID=/var/state/samba/smbd.pid
+NMBDPID=/var/run/samba/nmbd.pid
+SMBDPID=/var/run/samba/smbd.pid
 
 # clear conflicting settings from the environment
 unset TMPDIR

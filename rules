@@ -35,7 +35,7 @@ IVARS = BASEDIR=$(DESTDIR)/usr \
 		SBINDIR=$(DESTDIR)/usr/sbin \
 		MANDIR=$(DESTDIR)/usr/share/man \
 		LIBDIR=$(DESTDIR)/etc/samba \
-		VARDIR=$(DESTDIR)/var/state/samba \
+		VARDIR=$(DESTDIR)/var \
 		INCLUDEDIR=$(DESTDIR)/usr/include \
 		SWATDIR=$(SWATDIR)/usr/share/samba/swat \
 		SAMBABOOK=$(SAMBABOOK)/usr/share/samba/swat/using_samba \
@@ -81,7 +81,6 @@ configure-stamp:
 		--prefix=/usr \
 		--sysconfdir=/etc \
 		--with-privatedir=/etc/samba \
-		--with-lockdir=/var/state/samba \
 		--localstatedir=/var \
 		--with-netatalk \
 		--with-smbmount \

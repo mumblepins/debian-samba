@@ -6,8 +6,10 @@
 PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 DEBIAN_CONFIG=/etc/samba/debian_config
 
-NMBDPID=/var/state/samba/nmbd.pid
-SMBDPID=/var/state/samba/smbd.pid
+NMBDPID=/var/run/samba/nmbd.pid
+SMBDPID=/var/run/samba/smbd.pid
+OLDNMBDPID=/var/state/samba/nmbd.pid
+OLDSMBDPID=/var/state/samba/smbd.pid
 
 if [ ! -f $DEBIAN_CONFIG ]; then
 	echo "The file $DEBIAN_CONFIG does not exist! There is something wrong"
@@ -53,8 +55,19 @@ if [ "$run_mode" = "from_inetd" ]; then
 	#	killing the daemons.
 	update-inetd --disable netbios-ssn
 	update-inetd --disable netbios-ns
-	start-stop-daemon --stop --oknodo --user root --name nmbd --quiet --pidfile $NMBDPID
-	start-stop-daemon --stop --oknodo --user root --name smbd --quiet --pidfile $SMBDPID
+	# This seems an easy solution.
+	if [ -e $NMBDPID ]; then
+		start-stop-daemon --stop --oknodo --user root --name nmbd --quiet --pidfile $NMBDPID
+	fi
+	if [ -e $SMBDPID ]; then
+		start-stop-daemon --stop --oknodo --user root --name smbd --quiet --pidfile $SMBDPID
+	fi
+	if [ -e $OLDNMBDPID ]; then
+		start-stop-daemon --stop --oknodo --user root --name nmbd --quiet --pidfile $OLDNMBDPID
+	fi
+	if [ -e $OLDSMBDPID ]; then
+		start-stop-daemon --stop --oknodo --user root --name smbd --quiet --pidfile $OLDSMBDPID
+	fi
 else
 	# Samba is running as daemons
 	/etc/init.d/samba stop

@@ -1,8 +1,9 @@
-#!/bin/sh
+#!/bin/sh -e
 #
 # Post-installation script for the Samba package for Debian GNU/Linux
 #
 # Written by Eloy A. Paris <peloy@debian.org> for the Debian project.
+# Modifications by Steve Langasek <vorlon@debian.org>.
 #
 # The prerm script (run before the postinst) disables Samba in /etc/inetd.conf
 #	and stops both nmbd and smbd. So, when this script is run we
@@ -40,6 +41,30 @@ if [ -d /var/samba/ ]; then
 	mv /var/samba/* /var/state/samba/
 	rmdir /var/samba/
 fi
+
+# And as of Samba 2.2.3-3, all these files are now placed in their 
+# respective FHS-compliant directories.  Separate out the individual 
+# files accordingly.
+for F in browse.dat printing.tdb winbindd_cache.tdb
+do
+	if [ -e /var/state/samba/"$F" ]; then
+		mv /var/state/samba/"$F" /var/cache/samba/
+	fi
+done
+
+for F in brlock.tdb connections.tdb locking.tdb messages.tdb nmbd.pid \
+         sessionid.tdb smbd.pid unexpected.tdb 
+do
+	if [ -e /var/state/samba/"$F" ]; then
+		mv /var/state/samba/"$F" /var/run/samba/
+	fi
+done
+
+# Default for anything we don't know about is /var/lib/samba -- 
+# guaranteed not to accidentally tromp on any files the admin thought 
+# were safe.
+mv /var/state/samba/* /var/lib/samba/
+rmdir /var/state/samba/
 
 # Define some constants...
 DEBIAN_CONFIG=/etc/samba/debian_config

@@ -10,4 +10,5 @@ done
 cat debian/changelog | perl -pi -e '($version) = <STDIN> =~/\((.*)\)/; \
 		s/\".*\"/\"$version for Debian\"/' source/include/version.h
 
+cd source && autoconf
 exit 0

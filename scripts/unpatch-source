@@ -9,4 +9,5 @@ done
 
 perl -pi -e's/-.* for Debian//' source/include/version.h
 
+cd source && autoconf
 exit 0
