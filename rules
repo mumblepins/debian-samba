@@ -29,6 +29,7 @@ SWATDIR=`pwd`/debian/swat
 SAMBABOOK=`pwd`/debian/swat
 
 IVARS = BASEDIR=$(DESTDIR)/usr \
+		prefix=$(DESTDIR)/usr \
 		BINDIR=$(DESTDIR)/usr/bin \
 		SBINDIR=$(DESTDIR)/usr/sbin \
 		MANDIR=$(DESTDIR)/usr/share/man \
@@ -37,7 +38,7 @@ IVARS = BASEDIR=$(DESTDIR)/usr \
 		INCLUDEDIR=$(DESTDIR)/usr/include \
 		SWATDIR=$(SWATDIR)/usr/share/samba/swat \
 		SAMBABOOK=$(SAMBABOOK)/usr/share/samba/swat/using_samba \
-		CODEPAGEDIR=$(DESTDIR)/usr/share/samba/codepages
+		CODEPAGEDIR=$(DESTDIR)/usr/share/samba/
 
 patch: patch-stamp
 patch-stamp:
@@ -104,7 +105,7 @@ clean: unpatch
 
 	# Delete stuff left after a build that is not deleted by 'make clean'
 	rm -f source/bin/wbinfo source/bin/winbindd source/bin/debug2html \
-		source/include/stamp-h
+		source/bin/libsmbclient.a source/include/stamp-h
 
 	dh_clean
 
@@ -196,9 +197,6 @@ install: build
 	rmdir $(DESTDIR)/sbin
 	rmdir $(DESTDIR)/lib/security
 	rmdir $(DESTDIR)/lib
-
-	# Remove the deprecated make_printerdef util.
-	rm $(DESTDIR)/usr/bin/make_printerdef
 
 # Build architecture-independent files here.
 # Pass -i to all debhelper commands in this target to reduce clutter.
