@@ -27,7 +27,7 @@ case "$1" in
 	;;
 esac
 
-# --- Begin of migration code ---
+# --- Begin of FHS migration code ---
 
 # Starting with Samba 2.2.3-4 the WINS database, the browse
 #	database and other important run-time files are stored in
@@ -49,7 +49,7 @@ if [ -d /var/state/samba ]; then
 
 	# It's not FHS, and it's probably our fault this is here,
 	# so delete it if we can.
-	rmdir /var/state || true
+	rmdir /var/state/ 2> /dev/null || true
 fi
 
 # All these files are now placed in their respective FHS-compliant
@@ -69,7 +69,7 @@ do
 	fi
 done
 
-# --- End of migration code ---
+# --- End of FHS migration code ---
 
 # Define some constants...
 DEBIAN_CONFIG=/etc/samba/debian_config
