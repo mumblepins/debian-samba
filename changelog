@@ -1,3 +1,13 @@
+samba (2.2.2-12) unstable; urgency=high
+
+  * (Steve) Patch for source/client/client.c.
+    Closes: #86438 smbclient: Transfering several GB causes the average
+            speed to be messed up.
+  * Uploading with urgency=high to expedite the move from unstable
+    to testing because of the security problem fixed in -11.
+
+ -- Eloy A. Paris <peloy@debian.org>  Fri, 25 Jan 2002 22:31:12 -0500
+
 samba (2.2.2-11) unstable; urgency=low
 
   * Building with --with-libsmbclient. We have created two new
