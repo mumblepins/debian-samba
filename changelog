@@ -29,8 +29,12 @@ samba (2.2.3a-7) unstable; urgency=low
   * 'dh_installinit -n' gives us no initscript handling -- we need to
     handle all starting and stopping of daemons ourselves, which wasn't
     happening in the {pre,post}rm scripts.
+  * Vary the priority of the debconf question "Do you want to generate
+    /etc/samba/smbpassd?" depending on whether the file already exists.
+    File exists -> priority 'medium', file does not exist -> priority
+    'low'.
 
- -- Eloy A. Paris <peloy@debian.org>  Fri, 12 Apr 2002 13:12:15 -0400
+ -- Eloy A. Paris <peloy@debian.org>  Sat, 20 Apr 2002 17:48:27 -0400
 
 samba (2.2.3a-6) unstable; urgency=low
 
