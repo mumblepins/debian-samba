@@ -8,6 +8,8 @@ samba (2.999+3.0cvs20020723-1) unstable; urgency=medium
     target, so Samba doesn't try to create /etc/samba (closes: #153746).
   * fix makefile handling of LOGBASEDIR, so that logs always end up in
     the right place (closes: 153727).
+  * Fixed bug in the FHS migration path that causes nmbd to read its
+    state from one location, but write it out to another. (closes: #154210)
 
  -- Steve Langasek <vorlon@debian.org>  Fri, 19 Jul 2002 21:38:54 -0500
 
