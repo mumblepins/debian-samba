@@ -1,6 +1,6 @@
---- samba-2.2.5/docs/htmldocs/smb.conf.5.html.orig	Tue Jun 18 21:13:19 2002
-+++ samba-2.2.5/docs/htmldocs/smb.conf.5.html	Tue Jun 18 23:15:08 2002
-@@ -12458,7 +12458,7 @@
+--- samba/docs/htmldocs/smb.conf.5.html.orig	2002-10-12 11:53:58.000000000 -0400
++++ samba/docs/htmldocs/smb.conf.5.html	2002-10-13 01:43:10.000000000 -0400
+@@ -12482,7 +12482,7 @@
  ><P
  ><B
  CLASS="COMMAND"
@@ -9,7 +9,7 @@
  		%m' root &#60; %s; rm %s</B
  ></P
  ><P
-@@ -19780,4 +19780,5 @@
+@@ -19874,4 +19874,5 @@
  ></DIV
  ></BODY
  ></HTML
