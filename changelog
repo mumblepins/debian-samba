@@ -1,3 +1,9 @@
+samba (2.99.cvs.20020713-2) unstable; urgency=low
+
+  * remove spurious line from samba.config
+
+ -- Steve Langasek <vorlon@debian.org>  Fri, 19 Jul 2002 21:38:54 -0500
+
 samba (2.99.cvs.20020713-1) unstable; urgency=low
 
   * first attempt for 3.0pre.
