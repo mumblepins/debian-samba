@@ -1,6 +1,38 @@
+samba (2.2.3a-13) stable-security; urgency=high
+
+  * Apply patch from Urban Widmark <urban@teststation.com> to prevent
+    users from mounting remote filesystems containing suid files.
+
+ -- Eloy A. Paris <peloy@debian.org>  Sat, 21 Feb 2004 17:29:26 -0400
+
+samba (2.2.3a-12.3) stable-security; urgency=high
+
+  * Non-maintainer upload by the Security Team
+  * Adjusted patch to most recent bits from the Samba team
+
+ -- Martin Schulze <joey@infodrom.org>  Sun,  6 Apr 2003 10:17:11 +0200
+
+samba (2.2.3a-12.2) stable-security; urgency=high
+
+  * Non-maintainer upload by the Security Team
+  * Applied upstream patch to fix a vulnerability that could lead to an
+    anonymous user gaining root access on a Samba serving
+    system. (CAN-2003-0201)
+
+ -- Martin Schulze <joey@infodrom.org>  Sat,  5 Apr 2003 09:26:06 +0200
+
+samba (2.2.3a-12.1) stable-security; urgency=high
+
+  * Non-maintainer upload by security team
+  * Fix buffer overflows and chown race discovered SuSE's Sebastian Krahmer
+  * Delete proto.h patch from debian/patches/fhs.patch
+  * Delete useless dh_testroot call from clean target in debian/rules
+
+ -- Wichert Akkerman <wakkerma@debian.org>  Sat, 15 Mar 2003 13:26:33 +0100
+
 samba (2.2.3a-12) stable-security; urgency=high
 
-  * rebuild and reupload, since someone thought the last build was bad
+  * rebuild and reupload, since someone thought the last build was bad  
     enough to set satie on fire.
 
  -- Steve Langasek <vorlon@debian.org>  Thu, 21 Nov 2002 20:19:15 -0600
