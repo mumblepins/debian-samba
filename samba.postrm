@@ -12,11 +12,14 @@ if [ "$1" = purge ]; then
 	rm -Rf /var/lock/samba/
 
 	# Remove files left in /etc/samba/
-	rm -Rf /etc/samba/debian_config
 	rm -Rf /etc/samba/MACHINE.SID
 
 	# Remove log files
 	rm -Rf /var/log/samba/
+
+	# Remove init.d configuration file
+	echo  Removing configuration file /etc/default/samba...  >&2
+	rm -f /etc/default/samba
 
 	# Remove NetBIOS entries from /etc/inetd.conf
 	update-inetd --remove netbios-ssn

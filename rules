@@ -91,7 +91,8 @@ configure-stamp:
 		--with-readline \
 		--with-pam_smbpass \
 		--with-libsmbclient \
-		--with-winbind)
+		--with-winbind \
+		--with-msdfs)
 
 	touch configure-stamp
 
@@ -145,7 +146,6 @@ install: build
 
 	# Install other stuff not installed by "make install"
 	install -m 0755 debian/mksmbpasswd.awk $(DESTDIR)/usr/sbin/mksmbpasswd
-	install -m 0755 debian/sambaconfig $(DESTDIR)/usr/sbin/
 
 	# Install winbind stuff not installed by 'make install'
 	install -m 0644 source/nsswitch/libnss_winbind.so \
@@ -182,7 +182,6 @@ install: build
 	ln -s ../../../doc/samba-doc/htmldocs/using_samba $(SAMBABOOK)/usr/share/samba/swat/using_samba
 
 	# Install man pages for files without man pages in the upstream sources
-	install -m 0644 debian/sambaconfig.8 $(DESTDIR)/usr/share/man/man8/sambaconfig.8
 	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8
 
 	# Delete unwanted stuff leftover from "make install"
@@ -197,7 +196,7 @@ install: build
 
 	# Install samba-common's conffiles - they'll get moved later to their
 	#	correct place by dh_movefiles.
-	cp debian/smb.conf $(DESTDIR)/etc/samba/
+	cp debian/smb.conf $(DESTDIR)/usr/share/samba/
 	cp debian/samba.pamd $(DESTDIR)/etc/pam.d/samba
 
 	dh_movefiles --sourcedir=debian/samba/
@@ -211,7 +210,7 @@ binary-indep: DH_OPTIONS=-i
 binary-indep: build install
 	dh_testdir
 	dh_testroot
-#	dh_installdebconf
+	dh_installdebconf
 	dh_installdocs -A docs/textdocs/DIAGNOSIS.txt debian/README.build docs/README* docs/Samba-HOWTO-Collection.pdf
 	# dh_installexamples is not available in Debian Potato...
 	[ -x /usr/bin/dh_installexamples ] && dh_installexamples
@@ -239,7 +238,7 @@ binary-arch: DH_OPTIONS=-a
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-#	dh_installdebconf
+	dh_installdebconf
 	dh_installdocs -A docs/textdocs/DIAGNOSIS.txt debian/README.build docs/README* docs/Samba-HOWTO-Collection.pdf
 	# dh_installexamples is not available in Debian Potato...
 	[ -x /usr/bin/dh_installexamples ] && dh_installexamples
