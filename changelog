@@ -1,3 +1,9 @@
+samba (2.2.9-1.woody) stable; urgency=low
+
+  * New upstream version.
+
+ -- Eloy A. Paris <peloy@debian.org>  Mon, 10 May 2004 12:17:11 -0400
+
 samba (2.2.8a-1.woody) stable; urgency=high
 
   * New upsteam version. Fixes pretty bad security hole announced by
