@@ -8,7 +8,9 @@ samba (2.2.4-1) unstable; urgency=low
     fixes a display bug with mount (closes: #140397)
   * Added logic to /etc/init.d/samba so a help message is printed out
     when Samba is running from inetd _and_ we are not booting, i.e. the
-    user called the init script manually. (Closes: #139807, #140204)
+    user called the init script manually. Thanks to Francesco
+    Potorti <pot@gnu.org> for the suggestion on how to implement this.
+    (Closes: #139807, #140204)
   * samba.postinst: added logic so we don't call /etc/init.d/samba if
     we are running from inetd (this prevents the stupid help message
     to be printed during package upgrades if we are running from inetd.)
