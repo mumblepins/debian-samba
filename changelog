@@ -1,3 +1,9 @@
+samba (2.2.3-2) unstable; urgency=low
+
+  * add support to rules for automatic updating of <version.h>.
+
+ -- Steve Langasek <vorlon@debian.org>  Mon,  4 Feb 2002 09:51:00 -0600
+
 samba (2.2.3-1) unstable; urgency=low
 
   * New upstream release (closes: #131228).
