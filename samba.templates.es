@@ -2,6 +2,7 @@ Template: samba/run_mode
 Type: select
 Default: daemons
 Choices: daemons, inetd
+Choices-es: demonios, inetd
 Description: How do you want to run Samba?
  The Samba services (nmbd and smbd) can run as normal daemons or 
  from inetd. Running as daemons is the recommended approach.
