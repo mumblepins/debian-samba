@@ -1,17 +1,5 @@
 --- samba-2.2.4/docs/manpages/smb.conf.5.orig	Wed May  1 23:13:03 2002
 +++ samba-2.2.4/docs/manpages/smb.conf.5	Thu May  2 00:47:36 2002
-@@ -460,8 +460,9 @@
- steps fail, then the connection request is rejected. However, if one of the 
- steps succeeds, then the following steps are not checked.
- .PP
--If the service is marked "guest only = yes" then
--steps 1 to 5 are skipped.
-+If the service is marked "guest only = yes" and the
-+server is running with share-level security ("security = share")
-+then steps 1 to 5 are skipped.
- .IP 1. 
- If the client has passed a username/password 
- pair and that username/password pair is validated by the UNIX 
 @@ -4447,7 +4448,7 @@
  Here's a way of sending the messages as mail to root:
  .PP

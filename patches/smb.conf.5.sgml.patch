@@ -1,19 +1,6 @@
---- samba-2.2.4/docs/docbook/manpages/smb.conf.5.sgml.orig	Wed May  1 23:12:20 2002
-+++ samba-2.2.4/docs/docbook/manpages/smb.conf.5.sgml	Thu May  2 00:48:48 2002
-@@ -537,8 +537,10 @@
- 	steps fail, then the connection request is rejected.  However, if one of the 
- 	steps succeeds, then the following steps are not checked.</para>
- 
--	<para>If the service is marked "guest only = yes" then
--	steps 1 to 5 are skipped.</para>
-+	<para>If the service is marked "guest only = yes" and the
-+	server is running with share-level security ("security = share")
-+	then steps 1 to 5 are skipped.</para>
-+
- 
- 	<orderedlist numeration="Arabic">
- 		<listitem><para>If the client has passed a username/password 
-@@ -4709,7 +4711,7 @@
+--- samba/docs/docbook/manpages/smb.conf.5.sgml.orig	Thu May  2 13:49:14 2002
++++ samba/docs/docbook/manpages/smb.conf.5.sgml	Thu May  2 14:03:45 2002
+@@ -4711,7 +4711,7 @@
  
  		<para>Here's a way of sending the messages as mail to root:</para>
  
