@@ -240,7 +240,7 @@ binary-arch: build install
 	fi
 #	dh_installemacsen
 #	dh_installpam
-	dh_installinit
+	dh_installinit -n
 	dh_installcron
 #	dh_installmanpages
 #	dh_installinfo
