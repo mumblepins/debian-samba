@@ -5,8 +5,8 @@ samba (2.2.3a-3) unstable; urgency=low
     to make sure we are not calling an init script if it is not
     executable.
     Closes: #33520, #130534, #137321.
-  * Create /etc/samba/ if it's not there, before trying to copy files 
-    into it. (Closes: #137157)
+  * Make sure /etc/samba/ is included in the samba-common package.
+    Closes: #137157
 
  -- Steve Langasek <vorlon@debian.org>  Fri,  8 Mar 2002 11:13:21 -0500
 

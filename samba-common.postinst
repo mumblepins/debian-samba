@@ -5,12 +5,6 @@
 
 set -e
 
-# If this is a fresh install, dpkg won't create this empty directory
-# for us.
-if [ ! -d /etc/samba ]; then
-	mkdir /etc/samba
-fi
-
 # We need a default smb.conf file. If one doesn't exist we put in place
 #	one that has some basic defaults.
 if [ ! -e /etc/samba/smb.conf ]; then
