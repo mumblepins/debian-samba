@@ -24,3 +24,5 @@ else
 	update-inetd --disable netbios-ssn
 	update-inetd --disable netbios-ns
 fi
+
+#DEBHELPER#
