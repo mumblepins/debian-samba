@@ -81,7 +81,8 @@ configure-stamp:
 		--with-msdfs \
 		--with-automount \
 		--with-acl-support \
-		--with-tdbsam)
+		--with-tdbsam \
+		--with-ldapsam)
 
 	touch configure-stamp
 

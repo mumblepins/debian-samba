@@ -3,6 +3,7 @@ samba (2.99.cvs.20020713-2) unstable; urgency=medium
   * remove spurious line from samba.config
   * migrate from smbpasswd to tdbsam
   * re-add the pdbedit util and manpage
+  * compile in ldapsam support (closes: #146935)
 
  -- Steve Langasek <vorlon@debian.org>  Fri, 19 Jul 2002 21:38:54 -0500
 
