@@ -4,6 +4,8 @@ samba (2.2.3-5) unstable; urgency=low
     /var/state/samba/ no longer exists.  Better get this fix into the
     next upload. ;) (Closes: #133088)
   * Regenerate configure only if it is older than configure.in.
+  * Fix smbd handling of network neighborhood lists, which was missed
+    in the FHS conversion (Closes: #133091)
 
  -- Eloy A. Paris <peloy@debian.org>  Sat,  9 Feb 2002 16:37:57 -0500
 
