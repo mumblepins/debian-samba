@@ -1,10 +1,8 @@
-samba (2.2.2.cvs20020201-1) unstable; urgency=low
+samba (2.2.3-1) unstable; urgency=low
 
-  * Getting ready for Samba 2.2.3.
-  * Using a poor's man build system to keep our patches to upstream
-    under the debian/ directory.
+  * New upstream release.
 
- -- Eloy A. Paris <peloy@debian.org>  Fri,  1 Feb 2002 16:10:58 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Sat,  2 Feb 2002 19:56:18 -0500
 
 samba (2.2.2-12) unstable; urgency=high
 
