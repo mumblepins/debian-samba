@@ -1,6 +1,6 @@
---- samba/docs/docbook/manpages/smb.conf.5.sgml.orig	Thu May  2 13:49:14 2002
-+++ samba/docs/docbook/manpages/smb.conf.5.sgml	Thu May  2 14:03:45 2002
-@@ -4711,7 +4711,7 @@
+--- samba-2.2.4/docs/docbook/manpages/smb.conf.5.sgml.orig	Thu May  2 21:24:08 2002
++++ samba-2.2.4/docs/docbook/manpages/smb.conf.5.sgml	Sun May  5 18:22:35 2002
+@@ -4735,7 +4735,7 @@
  
  		<para>Here's a way of sending the messages as mail to root:</para>
  
