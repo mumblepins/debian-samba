@@ -188,6 +188,11 @@ install: build
 
 	# Remove empty directories that will never be used.
 	rmdir $(DESTDIR)/sbin
+	rmdir $(DESTDIR)/lib/security
+	rmdir $(DESTDIR)/lib
+
+	# Remove the deprecated make_printerdef util.
+	rm $(DESTDIR)/usr/bin/make_printerdef
 
 # Build architecture-independent files here.
 # Pass -i to all debhelper commands in this target to reduce clutter.
