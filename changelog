@@ -7,12 +7,20 @@ samba (2.2.3a-1) unstable; urgency=low
     notice.
   * Removed code that converts /etc/samba/smbpasswd from an ancient
     format to the new format of Samba 2.0.0 and later.
-    Closes: #134375.
+    Closes: #134375 - samba: postinst failed due to missing
+            /usr/bin/convert_smbpasswd.
   * Re-organized FHS migration code in samba.postinst. Make sure we
     don't fail when we move files that don't exist.
     Closes: #133813 - samba: Install failed.
+  * Adding docs. to the libpam-smbpass package.
+  * Remove man pages for findsmb because we are not providing this
+    script.
+    Closes: #134181 - findsmb referenced, but not included.
+  * Removed remove.patch because it is now present upstream.
+  * Added patch from Jerry Carter to fix a problem when saving
+    document preferences for printing from NT clients.
 
- -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Feb 2002 12:34:17 -0500
+ -- Eloy A. Paris <peloy@debian.org>  Wed, 20 Feb 2002 13:49:51 -0500
 
 samba (2.2.3-6) unstable; urgency=low
 
