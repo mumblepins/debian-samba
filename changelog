@@ -1,3 +1,9 @@
+samba (2.2.6-1.woody) stable; urgency=low
+
+  * New upstream version.
+
+ -- Eloy A. Paris <peloy@debian.org>  Sun, 13 Oct 2002 02:33:32 -0400
+
 samba (2.2.5-1.woody) stable; urgency=low
 
   * Upload latest stable Samba release to woody.
