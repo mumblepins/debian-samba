@@ -1,5 +1,7 @@
-samba (2.2.4-2) unstable; urgency=low
+samba (2.2.5-1) unstable; urgency=low
 
+  * New upstream release.
+  * Remove patches/parse_spoolss.patch, now included upstream.
   * Fixed thinko WRT POSIX ACL support, which we "half-enabled" in
     2.2.4-1. We don't use POSIX ACL support ourselves, so we'd
     appreciate reports from those using this feature so we can
