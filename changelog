@@ -1,3 +1,10 @@
+samba (2.2.3-3) unstable; urgency=low
+
+  * work on lintian-cleanness in the package (wrong permissions, 
+    maintainer scripts in need of debhelpering)
+
+ -- Steve Langasek <vorlon@debian.org>  Mon,  4 Feb 2002 21:47:01 -0600
+
 samba (2.2.3-2) unstable; urgency=low
 
   * add support to debian/scripts/{patch-source,unpatch-source} for
