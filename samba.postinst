@@ -132,12 +132,8 @@ fi
 if [ -e /etc/samba/smbpasswd -a ! -e /etc/samba/passdb.tdb \
    -a "$PDB_MIGRATE" = "true" ]
 then
-	pdbedit -i /etc/samba/smbpasswd
-	rm /etc/samba/smbpasswd
-	chmod 0600 /etc/samba/passdb.tdb
-
 	# The database has been moved, now make sure we can still find it.
-	PASSDB=`grep -i '^[[:space:]]*passdb backend[[:space:]]*=' $FILE \
+	PASSDB=`grep -i '^[[:space:]]*passdb backend[[:space:]]*=' /etc/samba/smb.conf \
 	 | sed -e's/^[[:space:]]*passdb backend[[:space:]]*=[[:space:]]*//i' \
 	 | tail -1`
 	if echo "$PASSDB" | egrep -q "(^|[[:space:]])smbpasswd"; then
@@ -152,6 +148,10 @@ then
 	sed -e "s/^\([[:space:]]*\)passdb backend[[:space:]]*=/\1passdb backend = ${PASSDB}/" \
 		< /etc/samba/smb.conf >${TMPFILE}
 	mv -f ${TMPFILE} /etc/samba/smb.conf
+
+	pdbedit -i /etc/samba/smbpasswd
+	rm /etc/samba/smbpasswd
+	chmod 0600 /etc/samba/passdb.tdb
 fi
 
 # ------------------------- Debconf questions end ---------------------
