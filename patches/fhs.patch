@@ -1,30 +1,19 @@
-diff -ur samba-2.99.cvs.20020713.orig/source/Makefile.in samba-2.99.cvs.20020713/source/Makefile.in
---- samba-2.99.cvs.20020713.orig/source/Makefile.in	Sat Jul 13 13:33:02 2002
-+++ samba-2.99.cvs.20020713/source/Makefile.in	Sat Jul 13 13:40:38 2002
-@@ -90,7 +90,7 @@
- PATH_FLAGS2 = $(PATH_FLAGS1) -DBINDIR=\"$(BINDIR)\" -DDRIVERFILE=\"$(DRIVERFILE)\" 
- PATH_FLAGS3 = $(PATH_FLAGS2) -DLMHOSTSFILE=\"$(LMHOSTSFILE)\" 
- PATH_FLAGS4 = $(PATH_FLAGS3) -DSWATDIR=\"$(SWATDIR)\"  -DLOCKDIR=\"$(LOCKDIR)\" -DPIDDIR=\"$(PIDDIR)\"
--PATH_FLAGS5 = $(PATH_FLAGS4) -DLIBDIR=\"$(LIBDIR)\" -DLOGFILEBASE=\"$(LOGFILEBASE)\"
-+PATH_FLAGS5 = $(PATH_FLAGS4) -DLIBDIR=\"$(LIBDIR)\" -DLOGFILEBASE=\"$(LOGFILEBASE)\" -DVARDIR=\"$(VARDIR)\"
- PATH_FLAGS = $(PATH_FLAGS5) $(PASSWD_FLAGS)
- 
- WINBIND_PROGS = @WINBIND_TARGETS@
 diff -ur samba-2.99.cvs.20020713.orig/source/acconfig.h samba-2.99.cvs.20020713/source/acconfig.h
 --- samba-2.99.cvs.20020713.orig/source/acconfig.h	Fri May 17 07:42:29 2002
 +++ samba-2.99.cvs.20020713/source/acconfig.h	Sat Jul 13 13:41:36 2002
-@@ -188,6 +188,7 @@
+@@ -188,6 +188,8 @@
  #undef STAT_ST_BLOCKSIZE
  #undef HAVE_DEVICE_MAJOR_FN
  #undef HAVE_DEVICE_MINOR_FN
 +#undef FHS_COMPATIBLE
++#undef VARDIR
  #undef HAVE_PASSWD_PW_COMMENT
  #undef HAVE_PASSWD_PW_AGE
  /*
 diff -ur samba-2.99.cvs.20020713.orig/source/configure.in samba-2.99.cvs.20020713/source/configure.in
 --- samba-2.99.cvs.20020713.orig/source/configure.in	Sat Jul 13 13:36:38 2002
 +++ samba-2.99.cvs.20020713/source/configure.in	Sat Jul 13 13:43:11 2002
-@@ -12,7 +12,7 @@
+@@ -12,11 +12,13 @@
  AC_ARG_WITH(fhs, 
  [  --with-fhs              Use FHS-compliant paths (default=no)],
      configdir="${sysconfdir}/samba"
@@ -33,16 +22,13 @@ diff -ur samba-2.99.cvs.20020713.orig/source/configure.in samba-2.99.cvs.2002071
      piddir="\$(VARDIR)/run/samba"
      logfilebase="\${VARDIR}/log/samba"
      privatedir="\${CONFIGDIR}/private"
-@@ -22,7 +22,8 @@
+-    swatdir="\${DATADIR}/samba/swat",
++    swatdir="\${DATADIR}/samba/swat"
++    AC_DEFINE(FHS_COMPATIBLE)
++    AC_DEFINE_UNQUOTED(VARDIR,"$localstatedir"),
+     configdir="\$(LIBDIR)"
+     logfilebase="\$(VARDIR)"
      lockdir="\${VARDIR}/locks"
-     piddir="\$(VARDIR)/locks"
-     privatedir="\${prefix}/private"
--    swatdir="\${prefix}/swat")
-+    swatdir="\${prefix}/swat"
-+    AC_DEFINE(FHS_COMPATIBLE))
- 
- #################################################
- # set private directory location
 diff -ur samba-2.99.cvs.20020713.orig/source/groupdb/mapping.c samba-2.99.cvs.20020713/source/groupdb/mapping.c
 --- samba-2.99.cvs.20020713.orig/source/groupdb/mapping.c	Fri Jun  7 09:33:30 2002
 +++ samba-2.99.cvs.20020713/source/groupdb/mapping.c	Sat Jul 13 13:56:02 2002
@@ -58,11 +44,12 @@ diff -ur samba-2.99.cvs.20020713.orig/source/groupdb/mapping.c samba-2.99.cvs.20
 diff -ur samba-2.99.cvs.20020713.orig/source/include/config.h.in samba-2.99.cvs.20020713/source/include/config.h.in
 --- samba-2.99.cvs.20020713.orig/source/include/config.h.in	Fri May 17 07:42:34 2002
 +++ samba-2.99.cvs.20020713/source/include/config.h.in	Sat Jul 13 13:44:09 2002
-@@ -254,6 +254,7 @@
+@@ -254,6 +254,8 @@
  #undef STAT_ST_BLOCKSIZE
  #undef HAVE_DEVICE_MAJOR_FN
  #undef HAVE_DEVICE_MINOR_FN
 +#undef FHS_COMPATIBLE
++#undef VARDIR
  #undef HAVE_PASSWD_PW_COMMENT
  #undef HAVE_PASSWD_PW_AGE
  /*

@@ -64,6 +64,7 @@ configure-stamp:
 		--with-fhs \
 		--prefix=/usr \
 		--sysconfdir=/etc \
+		--libdir=/etc/samba \
 		--with-privatedir=/etc/samba \
 		--localstatedir=/var \
 		--with-netatalk \
@@ -78,7 +79,8 @@ configure-stamp:
 		--with-winbind \
 		--with-msdfs \
 		--with-automount \
-		--with-acl-support)
+		--with-acl-support \
+		--with-tdbsam)
 
 	touch configure-stamp
 
