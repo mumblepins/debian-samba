@@ -9,6 +9,7 @@ samba (2.2.3a-6) unstable; urgency=low
     kernel already provides a much better default setting
     (closes: #80966, #80934, #137415, #133477)
   * Added libnss_wins.so to the winbind package (closes: #137201)
+  * Updates to README.debian.
 
  -- Eloy A. Paris <peloy@debian.org>  Tue, 12 Mar 2002 10:57:40 -0500
 
