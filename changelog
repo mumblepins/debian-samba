@@ -4,6 +4,10 @@ samba (2.2.3a-6) unstable; urgency=low
     avoid hanging bugs (closes: #137813)
   * Ony call 'update-inetd --add' on first installation, just as we only 
     call 'update-inetd --remove' on package purge.
+  * Bring our shipped smb.conf closer in line with the upstream 
+    defaults: don't twiddle the send/recv buffer sizes, since the Linux 
+    kernel already provides a much better default setting
+    (closes: #137415)
 
  -- Steve Langasek <vorlon@debian.org>  Mon, 11 Mar 2002 10:07:02 -0600
 
