@@ -1,8 +1,9 @@
-samba (2.999+3.0cvs20020818-1) unstable; urgency=low
+samba (2.999+3.0cvs20020825-1) unstable; urgency=low
 
-  * CVS update.
+  * CVS update. These packages are based on Samba 3.0alpha19 + any
+    code commited after 3.0alpha19 was released.
 
- -- Eloy A. Paris <peloy@debian.org>  Sun, 18 Aug 2002 21:40:58 -0400
+ -- Eloy A. Paris <peloy@debian.org>  Sun, 25 Aug 2002 14:56:46 -0400
 
 samba (2.999+3.0cvs20020723-2) unstable; urgency=low
 
