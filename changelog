@@ -1,11 +1,20 @@
 samba (2.2.3-4) unstable; urgency=low
 
-  * FHS cleanup; files in /var are now properly sorted according to 
+  * FHS cleanup; files in /var are now properly sorted according to
     their nature. (Closes: #102101)
-  * Remove patches to source/configure, since we now call autoconf to 
+  * Remove patches to source/configure, since we now call autoconf to
     regenerate this file cleanly.
+  * lintian fixes:
+      - Create winbind.conffiles and add /etc/logrotate.d/winbind and
+        /etc/init.d/winbind to it.
+      - Use a relative symlink for /usr/lib/cups/backend/smb.
+      - Removal of a .cvsignore file in the samba-doc package.
+  * winbind.init fixes:
+      - Corrected name of the pid file (Steve)
+      - Make start-stop-daemon create a pid file for winbindd since it
+        does not create one on his own.
 
- -- Steve Langasek <vorlon@debian.org>  Wed,  6 Feb 2002 11:18:00 -0600
+ -- Eloy A. Paris <peloy@debian.org>  Thu,  7 Feb 2002 13:10:03 -0500
 
 samba (2.2.3-3) unstable; urgency=low
 

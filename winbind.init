@@ -20,7 +20,8 @@ case "$1" in
 		echo -n "Starting the Winbind daemon:"
 
 		echo -n " winbindd"
-		start-stop-daemon --start --quiet --exec /usr/sbin/winbindd
+		start-stop-daemon --start --quiet --pidfile $WINBINDDPID \
+			--make-pidfile --exec /usr/sbin/winbindd
 
 		echo "."
 		;;
@@ -38,7 +39,8 @@ case "$1" in
 		echo -n " nmbd"
 		start-stop-daemon --stop --quiet --pidfile $WINBINDDPID
 		sleep 2
-		start-stop-daemon --start --quiet --exec /usr/sbin/winbindd
+		start-stop-daemon --start --quiet --pidfile $WINBINDDPID \
+			--make-pidfile --exec /usr/sbin/winbindd
 
 		echo "."
 		;;

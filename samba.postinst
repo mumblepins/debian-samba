@@ -246,6 +246,4 @@ if [ -f /var/backups/smbpasswd.bak ]; then
 	chmod 600 /var/backups/smbpasswd.bak
 fi
 
-#DEBHELPER#
-
 exit 0
