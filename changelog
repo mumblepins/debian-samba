@@ -1,5 +1,6 @@
-samba (2.2.3a-10) stable; urgency=high
+samba (2.2.3a-10) stable-security; urgency=high
 
+  * security upload
   * If Samba is restarted before the postinst runs,
     /var/lib/samba/secrets.tdb will be automatically created.  Deal
     with this appropriately in the migration.  Thanks to Jaakko Niemi
