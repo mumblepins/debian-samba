@@ -1,3 +1,11 @@
+samba (2.2.3-5) unstable; urgency=low
+
+  * Whoops, missed a spot on the samba.postinst -- will fail badly if 
+    /var/state/samba/ no longer exists.  Better get this fix into the 
+    next upload. ;)
+
+ -- Steve Langasek <vorlon@debian.org>  Thu,  7 Feb 2002 21:05:17 -0600
+
 samba (2.2.3-4) unstable; urgency=low
 
   * FHS cleanup; files in /var are now properly sorted according to
