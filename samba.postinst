@@ -25,9 +25,12 @@ esac
 
 INITCONFFILE=/etc/default/samba
 
+# We generate several files during the postinst, and we don't want
+#	them to be readable only by root.
+umask 022
+
 # Generate configuration file if it does not exist, using default values.
 [ -r "${INITCONFFILE}" ] || {
-	umask 022
 	echo Generating ${INITCONFFILE}... >&2
 	cat >${INITCONFFILE} <<'EOFMAGICNUMBER1234'
 # Defaults for samba initscript
@@ -91,8 +94,6 @@ done
 
 # ------------------------- Debconf questions start ---------------------
 
-umask 022
-
 # Run Samba as daemons or from inetd?
 db_get samba/run_mode || true
 RUN_MODE="${RET}"
@@ -142,7 +143,6 @@ if [ -z "$2" -o ! -f /tmp/samba-was-not-running ]; then
 	[ -x /etc/init.d/samba ] && /etc/init.d/samba start
 fi
 
-
 # This check is a safety net: the /etc/samba/smbpasswd file must have
 #	permissions 600.
 if [ -f /etc/samba/smbpasswd ]; then
@@ -169,6 +169,6 @@ fi
 
 # Do this last, so we don't accidentally start the daemons if something 
 # else in the script fails above.
-rm -f /tmp/samba-was-stopped
+rm -f /tmp/samba-was-not-running
 
 db_stop
