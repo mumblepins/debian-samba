@@ -1,3 +1,12 @@
+samba (2.2.3a-15) stable-security; urgency=low
+
+  * Acknowledge the Security Team's NMUs; thanks again for all your
+    work, Joey.
+  * Fix a rounding error introduced in the patch to bitmap_alloc() that
+    causes crashes on reload.  Closes: #302378.
+
+ -- Steve Langasek <vorlon@debian.org>  Tue, 19 Apr 2005 18:14:36 -0700
+
 samba (2.2.3a-14.2) stable-security; urgency=high
 
   * Non-maintainer upload by the Security Team

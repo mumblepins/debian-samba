@@ -355,7 +355,7 @@ diff -u -p -Nr --exclude CVS samba-2.2.3a.orig/source/lib/bitmap.c samba-2.2.3a/
  	
  	bm->n = n;
 -	bm->b = (uint32 *)malloc(sizeof(bm->b[0])*(n+31)/32);
-+	bm->b = (uint32 *)malloc_array(sizeof(bm->b[0]), (n+31)/32);
++	bm->b = (uint32 *)malloc_array(sizeof(bm->b[0]), (n+31)/32+1);
  	if (!bm->b) {
  		SAFE_FREE(bm);
  		return NULL;
