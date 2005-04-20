@@ -1,3 +1,18 @@
+samba (2.2.3a-14.2) stable-security; urgency=high
+
+  * Non-maintainer upload by the Security Team
+  * Backported backported upstream patch by Thomas Biege to fix serveral
+    integer overflows [debian/patches/z_CAN-2004-1154.patch]
+
+ -- Martin Schulze <joey@infodrom.org>  Sun, 20 Mar 2005 12:12:27 +0100
+
+samba (2.2.3a-14.1) stable-security; urgency=high
+
+  * Non-maintainer upload by the Security Team
+  * Clean up patch differenced between -13 and -14
+
+ -- Martin Schulze <joey@infodrom.org>  Thu, 30 Sep 2004 15:50:46 +0200
+
 samba (2.2.3a-14) stable-security; urgency=high
 
   * Apply fix from Samba Team for CAN-2004-0815 (Samba 2.2.x &
@@ -9,6 +24,7 @@ samba (2.2.3a-13) stable-security; urgency=high
 
   * Apply patch from Urban Widmark <urban@teststation.com> to prevent
     users from mounting remote filesystems containing suid files.
+    (CAN-2004-0186)
 
  -- Eloy A. Paris <peloy@debian.org>  Sat, 21 Feb 2004 17:29:26 -0400
 
