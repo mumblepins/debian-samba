@@ -7,6 +7,10 @@ samba (3.0.14a-4) unstable; urgency=high
     specified; this keeps the mount permissions from changing out from
     under the user when upgrading to a server (or to a kernel) that 
     supports unix extensions.  Closes: #310982.
+  * Second patch to smbclient search continuation logic, from upstream:
+    preserve the original UCS2 filename to guard against lossy
+    conversions, and break out if we find ourselves looping.
+    Closes: #311157.
 
  -- Steve Langasek <vorlon@debian.org>  Thu,  2 Jun 2005 07:02:46 -0700
 
