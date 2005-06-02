@@ -11,6 +11,9 @@ samba (3.0.14a-4) unstable; urgency=high
     preserve the original UCS2 filename to guard against lossy
     conversions, and break out if we find ourselves looping.
     Closes: #311157.
+  * Upstream fix to make print job cancellations work on big-endian
+    systems when talking to RAP-style clients (i.e., smbclient).
+    Closes: #311213.
 
  -- Steve Langasek <vorlon@debian.org>  Thu,  2 Jun 2005 07:02:46 -0700
 
