@@ -1,3 +1,15 @@
+samba (3.0.14a-4) unstable; urgency=high
+
+  * Last-minute upload for sarge, because I don't listen to anything
+    that RM guy says
+  * Patch smbmount to strip CAP_UNIX out of the capabilities passed to
+    the kernel when uid, gid, dmask, or fmask options have been
+    specified; this keeps the mount permissions from changing out from
+    under the user when upgrading to a server (or to a kernel) that 
+    supports unix extensions.  Closes: #310982.
+
+ -- Steve Langasek <vorlon@debian.org>  Thu,  2 Jun 2005 07:02:46 -0700
+
 samba (3.0.14a-3) unstable; urgency=high
 
   * Urgency set to high for a bug that makes smbclient/libsmbclient
