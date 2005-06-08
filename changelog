@@ -1,3 +1,10 @@
+samba (3.0.14a-5) unstable; urgency=low
+
+  * Fix libsmbclient.a to be built as non-PIC instead of PIC.
+    Closes: #279243.
+
+ -- Steve Langasek <vorlon@debian.org>  Wed,  8 Jun 2005 05:46:52 -0700
+
 samba (3.0.14a-4) unstable; urgency=high
 
   * Last-minute upload for sarge, because I don't listen to anything
