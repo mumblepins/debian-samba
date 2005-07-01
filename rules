@@ -19,13 +19,11 @@ export DH_OPTIONS
 # cross-building, etc.
 DEB_HOST_GNU_TYPE	:= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE	:= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
-DEB_HOST_GNU_SYSTEM	:= $(shell dpkg-architecture -qDEB_HOST_GNU_SYSTEM)
-DEB_BUILD_GNU_SYSTEM	:= $(shell dpkg-architecture -qDEB_BUILD_GNU_SYSTEM)
+DEB_HOST_ARCH_OS	:= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
 
 export DEB_HOST_GNU_TYPE
 export DEB_BUILD_GNU_TYPE
-export DEB_HOST_GNU_SYSTEM
-export DEB_BUILD_GNU_SYSTEM
+export DEB_HOST_ARCH_OS
 
 # Support the DEB_BUILD_OPTIONS variable
 CFLAGS = -gstabs -Wall
@@ -69,7 +67,7 @@ conf_args = \
 		--with-ldap \
 		--with-python=python2.3
 
-ifeq ($(DEB_HOST_GNU_SYSTEM),linux)
+ifeq ($(DEB_HOST_ARCH_OS),linux)
   conf_args += \
 		--with-smbmount \
 		--with-acl-support \
