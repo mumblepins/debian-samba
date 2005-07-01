@@ -3,6 +3,7 @@ samba (3.0.14a-6) unstable; urgency=low
   * Use DEB_HOST_ARCH_OS instead of DEB_HOST_GNU_SYSTEM to detect
     Linux in debian/rules, for compatibility with dpkg-dev >= 1.13.9;
     add a versioned build-depend accordingly.  Closes: #315955
+  * Switch to libreadline5.
 
  -- Steve Langasek <vorlon@debian.org>  Fri,  1 Jul 2005 00:13:12 -0700
 
