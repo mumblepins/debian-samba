@@ -1,9 +1,13 @@
 samba (3.0.14a-7) UNRELEASED; urgency=low
 
-  * Debconf translations:
-    - Added Vietnamese. Closes: #317876
+  * Christian Perrier:
+    - Debconf translations:
+      - Added Vietnamese. Closes: #317876
+  * Steve Langasek:
+    - Use ${misc:Depends} in debian/control instead of depending on
+      debconf directly, allowing use of cdebconf as an alternative.
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 12 Jul 2005 10:07:11 +0200
+ -- Steve Langasek <vorlon@debian.org>  Wed,  3 Aug 2005 03:56:27 -0700
 
 samba (3.0.14a-6) unstable; urgency=low
 

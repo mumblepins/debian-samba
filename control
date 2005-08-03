@@ -40,7 +40,7 @@ Description: a LanManager-like file and printer server for Unix
 
 Package: samba-common
 Architecture: any
-Depends: debconf, libpam-modules, ${shlibs:Depends}
+Depends: libpam-modules, ${shlibs:Depends}, ${misc:Depends}
 Replaces: samba (<< 2.999+3.0.alpha21-4)
 Description: Samba common files used by both the server and the client
  The Samba software suite is a collection of programs that
@@ -71,7 +71,7 @@ Description: a LanManager-like simple client for Unix
 
 Package: swat
 Architecture: any
-Depends: debconf, samba (= ${Source-Version}), ${shlibs:Depends}
+Depends: samba (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}
 Recommends: samba-doc
 Description: Samba Web Administration Tool
  The Samba software suite is a collection of programs that
