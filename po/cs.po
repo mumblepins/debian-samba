@@ -15,7 +15,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2003-08-30 19:08-0500\n"
+"POT-Creation-Date: 2005-08-13 17:05-0700\n"
 "PO-Revision-Date: 2004-03-05 12:04+0100\n"
 "Last-Translator: Miroslav Kure <kurem@debian.cz>\n"
 "Language-Team: Czech <provoz@debian.cz>\n"
@@ -23,11 +23,13 @@ msgstr ""
 "Content-Type: text/plain; charset=ISO-8859-2\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "Character Set for Unix filesystem"
 msgstr "Znaková sada pro unixový souborový systém"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid ""
@@ -41,16 +43,19 @@ msgstr ""
 "znakovou sadu, kterou chcete pou¾ít pro novou volbu. Tímto nastavíte, jak má "
 "Samba interpretovat názvy souborù v souborovém systému."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "If you leave this option blank, your smb.conf will not be changed."
 msgstr "Pokud nezadáte nic, vá¹ smb.conf se nezmìní."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid "Character Set for DOS clients"
 msgstr "Znaková sada pro DOSové klienty."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid ""
@@ -68,11 +73,13 @@ msgstr ""
 "klienty, pouze pro DOSové klienty. Pokud nezadáte nic, vá¹ smb.conf se "
 "nezmìní."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Upravit smb.conf, aby pou¾íval WINS nastavení z DHCP?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -88,6 +95,7 @@ msgstr ""
 "nastaví, aby se informace o WINS serverech naèítaly ze souboru /etc/samba/"
 "dhcp.conf."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -96,11 +104,13 @@ msgid ""
 msgstr ""
 "Pro vyu¾ití této vlastnosti musíte mít nainstalovaný balík dhcp3-client."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid "Configure smb.conf through debconf?"
 msgstr "Konfigurovat smb.conf pøes debconf?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -116,6 +126,7 @@ msgstr ""
 "nebo volbu, která se táhne pøes více øádkù, co¾ mù¾e zmást debconf a mù¾e "
 "zpùsobit, ¾e pro znovuzprovoznìní Samby budete muset upravit smb.conf ruènì."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -128,11 +139,13 @@ msgstr ""
 "v¹echna nastavení sami a nebudete moci vyu¾ívat výhod pravidelných vylep¹ení "
 "tohoto souboru. Z tohoto pohledu je pou¾ití debconf doporuèená volba."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid "Workgroup/Domain Name?"
 msgstr "Skupina/Doménové jméno?"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid ""
@@ -143,11 +156,13 @@ msgstr ""
 "Zde mù¾ete zadat jméno skupiny, do které má server patøit. Tímto parametrem "
 "také nastavíte doménové jméno pou¾ívané s nastavením security=domain."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid "Use password encryption?"
 msgstr "Pou¾ít ¹ifrování hesel?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid ""
@@ -164,11 +179,13 @@ msgstr ""
 "za¹ifrovaná hesla. Hesla mù¾ete jednotlivým u¾ivatelùm pøidat pøíkazem "
 "smbpasswd."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "Vytvoøit databázi hesel /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid ""
@@ -192,11 +209,13 @@ msgstr ""
 "naleznete v /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html z balíku samba-"
 "doc."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid "Samba's log files have moved."
 msgstr "Logovací soubory Samby se pøesunuly."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -208,6 +227,7 @@ msgstr ""
 "serverù (nmbd a smbd) umístìny ve /var/log/samba/. Názvy pøíslu¹ných souborù "
 "jsou log.nmbd a log.smbd."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -216,11 +236,13 @@ msgid ""
 msgstr ""
 "Staré soubory z adresáøe /var/log/ budou pøesunuty na nové místo automaticky."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid "Running nmbd from inetd is no longer supported"
 msgstr "Spou¹tìní nmbd z inetd ji¾ není podporováno"
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid ""
@@ -234,16 +256,19 @@ msgstr ""
 "startovací skript /etc/init.d/samba, mo¾ná jej nyní budete muset upravit pro "
 "korektní start nmbd."
 
+#. Type: select
 #. Choices
 #: ../samba.templates:36
 msgid "daemons, inetd"
 msgstr "démoni, inetd"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid "How do you want to run Samba?"
 msgstr "Jak chcete spou¹tìt Sambu?"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid ""
@@ -253,11 +278,13 @@ msgstr ""
 "Server Samby smbd mù¾e bì¾et jako obyèejný démon (doporuèeno), nebo se mù¾e "
 "spou¹tìt z inetd."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Pøesunout /etc/samba/smbpasswd do /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid ""
@@ -272,11 +299,13 @@ msgstr ""
 "smbpasswd na /var/lib/samba/passwd.tdb? Pokud plánujete pou¾ít jinou pdb "
 "databázi (tøeba LDAP), mìli byste odponìdìt 'ne'."
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Your smb.conf will be re-written!"
 msgstr "Vá¹ smb.conf bude pøepsán!"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid ""

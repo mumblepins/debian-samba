@@ -2,12 +2,12 @@
 # Copyright (C) 2004 Software in the Public Interest
 # This file is distributed under the same license as the samba package.
 # Luca Monducci, 2004.
-#
+# 
 msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.7 debconf templates\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2003-08-30 19:08-0500\n"
+"POT-Creation-Date: 2005-08-13 17:05-0700\n"
 "PO-Revision-Date: 2004-12-03 21:10+0100\n"
 "Last-Translator: Luca Monducci <luca.mo@tiscali.it>\n"
 "Language-Team: Italian <debian-l10n-italian@lists.debian.org>\n"
@@ -15,11 +15,13 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "Character Set for Unix filesystem"
 msgstr "Set di caratteri per il filesystem Unix"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid ""
@@ -30,19 +32,22 @@ msgid ""
 msgstr ""
 "Attualmente in smb.conf è configurato il «character set», in Samba 3.0, "
 "questa opzione è sostituita da una nuova opzione «unix character». "
-"Specificare il set di caratteri che si desidera usare per questa opzione "
-"che controlla come Samba interpreta i nomi dei file sul file system."
+"Specificare il set di caratteri che si desidera usare per questa opzione che "
+"controlla come Samba interpreta i nomi dei file sul file system."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "If you leave this option blank, your smb.conf will not be changed."
 msgstr "Lasciando vuoto questo valore smb.conf non verrà modificato."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid "Character Set for DOS clients"
 msgstr "Set di caratteri per i client DOS"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid ""
@@ -54,17 +59,19 @@ msgid ""
 "this option blank, your smb.conf will not be changed."
 msgstr ""
 "Attualmente in smb.conf è configurato il «client code page», in Samba 3.0, "
-"questa opzione è sostituita dall'opzione «dos character». Specificare il "
-"set di caratteri che si desidera usare per questa opzione. In molti casi "
-"il valore predefinito è sufficiente. Notare che questa opzione non è "
-"necessaria per i client Windows, invece è specifica per i client DOS. "
-"Lasciando vuoto questo valore smb.conf non verrà modificato."
+"questa opzione è sostituita dall'opzione «dos character». Specificare il set "
+"di caratteri che si desidera usare per questa opzione. In molti casi il "
+"valore predefinito è sufficiente. Notare che questa opzione non è necessaria "
+"per i client Windows, invece è specifica per i client DOS. Lasciando vuoto "
+"questo valore smb.conf non verrà modificato."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Modificare smb.conf per usare le impostazioni WINS da DHCP?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -75,11 +82,12 @@ msgid ""
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
 "Se il computer prende le informazioni sull'indirizzo IP da un server DHCP "
-"allora il server DHCP può fornire anche informazioni sui server WINS (i "
-"name server per NetBIOS) presenti nella rete. Questo necessita una modifica "
-"al file smb.conf in modo le impostazioni di WINS fornite dal DHCP siano "
-"lette automaticamente da /etc/samba/dhcp.conf."
+"allora il server DHCP può fornire anche informazioni sui server WINS (i name "
+"server per NetBIOS) presenti nella rete. Questo necessita una modifica al "
+"file smb.conf in modo le impostazioni di WINS fornite dal DHCP siano lette "
+"automaticamente da /etc/samba/dhcp.conf."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -89,11 +97,13 @@ msgstr ""
 "Deve essere installato il pacchetto dhcp3-client per usare questa "
 "funzionalità."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid "Configure smb.conf through debconf?"
 msgstr "Configurare smb.conf usando debconf?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -103,13 +113,13 @@ msgid ""
 "line or an option that spans multiple lines, which could confuse debconf and "
 "require you to edit your smb.conf by hand to get it working again."
 msgstr ""
-"Il resto della configurazione di Samba fa delle domande sui parametri di "
-"/etc/samba/smb.conf, il file usato per configurare i programmi di Samba "
-"(nmbd e smbd). L'attuale file smb.conf contiene una riga «include» o una "
-"opzione che si estende su più righe: questo potrebbe confondere debconf "
-"e richiedere una modifica manuale a smb.conf per renderlo nuovamente "
-"funzionante."
+"Il resto della configurazione di Samba fa delle domande sui parametri di /"
+"etc/samba/smb.conf, il file usato per configurare i programmi di Samba (nmbd "
+"e smbd). L'attuale file smb.conf contiene una riga «include» o una opzione "
+"che si estende su più righe: questo potrebbe confondere debconf e richiedere "
+"una modifica manuale a smb.conf per renderlo nuovamente funzionante."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -120,14 +130,16 @@ msgid ""
 msgstr ""
 "Se non si vuole usare usare debconf per configurare smb.conf si dovranno "
 "gestire tutti i cambiamenti della configurazione da soli e non sarà "
-"possibile beneficiare dei miglioramenti periodici della configurazione; "
-"se possibile, si consiglia l'uso di debconf."
+"possibile beneficiare dei miglioramenti periodici della configurazione; se "
+"possibile, si consiglia l'uso di debconf."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid "Workgroup/Domain Name?"
 msgstr "Nome del Workgroup/Dominio"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid ""
@@ -139,11 +151,13 @@ msgstr ""
 "tenteranno l'accesso. Notare che questo parametro controlla anche il nome "
 "del Dominio usato del parametro «security=domain»."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid "Use password encryption?"
 msgstr "Usare password cifrate?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid ""
@@ -155,16 +169,18 @@ msgid ""
 "command."
 msgstr ""
 "I client Windows recenti comunicano con i server SMB usando password "
-"cifrate. Per usare password in chiaro è necessario cambiare un parametro "
-"nel registro di Windows. Si raccomanda l'uso di password cifrate. In caso "
-"contrario assicurarsi che il file /etc/samba/smbpasswd sia valido e usare "
-"il comando smbpasswd per inserirci le password di ciascun utente."
+"cifrate. Per usare password in chiaro è necessario cambiare un parametro nel "
+"registro di Windows. Si raccomanda l'uso di password cifrate. In caso "
+"contrario assicurarsi che il file /etc/samba/smbpasswd sia valido e usare il "
+"comando smbpasswd per inserirci le password di ciascun utente."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "Creare il database delle password samba /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid ""
@@ -178,22 +194,23 @@ msgid ""
 "doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc package for more "
 "details."
 msgstr ""
-"Per essere compatibile con le impostazioni predefinite di molte versioni "
-"di Windows, Samba deve essere configurato per usare password cifrate. "
-"Questo richiede che le password degli utenti siano memorizzate in un file "
-"diverso da /etc/passwd. Questo file può essere creato automaticamente ma "
-"qualcuno (l'amministratore o l'utente) dovrà inserire manualmente e poi "
-"tenere aggiornate le password usando smbpasswd. Se non si crea questo file "
-"sarà necessario riconfigurare samba (e probabilmente anche le macchine "
-"client) per usare password in chiaro. Vedere /usr/share/doc/samba-doc/"
-"htmldocs/ENCRYPTION.html contenuto nel pacchetto samba-doc per ulteriori "
-"dettagli."
+"Per essere compatibile con le impostazioni predefinite di molte versioni di "
+"Windows, Samba deve essere configurato per usare password cifrate. Questo "
+"richiede che le password degli utenti siano memorizzate in un file diverso "
+"da /etc/passwd. Questo file può essere creato automaticamente ma qualcuno "
+"(l'amministratore o l'utente) dovrà inserire manualmente e poi tenere "
+"aggiornate le password usando smbpasswd. Se non si crea questo file sarà "
+"necessario riconfigurare samba (e probabilmente anche le macchine client) "
+"per usare password in chiaro. Vedere /usr/share/doc/samba-doc/htmldocs/"
+"ENCRYPTION.html contenuto nel pacchetto samba-doc per ulteriori dettagli."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid "Samba's log files have moved."
 msgstr "I file di log di Samba sono stati spostati."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -202,10 +219,11 @@ msgid ""
 "names of the files are log.nmbd and log.smbd, for nmbd and smbd respectively."
 msgstr ""
 "A partire dai primi pacchetti Samba 2.2 per Debian i file di log per "
-"entrambi i demoni Samba (nmbd e smbd) sono memorizzati in /var/log/samba/. "
-"I nomi dei file di log sono log.nmbd e log.smbd rispettivamente per nmbd e "
+"entrambi i demoni Samba (nmbd e smbd) sono memorizzati in /var/log/samba/. I "
+"nomi dei file di log sono log.nmbd e log.smbd rispettivamente per nmbd e "
 "smbd."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -214,11 +232,13 @@ msgid ""
 msgstr ""
 "I vecchi file di log in /var/log/ verranno spostati nella nuova directory."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid "Running nmbd from inetd is no longer supported"
 msgstr "L'avvio di nmbd da inetd non è più supportato"
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid ""
@@ -232,16 +252,19 @@ msgstr ""
 "modificato lo script di avvio /etc/init.d/samba potrebbe essere necessario "
 "correggerlo a mano in modo da permettere l'avvio di nmbd."
 
+#. Type: select
 #. Choices
 #: ../samba.templates:36
 msgid "daemons, inetd"
 msgstr "demoni, inetd"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid "How do you want to run Samba?"
 msgstr "Come avviare Samba?"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid ""
@@ -251,11 +274,13 @@ msgstr ""
 "Il demone Samba smbd può essere avviato come un normale demone oppure da "
 "inetd. Si raccomanda l'avvio come demone."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Spostare /etc/samba/smbpasswd in /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid ""
@@ -270,11 +295,13 @@ msgstr ""
 "migrato a /var/lib/samba/passdb.tdb? Se si pensa di usare un backend pdb "
 "diverso (p.e. LDAP), si dovrebbe rispondere «no»."
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Your smb.conf will be re-written!"
 msgstr "Sovrascrittura di smb.conf!"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid ""

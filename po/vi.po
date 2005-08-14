@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.14a-6\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2003-08-30 19:08-0500\n"
+"POT-Creation-Date: 2005-08-13 17:05-0700\n"
 "PO-Revision-Date: 2005-07-12 16:17+0930\n"
 "Last-Translator: Clytie Siddall <clytie@riverland.net.au>\n"
 "Language-Team: Vietnamese <gnomevi-list@lists.sourceforge.net>\n"
@@ -16,11 +16,13 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0\n"
 "X-Generator: LocFactoryEditor 1.2.2\n"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "Character Set for Unix filesystem"
 msgstr "Bộ ký tự cho hệ thống tập tin Unix"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid ""
@@ -36,17 +38,20 @@ msgstr ""
 "mới này, mà điều khiển cách Samba giải thích tên tập tin trong hệ thống tập "
 "tin này."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "If you leave this option blank, your smb.conf will not be changed."
 msgstr ""
 "Nếu bạn bỏ rỗng tùy chọn này thì sẽ không sửa đổi tập tin «smb.conf» của bạn."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid "Character Set for DOS clients"
 msgstr "Bộ ký tự cho trình khách DOS"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid ""
@@ -65,11 +70,13 @@ msgstr ""
 "Windows: chỉ trình khách DOS cần thiết nó. Nếu bạn bỏ rỗng tùy chọn này thì "
 "sẽ không sửa đổi tập tin «smb.conf» của bạn."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Sửa đổi «smb.conf» để dùng thiết lập WINS từ DHCP không?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -85,6 +92,7 @@ msgstr ""
 "bạn thay đổi tập tin «smb.conf» mình để cho phép thiết lập WINS do DHCP cung "
 "cấp sẽ tự động được đọc từ tập tin «/etc/samba/dhcp.conf»."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -92,11 +100,13 @@ msgid ""
 "feature."
 msgstr "Để nhớ dịp tính năng này, bạn cần phải cài đặt gói tin «dhcp3-client»."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid "Configure smb.conf through debconf?"
 msgstr "Cấu hình «smb.conf» bằng debconf không?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -113,6 +123,7 @@ msgstr ""
 "trình debconf nên bạn sẽ phải tự sửa đổi tập tin «smb.conf» mình để hoạt hóa "
 "lại nó."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -125,11 +136,13 @@ msgstr ""
 "quản lý sự thay đổi cấu hình nào, và sẽ không thể nhớ dịp cấu hình tăng "
 "cường định kỳ. Vì vậy, khuyến khích bạn sử dụng debconf nếu có thể."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid "Workgroup/Domain Name?"
 msgstr "Tên nhóm làm việc hay tên miền?"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid ""
@@ -142,11 +155,13 @@ msgstr ""
 "điều khiển tên miền được dùng với thiết lập «security=domain» (bảo mật = "
 "miền)."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid "Use password encryption?"
 msgstr "Mật mã hóa mật khẩu không?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid ""
@@ -164,11 +179,13 @@ msgstr ""
 "kiểm tra xem có một tập tin «/etc/samba/smbpasswd» hợp lệ, và bạn đã lập mật "
 "khẩu trong nó cho mỗi người dùng có dùng lệnh «smbpasswd»."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "Tạo cơ sở dữ liệu mật khẩu samba «/var/lib/samba/passdb.tdb» không?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid ""
@@ -192,11 +209,13 @@ msgstr ""
 "tin «/usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html» từ gói tin «samba-"
 "doc» để tìm chi tiết."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid "Samba's log files have moved."
 msgstr "Tập tin bản ghi Samba đã di chuyển rồi."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -209,6 +228,7 @@ msgstr ""
 "samba/». Tên của tập tin này là «log.nmbd» và «log.smbd» cho trình nmdb và "
 "trình smbd riêng từng cái."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -218,11 +238,13 @@ msgstr ""
 "Các tập tin bản ghi cũ đã trong «/var/log/» sẽ được di chuyển sang vị trí "
 "mới cho bạn dùng."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid "Running nmbd from inetd is no longer supported"
 msgstr "Không còn hỗ trợ lại chạy trình nmbd từ inetd."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid ""
@@ -236,16 +258,19 @@ msgstr ""
 "lại từ inetd. Nếu bạn đã sửa đổi tập lệnh khởi chạy «/etc/init.d/samba» thì "
 "có lẽ bạn muốn tự điều chỉnh nó, để khởi chạy nmbd trong trường hợp mới này."
 
+#. Type: select
 #. Choices
 #: ../samba.templates:36
 msgid "daemons, inetd"
 msgstr "trình nền, inetd"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid "How do you want to run Samba?"
 msgstr "Bạn có muốn chạy Samba như thế nào?"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid ""
@@ -255,12 +280,14 @@ msgstr ""
 "Trình nền (dæmon) Samba smbd có thể chạy với tư cách trình nền bình thường, "
 "hoặc từ inetd. Khuyên bạn chạy nó là trình nền."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr ""
 "Di chuyển «/etc/samba/smbpasswd» sang «/var/lib/samba/passdb.tdb» không?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid ""
@@ -276,11 +303,13 @@ msgstr ""
 "Nếu bạn định sử dụng hậu phương «pdb» khác (v.d. LDAP) thì bạn nên trả lời "
 "Không (no) tại đây."
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Your smb.conf will be re-written!"
 msgstr "• Sẽ ghi lại tập tin «smb.conf» của bạn. •"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid ""

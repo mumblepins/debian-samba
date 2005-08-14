@@ -16,7 +16,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2003-08-30 19:08-0500\n"
+"POT-Creation-Date: 2005-08-13 17:05-0700\n"
 "PO-Revision-Date: 2003-09-09 09:26+0900\n"
 "Last-Translator: Kenshi Muto <kmuto@debian.org>\n"
 "Language-Team: Japanese <debian-japanese@lists.debian.org>\n"
@@ -24,11 +24,13 @@ msgstr ""
 "Content-Type: text/plain; charset=EUC-JP\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "Character Set for Unix filesystem"
 msgstr "Unix ファイルシステム向けの文字セット"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid ""
@@ -42,16 +44,19 @@ msgstr ""
 "Samba がファイルシステムのファイル名をどのように解釈するかを制御するこの新し"
 "いオプションのために、希望する文字セットを指定してください。"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "If you leave this option blank, your smb.conf will not be changed."
 msgstr "このオプションを空のままにすると、smb.conf は変更されません。"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid "Character Set for DOS clients"
 msgstr "DOS クライアント向けの文字セット"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid ""
@@ -69,11 +74,13 @@ msgstr ""
 "トサポートには必要なく、DOS クライアントのみのためであることを注意しておきま"
 "す。このオプションを空のままにすると、smb.conf は変更されません。"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "DHCP から WINS 設定を使うよう smb.conf を変更しますか?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -89,6 +96,7 @@ msgstr ""
 "設定は /etc/samba/dhcp.conf から自動的に読み込まれるため、smb.conf ファイルを"
 "変更する必要があります。"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -98,11 +106,13 @@ msgstr ""
 "この機能を使うためには、dhcp3-client パッケージがインストールされている必要が"
 "あります。"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid "Configure smb.conf through debconf?"
 msgstr "debconf を通して smb.conf を設定しますか?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -118,6 +128,7 @@ msgstr ""
 "これは debconf を混乱させる可能性があり、再び debconf が作動するようにすべく "
 "smb.conf の手動での修正を必要とします。"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -130,11 +141,13 @@ msgstr ""
 "倒を見る必要があります。これは定期的な設定改善には向いていません。そのため、"
 "可能なら debconf を使うのがお勧めです。"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid "Workgroup/Domain Name?"
 msgstr "ワークグループ/ドメイン名は何ですか?"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid ""
@@ -146,11 +159,13 @@ msgstr ""
 "御します。このパラメータは security=domain 設定が使われたときのドメイン名も制"
 "御します。"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid "Use password encryption?"
 msgstr "パスワードの暗号化を使いますか?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid ""
@@ -167,11 +182,13 @@ msgstr ""
 "を推奨します。こうする場合、有効な /etc/samba/smbpasswd ファイルがあることを"
 "確認し、各ユーザのパスワードは smbpasswd コマンドを使って設定します。"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "Samba パスワードデータベース /var/lib/samba/passdb.tdb を作成しますか?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid ""
@@ -195,11 +212,13 @@ msgstr ""
 "細については、samba-doc パッケージにある /usr/share/doc/samba-doc/htmldocs/"
 "ENCRYPTION.html を参照してください。"
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid "Samba's log files have moved."
 msgstr "Samba のログファイルは移動されました。"
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -211,6 +230,7 @@ msgstr ""
 "smbd) のログファイルは /var/log/samba に格納されるようになっています。ファイ"
 "ル名は nmbd と smbd で別個になるよう、log.nmbd および log.smbd となります。"
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -218,11 +238,13 @@ msgid ""
 "for you."
 msgstr "/var/log/ にあった古いログファイルは新しい場所に移動されます。"
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid "Running nmbd from inetd is no longer supported"
 msgstr "inetd からの nmbd の実行はもうサポートされません"
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid ""
@@ -236,16 +258,19 @@ msgstr ""
 "せん。/etc/init.d/samba スタートアップスクリプトを変更しているのであれば、"
 "nmbd が起動するよう手動で調整する必要があるでしょう。"
 
+#. Type: select
 #. Choices
 #: ../samba.templates:36
 msgid "daemons, inetd"
 msgstr "デーモン, inetd"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid "How do you want to run Samba?"
 msgstr "どのように Samba を実行したいですか?"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid ""
@@ -255,11 +280,13 @@ msgstr ""
 "Samba デーモン smbd は通常のデーモンとしての実行または inetd からの実行ができ"
 "ます。デーモンとして実行するのがお勧めの手段です。"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "/etc/samba/smbpasswd を /var/lib/samba/passdb.tdb に移動しますか?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid ""
@@ -274,11 +301,13 @@ msgstr ""
 "イルを /var/lib/samba/passdb.tdb に移行しますか? 別の pdb バックエンド (LDAP "
 "など) を代わりに計画しているのであれば、ここでは 'いいえ' と答えるべきです。"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Your smb.conf will be re-written!"
 msgstr "あなたの smb.conf は書き直されます!"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid ""

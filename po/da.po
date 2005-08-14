@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: da\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2003-08-30 19:08-0500\n"
+"POT-Creation-Date: 2005-08-13 17:05-0700\n"
 "PO-Revision-Date: 2004-02-15 17:23+0100\n"
 "Last-Translator: Claus Hindsgaul <claus_h@image.dk>\n"
 "Language-Team: Danish <dansk@klid.dk>\n"
@@ -15,11 +15,13 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: KBabel 1.0.2\n"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "Character Set for Unix filesystem"
 msgstr "Tegnsæt til Unix-filsystemet"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid ""
@@ -29,20 +31,23 @@ msgid ""
 "controls how Samba interprets filenames on the file system."
 msgstr ""
 "Du har en \"character set\"-indstilling i din smb.conf. I Samba 3.0 "
-"erstattes denne af en ny indstilling, \"unix charset\". Angiv det "
-"tegnsæt, du ønsker at bruge i denne nye indstilling, som styrer "
-"hvordan Samba tolker filnavne på systemet."
+"erstattes denne af en ny indstilling, \"unix charset\". Angiv det tegnsæt, "
+"du ønsker at bruge i denne nye indstilling, som styrer hvordan Samba tolker "
+"filnavne på systemet."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "If you leave this option blank, your smb.conf will not be changed."
 msgstr "Hvis du ikke skriver noget her, vil din smb.conf ikke blive ændret."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid "Character Set for DOS clients"
 msgstr "Tegnsæt til DOS-klienter"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid ""
@@ -53,18 +58,20 @@ msgid ""
 "needed to support Windows clients, it is only for DOS clients.  If you leave "
 "this option blank, your smb.conf will not be changed."
 msgstr ""
-"Du har en \"client code page\"-indstilling i din smb.conf. I Samba "
-"3.0 erstattes denne af en ny indstilling, \"dos charset\". Angiv det "
-"tegnsæt, du ønsker at bruge i denne nye indstilling. I de fleste tilfælde "
-"vil det forvalgte være nok. Bemærk at denne indstilling ikke kræves "
-"for at understøtte Windows-klienter; den gælder kun DOS-klienter. Hvis "
-"du ikke skriver noget her, vil smb.conf ikke blive ændret."
+"Du har en \"client code page\"-indstilling i din smb.conf. I Samba 3.0 "
+"erstattes denne af en ny indstilling, \"dos charset\". Angiv det tegnsæt, du "
+"ønsker at bruge i denne nye indstilling. I de fleste tilfælde vil det "
+"forvalgte være nok. Bemærk at denne indstilling ikke kræves for at "
+"understøtte Windows-klienter; den gælder kun DOS-klienter. Hvis du ikke "
+"skriver noget her, vil smb.conf ikke blive ændret."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Ret smb.conf, så den benytter WINS-indstillinger fra DHCP?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -74,12 +81,13 @@ msgid ""
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
-"Hvis din computer får IP-adresseoplysninger fra en DHCP-server på "
-"netværket, kan DHCP-serveren også give oplysninger om WINS-servere "
-"(\"NetBIOS navneservere\") på netværket. Dette kræver en ændring i din "
-"smb.conf-fil, så WINS-indstillingerne fra DHCP-serveren automatisk "
-"indlæses fra /etc/samba/dhcp.conf."
+"Hvis din computer får IP-adresseoplysninger fra en DHCP-server på netværket, "
+"kan DHCP-serveren også give oplysninger om WINS-servere (\"NetBIOS "
+"navneservere\") på netværket. Dette kræver en ændring i din smb.conf-fil, så "
+"WINS-indstillingerne fra DHCP-serveren automatisk indlæses fra /etc/samba/"
+"dhcp.conf."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -89,11 +97,13 @@ msgstr ""
 "Ud skal have pakken dhcp3-client installeret for at kunne udnytte denne "
 "funktion."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid "Configure smb.conf through debconf?"
 msgstr "Sæt smb.conf op med debconf?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -103,13 +113,14 @@ msgid ""
 "line or an option that spans multiple lines, which could confuse debconf and "
 "require you to edit your smb.conf by hand to get it working again."
 msgstr ""
-"Resten af Samba-opsætningen drejer sig om spørgsmål om indstillingerne "
-"i filen /etc/samba/smb.conf, som benyttes til at sætte Samba-programmerne "
+"Resten af Samba-opsætningen drejer sig om spørgsmål om indstillingerne i "
+"filen /etc/samba/smb.conf, som benyttes til at sætte Samba-programmerne "
 "(nmbd og smbd) op. Din nuværende smb.conf indeholder en 'include'-linje "
-"eller en indstilling, der fylder flere linjer, hvilket kan forvirre "
-"debconf og kræve at du redigerer din smb.conf selv for at få Samba til "
-"at fungere igen."
+"eller en indstilling, der fylder flere linjer, hvilket kan forvirre debconf "
+"og kræve at du redigerer din smb.conf selv for at få Samba til at fungere "
+"igen."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -120,14 +131,16 @@ msgid ""
 msgstr ""
 "Hvis du ikke bruger debconf til at sætte smb.conf op, må du selv håndtere "
 "ændringer i opsætningen, og vil ikke kunne drage nytte af de løbende "
-"forbedringer i opsætningen. Derfor anbefales brugen af debconf, hvis "
-"det er muligt."
+"forbedringer i opsætningen. Derfor anbefales brugen af debconf, hvis det er "
+"muligt."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid "Workgroup/Domain Name?"
 msgstr "Navn på arbejdsgruppe/domæne?"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid ""
@@ -139,11 +152,13 @@ msgstr ""
 "spurgt af klienter. Bemærk at dette også styrer det domænenavn, der bruges "
 "med indstillingen \"security=domain\"."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid "Use password encryption?"
 msgstr "Kryptér adgangskoder?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid ""
@@ -155,17 +170,19 @@ msgid ""
 "command."
 msgstr ""
 "Nyere Windows-klienter kommunikerer med SMB-servere med krypterede "
-"adgangskoder. Hvis du vil bruge adgangkoder i klar tekst, bliver du "
-"nødt til at ændre en indstilling i Windows' registreringsdatabase. Det "
-"anbefales at du bruger krypterede adgangskoder. Hvis du gør, så sørg for "
-"at du har en gyldig /etc/samba/smbpasswd-fil og at du her angiver "
-"adgangskoder for hver bruger med kommandoen smbpasswd."
+"adgangskoder. Hvis du vil bruge adgangkoder i klar tekst, bliver du nødt til "
+"at ændre en indstilling i Windows' registreringsdatabase. Det anbefales at "
+"du bruger krypterede adgangskoder. Hvis du gør, så sørg for at du har en "
+"gyldig /etc/samba/smbpasswd-fil og at du her angiver adgangskoder for hver "
+"bruger med kommandoen smbpasswd."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "Opret samba-adgangskodedatabasen /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid ""
@@ -180,20 +197,22 @@ msgid ""
 "details."
 msgstr ""
 "For at være kompatibel med standardindstillingerne i de fleste udgaver af "
-"Windows, skal Samba være sat op til at benytte krypterede adgangskoder. "
-"Det kræver at brugernes adgangskoder gemmes i en anden fil end /etc/passwd. "
+"Windows, skal Samba være sat op til at benytte krypterede adgangskoder. Det "
+"kræver at brugernes adgangskoder gemmes i en anden fil end /etc/passwd. "
 "Denne fil kan oprettes automatisk, men adgangskoderne er nødt til at blive "
 "tilføjet manuelt (af dig eller af brugeren) ved at køre smbpasswd, og du "
 "skal holde den opdateret i fremtiden. Hvis du ikke opretter den, er du nødt "
 "til at sætte samba (og sikkert også dine klientmaskiner) op til at benytte "
-"adgangskoder i klar tekst. Se /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html "
-"i pakken samba-doc for flere detaljer."
+"adgangskoder i klar tekst. Se /usr/share/doc/samba-doc/htmldocs/ENCRYPTION."
+"html i pakken samba-doc for flere detaljer."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid "Samba's log files have moved."
 msgstr "Sambas logfiler er flyttet."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -205,20 +224,23 @@ msgstr ""
 "(nmbd og smbd) logfiler gemt i /var/log/samba/. Filernes navne er log.nmbd "
 "og log.smbd."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
 "The old log files that were in /var/log/ will be moved to the new location "
 "for you."
 msgstr ""
-"De gamle logfiler, der var i /var/log vil blive flyttet til den nye placering "
-"for dig."
+"De gamle logfiler, der var i /var/log vil blive flyttet til den nye "
+"placering for dig."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid "Running nmbd from inetd is no longer supported"
 msgstr "Kørsel af nmbd fra inetd understøttes ikke længere."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid ""
@@ -227,21 +249,24 @@ msgid ""
 "If you have modified your /etc/init.d/samba startup script, you may need to "
 "adjust it by hand now so that nmbd will start."
 msgstr ""
-"Dit system var tidligere sat op til at starte nmbd og smbd fra inetd. "
-"Fra og med version 2.999+3.0.alpha20-4 kan nmbd ikke længere startes med inetd. "
+"Dit system var tidligere sat op til at starte nmbd og smbd fra inetd. Fra og "
+"med version 2.999+3.0.alpha20-4 kan nmbd ikke længere startes med inetd. "
 "Hvis du har rettet din opstartsskript /etc/init.d/samba, kan du være nødt "
 "til at justere det manuelt nu, så nmbd bliver startet."
 
+#. Type: select
 #. Choices
 #: ../samba.templates:36
 msgid "daemons, inetd"
 msgstr "dæmoner, inetd"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid "How do you want to run Samba?"
 msgstr "Hvordan skal Samba køres?"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid ""
@@ -251,11 +276,13 @@ msgstr ""
 "Samba-dæmonen smbd kan køre som en almindelig dæmon eller fra inetd. Det "
 "anbefales at køre den som dæmon."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Flyt /etc/samba/smbpasswd til /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid ""
@@ -266,16 +293,17 @@ msgid ""
 "here."
 msgstr ""
 "Samba 3.0 har en nyere og mere komplet SAM-databasegrænseflade, som "
-"erstatter filen /etc/samba/smbpasswd. Vil du have din eksisterende "
-"smbpasswd-fil overført til /var/lib/samba/passdb.tdb?`Hvis du i stedet "
-"planlægger at bruge en anden pdb-håndtering (f.eks. LDAP), bør du afvise "
-"dette."
+"erstatter filen /etc/samba/smbpasswd. Vil du have din eksisterende smbpasswd-"
+"fil overført til /var/lib/samba/passdb.tdb?`Hvis du i stedet planlægger at "
+"bruge en anden pdb-håndtering (f.eks. LDAP), bør du afvise dette."
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Your smb.conf will be re-written!"
 msgstr "Din smb.conf vil blive omskrevet!"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid ""
@@ -283,8 +311,7 @@ msgid ""
 "delete all comments, include= and copy= options. If you have a carefully "
 "crafted smb.conf then back it up or don't use SWAT!"
 msgstr ""
-"SWAT vil overskrive din smb.conf-fil. Den vil flytte rundt på linjerne "
-"og slette alle kommentarer, og linjer med \"include=\" og \"copy=\". "
-"Hvis du har brugt tid på at lave din egen smb.conf, så tag en "
-"sikkerhedskopi eller undlad at benytte SWAT!"
-
+"SWAT vil overskrive din smb.conf-fil. Den vil flytte rundt på linjerne og "
+"slette alle kommentarer, og linjer med \"include=\" og \"copy=\". Hvis du "
+"har brugt tid på at lave din egen smb.conf, så tag en sikkerhedskopi eller "
+"undlad at benytte SWAT!"

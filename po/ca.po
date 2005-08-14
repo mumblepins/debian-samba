@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: samba_3.0.0beta2-1_templates\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2003-08-30 19:08-0500\n"
+"POT-Creation-Date: 2005-08-13 17:05-0700\n"
 "PO-Revision-Date: 2004-03-13 21:32-0500\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Debian L10n Catalan <debian-l10n-catalan@lists.debian.org>\n"
@@ -14,11 +14,13 @@ msgstr ""
 "Content-Type: text/plain; charset=ISO-8859-1\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "Character Set for Unix filesystem"
 msgstr "Joc de caràcters pel sistema de fitxers de Unix"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid ""
@@ -33,16 +35,19 @@ msgstr ""
 "opció que controla el mode que el Samba interpreta els noms de fitxers del "
 "sistema de fitxers."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:3
 msgid "If you leave this option blank, your smb.conf will not be changed."
 msgstr "Si deixeu aquesta opció en blanc no es modificarà el smb.conf."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid "Character Set for DOS clients"
 msgstr "Joc de caràcters pels clients DOS"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:13
 msgid ""
@@ -60,6 +65,7 @@ msgstr ""
 "pels clients de DOS. Si deixeu aquesta opció en blanc no es canviarà el smb."
 "conf."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid "Modify smb.conf to use WINS settings from DHCP?"
@@ -67,6 +73,7 @@ msgstr ""
 "Voleu modificar el smb.conf perquè utilitza els paràmetres de configuració "
 "del WINS del DHCP?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -83,6 +90,7 @@ msgstr ""
 "WINS obtinguts a través del DHCP s'obtinguin a través de la lectura de /etc/"
 "samba/dhcp.conf"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:24
 msgid ""
@@ -92,11 +100,13 @@ msgstr ""
 "Per beneficiar-vos d'aquesta característica cal que tingueu instal·lat el "
 "paquet dhcp3-client."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid "Configure smb.conf through debconf?"
 msgstr "Voleu configurar el smb.conf a través del debconf?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -112,6 +122,7 @@ msgstr ""
 "que abarca múltiples línies que podria confondre al debconf i precisa de la "
 "seva edició manual per poder-lo fer funcionar de nou."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:37
 msgid ""
@@ -124,11 +135,13 @@ msgstr ""
 "manualment qualsevol canvi de la configuració, i no us podreu beneficiar de "
 "les millores.  La seva utilització és recomenable en cas que sigui possible."
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid "Workgroup/Domain Name?"
 msgstr "Grup de treball/nom del domini?"
 
+#. Type: string
 #. Description
 #: ../samba-common.templates:52
 msgid ""
@@ -140,11 +153,13 @@ msgstr ""
 "quan ho consultin els clients. Recordeu que aquest paràmetre també controla "
 "el nom de domini utilitzat pel paràmetre de configuració security=domain."
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid "Use password encryption?"
 msgstr "Voleu utilitzar l'encriptació de contrasenyes?"
 
+#. Type: boolean
 #. Description
 #: ../samba-common.templates:60
 msgid ""
@@ -162,12 +177,14 @@ msgstr ""
 "fitxer /etc/samba/smbpasswd vàlid i que hi especifiqueu la contrasenya de "
 "cada usuari utilitzant l'ordre smbpasswd."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr ""
 "Es crea la base de dades de contrasenyes de Samba, /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:4
 msgid ""
@@ -192,11 +209,13 @@ msgstr ""
 "Per més informació feu una ullada a /usr/share/doc/samba-doc/htmldocs/"
 "ENCRYPTION.html del paquet samba-doc."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid "Samba's log files have moved."
 msgstr "S'han desplaçat els fitxers de registre de Samba."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -208,6 +227,7 @@ msgstr ""
 "var/log/samba des de la primera versió dels paquets de Samba 2.2 per Debian. "
 "Els noms dels fitxers són, respectivament, log.nmbd i log.smbd."
 
+#. Type: note
 #. Description
 #: ../samba.templates:17
 msgid ""
@@ -217,11 +237,13 @@ msgstr ""
 "Els fitxers de registre antics que estaven a /var/log/ es desplacen a la "
 "nova ubicació."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid "Running nmbd from inetd is no longer supported"
 msgstr "L'execució del nmbd a través del inetd ja no estarà suportada."
 
+#. Type: note
 #. Description
 #: ../samba.templates:28
 msgid ""
@@ -236,16 +258,19 @@ msgstr ""
 "d'arrencada /etc/init.d/samba, l'haureu de modificar manualment per tal que "
 "s'iniciï com a dimoni."
 
+#. Type: select
 #. Choices
 #: ../samba.templates:36
 msgid "daemons, inetd"
 msgstr "dimonis, inetd"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid "How do you want to run Samba?"
 msgstr "Com voleu executar el Samba?"
 
+#. Type: select
 #. Description
 #: ../samba.templates:38
 msgid ""
@@ -255,11 +280,13 @@ msgstr ""
 "El dimoni de Samba pot executar-se com un dimoni normal o des del inetd. És "
 "recomanable executar-lo com un dimoni."
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Es desplaça etc/samba/smbpasswd a /var/lib/samba/passdb.tdb?"
 
+#. Type: boolean
 #. Description
 #: ../samba.templates:45
 msgid ""
@@ -274,11 +301,13 @@ msgstr ""
 "fitxer smbpasswd a /var/lib/samba/passdb.tdb?  Si la vostra intenció és "
 "utilitzar un altre pdb (ex, LDAP), haurieu de respondre 'no' aquí."
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Your smb.conf will be re-written!"
 msgstr "El vostre smb.conf es reescriurà"
 
+#. Type: note
 #. Description
 #: ../swat.templates:3
 msgid ""

@@ -6,8 +6,10 @@ samba (3.0.14a-7) UNRELEASED; urgency=low
   * Steve Langasek:
     - Use ${misc:Depends} in debian/control instead of depending on
       debconf directly, allowing use of cdebconf as an alternative.
+    - Debconf translations:
+      - Added German.  Closes: #322907
 
- -- Steve Langasek <vorlon@debian.org>  Wed,  3 Aug 2005 03:56:27 -0700
+ -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
 samba (3.0.14a-6) unstable; urgency=low
 
