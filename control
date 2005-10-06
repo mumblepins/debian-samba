@@ -37,6 +37,8 @@ Description: a LanManager-like file and printer server for Unix
  It is possible to install a subset of these packages depending on
  your particular needs. For example, to access other SMB servers you
  should only need the smbclient and samba-common packages.
+ .
+ http://www.samba.org/
 
 Package: samba-common
 Architecture: any

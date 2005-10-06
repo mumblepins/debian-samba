@@ -12,6 +12,7 @@ samba (3.0.14a-7) UNRELEASED; urgency=low
     - corrected libsmbclient priority to optional. Closes: #310045
     - corrected the path of ServerType.html in smb.conf. Closes: #296500
     - updated Standards-Version to 3.6.2 (no changes needed)
+    - added homepage to description
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
