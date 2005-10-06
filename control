@@ -136,7 +136,7 @@ Description: pluggable authentication module for SMB password database
 
 Package: libsmbclient
 Section: libs
-Priority: extra
+Priority: optional
 Architecture: any
 Depends: ${shlibs:Depends}
 Description: shared library that allows applications to talk to SMB servers

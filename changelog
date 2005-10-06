@@ -8,6 +8,8 @@ samba (3.0.14a-7) UNRELEASED; urgency=low
     - Use ${misc:Depends} in debian/control instead of depending on
       debconf directly, allowing use of cdebconf as an alternative.
       Closes: #332088.
+  * Noèl Köthe
+    - corrected libsmbclient priority to optional. Closes: #310045
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
