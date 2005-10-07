@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Eloy A. Paris <peloy@debian.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Christian Perrier <bubulle@debian.org>
 Build-Depends: debhelper (>= 4.1.13), libpam0g-dev, libreadline5-dev, libcupsys2-dev (>=1.1.20final+cvs20040330-4), autoconf, libacl1-dev (>= 2.2.11-1) [@libacl@], libkrb5-dev, libldap2-dev, po-debconf, python2.3-dev, binutils (>= 2.14.90.0.7), type-handling (>= 0.2.1), libpopt-dev
-Standards-Version: 3.5.10
+Standards-Version: 3.6.2
 
 Package: samba
 Architecture: any
@@ -37,6 +37,8 @@ Description: a LanManager-like file and printer server for Unix
  It is possible to install a subset of these packages depending on
  your particular needs. For example, to access other SMB servers you
  should only need the smbclient and samba-common packages.
+ .
+ http://www.samba.org/
 
 Package: samba-common
 Architecture: any
@@ -136,7 +138,7 @@ Description: pluggable authentication module for SMB password database
 
 Package: libsmbclient
 Section: libs
-Priority: extra
+Priority: optional
 Architecture: any
 Depends: ${shlibs:Depends}
 Description: shared library that allows applications to talk to SMB servers
