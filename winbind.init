@@ -18,32 +18,32 @@ test -x $DAEMON || exit 0
 
 case "$1" in
 	start)
-               log_begin_msg "Starting the Winbind daemon..."
+		log_daemon_msg "Starting the Winbind daemon" "winbind"
 
 		start-stop-daemon --start --quiet --exec $DAEMON
 
-               log_end_msg $?
+		log_end_msg $?
 		;;
 
 	stop)
-               log_begin_msg "Stopping the Winbind daemon..."
+		log_daemon_msg "Stopping the Winbind daemon" "winbind"
 
 		start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
 
-               log_end_msg $?
+		log_end_msg $?
 		;;
 
 	restart|force-reload)
-               log_begin_msg "Restarting the Winbind daemon..."
+		log_daemon_msg "Restarting the Winbind daemon" "winbind"
 
 		start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
 		sleep 2
 		start-stop-daemon --start --quiet --exec $DAEMON
 
-               log_end_msg $?
+		log_end_msg $?
 		;;
 	*)
-               log_success_msg "Usage: /etc/init.d/winbind {start|stop|restart|force-reload}"
+		echo "Usage: /etc/init.d/winbind {start|stop|restart|force-reload}"
 		exit 1
 		;;
 esac

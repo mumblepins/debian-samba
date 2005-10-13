@@ -23,13 +23,14 @@ test -x /usr/sbin/nmbd -a -x /usr/sbin/smbd || exit 0
 
 case "$1" in
 	start)
-		log_begin_msg "Starting Samba daemons.."
+		log_daemon_msg "Starting Samba daemons" "nmbd"
 
 		if ! start-stop-daemon --start --quiet --oknodo --exec /usr/sbin/nmbd -- -D; then
 			log_end_msg 1
 			exit 1
 		fi
 
+		log_progress_msg "smbd"
 		if [ "$RUN_MODE" != "inetd" ]; then
 			if ! start-stop-daemon --start --quiet --oknodo --exec /usr/sbin/smbd -- -D; then
 				log_end_msg 1
@@ -40,7 +41,7 @@ case "$1" in
 		log_end_msg 0
 		;;
 	stop)
-		log_begin_msg "Stopping Samba daemons..."
+		log_daemon_msg "Stopping Samba daemons" "nmbd"
 
 		start-stop-daemon --stop --quiet --pidfile $NMBDPID
 		# Wait a little and remove stale PID file
@@ -52,6 +53,7 @@ case "$1" in
 			rm -f $NMBDPID
 		fi
 
+		log_progress_msg "smbd"
 		if [ "$RUN_MODE" != "inetd" ]; then
 			start-stop-daemon --stop --quiet --pidfile $SMBDPID
 			# Wait a little and remove stale PID file
@@ -68,7 +70,7 @@ case "$1" in
 
 		;;
 	reload)
-		log_begin_msg "Reloading /etc/samba/smb.conf (smbd only)..."
+		log_daemon_msg "Reloading /etc/samba/smb.conf" "smbd only"
 
 		start-stop-daemon --stop --signal HUP --pidfile $SMBDPID
 
@@ -80,7 +82,7 @@ case "$1" in
 		$0 start
 		;;
 	*)
-		log_success_msg "Usage: /etc/init.d/samba {start|stop|reload|restart|force-reload}"
+		echo "Usage: /etc/init.d/samba {start|stop|reload|restart|force-reload}"
 		exit 1
 		;;
 esac
