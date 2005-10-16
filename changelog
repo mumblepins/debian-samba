@@ -18,6 +18,7 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
     - added Swedish. Closes: #331437
     - new upstream release 3.0.20b (from 2005-10-13). Closes: #324515
       . Mac OS Tiger Problem fixed. Closes: #309836
+      . testprns removed by upstream so removed in samba.files
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
