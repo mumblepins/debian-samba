@@ -35,6 +35,7 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
               caused by an invalid character set conversion.)
       . fixed the following patches which didn't applied cleanly
         fhs.patch
+        non-linux-ports.patch
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
