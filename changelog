@@ -24,6 +24,8 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
       . removing patches which are included upstream:
         dos7-xcopy-always-copies-files.patch
            (* BUG 2622: Remove DPTR_MASK as it makes no sense.)
+        hide-special-file-fix.patch
+           (* Hide dot files and directory logic fixes.)
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
