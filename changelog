@@ -20,6 +20,7 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
       . Mac OS Tiger Problem fixed. Closes: #309836
       . testprns removed by upstream so removed in samba.files
       . corrected docs/*.pdf names (samba-doc.docs)
+      . corrected diagnosis.html path (samba.docs)
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
