@@ -451,23 +451,22 @@ diff -uNr samba-3.0.10.orig/source/printing/printing_db.c samba-3.0.10/source/pr
 diff -uNr samba-3.0.10.orig/source/registry/reg_db.c samba-3.0.10/source/registry/reg_db.c
 --- samba-3.0.10.orig/source/registry/reg_db.c	2004-12-17 03:50:09.000000000 -0800
 +++ samba-3.0.10/source/registry/reg_db.c	2004-12-17 03:55:31.000000000 -0800
-@@ -131,13 +131,13 @@
- 	 * if we need to init the data in the registry
- 	 */
- 	
--	tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR, 0600);
-+	tdb_reg = tdb_open_log(state_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR, 0600);
- 	if ( !tdb_reg ) 
- 	{
--		tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
-+		tdb_reg = tdb_open_log(state_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
- 		if ( !tdb_reg ) {
- 			DEBUG(0,("init_registry: Failed to open registry %s (%s)\n",
--				lock_path("registry.tdb"), strerror(errno) ));
-+				state_path("registry.tdb"), strerror(errno) ));
- 			return False;
- 		}
- 		
+@@ -198,12 +198,12 @@
+        if ( tdb_reg )
+                return True;
+
+-       if ( !(tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR, 0600)) )
++       if ( !(tdb_reg = tdb_open_log(state_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR, 0600)) )
+        {
+-               tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++               tdb_reg = tdb_open_log(state_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+                if ( !tdb_reg ) {
+                        DEBUG(0,("init_registry: Failed to open registry %s (%s)\n",
+-                               lock_path("registry.tdb"), strerror(errno) ));
++                               state_path("registry.tdb"), strerror(errno) ));
+                        return False;
+                }
+
 diff -uNr samba-3.0.10.orig/source/rpc_server/srv_srvsvc_nt.c samba-3.0.10/source/rpc_server/srv_srvsvc_nt.c
 --- samba-3.0.10.orig/source/rpc_server/srv_srvsvc_nt.c	2004-12-17 03:50:09.000000000 -0800
 +++ samba-3.0.10/source/rpc_server/srv_srvsvc_nt.c	2004-12-17 03:55:31.000000000 -0800
