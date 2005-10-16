@@ -26,6 +26,9 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
            (* BUG 2622: Remove DPTR_MASK as it makes no sense.)
         hide-special-file-fix.patch
            (* Hide dot files and directory logic fixes.)
+        rap-printing-bigendian.patch
+           (* BUG 1998: Correct byte ordering bug when storing
+              16-bit RAP print job ids.)
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
