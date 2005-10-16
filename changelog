@@ -29,6 +29,10 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
         rap-printing-bigendian.patch
            (* BUG 1998: Correct byte ordering bug when storing
               16-bit RAP print job ids.)
+        smbclient-vfat-loop.patch
+        smbclient-vfat-loop2.patch
+           (* BUG 2698: Fix infinite listing loop in smbclient
+              caused by an invalid character set conversion.)
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 13 Aug 2005 17:04:40 -0700
 
