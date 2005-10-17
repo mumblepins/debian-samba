@@ -21,14 +21,15 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
     - moved smbpasswd(5) to samba-common where the binary and smbpasswd(8) is
       Closes: #253603
     - new upstream release 3.0.20b (from 2005-10-13). Closes: #324515
-      . support for Windows Vista. Closes: #323489
-      . Mac OS Tiger Problem fixed. Closes: #309836
-      . BUG 2688: re-implement support for the -P (--port) option. Closes: #307746
-      . "man smb.conf" warnings fixed. Closes: #266320
-      . testprns removed by upstream so removed in samba.files
-      . corrected docs/*.pdf names (samba-doc.docs)
-      . corrected diagnosis.html path (samba.docs)
-      . removing patches which are included upstream:
+      - support for Windows Vista. Closes: #323489
+      - Mac OS Tiger Problem fixed. Closes: #309836
+      - BUG 2688: re-implement support for the -P (--port) option.
+        Closes: #307746
+      - "man smb.conf" warnings fixed. Closes: #266320
+      - testprns removed by upstream so removed in samba.files
+      - corrected docs/*.pdf names (samba-doc.docs)
+      - corrected diagnosis.html path (samba.docs)
+      - removing patches which are included upstream:
         dos7-xcopy-always-copies-files.patch
            (* BUG 2622: Remove DPTR_MASK as it makes no sense.)
         hide-special-file-fix.patch
@@ -40,7 +41,7 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
         smbclient-vfat-loop2.patch
            (* BUG 2698: Fix infinite listing loop in smbclient
               caused by an invalid character set conversion.)
-      . fixed the following patches which didn't applied cleanly
+      - fixed the following patches which didn't applied cleanly
         fhs.patch
         non-linux-ports.patch
 
