@@ -18,6 +18,8 @@ samba (3.0.20b-1) UNRELEASED; urgency=low
     - added Swedish. Closes: #331437
     - removed outdated "guest" value in "passdb backend" in default smb.conf
       Closes: #289519
+    - moved smbpasswd(5) to samba-common where the binary and smbpasswd(8) is
+      Closes: #253603
     - new upstream release 3.0.20b (from 2005-10-13). Closes: #324515
       . support for Windows Vista. Closes: #323489
       . Mac OS Tiger Problem fixed. Closes: #309836
