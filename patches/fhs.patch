@@ -305,9 +305,21 @@ diff -uNr samba-3.0.10.orig/source/nmbd/nmbd_winsserver.c samba-3.0.10/source/nm
  	all_string_sub(fname,"//", "/", 0);
  	slprintf(fnamenew,sizeof(fnamenew)-1,"%s.%u", fname, (unsigned int)sys_getpid());
  
-diff -uNr samba-3.0.10.orig/source/nsswitch/winbindd_cache.c samba-3.0.10/source/nsswitch/winbindd_cache.c
---- samba-3.0.10.orig/source/nsswitch/winbindd_cache.c	2004-12-17 03:50:09.000000000 -0800
-+++ samba-3.0.10/source/nsswitch/winbindd_cache.c	2004-12-17 03:55:30.000000000 -0800
+diff -uNr samba-3.0.20b.orig/source/passdb/login_cache.c samba-3.0.20b/source/passdb/login_cache.c
+--- samba-3.0.20b.orig/source/passdb/login_cache.c
++++ samba-3.0.20b/source/passdb/login_cache.c
+@@ -36,7 +36,7 @@
+ 	/* skip file open if it's already opened */
+ 	if (cache) return True;
+ 
+-	asprintf(&cache_fname, "%s/%s", lp_lockdir(), LOGIN_CACHE_FILE);
++	asprintf(&cache_fname, "%s/%s", dyn_CACHEDIR(), LOGIN_CACHE_FILE);
+ 	if (cache_fname)
+ 		DEBUG(5, ("Opening cache file at %s\n", cache_fname));
+ 	else {
+diff -uNr samba-3.0.20b.orig/source/nsswitch/winbindd_cache.c samba-3.0.20b/source/nsswitch/winbindd_cache.c
+--- samba-3.0.20b.orig/source/nsswitch/winbindd_cache.c
++++ samba-3.0.20b/source/nsswitch/winbindd_cache.c
 @@ -57,7 +57,7 @@
  	if (opt_nocache)
  		return;
@@ -317,6 +329,15 @@ diff -uNr samba-3.0.10.orig/source/nsswitch/winbindd_cache.c samba-3.0.10/source
  				   TDB_CLEAR_IF_FIRST, O_RDWR|O_CREAT, 0600);
  
  	if (!wcache->tdb) {
+@@ -1471,7 +1471,7 @@
+ 	if (wcache->tdb != NULL)
+ 		return True;
+ 
+-	wcache->tdb = tdb_open_log(lock_path("winbindd_cache.tdb"), 5000, 
++	wcache->tdb = tdb_open_log(cache_path("winbindd_cache.tdb"), 5000, 
+ 				   TDB_CLEAR_IF_FIRST, O_RDWR|O_CREAT, 0600);
+ 
+ 	if (wcache->tdb == NULL) {
 diff -uNr samba-3.0.10.orig/source/nsswitch/winbindd_util.c samba-3.0.10/source/nsswitch/winbindd_util.c
 --- samba-3.0.10.orig/source/nsswitch/winbindd_util.c	2004-12-17 03:50:09.000000000 -0800
 +++ samba-3.0.10/source/nsswitch/winbindd_util.c	2004-12-17 03:55:30.000000000 -0800
