@@ -1,3 +1,10 @@
+samba (3.0.20b-2) unstable; urgency=low
+
+  * Don't build with -gstabs any more; -g no longer gives a problematic
+    size hit, and -gstabs is no longer supported on ia64.
+
+ -- Steve Langasek <vorlon@debian.org>  Wed, 19 Oct 2005 19:02:44 -0700
+
 samba (3.0.20b-1) unstable; urgency=low
 
   * Christian Perrier:

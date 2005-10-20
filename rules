@@ -26,7 +26,7 @@ export DEB_BUILD_GNU_TYPE
 export DEB_HOST_ARCH_OS
 
 # Support the DEB_BUILD_OPTIONS variable
-CFLAGS = -gstabs -Wall
+CFLAGS = -g -Wall
 INSTALL = install
 
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
