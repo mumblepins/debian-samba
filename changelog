@@ -1,8 +1,12 @@
 samba (3.0.20b-3) UNRELEASED; urgency=low
 
-  * Drop the FHS transition code from the samba postinst, since it's
-    not needed for upgrades from sarge (and most of it not for upgrades
-    from woody).
+  * Steve Langasek:
+    - Drop the FHS transition code from the samba postinst, since it's
+      not needed for upgrades from sarge (and most of it not for upgrades
+      from woody).
+  * Noèl Köthe:
+    - libpam-smbpass dependency on samba-common
+      Closes: #297923
 
  -- Steve Langasek <vorlon@debian.org>  Sun, 23 Oct 2005 00:50:33 -0700
 

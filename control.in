@@ -127,7 +127,7 @@ Package: libpam-smbpass
 Section: admin
 Priority: extra
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, samba-common (= ${Source-Version})
 Suggests: samba
 Description: pluggable authentication module for SMB password database
  This is a stackable PAM module that allows a system administrator to easily
