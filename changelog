@@ -8,6 +8,8 @@ samba (3.0.20b-3) UNRELEASED; urgency=low
     - libpam-smbpass dependency on samba-common
       Closes: #297923
     - updated swedish debconf translation. Closes: #335784
+  * Peter Eisentraut
+    - Added doc-base support. Closes: #55580
 
  -- Steve Langasek <vorlon@debian.org>  Sun, 23 Oct 2005 00:50:33 -0700
 
