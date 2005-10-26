@@ -11,6 +11,10 @@ samba (3.0.20b-3) UNRELEASED; urgency=low
     - Added Recommends: smbldap-tools. Closes: #227675
   * Peter Eisentraut
     - Added doc-base support. Closes: #55580
+    - Fixed dh_installexamples call so the debian/*.examples files are
+      actually used.
+    - Patched libpam-smbpass README to refer to examples directory.
+      Closes: #215771
 
  -- Steve Langasek <vorlon@debian.org>  Sun, 23 Oct 2005 00:50:33 -0700
 
