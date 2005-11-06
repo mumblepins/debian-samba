@@ -1,5 +1,6 @@
 samba (3.0.20b-3) UNRELEASED; urgency=low
 
+  [ Steve Langasek ]
   * Steve Langasek:
     - Drop the FHS transition code from the samba postinst, since it's
       not needed for upgrades from sarge (and most of it not for upgrades
@@ -16,7 +17,11 @@ samba (3.0.20b-3) UNRELEASED; urgency=low
     - Patched libpam-smbpass README to refer to examples directory.
       Closes: #215771
 
- -- Steve Langasek <vorlon@debian.org>  Sun, 23 Oct 2005 00:50:33 -0700
+  [ Christian Perrier ]
+  * Add a working passwd chat line to the default smb.conf file
+    Closes: #269746
+
+ -- Christian Perrier <bubulle@debian.org>  Sat,  5 Nov 2005 14:16:09 +0100
 
 samba (3.0.20b-2) unstable; urgency=low
 
