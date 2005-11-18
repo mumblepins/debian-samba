@@ -1,5 +1,6 @@
 usr/bin/smbstatus
 usr/bin/smbcontrol
+usr/bin/profiles
 usr/bin/tdbbackup
 usr/bin/pdbedit
 usr/sbin/smbd
@@ -7,6 +8,7 @@ usr/sbin/nmbd
 usr/sbin/mksmbpasswd
 usr/lib/samba/vfs
 usr/share/man/man1/smbcontrol.1
+usr/share/man/man1/profiles.1
 usr/share/man/man1/smbstatus.1
 usr/share/man/man8/nmbd.8
 usr/share/man/man8/pdbedit.8
