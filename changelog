@@ -10,6 +10,7 @@ samba (3.0.20b-3) UNRELEASED; urgency=low
     Closes: #297923
   * Updated swedish debconf translation. Closes: #335784
   * Added Recommends: smbldap-tools. Closes: #227675
+  * build package without krb4. Closes: #340658
 
   [ Peter Eisentraut ]
   * Added doc-base support. Closes: #55580
