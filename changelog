@@ -22,8 +22,11 @@ samba (3.0.20b-3) UNRELEASED; urgency=low
   * Add a working passwd chat line to the default smb.conf file
     Closes: #269746
   * Add the profiles binary and man page to the shipped files. Closes: #225494
+  * Add a dependency on samba-common for winbind and force versions to match
+    Closes: #273007, #264855
+  * Add /var/log/samba to winbind directories. Closes: #340833
 
- -- Christian Perrier <bubulle@debian.org>  Fri, 18 Nov 2005 19:49:06 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sat, 26 Nov 2005 13:51:27 +0100
 
 samba (3.0.20b-2) unstable; urgency=low
 
