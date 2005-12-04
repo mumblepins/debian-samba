@@ -74,7 +74,7 @@ Description: a LanManager-like simple client for Unix
 
 Package: swat
 Architecture: any
-Depends: samba (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: samba (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}, netbase
 Recommends: samba-doc
 Description: Samba Web Administration Tool
  The Samba software suite is a collection of programs that
@@ -159,14 +159,14 @@ Description: libsmbclient static libraries and headers
  This gives applications the ability to talk to Microsoft Windows servers
  and Unix servers running Samba.
  .
- This package contains the libraries and headers needed to build
- applications that use SMB services.
+ This package contains the libsmbclient static libraries and headers
+ needed to build applications that use SMB services.
 
 Package: winbind
 Section: net
 Priority: optional
 Architecture: any
-Depends: samba-common (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, samba-common (= ${Source-Version})
 Replaces: samba (<= 2.2.3-2)
 Description: service to resolve user and group information from Windows NT servers
  This package provides the winbindd daemon, which provides a

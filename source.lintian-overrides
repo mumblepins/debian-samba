@@ -1,0 +1,11 @@
+samba source: invalid-arch-string-in-source-relation m32r
+samba source: invalid-arch-string-in-source-relation s390x
+samba source: invalid-arch-string-in-source-relation sh3
+samba source: invalid-arch-string-in-source-relation sh3eb
+samba source: invalid-arch-string-in-source-relation sh4
+samba source: invalid-arch-string-in-source-relation sh4eb
+# These are *not* configure-generated files
+samba source: configure-generated-file-in-source debian/config.cache
+# Those aren't even part of the diff.gz
+samba source: configure-generated-file-in-source packaging/Debian/debian-stable/config.cache
+samba source: configure-generated-file-in-source packaging/Debian/debian-unstable/config.cache
