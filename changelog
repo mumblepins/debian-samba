@@ -29,6 +29,7 @@ samba (3.0.20b-3) unstable; urgency=low
     for things done on purpose or just because it makes wrong assumptions
   * Corrected FSF address in debian/copyright
   * Make swat depend on netbase as it uses update-inetd in its postinst script
+  * Correct shebang lines in config scripts
 
  -- Christian Perrier <bubulle@debian.org>  Sat,  3 Dec 2005 07:30:40 +0100
 
