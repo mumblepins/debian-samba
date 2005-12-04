@@ -1,8 +1,9 @@
 samba (3.0.20b-4) UNRELEASED; urgency=low
 
-  * 
+  * Remove the smbldap-tools-* directory from the examples of samba-doc
+    as these tools exist as an independent package. Closes: #341934
 
- -- Christian Perrier <bubulle@debian.org>  Sun,  4 Dec 2005 15:19:50 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sun,  4 Dec 2005 19:03:33 +0100
 
 samba (3.0.20b-3) unstable; urgency=low
 
