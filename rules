@@ -256,12 +256,9 @@ binary-indep: build install
 	dh_testroot
 	dh_installdebconf
 	dh_installdocs -A debian/README.build
-	dh_installexamples
-
-	# Remove an extra copy of the GPL licence in smbldap-tools example
-	# directory. Thanks lintian, for noticing
-	rm debian/samba-doc/usr/share/doc/samba-doc/examples/LDAP/smbldap-tools-0.9.1/COPYING.gz
-
+	# Ignore COPYING. Otherwise, an extra copy of the GPL licence 
+	# in smbldap-tools example is included in samba-doc
+	dh_installexamples -XCOPYING
 #	dh_installmenu
 #	dh_installemacsen
 #	dh_installpam
