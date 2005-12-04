@@ -1,3 +1,0 @@
-# These files are setuid on purpose
-smbfs: setuid-binary usr/bin/smbmnt 4755 root/root
-smbfs: setuid-binary usr/bin/smbumount 4755 root/root
