@@ -4,6 +4,9 @@
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
+# Needed to run the .config script even if we don't use debconf'
+. /usr/share/debconf/confmodule
+
 case "$1" in
 	configure)
 		;;
