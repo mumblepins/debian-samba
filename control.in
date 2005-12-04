@@ -74,7 +74,7 @@ Description: a LanManager-like simple client for Unix
 
 Package: swat
 Architecture: any
-Depends: samba (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: samba (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}, netbase
 Recommends: samba-doc
 Description: Samba Web Administration Tool
  The Samba software suite is a collection of programs that

@@ -1,4 +1,4 @@
-samba (3.0.20b-3) UNRELEASED; urgency=low
+samba (3.0.20b-3) unstable; urgency=low
 
   [ Steve Langasek ]
   * Drop the FHS transition code from the samba postinst, since it's
@@ -25,8 +25,12 @@ samba (3.0.20b-3) UNRELEASED; urgency=low
   * Add a dependency on samba-common for winbind and force versions to match
     Closes: #273007, #264855
   * Add /var/log/samba to winbind directories. Closes: #340833
+  * Add a few lintian overrides to avoid lintian complaining
+    for things done on purpose or just because it makes wrong assumptions
+  * Corrected FSF address in debian/copyright
+  * Make swat depend on netbase as it uses update-inetd in its postinst script
 
- -- Christian Perrier <bubulle@debian.org>  Sat, 26 Nov 2005 13:51:27 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sat,  3 Dec 2005 07:30:40 +0100
 
 samba (3.0.20b-2) unstable; urgency=low
 
