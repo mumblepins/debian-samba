@@ -25,12 +25,16 @@ samba (3.0.20b-3) unstable; urgency=low
   * Add a dependency on samba-common for winbind and force versions to match
     Closes: #273007, #264855
   * Add /var/log/samba to winbind directories. Closes: #340833
-  * Add a few lintian overrides to avoid lintian complaining
-    for things done on purpose or just because it makes wrong assumptions
-  * Corrected FSF address in debian/copyright
-  * Make swat depend on netbase as it uses update-inetd in its postinst script
-  * Correct shebang lines in config scripts
-  * Remove an extra copy of the GPL in smbldap-tool examples in samba-doc
+  * Lintian cleaning:
+    - Add a few lintian overrides to avoid lintian complaining
+      for things done on purpose or just because it makes wrong assumptions
+    - Corrected FSF address in debian/copyright
+    - Make swat depend on netbase as it uses update-inetd in its postinst
+      script
+    - Correct shebang lines in config scripts
+    - Remove an extra copy of the GPL in smbldap-tool examples in samba-doc
+    - Minor correction in libsmbclient-dev description to avoid strictly
+      repeating the short description in the long description
 
  -- Christian Perrier <bubulle@debian.org>  Sat,  3 Dec 2005 07:30:40 +0100
 
