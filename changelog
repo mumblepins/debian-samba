@@ -1,3 +1,9 @@
+samba (3.0.20b-4) UNRELEASE; urgency=low
+
+  * 
+
+ -- Christian Perrier <bubulle@debian.org>  Sun,  4 Dec 2005 15:19:50 +0100
+
 samba (3.0.20b-3) unstable; urgency=low
 
   [ Steve Langasek ]
