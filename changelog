@@ -3,8 +3,10 @@ samba (3.0.20b-4) UNRELEASED; urgency=low
   * Remove the smbldap-tools-* directory from the examples of samba-doc
     as these tools exist as an independent package. Closes: #341934
   * Swedish debconf translation update. Closes: #342022
+  * Preserve the local admin settings for run_mode in /etc/default/samba
+    when upgrading. Closes: #234038, #267988, #269735
 
- -- Christian Perrier <bubulle@debian.org>  Sun,  4 Dec 2005 19:03:33 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sun, 11 Dec 2005 09:46:58 +0100
 
 samba (3.0.20b-3) unstable; urgency=low
 
