@@ -1,10 +1,16 @@
 samba (3.0.20b-4) UNRELEASED; urgency=low
 
+  [ Christian Perrier ]
   * Remove the smbldap-tools-* directory from the examples of samba-doc
     as these tools exist as an independent package. Closes: #341934
   * Swedish debconf translation update. Closes: #342022
   * Preserve the local admin settings for run_mode in /etc/default/samba
     when upgrading. Closes: #234038, #267988, #269735
+
+  [ Peter Eisentraut ]
+  * Added separate samba-doc-pdf package. Closes: #281971
+  * Removed duplicate documentation in swat package, symlinked to
+    samba-doc; swat now depends on samba-doc. Closes: #233447
 
  -- Christian Perrier <bubulle@debian.org>  Sun, 11 Dec 2005 09:46:58 +0100
 

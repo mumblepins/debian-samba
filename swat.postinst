@@ -1,26 +1,22 @@
-#!/bin/sh
-#
-#
+#!/bin/sh -e
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin
+action="$1"
+oldversion="$2"
 
 # Needed to run the .config script even if we don't use debconf'
 . /usr/share/debconf/confmodule
 
-case "$1" in
-	configure)
-		;;
-	abort-upgrade|abort-remove|abort-deconfigure)
-		exit 0
-		;;
-	*)
-		echo "$0: Unknown action \"$1\""
-		exit 0
-		;;
-esac
-
 # Set up swat, turned off by default.
 update-inetd --group OTHER --add \
  '#<off># swat\t\tstream\ttcp\tnowait.400\troot\t/usr/sbin/tcpd\t/usr/sbin/swat'
+
+# Fix symlinks
+for dir in manpages Samba3-ByExample Samba3-Developers-Guide Samba3-HOWTO; do
+	if [ ! -L /usr/share/samba/swat/help/$dir ] && \
+	   dpkg --compare-versions "$oldversion" lt-nl 3.0.20b-3; then
+		rm -rf /usr/share/samba/swat/help/$dir
+		ln -s ../../../doc/samba-doc/htmldocs/$dir /usr/share/samba/swat/help/$dir
+	fi
+done
 
 #DEBHELPER#

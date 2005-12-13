@@ -215,12 +215,6 @@ endif
 	# Install man pages for files without man pages in the upstream sources
 	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8
 
-	# We don't provide the "Using Samba" book in the swat package.
-	# It's provided in the samba-doc package so in the swat package
-	# we just provide a symlink to the real book.
-	ln -s ../../doc/samba-doc/htmldocs/using_samba \
-	      $(DESTDIR)/usr/share/samba/swat/using_samba
-
 	# The smbwrapper package is not being generated anymore, so we must
 	#	delete the related man pages.
 	rm $(DESTDIR)/usr/share/man/man1/smbsh.1

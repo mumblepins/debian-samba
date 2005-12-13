@@ -84,6 +84,7 @@ samba-common: Samba common files used by both the server and the client.
 smbclient: A LanManager like simple client for Unix.
 swat: Samba Web Administration Tool
 samba-doc: Samba documentation.
+samba-doc-pdf: Samba documentation (PDF format).
 smbfs: Mount and umount commands for the smbfs (works with 2.2.x and
 	above kernels, not with 2.0.x kernels.)
 libpam-smbpass: pluggable authentication module for SMB password
