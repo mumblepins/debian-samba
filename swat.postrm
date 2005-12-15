@@ -4,7 +4,7 @@
 
 case "$1" in
 	purge)
-		update-inetd --remove '/usr/sbin/swat$'
+		update-inetd --remove swat
 		;;
 	remove)
 		;;

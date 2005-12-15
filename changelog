@@ -7,6 +7,8 @@ samba (3.0.20b-4) UNRELEASED; urgency=low
   * Preserve the local admin settings for run_mode in /etc/default/samba
     when upgrading. Closes: #234038, #267988, #269735
   * Winbind also must depend on lsb-base. Closes: #343379
+  * Enable swat in inetd when installing it and remove it when
+    uninstalling. Closes: #87905, #230936, #268429
 
   [ Peter Eisentraut ]
   * Added separate samba-doc-pdf package. Closes: #281971
