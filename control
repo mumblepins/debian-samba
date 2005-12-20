@@ -175,7 +175,7 @@ Package: winbind
 Section: net
 Priority: optional
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, samba-common (= ${Source-Version}), lsb-base (>= 3.0-6)
 Replaces: samba (<= 2.2.3-2)
 Description: service to resolve user and group information from Windows NT servers
  This package provides the winbindd daemon, which provides a

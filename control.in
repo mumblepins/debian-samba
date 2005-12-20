@@ -11,7 +11,6 @@ Architecture: any
 Depends: samba-common (= ${Source-Version}), netbase, logrotate, ${shlibs:Depends}, ${misc:Depends}, libpam-runtime (>= 0.76-13.1), libpam-modules, lsb-base (>= 3.0-6)
 Recommends: smbldap-tools
 Replaces: samba-common (<= 2.0.5a-2)
-Suggests: samba-doc
 Description: a LanManager-like file and printer server for Unix
  The Samba software suite is a collection of programs that
  implements the SMB protocol for unix systems, allowing you to serve
