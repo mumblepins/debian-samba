@@ -1,3 +1,10 @@
+samba (3.0.20b-5) UNRELEASED; urgency=low
+
+  * *Really* make samba-doc suggest samna-doc-pdf. This change finally
+    did not make it in the previous release.
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 20 Dec 2005 23:30:08 +0100
+
 samba (3.0.20b-4) unstable; urgency=low
 
   [ Christian Perrier ]

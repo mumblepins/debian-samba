@@ -87,6 +87,7 @@ Description: Samba Web Administration Tool
 Package: samba-doc
 Section: doc
 Architecture: all
+Suggests: samba-doc
 Description: Samba documentation
  The Samba software suite is a collection of programs that
  implements the SMB protocol for unix systems, allowing you to serve
