@@ -11,7 +11,8 @@ samba (3.0.20b-4) UNRELEASED; urgency=low
     uninstalling. Closes: #87905, #230936, #268429
 
   [ Peter Eisentraut ]
-  * Added separate samba-doc-pdf package. Closes: #281971
+  * Added separate samba-doc-pdf package, suggested by samba-doc.
+    Closes: #281971
   * Removed duplicate documentation in swat package, symlinked to
     samba-doc; swat now depends on samba-doc. Closes: #233447
 
