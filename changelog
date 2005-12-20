@@ -1,4 +1,4 @@
-samba (3.0.20b-4) UNRELEASED; urgency=low
+samba (3.0.20b-4) unstable; urgency=low
 
   [ Christian Perrier ]
   * Remove the smbldap-tools-* directory from the examples of samba-doc
@@ -16,7 +16,7 @@ samba (3.0.20b-4) UNRELEASED; urgency=low
   * Removed duplicate documentation in swat package, symlinked to
     samba-doc; swat now depends on samba-doc. Closes: #233447
 
- -- Christian Perrier <bubulle@debian.org>  Thu, 15 Dec 2005 22:54:16 +0100
+ -- Christian Perrier <bubulle@debian.org>  Tue, 20 Dec 2005 17:08:20 +0100
 
 samba (3.0.20b-3) unstable; urgency=low
 
