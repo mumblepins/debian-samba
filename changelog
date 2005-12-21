@@ -1,7 +1,7 @@
 samba (3.0.21-1) UNRELEASED; urgency=low
 
   [ Christian Perrier ]
-  * *Really* make samba-doc suggest samna-doc-pdf. This change finally
+  * *Really* make samba-doc suggest samba-doc-pdf. This change finally
     did not make it in the previous release.
 
   [ Noèl Köthe ]
