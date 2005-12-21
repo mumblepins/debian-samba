@@ -215,10 +215,6 @@ endif
 	# Install man pages for files without man pages in the upstream sources
 	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8
 
-	# The smbwrapper package is not being generated anymore, so we must
-	#	delete the related man pages.
-	rm $(DESTDIR)/usr/share/man/man1/smbsh.1
-
 	# We're not providing findsmb (should we?) so let's remove the man
 	#	pages.
 	find debian/ -name 'findsmb*' -exec rm -f {} \;

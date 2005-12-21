@@ -1,9 +1,25 @@
-samba (3.0.20b-5) UNRELEASED; urgency=low
+samba (3.0.21-1) UNRELEASED; urgency=low
 
+  [ Christian Perrier ]
   * *Really* make samba-doc suggest samna-doc-pdf. This change finally
     did not make it in the previous release.
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 20 Dec 2005 23:30:08 +0100
+  [ Noèl Köthe ]
+  * new upstream release 3.0.21
+    - removed smbsh.1 from debian/rules
+    - fixed "cd command fails in smbclient". Closes: #307535
+    - fixed "file descriptor leak". Closes: #339564
+    - fixed "smbclient(1) doesn't list same options as
+      smbclient usage statement". Closes: #154184
+    - fixed "typo in smbmount.8". Closes: #260673
+    - fixed "smbmount manual page doesn't have a link to
+      smbumount". Closes: #297535
+    - fixed "smb.conf man page references non-existent
+      BROWSING.txt file". Closes: #316458
+    - fixed "smb.conf - improve topic: hosts deny (S)". Closes: #273480
+    - fixed "fails to manage groups containing spaces". Closes: #299592
+
+ -- Noèl Köthe <noel@debian.org>  Wed, 21 Dec 2005 11:34:44 +0100
 
 samba (3.0.20b-4) unstable; urgency=low
 
