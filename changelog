@@ -11,6 +11,7 @@ samba (3.0.21-1) UNRELEASED; urgency=low
       to existing Debian smbget)
     - added libsmbclient.8 to libsmbclient package
     - added umount.cifs.8 to smbfs package
+    - added pam_winbind.8 to winbind package
     - fixed "cd command fails in smbclient". Closes: #307535
     - fixed "file descriptor leak". Closes: #339564
     - fixed "smbclient(1) doesn't list same options as
