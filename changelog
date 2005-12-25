@@ -27,6 +27,7 @@ samba (3.0.21-1) UNRELEASED; urgency=low
       BROWSING.txt file". Closes: #316458
     - fixed "smb.conf - improve topic: hosts deny (S)". Closes: #273480
     - fixed "fails to manage groups containing spaces". Closes: #299592
+    - added myself to Uploaders
 
  -- Noèl Köthe <noel@debian.org>  Wed, 21 Dec 2005 11:34:44 +0100
 
