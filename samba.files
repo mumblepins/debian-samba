@@ -1,3 +1,4 @@
+usr/bin/eventlogadm
 usr/bin/smbstatus
 usr/bin/smbcontrol
 usr/bin/profiles
@@ -15,4 +16,3 @@ usr/share/man/man8/pdbedit.8
 usr/share/man/man8/smbd.8
 usr/share/man/man8/mksmbpasswd.8
 usr/share/man/man8/tdbbackup.8
-
