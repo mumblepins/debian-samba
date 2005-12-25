@@ -59,7 +59,8 @@ Description: Samba common files used by both the server and the client
 Package: smbclient
 Architecture: any
 Depends: samba-common (= ${Source-Version}), ${shlibs:Depends}
-Replaces: samba (<< 2.999+3.0.alpha21-4)
+Replaces: samba (<< 2.999+3.0.alpha21-4), smbget
+Conflicts: smbget
 Provides: samba-client
 Suggests: smbfs
 Description: a LanManager-like simple client for Unix
