@@ -9,6 +9,7 @@ samba (3.0.21-1) UNRELEASED; urgency=low
     - removed smbsh.1 from debian/rules
     - added new smbclient programm smbget (with conflict/replace
       to existing Debian smbget)
+    - added libsmbclient.8 to libsmbclient package
     - fixed "cd command fails in smbclient". Closes: #307535
     - fixed "file descriptor leak". Closes: #339564
     - fixed "smbclient(1) doesn't list same options as
