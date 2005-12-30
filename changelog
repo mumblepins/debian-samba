@@ -1,11 +1,11 @@
-samba (3.0.21-1) UNRELEASED; urgency=low
+samba (3.0.21a-1) UNRELEASED; urgency=low
 
   [ Christian Perrier ]
   * *Really* make samba-doc suggest samba-doc-pdf. This change finally
     did not make it in the previous release.
 
   [ Noèl Köthe ]
-  * new upstream release 3.0.21
+  * new upstream release 3.0.21a
     - removed smbsh.1 from debian/rules
     - added new smbclient programm smbget (with conflict/replace
       to existing Debian smbget package)
