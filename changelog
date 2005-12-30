@@ -11,7 +11,7 @@ samba (3.0.21a-1) UNRELEASED; urgency=low
       to existing Debian smbget package)
     - added tdbdump and tdbtool to samba package (with conflict/replace
       to existing Debian tdb-tools package) because tdb-tools are outdated.
-    - added libsmbclient.8 to libsmbclient package
+    - added libsmbclient.7 to libsmbclient package
     - added umount.cifs.8 to smbfs package
     - added pam_winbind.8 to winbind package
     - added new /usr/bin/eventlogadm to samba package which is
