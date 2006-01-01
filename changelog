@@ -25,7 +25,8 @@ samba (3.0.21a-1) UNRELEASED; urgency=low
       BROWSING.txt file". Closes: #316458
     - fixed "smb.conf - improve topic: hosts deny (S)". Closes: #273480
     - fixed "fails to manage groups containing spaces". Closes: #299592
-    - added myself to Uploaders
+    - corrected nonpic-libsmbclient.patch to apply
+  * added myself to Uploaders
   * Rewording of the panic action script. Closes: #335051
   * added missing swat translation to swat package
 
