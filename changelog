@@ -1,3 +1,9 @@
+samba (3.0.21a-2) UNRELEASED; urgency=low
+
+  *
+
+ -- Noèl Köthe <noel@debian.org>  Sun, 01 Jan 2006 16:45:33 +0100
+
 samba (3.0.21a-1) unstable; urgency=low
 
   [ Christian Perrier ]
