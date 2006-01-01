@@ -1,4 +1,5 @@
 usr/sbin/swat
+usr/lib/samba/*.msg
 usr/share/samba/swat/help/welcome.html
 usr/share/samba/swat/images
 usr/share/samba/swat/include
