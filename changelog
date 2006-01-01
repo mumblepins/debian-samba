@@ -1,4 +1,4 @@
-samba (3.0.21a-1) UNRELEASED; urgency=low
+samba (3.0.21a-1) unstable; urgency=low
 
   [ Christian Perrier ]
   * *Really* make samba-doc suggest samba-doc-pdf. This change finally
