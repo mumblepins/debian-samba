@@ -28,6 +28,7 @@ samba (3.0.21a-1) UNRELEASED; urgency=low
     - fixed "smb.conf - improve topic: hosts deny (S)". Closes: #273480
     - fixed "fails to manage groups containing spaces". Closes: #299592
     - added myself to Uploaders
+  * Rewording of the panic action script. Closes: #335051
 
  -- Noèl Köthe <noel@debian.org>  Wed, 21 Dec 2005 11:34:44 +0100
 

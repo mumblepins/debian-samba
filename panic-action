@@ -39,8 +39,11 @@
 	fi
 
 	echo "Below is a backtrace for this process generated with gdb, which shows"
-	echo "the state of the program at the time the error occured.  You are"
-	echo "encouraged to submit this information as a bug report to Debian.  For"
+	echo "the state of the program at the time the error occurred. "
+	echo 
+	echo "If the problem persists, you are encouraged to first install the "
+	echo "samba-dbg package which contains the debugging symbols for samba "
+	echo "binaries. The, submit the provided information as a bug report to Debian.  For"
 	echo "information about the procedure for submitting bug reports , please see"
 	echo "http://www.debian.org/Bugs/Reporting or the reportbug(1) manpage."
 	echo
