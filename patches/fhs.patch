@@ -151,18 +151,18 @@ diff -uNr samba-3.0.10.orig/source/intl/lang_tdb.c samba-3.0.10/source/intl/lang
  	if (stat(msg_path, &st) != 0) {
  		/* the msg file isn't available */
  		DEBUG(10, ("lang_tdb_init: %s: %s\n", msg_path, 
-diff -uNr samba-3.0.10.orig/source/lib/account_pol.c samba-3.0.10/source/lib/account_pol.c
---- samba-3.0.10.orig/source/lib/account_pol.c	2004-12-17 03:50:08.000000000 -0800
-+++ samba-3.0.10/source/lib/account_pol.c	2004-12-17 03:55:29.000000000 -0800
-@@ -35,7 +35,7 @@
- 
- 	if (tdb)
- 		return True;
--	tdb = tdb_open_log(lock_path("account_policy.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
-+	tdb = tdb_open_log(state_path("account_policy.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
- 	if (!tdb) {
- 		DEBUG(0,("Failed to open account policy database\n"));
- 		return False;
+diff -uNr samba-3.0.21a.orig/source/lib/account_pol.c samba-3.0.21a/source/lib/account_pol.c
+--- samba-3.0.21a.orig/source/lib/account_pol.c  2006-01-01 13:45:20.000000000 +0100
++++ samba-3.0.21a/source/lib/account_pol.c       2006-01-01 13:49:37.000000000 +0100
+@@ -262,7 +262,7 @@
+                return True;
+        }
+
+-       tdb = tdb_open_log(lock_path("account_policy.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
++       tdb = tdb_open_log(state_path("account_policy.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
+        if (!tdb) {
+                DEBUG(0,("Failed to open account policy database\n"));
+                return False;
 diff -uNr samba-3.0.10.orig/source/lib/util.c samba-3.0.10/source/lib/util.c
 --- samba-3.0.10.orig/source/lib/util.c	2004-12-17 03:50:08.000000000 -0800
 +++ samba-3.0.10/source/lib/util.c	2004-12-17 03:55:29.000000000 -0800
@@ -469,10 +469,10 @@ diff -uNr samba-3.0.10.orig/source/printing/printing_db.c samba-3.0.10/source/pr
  	pstrcat(printdb_path, printername);
  	pstrcat(printdb_path, ".tdb");
  
-diff -uNr samba-3.0.10.orig/source/registry/reg_db.c samba-3.0.10/source/registry/reg_db.c
---- samba-3.0.10.orig/source/registry/reg_db.c	2004-12-17 03:50:09.000000000 -0800
-+++ samba-3.0.10/source/registry/reg_db.c	2004-12-17 03:55:31.000000000 -0800
-@@ -198,12 +198,12 @@
+diff -uNr samba-3.0.21a.orig/source/registry/reg_db.c samba-3.0.21a/source/registry/reg_db.c
+--- samba-3.0.21a.orig/source/registry/reg_db.c       2006-01-01 13:54:28.000000000 +0100
++++ samba-3.0.21a/source/registry/reg_db.c    2006-01-01 13:58:09.000000000 +0100
+@@ -205,12 +205,12 @@
         if ( tdb_reg )
                 return True;
 
@@ -482,7 +482,7 @@ diff -uNr samba-3.0.10.orig/source/registry/reg_db.c samba-3.0.10/source/registr
 -               tdb_reg = tdb_open_log(lock_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 +               tdb_reg = tdb_open_log(state_path("registry.tdb"), 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
                 if ( !tdb_reg ) {
-                        DEBUG(0,("init_registry: Failed to open registry %s (%s)\n",
+                        DEBUG(0,("regdb_init: Failed to open registry %s (%s)\n",
 -                               lock_path("registry.tdb"), strerror(errno) ));
 +                               state_path("registry.tdb"), strerror(errno) ));
                         return False;
