@@ -61,7 +61,7 @@ Description: test suite from Samba 4
  
 Package: samba
 Architecture: any
-Recommends: samba-swat
+Recommends: swat
 Depends: ${shlibs:Depends}, samba-common, debconf
 Description: LanManager-like file and printer server for Unix (version 4)
  The Samba software suite is a collection of programs that
@@ -168,8 +168,9 @@ Description: tools for maintaining LDB database files
  are primarily useful for debugging and developing Samba or other
  applications using LDB.
 
-Package: samba-swat
+Package: swat
 Architecture: all
+Depends: samba (=${Source-Version})
 Description: data files for SWAT
  The Samba software suite is a collection of programs that
  implements the SMB protocol for unix systems, allowing you to serve
