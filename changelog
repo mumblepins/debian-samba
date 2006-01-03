@@ -4,6 +4,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Remove a few unused files in the packaging.
   * Rename samba-server package to just samba, for consistency with the
     Samba 3 packaging.
+  * Be more explicit about what happens to the administrator password the
+    user enters.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 14:37:59 +0100
 

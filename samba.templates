@@ -27,6 +27,5 @@ Template: samba/password
 Type: password
 _Description: Administrator password
  You will need a password for the "Administrator" account. Note that in the
- current version of the packaging, this will be visible in "ps" for a short
- time for everybody on the system, so you might not want to use a very
- sensitive password here.
+ current version of the packaging, this will be echoed back in cleartext later,
+ so you might not want to use a very sensitive password here.
