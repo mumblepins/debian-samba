@@ -36,7 +36,6 @@ build-stamp: configure
 	-$(MAKE) -C $(SOURCEPATH) pch
 	$(MAKE) -C $(SOURCEPATH) all
 	$(MAKE) -C $(SOURCEPATH)/pidl all
-	$(MAKE) -C $(SOURCEPATH) quicktest
 	touch $@
 
 clean:
