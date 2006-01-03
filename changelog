@@ -25,8 +25,10 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Don't give --pidfile to start-stop-daemon when stopping -- current
     versions of Samba 4 won't die when the parent is killed.
   * Removed debmake comment from debian/rules, it's hardly relevant any more.
+  * Support purging properly in postrm, both for samba and samba-common
+    (adapted from the Samba 3 packaging).
 
- -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 22:46:06 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 23:13:28 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
