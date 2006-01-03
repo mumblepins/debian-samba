@@ -6,8 +6,11 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
     Samba 3 packaging.
   * Be more explicit about what happens to the administrator password the
     user enters.
+  * Change SOURCEPATH in debian/rules to reflect that we now have the
+    packaging in debian/, not packaging/debian/. This will have to be reverted
+    whenever upstream syncs with us.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 14:37:59 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 14:52:52 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
