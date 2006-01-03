@@ -29,7 +29,7 @@ case "$1" in
 	stop)
 		log_daemon_msg "Stopping Samba 4 daemon" "smbd"
 
-		start-stop-daemon --stop --quiet $SMBDPID
+		start-stop-daemon --stop --quiet --name smbd $SMBDPID
 		# Wait a little and remove stale PID file
 		sleep 1
 		if [ -f $SMBDPID ] && ! ps h `cat $SMBDPID` > /dev/null
