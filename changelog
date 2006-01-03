@@ -16,8 +16,9 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
     * Check for upgrade from << 3.9.0 in postinst, and upgrade if the user
       wished to.
   * Only provision in samba.postinst if we're being called with "configure".
+  * Make samba-client Replaces/Conflicts smbclient. 
 
- -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 15:55:14 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 16:48:57 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 

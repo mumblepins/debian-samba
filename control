@@ -25,6 +25,8 @@ Description: Samba 4 common files used by both the server and the client
 Package: samba-client
 Architecture: any
 Depends: ${shlibs:Depends}
+Replaces: smbclient
+Conflicts: smbclient
 Description: client utilities from Samba 4
  The Samba software suite is a collection of programs that
  implements the SMB protocol for unix systems, allowing you to serve
