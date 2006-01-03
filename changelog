@@ -12,6 +12,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Attempt to upgrade from Samba 3 if that's what the user tries to do.
     * Copy upgrade script into /usr/lib/samba/setup.
   * Run "make quicktest" on build.
+  * Only provision in samba.postinst if we're being called with "configure".
 
  -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 15:19:55 +0100
 
