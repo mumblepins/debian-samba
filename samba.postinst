@@ -12,7 +12,8 @@ if [ "$1" = "configure" ]; then
 			db_get samba/upgrade-from-v3 || true
 			if [ "$RET" = "true" ]; then
 				UPGRADE_FROM_V3=yes
-				/usr/lib/samba/setup/upgrade	
+				mv /etc/samba/smb.conf /etc/samba/smb.conf.samba3
+				/usr/lib/samba/setup/upgrade /var/lib/samba /etc/samba/smb.conf.samba3
 				db_stop
 			fi
 		fi
