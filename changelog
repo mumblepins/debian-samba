@@ -4,6 +4,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Remove a few unused files in the packaging.
   * Rename samba-server package to just samba, for consistency with the
     Samba 3 packaging.
+    * Rename samba.samba.init to samba.init, now that the init script and the
+      server package are called the same.
   * Be more explicit about what happens to the administrator password the
     user enters.
   * Change SOURCEPATH in debian/rules to reflect that we now have the
@@ -22,9 +24,9 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Remove leftover, unused init.d script from debmake.
   * Don't give --pidfile to start-stop-daemon when stopping -- current
     versions of Samba 4 won't die when the parent is killed.
-  * Removed debmake comment from debian/rules, it's hardly relevant any more. 
+  * Removed debmake comment from debian/rules, it's hardly relevant any more.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 22:45:16 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 22:46:06 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
