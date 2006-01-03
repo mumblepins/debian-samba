@@ -18,6 +18,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Only provision in samba.postinst if we're being called with "configure".
   * Make samba-client Replaces/Conflicts smbclient.
   * Rename samba-swat to swat, and add a dependency from swat to samba.
+  * Change debhelper compatibility level to 5.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Tue,  3 Jan 2006 18:29:10 +0100
 
