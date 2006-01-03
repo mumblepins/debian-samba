@@ -2,9 +2,9 @@
 
 set -e
 
-if [ "$1" = "configure" ]; then
-	. /usr/share/debconf/confmodule
+. /usr/share/debconf/confmodule
 
+if [ "$1" = "configure" ]; then
 	# See if we're upgrading from Samba 3
 	UPGRADE_FROM_V3=
 	if [ ! -z "$2" ]; then
@@ -13,6 +13,7 @@ if [ "$1" = "configure" ]; then
 			if [ "$RET" = "true" ]; then
 				UPGRADE_FROM_V3=yes
 				/usr/lib/samba/setup/upgrade	
+				db_stop
 			fi
 		fi
 	fi
