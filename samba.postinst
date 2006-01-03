@@ -5,23 +5,37 @@ set -e
 if [ "$1" = "configure" ]; then
 	. /usr/share/debconf/confmodule
 
-	db_get samba/setup-pdc || true
+	# See if we're upgrading from Samba 3
+	UPGRADE_FROM_V3=
+	if [ ! -z "$2" ]; then
+		if dpkg --compare-versions "$2" lt "3.9.0"; then
+			db_get samba/upgrade-from-v3 || true
+			if [ "$RET" = "true" ]; then
+				UPGRADE_FROM_V3=yes
+				/usr/lib/samba/setup/upgrade	
+			fi
+		fi
+	fi
 
-	if [ "$RET" = "true" ]; then
-		db_get samba/realm
-		REALM="$RET"
+	if [ -z "$UPGRADE_FROM_V3" ]; then
+		db_get samba/setup-pdc || true
 
-		db_get samba/domain
-		DOMAIN="$RET"
+		if [ "$RET" = "true" ]; then
+			db_get samba/realm
+			REALM="$RET"
 
-		db_get samba/password
-		PASSWORD="$RET"
+			db_get samba/domain
+			DOMAIN="$RET"
 
-		db_stop
+			db_get samba/password
+			PASSWORD="$RET"
 
-		/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN" --adminpass="$PASSWORD"
-	else
-		db_stop
+			db_stop
+
+			/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN" --adminpass="$PASSWORD"
+		else
+			db_stop
+		fi
 	fi
 fi
 
