@@ -19,8 +19,8 @@ Description: Samba 4 common files used by both the server and the client
  regard to upgrades between versions.
  .
  This package contains the common files that are used by both the server
- (provided in the samba-server package) and the client (provided in the
- samba-client package).
+ (provided in the samba package) and the client (provided in the samba-client
+ package).
 
 Package: samba-client
 Architecture: any
@@ -57,7 +57,7 @@ Description: test suite from Samba 4
  This package contains programs for testing the reliability and speed 
  of SMB servers, Samba in particular.
  
-Package: samba-server
+Package: samba
 Architecture: any
 Recommends: samba-swat
 Depends: ${shlibs:Depends}, samba-common, debconf
