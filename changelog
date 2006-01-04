@@ -14,6 +14,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
       not packaging/debian/. This will have to be reverted whenever upstream
       syncs with us.
     * Removed debmake comment, it's hardly relevant any more.
+    * Remove redundant "package=samba" variable.
 
   * debian/control changes:
     * Copied Uploaders: line from Samba 3 packaging, adding myself.

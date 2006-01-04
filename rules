@@ -3,8 +3,6 @@
 
 SOURCEPATH=./source
 
-package=samba
-
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
