@@ -1,35 +1,44 @@
 samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
 
   * First upload to Debian main.
+
+  * Package renaming to get more in line with Samba 3 packaging:
+    * Rename samba-server package to just samba, for consistency with the
+      Samba 3 packaging.
+      * Rename samba.samba.init to samba.init, now that the init script and the
+        server package are called the same.
+    * Rename samba-swat to swat, and add a dependency from swat to samba.
+
+  * debian/rules changes:
+    * Change SOURCEPATH to reflect that we now have the packaging in debian/,
+      not packaging/debian/. This will have to be reverted whenever upstream
+      syncs with us.
+    * Removed debmake comment, it's hardly relevant any more.
+
+  * debian/control changes:
+    * Copied Uploaders: line from Samba 3 packaging, adding myself.
+    * Make samba-client Replaces/Conflicts smbclient.
+
+  * Maintainer script changes:
+    * Attempt to upgrade from Samba 3 if that's what the user tries to do.
+      * Copy upgrade script into /usr/lib/samba/setup.
+      * Check for upgrade from << 3.9.0 in config, and ask the user for upgrade
+        if relevant.
+      * Check for upgrade from << 3.9.0 in postinst, and upgrade if the user
+        wished to.
+    * Only provision in samba.postinst if we're doing a fresh install.
+    * Support purging properly in postrm, both for samba and samba-common
+      (adapted from the Samba 3 packaging).
+    * Don't ask about an administrator password -- just let the provisioning
+      scripts make up a random one.
+      * Updated README.Debian to show the user how to change the password.
+      * Make samba recommend ldb-tools.
+
   * Remove a few unused files in the packaging.
-  * Rename samba-server package to just samba, for consistency with the
-    Samba 3 packaging.
-    * Rename samba.samba.init to samba.init, now that the init script and the
-      server package are called the same.
-  * Change SOURCEPATH in debian/rules to reflect that we now have the
-    packaging in debian/, not packaging/debian/. This will have to be reverted
-    whenever upstream syncs with us.
-  * Attempt to upgrade from Samba 3 if that's what the user tries to do.
-    * Copy upgrade script into /usr/lib/samba/setup.
-    * Check for upgrade from << 3.9.0 in config, and ask the user for upgrade
-      if relevant.
-    * Check for upgrade from << 3.9.0 in postinst, and upgrade if the user
-      wished to.
-  * Only provision in samba.postinst if we're doing a fresh install.
-  * Make samba-client Replaces/Conflicts smbclient.
-  * Rename samba-swat to swat, and add a dependency from swat to samba.
   * Change debhelper compatibility level to 5.
   * Don't give --pidfile to start-stop-daemon when stopping -- current
     versions of Samba 4 won't die when the parent is killed.
-  * Removed debmake comment from debian/rules, it's hardly relevant any more.
-  * Support purging properly in postrm, both for samba and samba-common
-    (adapted from the Samba 3 packaging).
-  * Copied Uploaders: line from Samba 3 packaging, adding myself.
   * Updated README.debian somewhat, and renamed to use a capital D.
-  * Don't ask about an administrator password -- just let the provisioning
-    scripts make up a random one.
-    * Updated README.Debian to show the user how to change the password.
-    * Make samba recommend ldb-tools.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Wed,  4 Jan 2006 01:50:11 +0100
 
