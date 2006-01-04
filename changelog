@@ -29,6 +29,10 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
     (adapted from the Samba 3 packaging).
   * Copied Uploaders: line from Samba 3 packaging, adding myself.
   * Updated README.debian somewhat, and renamed to use a capital D.
+  * Don't ask about an administrator password -- just let the provisioning
+    scripts make up a random one.
+    * Updated README.Debian to show the user how to change the password.
+    * Make samba recommend ldb-tools.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Wed,  4 Jan 2006 01:50:11 +0100
 

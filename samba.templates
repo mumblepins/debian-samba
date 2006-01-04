@@ -30,10 +30,3 @@ _Description: Domain
  What will be the domain of your server? This is also known as the
  "workgroup" of your server, and is typically a short name without any dots
  (ie. DOMAIN).
-
-Template: samba/password
-Type: password
-_Description: Administrator password
- You will need a password for the "Administrator" account. Note that in the
- current version of the packaging, this will be echoed back in cleartext later,
- so you might not want to use a very sensitive password here.

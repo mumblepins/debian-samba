@@ -62,7 +62,7 @@ Description: test suite from Samba 4
  
 Package: samba
 Architecture: any
-Recommends: swat
+Recommends: swat, ldb-tools
 Depends: ${shlibs:Depends}, samba-common, debconf
 Description: LanManager-like file and printer server for Unix (version 4)
  The Samba software suite is a collection of programs that

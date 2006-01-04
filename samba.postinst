@@ -34,7 +34,7 @@ if [ "$1" = "configure" ]; then
 
 			db_stop
 
-			/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN" --adminpass="$PASSWORD"
+			/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN"
 		else
 			db_stop
 		fi
