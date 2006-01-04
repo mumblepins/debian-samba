@@ -43,8 +43,10 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Don't give --pidfile to start-stop-daemon when stopping -- current
     versions of Samba 4 won't die when the parent is killed.
   * Updated README.debian somewhat, and renamed to use a capital D.
+  * Rewritten README.building, to reflect the magic that has to be done
+    with the package in another repository.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Wed,  4 Jan 2006 16:55:23 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Wed,  4 Jan 2006 18:00:38 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 

@@ -1,14 +1,51 @@
 Building the experimental Debian package for Samba 4.0
 ======================================================
-					   By Jelmer Vernooij, 20 May 2004.
 
-Check out the SAMBA_4 branch of the samba-docs SVN repository 
-and put the output in the top directory of samba4 (the directory
-where source/ and packaging/ can be found).
+  By Jelmer Vernooij, 20 May 2004.
+  Rewritten by Steinar H. Gunderson, 4 January 2006.
 
-Now, go to packaging/, and run:
+1. If you want to use the upstream packaging
+============================================
 
-svn-buildpackage -rfakeroot
+The upstream Samba 4 repository (see http://devel.samba.org/)
+contains a directory called packaging/debian/ which contains the
+framework for building Debian packages. This directory is synced
+with the official Debian packaging (see below) now and then, but
+might be outdated at any given time. It is, however, easier to use
+(due to svn-buildpackage oddities) than the official packaging.
+Go to packaging/, and run:
 
-See the Debian docs for more information about the debian build 
-process.
+  svn-buildpackage -rfakeroot
+
+2. If you want to use the official Debian packaging
+===================================================
+
+Unfortunately, this is somewhat more involved than using the
+upstream packaging. If anybody knows a better way of doing this,
+feel free to contact me (sesse@debian.org) :-)
+
+First check out the Samba 4 tree as usual:
+
+  svn co svn://svnanon.samba.org/samba/branches/SAMBA_4_0 samba4 
+
+Then, check out the official Debian packaging:
+
+  svn co svn://svn.debian.org/pkg-samba/branches/samba4 samba4/debian
+
+Samba is not a native Debian package, so you'll need to create
+an .orig.tar.gz tarball. Do something along the lines of:
+
+  VER=$( dpkg-parsechangelog -lsamba4/debian/changelog | sed -n 's/^Version: \(.*:\|\)//p' | sed 's/-[0-9.]\+$//' )
+  svn export samba4 samba-$VER
+  tar zcf samba_$VER.orig.tar.gz samba-$VER
+
+With the .orig.tar.gz in place, you can now also export the debian/
+directory:
+
+  svn export samba4/debian samba-$VER/debian
+
+Finally, build the package using whatever method you prefer:
+
+  cd samba-$VER
+  debuild
+
