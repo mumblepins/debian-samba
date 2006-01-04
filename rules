@@ -28,7 +28,7 @@ configure-stamp:
 build: build-stamp
 build-stamp: configure
 	dh_testdir
-	$(MAKE) -C $(SOURCEPATH) pch all
+	$(MAKE) -C $(SOURCEPATH) proto pch all
 	$(MAKE) -C $(SOURCEPATH)/pidl all
 	touch $@
 
