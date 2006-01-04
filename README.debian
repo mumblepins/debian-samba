@@ -1,7 +1,8 @@
-samba4 for Debian
-----------------------
+Samba 4 for Debian
+------------------
 
-This is an experimental package of an experimental version of Samba. This 
-version is for testing purposes only. DO NOT USE IN A PRODUCTION ENVIRONMENT!
+Note that the current packages, as well as Samba 4, are _highly experimental_
+and definitely not finished yet. You do not want to use these in a production
+environment unless you're unusually brave, stupid or both.
 
-Jelmer Vernooij <jelmer@samba.org>, Thu, 13 May 2004 01:38:41 +0200
+  -- Steinar H. Gunderson <sesse@debian.org>,  Wed, 04 Jan 2006 02:07:52 +0100
