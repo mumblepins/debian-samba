@@ -14,6 +14,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
       not packaging/debian/. This will have to be reverted whenever upstream
       syncs with us.
     * Removed debmake comment, it's hardly relevant any more.
+    * Removed comment that there aren't any architecture-independent packages
+      (because there are).
     * Remove redundant "package=samba" variable.
     * Do "make pch ; make all" instead of "make proto ; -make pch ; make all";
       some build system bug prevents us from just doing "make pch all", but
