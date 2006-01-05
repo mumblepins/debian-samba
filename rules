@@ -44,7 +44,7 @@ binary-indep: build install
 	dh_testdir
 	dh_testroot
 	dh_install -i --sourcedir=debian/tmp
-	dh_installdocs -i
+	dh_installdocs -i README.building
 	dh_installchangelogs -i
 	dh_compress -i
 	dh_fixperms -i
