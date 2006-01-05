@@ -1,6 +1,7 @@
 samba (3.9.0+SVN12727-1) UNRELEASED; urgency=low
 
-  * 
+  * Move /usr/lib/samba/setup from samba-common to samba. 
+    * Make samba replace samba-common (<= 3.9.0+SVN12726-1)
 
  -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 23:41:19 +0100
 
