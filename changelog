@@ -15,10 +15,9 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
       syncs with us.
     * Removed debmake comment, it's hardly relevant any more.
     * Remove redundant "package=samba" variable.
-    * Do "make proto pch all" instead of "make proto ; -make pch ; make all";
-      proto should be redundant when using the pch target and will be removed
-      in the future (but its removal triggers a build system bug currently).
-      Since we're more or less guaranteed a recent gcc version, the pch target
+    * Do "make pch ; make all" instead of "make proto ; -make pch ; make all";
+      some build system bug prevents us from just doing "make pch all", but
+      since we're more or less guaranteed a recent gcc version, the pch target
       shouldn't fail, so we won't allow it to.
 
   * debian/control changes:
