@@ -44,7 +44,7 @@ binary-indep: build install
 	dh_testdir
 	dh_testroot
 	dh_install -i --sourcedir=debian/tmp
-	dh_installdocs -i README.building
+	dh_installdocs -i
 	dh_installchangelogs -i
 	dh_compress -i
 	dh_fixperms -i
@@ -67,7 +67,7 @@ binary-arch: build install
 	dh_testdir
 	dh_testroot
 	dh_install -a --sourcedir=debian/tmp
-	dh_installdocs -a
+	dh_installdocs -a debian/README.building
 	dh_installchangelogs -a
 	dh_strip -a
 	dh_perl -a
