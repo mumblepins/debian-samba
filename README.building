@@ -24,28 +24,31 @@ Unfortunately, this is somewhat more involved than using the
 upstream packaging. If anybody knows a better way of doing this,
 feel free to contact me (sesse@debian.org) :-)
 
-First check out the Samba 4 tree as usual:
+You should be able to cut-and-paste the entire tutorial into
+your shell in one go if you want it done automatically.
+
+: First check out the Samba 4 tree as usual:
 
   svn co svn://svnanon.samba.org/samba/branches/SAMBA_4_0 samba4 
 
-Then, check out the official Debian packaging:
+: Then, check out the official Debian packaging:
 
   svn co svn://svn.debian.org/pkg-samba/branches/samba4 samba4/debian
 
-Samba is not a native Debian package, so you'll need to create
-an .orig.tar.gz tarball. Do something along the lines of:
+: Samba is not a native Debian package, so you will need to create
+: an .orig.tar.gz tarball. Do something along the lines of:
 
   VER=$( dpkg-parsechangelog -lsamba4/debian/changelog | sed -n 's/^Version: \(.*:\|\)//p' | sed 's/-[0-9.]\+$//' )
   svn export samba4 samba-$VER
   ( cd samba-$VER/source && ./autogen.sh )
   tar zcf samba_$VER.orig.tar.gz samba-$VER
 
-With the .orig.tar.gz in place, you can now also export the debian/
-directory:
+: With the .orig.tar.gz in place, you can now also export the debian/
+: directory:
 
   svn export samba4/debian samba-$VER/debian
 
-Finally, build the package using whatever method you prefer:
+: Finally, build the package using whatever method you prefer:
 
   cd samba-$VER
   debuild
