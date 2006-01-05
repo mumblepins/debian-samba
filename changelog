@@ -43,6 +43,11 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
       * Updated README.Debian to show the user how to change the password.
       * Make samba recommend ldb-tools.
 
+  * Updated debian/copyright.
+    * Added Samba copyright holders.
+    * Noted that talloc, ldb and tdb are under the LGPL.
+    * Added copyright holders and licensing for the packaging itself. 
+
   * Remove a few unused files in the packaging.
   * Change debhelper compatibility level to 5.
   * Don't give --pidfile to start-stop-daemon when stopping -- current
@@ -51,7 +56,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Rewritten README.building, to reflect the magic that has to be done
     with the package in another repository.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Wed,  4 Jan 2006 18:00:38 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 15:25:12 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
