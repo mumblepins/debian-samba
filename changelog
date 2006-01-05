@@ -54,13 +54,14 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
 
   * Remove a few unused files in the packaging.
   * Change debhelper compatibility level to 5.
+    * Update versioned depends accordingly.
   * Don't give --pidfile to start-stop-daemon when stopping -- current
     versions of Samba 4 won't die when the parent is killed.
   * Updated README.debian somewhat, and renamed to use a capital D.
   * Rewritten README.building, to reflect the magic that has to be done
     with the package in another repository.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 17:33:25 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 18:05:14 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
