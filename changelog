@@ -1,3 +1,9 @@
+samba (3.9.0+SVN12727-2) experimental; urgency=low
+
+  * 
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 23:41:19 +0100
+
 samba (3.9.0+SVN12726-1) experimental; urgency=low
 
   * First upload to Debian main.
