@@ -32,6 +32,8 @@ if [ "$1" = "configure" ]; then
 			db_stop
 		fi
 	fi
+else
+	db_stop
 fi
 
 #DEBHELPER#
