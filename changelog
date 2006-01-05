@@ -1,4 +1,4 @@
-samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
+samba (3.9.0+SVN12726-1) experimental; urgency=low
 
   * First upload to Debian main.
 
@@ -67,7 +67,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Update po/POTFILES.in to reflect name change (from samba4-server ->
     samba-server -> samba).
 
- -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 20:41:13 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 21:27:13 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
