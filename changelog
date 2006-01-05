@@ -21,13 +21,13 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
       some build system bug prevents us from just doing "make pch all", but
       since we're more or less guaranteed a recent gcc version, the pch target
       shouldn't fail, so we won't allow it to.
+    * Remove autogen.sh call from configure; it should be done in the
+      upstream tarball, not in maintainer scripts.
 
   * debian/control changes:
     * Copied Uploaders: line from Samba 3 packaging, adding myself.
     * Rename samba-client package to samba-clients.
     * Make samba-clients Replaces/Conflicts smbclient.
-    * Remove autogen.sh call from configure; it should be done in the
-      upstream tarball, not in maintainer scripts.
     * Build-depend on docbook-xml, not just docbook-xsl -- the documentation
       needs data from both to build.
 
