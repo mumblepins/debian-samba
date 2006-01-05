@@ -24,6 +24,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * debian/control changes:
     * Copied Uploaders: line from Samba 3 packaging, adding myself.
     * Make samba-client Replaces/Conflicts smbclient.
+    * Add build-dependency on autoconf, it's needed for a clean build from
+      SVN.
 
   * Maintainer script changes:
     * Attempt to upgrade from Samba 3 if that's what the user tries to do.
