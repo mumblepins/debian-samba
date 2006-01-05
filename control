@@ -6,6 +6,23 @@ Uploaders: Steve Langasek <vorlon@debian.org>, Christian Perrier <bubulle@debian
 Standards-Version: 3.6.2
 Build-Depends: libgtk2.0-dev, libgconf2-dev, libldap-dev, debhelper (>> 5.0.0), libparse-yapp-perl, perl, docbook-xsl, docbook-xml, xsltproc, po-debconf
 
+Package: samba
+Architecture: any
+Recommends: swat, ldb-tools
+Depends: ${shlibs:Depends}, samba-common, debconf
+Description: LanManager-like file and printer server for Unix (version 4)
+ The Samba software suite is a collection of programs that
+ implements the SMB protocol for unix systems, allowing you to serve
+ files and printers to Windows, NT, OS/2 and DOS clients, as well as
+ run as a domain controller for Active Directory.
+ .
+ These packages contain snapshot versions of Samba 4, the next-generation
+ version of Samba. These should be considered _experimental_, and should
+ not be used in production. In particular, no guarantees are made with
+ regard to upgrades between versions.
+ .
+ This package contains smbd, the Samba file, print and domain server.
+
 Package: samba-common
 Architecture: all
 Description: Samba 4 common files used by both the server and the client
@@ -60,23 +77,6 @@ Description: test suite from Samba 4
  This package contains programs for testing the reliability and speed 
  of SMB servers, Samba in particular.
  
-Package: samba
-Architecture: any
-Recommends: swat, ldb-tools
-Depends: ${shlibs:Depends}, samba-common, debconf
-Description: LanManager-like file and printer server for Unix (version 4)
- The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
- files and printers to Windows, NT, OS/2 and DOS clients, as well as
- run as a domain controller for Active Directory.
- .
- These packages contain snapshot versions of Samba 4, the next-generation
- version of Samba. These should be considered _experimental_, and should
- not be used in production. In particular, no guarantees are made with
- regard to upgrades between versions.
- .
- This package contains smbd, the Samba file, print and domain server.
-
 Package: samba-gtk-frontends
 Architecture: any
 Depends: ${shlibs:Depends}
