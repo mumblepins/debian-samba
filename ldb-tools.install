@@ -2,9 +2,14 @@ usr/bin/ldbadd
 usr/bin/ldbdel
 usr/bin/ldbedit
 usr/bin/ldbmodify
+usr/bin/ldbrename
 usr/bin/ldbsearch
+usr/bin/ldbtest
+usr/bin/oLschema2ldif
 usr/share/man/man1/ldbadd.1
 usr/share/man/man1/ldbdel.1
 usr/share/man/man1/ldbedit.1
 usr/share/man/man1/ldbmodify.1
+usr/share/man/man1/ldbrename.1
 usr/share/man/man1/ldbsearch.1
+usr/share/man/man1/ldbtest.1

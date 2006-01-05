@@ -4,6 +4,13 @@ samba (3.9.0+SVN12727-1) UNRELEASED; urgency=low
     * Make samba replace samba-common (<= 3.9.0+SVN12726-1)
   * Add a missing db_stop in samba.postinst, probably causing problems
     starting the daemon in some cases.
+  * Add orphan files from /usr/bin (and relevant manpages) into their
+    correct packages:
+    * ldb-tools: ldbrename, ldbtest, oLschema2ldif.
+    * samba-clients: getntacl, ntlm_auth.
+    * samba-gtk-frontends: gwcrontab.
+    * winregistry-tools: winreg.
+    * samba3dump and tdbtorture remain orphans.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 23:41:19 +0100
 
