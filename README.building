@@ -37,6 +37,7 @@ an .orig.tar.gz tarball. Do something along the lines of:
 
   VER=$( dpkg-parsechangelog -lsamba4/debian/changelog | sed -n 's/^Version: \(.*:\|\)//p' | sed 's/-[0-9.]\+$//' )
   svn export samba4 samba-$VER
+  ( cd samba-$VER && ./autogen.sh )
   tar zcf samba_$VER.orig.tar.gz samba-$VER
 
 With the .orig.tar.gz in place, you can now also export the debian/

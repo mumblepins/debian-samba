@@ -25,8 +25,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
     * Copied Uploaders: line from Samba 3 packaging, adding myself.
     * Rename samba-client package to samba-clients.
     * Make samba-clients Replaces/Conflicts smbclient.
-    * Add build-dependency on autoconf, it's needed for a clean build from
-      SVN.
+    * Remove autogen.sh call from configure; it should be done in the
+      upstream tarball, not in maintainer scripts.
 
   * Maintainer script changes:
     * Attempt to upgrade from Samba 3 if that's what the user tries to do.

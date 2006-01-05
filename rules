@@ -6,7 +6,6 @@ SOURCEPATH=./source
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
-	cd $(SOURCEPATH) && ./autogen.sh
 	cd $(SOURCEPATH) && ./configure --with-fhs \
 		--prefix=/usr \
 		--mandir=/usr/share/man \
