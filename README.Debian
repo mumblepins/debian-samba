@@ -16,7 +16,7 @@ change this, you'll need ldbedit from the ldb-tools package. Run
 
 Somewhere in the LDIF, add a new line like this:
 
-  unicodePwd: PASSWORD
+  sambaPassword: PASSWORD
 
 where PASSWORD is the new administrator password. Save and quit, and the
 password is changed for you.
