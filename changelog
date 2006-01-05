@@ -28,6 +28,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
     * Make samba-clients Replaces/Conflicts smbclient.
     * Remove autogen.sh call from configure; it should be done in the
       upstream tarball, not in maintainer scripts.
+    * Build-depend on docbook-xml, not just docbook-xsl -- the documentation
+      needs data from both to build.
 
   * Maintainer script changes:
     * Attempt to upgrade from Samba 3 if that's what the user tries to do.
@@ -58,7 +60,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Rewritten README.building, to reflect the magic that has to be done
     with the package in another repository.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 17:22:57 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 17:33:25 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
