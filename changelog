@@ -60,8 +60,10 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Updated README.debian somewhat, and renamed to use a capital D.
   * Rewritten README.building, to reflect the magic that has to be done
     with the package in another repository.
+  * Update po/POTFILES.in to reflect name change (from samba4-server -> 
+    samba-server -> samba).
 
- -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 18:05:14 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 18:06:08 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
