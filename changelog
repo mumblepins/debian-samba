@@ -48,6 +48,8 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
       * Updated README.Debian to show the user how to change the password.
       * Make samba recommend ldb-tools.
     * Install README.building along with all the other documentation.
+    * Don't try to ask about the "done" question, which we nuked in a previous
+      release.
 
   * Updated debian/copyright.
     * Added Samba copyright holders.
@@ -65,7 +67,7 @@ samba (3.9.0+SVN12692-1) UNRELEASED; urgency=low
   * Update po/POTFILES.in to reflect name change (from samba4-server ->
     samba-server -> samba).
 
- -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 18:14:21 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 20:41:13 +0100
 
 samba (3.9.0+SVN12395-1) unstable; urgency=low
 
