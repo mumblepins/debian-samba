@@ -1,6 +1,8 @@
---- samba-3.0.0rc2/source/VERSION.orig	2003-09-02 21:56:11.000000000 -0400
-+++ samba-3.0.0rc2/source/VERSION	2003-09-02 21:56:30.000000000 -0400
-@@ -78,4 +78,4 @@
+Index: samba-3.0.21a.new/source/VERSION
+===================================================================
+--- samba-3.0.21a.new.orig/source/VERSION	2005-12-29 21:48:50.000000000 +0100
++++ samba-3.0.21a.new/source/VERSION	2006-01-02 09:57:54.054746861 +0100
+@@ -90,4 +90,4 @@
  # e.g. SAMBA_VERSION_VENDOR_SUFFIX=vendor_version()    #
  #  ->  "CVS 3.0.0rc2-VendorVersion"                    #
  ########################################################

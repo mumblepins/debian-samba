@@ -1,7 +1,8 @@
-diff -uNr samba-3.0.7.orig/source/Makefile.in samba-3.0.7/source/Makefile.in
---- samba-3.0.7.orig/source/Makefile.in	2004-10-25 10:06:08.000000000 -0700
-+++ samba-3.0.7/source/Makefile.in	2004-10-25 10:03:31.000000000 -0700
-@@ -1371,6 +1371,7 @@
+Index: samba-3.0.21a.new/source/Makefile.in
+===================================================================
+--- samba-3.0.21a.new.orig/source/Makefile.in	2006-01-02 09:43:36.349338911 +0100
++++ samba-3.0.21a.new/source/Makefile.in	2006-01-02 09:58:46.622122510 +0100
+@@ -1490,6 +1490,7 @@
  
  python_clean:
  	@-if test -n "$(PYTHON)"; then $(PYTHON) python/setup.py clean; fi
@@ -9,7 +10,7 @@ diff -uNr samba-3.0.7.orig/source/Makefile.in samba-3.0.7/source/Makefile.in
  
  # revert to the previously installed version
  revert:
-@@ -1437,6 +1438,7 @@
+@@ -1558,6 +1559,7 @@
  	@rm -f include/proto.h include/build_env.h  include/wrepld_proto.h \
  		nsswitch/winbindd_proto.h web/swat_proto.h \
  		client/client_proto.h utils/net_proto.h \
@@ -17,7 +18,7 @@ diff -uNr samba-3.0.7.orig/source/Makefile.in samba-3.0.7/source/Makefile.in
  		smbd/build_options.c
  
  MKPROTO_SH = $(srcdir)/script/mkproto.sh
-@@ -1512,6 +1514,7 @@
+@@ -1634,6 +1636,7 @@
  
  distclean: realclean
  	-rm -f include/stamp-h

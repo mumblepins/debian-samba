@@ -39,6 +39,7 @@ ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
   INSTALL += -s
 endif
 
+include /usr/share/quilt/quilt.make
 
 DESTDIR=`pwd`/debian/tmp
 
@@ -86,18 +87,7 @@ else
   conf_args += --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
 endif
 
-patch: patch-stamp
-patch-stamp:
-	dh_testdir
-	if [ ! -f patch-stamp ]; then /bin/sh debian/scripts/patch-source; fi
-	touch patch-stamp
-
-unpatch:
-	dh_testdir
-	if [ -f patch-stamp ]; then /bin/sh debian/scripts/unpatch-source; fi
-	rm -f patch-stamp
-
-configure: patch-stamp configure-stamp
+configure: patch configure-stamp
 configure-stamp:
 	dh_testdir
 
@@ -121,7 +111,9 @@ endif
 
 	touch build-stamp
 
-clean: unpatch
+clean:	clean-patched unpatch
+
+clean-patched: 
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp configure-stamp
@@ -345,4 +337,4 @@ endif
 	dh_builddeb
 
 binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary install configure
+.PHONY: build clean binary-indep binary-arch binary install configure patch unpatch

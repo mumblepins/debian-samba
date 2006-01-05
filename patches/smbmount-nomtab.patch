@@ -1,7 +1,8 @@
-diff -uNr samba-3.0alpha22.orig/source/client/smbmnt.c samba-3.0alpha22/source/client/smbmnt.c
---- samba-3.0alpha22.orig/source/client/smbmnt.c	2003-03-15 12:11:39.000000000 -0600
-+++ samba-3.0alpha22/source/client/smbmnt.c	2003-03-15 12:11:49.000000000 -0600
-@@ -28,6 +28,7 @@
+Index: samba-3.0.21a.new/source/client/smbmnt.c
+===================================================================
+--- samba-3.0.21a.new.orig/source/client/smbmnt.c	2006-01-02 09:57:47.068158819 +0100
++++ samba-3.0.21a.new/source/client/smbmnt.c	2006-01-02 09:57:48.390891503 +0100
+@@ -44,6 +44,7 @@
  static uid_t mount_uid;
  static gid_t mount_gid;
  static int mount_ro;
@@ -9,15 +10,15 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmnt.c samba-3.0alpha22/source/c
  static unsigned mount_fmask;
  static unsigned mount_dmask;
  static int user_mount;
-@@ -40,6 +41,7 @@
+@@ -56,6 +57,7 @@
          printf("Usage: smbmnt mount-point [options]\n");
- 	printf("Version %s\n\n",VERSION);
+ 	printf("Version %s\n\n",SAMBA_VERSION_STRING);
          printf("-s share       share name on server\n"
 +               "-n             don't update /etc/mtab\n"
                 "-r             mount read-only\n"
                 "-u uid         mount as uid\n"
                 "-g gid         mount as gid\n"
-@@ -54,7 +56,7 @@
+@@ -70,7 +72,7 @@
  {
          int opt;
  
@@ -26,7 +27,7 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmnt.c samba-3.0alpha22/source/c
  	{
                  switch (opt)
  		{
-@@ -71,6 +73,9 @@
+@@ -87,6 +89,9 @@
  				mount_gid = strtol(optarg, NULL, 0);
  			}
                          break;
@@ -36,7 +37,7 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmnt.c samba-3.0alpha22/source/c
                  case 'r':
                          mount_ro = 1;
                          break;
-@@ -274,36 +279,38 @@
+@@ -291,36 +296,38 @@
  		return -1;
  	}
  	
@@ -102,10 +103,11 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmnt.c samba-3.0alpha22/source/c
  
  	return 0;
  }	
-diff -uNr samba-3.0alpha22.orig/source/client/smbmount.c samba-3.0alpha22/source/client/smbmount.c
---- samba-3.0alpha22.orig/source/client/smbmount.c	2003-03-15 12:04:29.000000000 -0600
-+++ samba-3.0alpha22/source/client/smbmount.c	2003-03-15 12:15:10.000000000 -0600
-@@ -48,6 +48,7 @@
+Index: samba-3.0.21a.new/source/client/smbmount.c
+===================================================================
+--- samba-3.0.21a.new.orig/source/client/smbmount.c	2006-01-02 09:53:33.819339256 +0100
++++ samba-3.0.21a.new/source/client/smbmount.c	2006-01-02 09:58:17.214066308 +0100
+@@ -46,6 +46,7 @@
  static int mount_ro;
  static unsigned mount_fmask;
  static unsigned mount_dmask;
@@ -113,7 +115,7 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmount.c samba-3.0alpha22/source
  static BOOL use_kerberos;
  /* TODO: Add code to detect smbfs version in kernel */
  static BOOL status32_smbfs = False;
-@@ -273,6 +274,9 @@
+@@ -271,6 +272,9 @@
                  return;
          }
  
@@ -123,7 +125,7 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmount.c samba-3.0alpha22/source
          if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1) {
                  DEBUG(0,("%d: Can't get "MOUNTED"~ lock file", sys_getpid()));
                  return;
-@@ -467,6 +471,9 @@
+@@ -465,6 +469,9 @@
  	args[i++] = "-s";
  	args[i++] = svc2;
  
@@ -133,16 +135,16 @@ diff -uNr samba-3.0alpha22.orig/source/client/smbmount.c samba-3.0alpha22/source
  	if (mount_ro) {
  		args[i++] = "-r";
  	}
-@@ -662,7 +669,7 @@
+@@ -660,7 +667,7 @@
  ****************************************************************************/
  static void usage(void)
  {
 -	printf("Usage: mount.smbfs service mountpoint [-o options,...]\n");
 +	printf("Usage: mount.smbfs service mountpoint [-n] [-o options,...]\n");
  
- 	printf("Version %s\n\n",VERSION);
+ 	printf("Version %s\n\n",SAMBA_VERSION_STRING);
  
-@@ -740,8 +747,13 @@
+@@ -738,8 +745,13 @@
  	argc -= 2;
  	argv += 2;
  

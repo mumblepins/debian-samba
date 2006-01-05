@@ -1,6 +1,8 @@
---- samba-3.0.21a.orig/source/Makefile.in	2006-01-01 13:26:14.000000000 +0100
-+++ samba-3.0.21a/source/Makefile.in	2006-01-01 13:27:38.000000000 +0100
-@@ -1057,9 +1057,9 @@
+Index: samba-3.0.21a.new/source/Makefile.in
+===================================================================
+--- samba-3.0.21a.new.orig/source/Makefile.in	2006-01-02 09:45:52.416794431 +0100
++++ samba-3.0.21a.new/source/Makefile.in	2006-01-02 09:58:11.514218283 +0100
+@@ -1064,9 +1064,9 @@
  		$(KRB5LIBS) $(LDAP_LIBS) \
  		@SONAMEFLAG@`basename $@`.$(LIBSMBCLIENT_MAJOR)
  
@@ -12,7 +14,7 @@
  
  bin/libsmbsharemodes.@SHLIBEXT@: $(LIBSMBSHAREMODES_PICOBJS)
  	@echo Linking libsmbsharemodes shared library $@
-@@ -1076,9 +1076,9 @@
+@@ -1083,9 +1083,9 @@
  	@$(SHLD) $(LDSHFLAGS) -o $@ $(CAC_PICOBJS) $(LDFLAGS) $(LIBS) \
  	@SONAMEFLAG@`basename $@`.$(LIBMSRPC_MAJOR)
  

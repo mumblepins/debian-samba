@@ -1,6 +1,7 @@
-diff -uNr ../samba-3.0.20b/source/pam_smbpass/README samba-3.0.20b/source/pam_smbpass/README
---- ../samba-3.0.20b/source/pam_smbpass/README	2005-10-12 19:03:29.000000000 +0200
-+++ samba-3.0.20b/source/pam_smbpass/README	2005-10-25 20:56:03.000000000 +0200
+Index: samba-3.0.21a.new/source/pam_smbpass/README
+===================================================================
+--- samba-3.0.21a.new.orig/source/pam_smbpass/README	2005-02-25 18:59:30.000000000 +0100
++++ samba-3.0.21a.new/source/pam_smbpass/README	2006-01-02 09:53:31.455818173 +0100
 @@ -37,7 +37,7 @@
  	smbconf=<file>	-	specify an alternate path to the smb.conf
  				file.

@@ -1,7 +1,8 @@
-diff -uNr samba-3.0.14a.orig/source/client/smbmount.c samba-3.0.14a/source/client/smbmount.c
---- samba-3.0.14a.orig/source/client/smbmount.c	2005-06-02 06:49:31.000000000 -0700
-+++ samba-3.0.14a/source/client/smbmount.c	2005-06-02 06:59:41.000000000 -0700
-@@ -213,6 +213,10 @@
+Index: samba-3.0.21a.new/source/client/smbmount.c
+===================================================================
+--- samba-3.0.21a.new.orig/source/client/smbmount.c	2006-01-02 09:57:48.391891301 +0100
++++ samba-3.0.21a.new/source/client/smbmount.c	2006-01-02 09:57:49.591648836 +0100
+@@ -211,6 +211,10 @@
    		c->capabilities &= ~CAP_STATUS32;
  		c->force_dos_errors = True;
  	}

@@ -1,7 +1,8 @@
-diff -uNr samba-3.0.11.orig/source/configure.in samba-3.0.11/source/configure.in
---- samba-3.0.11.orig/source/configure.in	2005-03-23 02:39:11.000000000 -0800
-+++ samba-3.0.11/source/configure.in	2005-03-23 02:43:01.000000000 -0800
-@@ -573,6 +573,15 @@
+Index: samba-3.0.21a.new/source/configure.in
+===================================================================
+--- samba-3.0.21a.new.orig/source/configure.in	2006-01-02 09:43:36.355337696 +0100
++++ samba-3.0.21a.new/source/configure.in	2006-01-02 09:53:12.969563953 +0100
+@@ -638,6 +638,15 @@
        fi
      ;;
  
@@ -17,7 +18,7 @@ diff -uNr samba-3.0.11.orig/source/configure.in samba-3.0.11/source/configure.in
  # Tests for linux LFS support. Need kernel 2.4 and glibc2.2 or greater support.
  #
      *linux*)
-@@ -1040,7 +1049,7 @@
+@@ -1197,7 +1206,7 @@
  # 
  #
  case "$host_os" in
@@ -26,7 +27,7 @@ diff -uNr samba-3.0.11.orig/source/configure.in samba-3.0.11/source/configure.in
         # glibc <= 2.3.2 has a broken getgrouplist
         AC_TRY_RUN([
  #include <unistd.h>
-@@ -1172,7 +1181,10 @@
+@@ -1392,7 +1401,10 @@
  
    # and these are for particular systems
    case "$host_os" in
@@ -38,7 +39,7 @@ diff -uNr samba-3.0.11.orig/source/configure.in samba-3.0.11/source/configure.in
  			BLDSHARED="true"
  			if test "${ac_cv_gnu_ld_no_default_allow_shlib_undefined}" = "yes"; then
  				LDSHFLAGS="-shared -Wl,-Bsymbolic -Wl,--allow-shlib-undefined" 
-@@ -4044,7 +4056,7 @@
+@@ -4622,7 +4634,7 @@
  	AC_MSG_RESULT(yes);
  
  	case "$host_os" in
@@ -47,16 +48,16 @@ diff -uNr samba-3.0.11.orig/source/configure.in samba-3.0.11/source/configure.in
  		AC_CACHE_CHECK([for linux sendfile64 support],samba_cv_HAVE_SENDFILE64,[
  		AC_TRY_LINK([#include <sys/sendfile.h>],
  [\
-@@ -4722,10 +4722,10 @@
+@@ -4885,10 +4897,10 @@
  WINBIND_NSS_LDSHFLAGS=$LDSHFLAGS
-
+ 
  case "$host_os" in
--       *linux*)
-+       linux*-gnu* | gnu* | k*bsd*-gnu)
-                WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_linux.o"
-                ;;
--       *freebsd[[5-9]]*)
-+       freebsd5*|*freebsd[[6-9]]*)
-                # FreeBSD winbind client is implemented as a wrapper around
-                # the Linux version.
-                WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_freebsd.o \
+-	*linux*)
++	linux*-gnu* | gnu* | k*bsd*-gnu)
+ 		WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_linux.o"
+ 		;;
+-	*freebsd[[5-9]]*)
++	freebsd5*|*freebsd[[6-9]]*)
+ 		# FreeBSD winbind client is implemented as a wrapper around
+ 		# the Linux version.
+ 		WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_freebsd.o \
