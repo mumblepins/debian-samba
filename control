@@ -20,10 +20,10 @@ Description: Samba 4 common files used by both the server and the client
  regard to upgrades between versions.
  .
  This package contains the common files that are used by both the server
- (provided in the samba package) and the client (provided in the samba-client
+ (provided in the samba package) and the client (provided in the samba-clients
  package).
 
-Package: samba-client
+Package: samba-clients
 Architecture: any
 Depends: ${shlibs:Depends}
 Replaces: smbclient
