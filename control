@@ -25,7 +25,9 @@ Description: LanManager-like file and printer server for Unix (version 4)
  This package contains smbd, the Samba file, print and domain server.
 
 Package: samba-common
-Architecture: all
+Architecture: any
+Replaces: samba (<= 3.9.0+SVN12739-1)
+Conflicts: samba (<= 3.9.0+SVN12739-1)
 Description: Samba 4 common files used by both the server and the client
  The Samba software suite is a collection of programs that
  implements the SMB protocol for unix systems, allowing you to serve

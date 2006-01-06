@@ -2,5 +2,4 @@ usr/sbin/smbd
 usr/bin/ntlm_auth
 usr/bin/smbstatus
 usr/bin/smbscript
-usr/bin/testparm
 usr/lib/samba/setup
