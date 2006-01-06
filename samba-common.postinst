@@ -27,3 +27,5 @@ if [ "$1" = "configure" ]; then
 EOF
 	fi
 fi
+
+#DEBHELPER#
