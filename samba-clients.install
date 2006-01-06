@@ -1,7 +1,6 @@
 usr/bin/getntacl
 usr/bin/net
 usr/bin/nmblookup
-usr/bin/ntlm_auth
 usr/bin/setntacl
 usr/bin/setnttoken
 usr/bin/smbclient
