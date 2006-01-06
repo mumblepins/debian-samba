@@ -1,3 +1,9 @@
+samba (3.9.0+SVN12743-1) experimental; urgency=low
+
+  * 
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Fri,  6 Jan 2006 18:27:09 +0100
+
 samba (3.9.0+SVN12739-1) experimental; urgency=low
 
   * Move /usr/lib/samba/setup from samba-common to samba.
