@@ -13,6 +13,8 @@ samba (3.9.0+SVN12727-1) UNRELEASED; urgency=low
     * winregistry-tools: winreg.
     * samba3dump and tdbtorture remain orphans.
   * Add new executable /usr/bin/testparm to samba package.
+    * Add /var/lib/samba directory to samba package; it's needed by
+      testparm.
   * Rewrite configuration/bootstrapping to be able to install the client
     only and still get a usable smb.conf. The basic idea is:
     * samba-common looks for an smb.conf. If there is none, it asks for
@@ -27,7 +29,7 @@ samba (3.9.0+SVN12727-1) UNRELEASED; urgency=low
   * Let samba-clients conflict/replace samba-common (<< 3.9.0), as they share
     /usr/bin/net.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Fri,  6 Jan 2006 14:17:02 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Fri,  6 Jan 2006 14:25:50 +0100
 
 samba (3.9.0+SVN12726-1) experimental; urgency=low
 
