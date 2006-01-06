@@ -12,12 +12,10 @@ if [ "$1" = "configure" ]; then
 			if [ "$RET" = "true" ]; then
 				mv /etc/samba/smb.conf /etc/samba/smb.conf.samba3
 				/usr/lib/samba/setup/upgrade /var/lib/samba /etc/samba/smb.conf.samba3
-				db_stop
 			fi
 		fi
 	else
 		db_get samba/setup-pdc || true
-		db_stop
 
 		if [ "$RET" = "true" ]; then
 			# add "server role = pdc" to [globals]
@@ -27,12 +25,19 @@ if [ "$1" = "configure" ]; then
 				mv /etc/samba/smb.conf.new /etc/samba/smb.conf
 			fi
 
-			/usr/lib/samba/setup/provision
+			db_get samba-common/realm || true
+			REALM="$RET"
+
+			db_get samba-common/domain || true
+			DOMAIN="$RET"
+
+			if [ -n "$REALM" -a -n "$DOMAIN" ]; then
+				/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN"
+			fi
 		fi
 	fi
-else
-	db_stop
 fi
+db_stop
 
 #DEBHELPER#
 
