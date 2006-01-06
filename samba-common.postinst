@@ -10,10 +10,10 @@ if [ "$1" = "configure" ]; then
 		exit
 	fi
 
-	db_get samba/realm || true
+	db_get samba-common/realm || true
 	REALM="$RET"
 
-	db_get samba/domain || true
+	db_get samba-common/domain || true
 	DOMAIN="$RET"
 
 	HOSTNAME=$( hostname -s )
