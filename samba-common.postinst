@@ -1,0 +1,29 @@
+#! /bin/sh
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+if [ "$1" = "configure" ]; then
+	# Don't overwrite an existing smb.conf file.
+	if [ -f /etc/samba/smb.conf ]; then
+		exit
+	fi
+
+	db_get samba/realm || true
+	REALM="$RET"
+
+	db_get samba/domain || true
+	DOMAIN="$RET"
+
+	HOSTNAME=$( hostname -s )
+
+	if [ -n "$REALM" -a -n "$DOMAIN" ]; then
+		cat <<EOF >/etc/samba/smb.conf
+[globals]
+	netbios name    = $HOSTNAME
+	workgroup       = $DOMAIN
+	realm           = $REALM
+EOF
+	fi
+fi

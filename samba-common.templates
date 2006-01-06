@@ -1,0 +1,12 @@
+Template: samba-common/realm
+Type: string
+_Description: Realm
+ What Kerberos realm will your server be in? In many cases, this will be
+ the same as your DNS domain name (ie. YOUR.REALM).
+
+Template: samba-common/domain
+Type: string
+_Description: Domain
+ What will be the domain of your server? This is also known as the
+ "workgroup" of your server, and is typically a short name without any dots
+ (ie. DOMAIN).

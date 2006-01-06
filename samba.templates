@@ -17,16 +17,3 @@ _Description: Set up Samba 4 as a PDC?
  Note that even if you answer "yes", you will need to set up DNS such that
  it serves the data from the zone file in that directory before you can use
  your Active Directory domain.
-
-Template: samba/realm
-Type: string
-_Description: Realm
- What Kerberos realm will your server be in? In many cases, this will be
- the same as your DNS domain name (ie. YOUR.REALM).
-
-Template: samba/domain
-Type: string
-_Description: Domain
- What will be the domain of your server? This is also known as the
- "workgroup" of your server, and is typically a short name without any dots
- (ie. DOMAIN).

@@ -17,19 +17,17 @@ if [ "$1" = "configure" ]; then
 		fi
 	else
 		db_get samba/setup-pdc || true
+		db_stop
 
 		if [ "$RET" = "true" ]; then
-			db_get samba/realm
-			REALM="$RET"
+			# add "server role = pdc" to [globals]
+			if grep -q '^\[globals\]' /etc/samba/smb.conf; then
+				grep -v '^\s*server role\s*=' /etc/samba/smb.conf |
+					sed 's/\[globals\]/&\n\tserver role     = pdc/i' > /etc/samba/smb.conf.new
+				mv /etc/samba/smb.conf.new /etc/samba/smb.conf
+			fi
 
-			db_get samba/domain
-			DOMAIN="$RET"
-
-			db_stop
-
-			/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN"
-		else
-			db_stop
+			/usr/lib/samba/setup/provision
 		fi
 	fi
 else
