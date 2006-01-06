@@ -11,6 +11,15 @@ samba (3.9.0+SVN12727-1) UNRELEASED; urgency=low
     * samba-gtk-frontends: gwcrontab.
     * winregistry-tools: winreg.
     * samba3dump and tdbtorture remain orphans.
+  * [NOT IMPLEMENTED YET]
+    Rewrite configuration/bootstrapping to be able to install the client
+    only and still get a usable smb.conf. The basic idea is:
+    * samba-common looks for an smb.conf. If there is none, it asks for
+      realm and domain and generates a skeleton smb.conf.
+    * If samba notices an upgrade from Samba 3, it asks whether the user
+      wants to upgrade. If not, it leaves everything alone (and broken).
+    * Otherwise, samba asks whether the user wants to set up a PDC. If yes,
+      it adds "server role = pdc" to smb.conf and provisions the server.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 23:41:19 +0100
 
