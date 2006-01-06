@@ -45,7 +45,7 @@ Description: Samba 4 common files used by both the server and the client
 
 Package: samba-clients
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, samba-common (=${Source-Version})
 Replaces: smbclient, samba-common (<< 3.9.0)
 Conflicts: smbclient, samba-common (<< 3.9.0)
 Description: client utilities from Samba 4
