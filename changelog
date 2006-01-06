@@ -21,6 +21,7 @@ samba (3.9.0+SVN12727-1) UNRELEASED; urgency=low
       wants to upgrade. If not, it leaves everything alone (and broken).
     * Otherwise, samba asks whether the user wants to set up a PDC. If yes,
       it adds "server role = pdc" to smb.conf and provisions the server.
+  * Removed unused file samba.conffiles.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Thu,  5 Jan 2006 23:41:19 +0100
 
