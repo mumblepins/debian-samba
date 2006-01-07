@@ -1,0 +1,18 @@
+Goal: Adapt example script to Debian
+Fixes: #346234
+
+Status wrt upstream: Debian specific
+
+Index: samba-3.0.21a/docs/manpages/smb.conf.5
+===================================================================
+--- samba-3.0.21a.orig/docs/manpages/smb.conf.5	2005-12-29 17:19:48.000000000 +0100
++++ samba-3.0.21a/docs/manpages/smb.conf.5	2006-01-07 17:44:20.210534570 +0100
+@@ -450,7 +450,7 @@
+ 
+ Default: \fB\fIadd machine script\fR = \fR 
+ 
+-Example: \fB\fIadd machine script\fR = /usr/sbin/adduser \-n \-g machines \-c Machine \-d /var/lib/nobody \-s /bin/false %u \fR 
++Example for Debian: \fB\fIadd machine script\fR = /usr/sbin/useradd \-g machines \-c Machine \-d /var/lib/samba \-s /bin/false %u \fR 
+ 
+ .TP
+ add printer command (G)
