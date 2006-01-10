@@ -5,7 +5,8 @@ samba (3.9.0+SVN12743-1) experimental; urgency=low
     * Make samba-common replace/conflict samba (<= 3.9.0+SVN12739-1).
   * Make samba-clients depend on samba-common.
   * Make samba-common depend on debconf.
-  * Make all debconf dependencies have debconf-2.0 as a valid alternative.
+  * Replace debconf dependencies with ${misc:Depends}, to automatically
+    get the debconf-2.0 alternative right.
   * Include the newuser binary in samba-server package.
   * Add missing Build-Depends on: libgnutls-dev, libreadline5-dev,
     libpam0g-dev. All were causing silent build failures (ie. the package
