@@ -6,9 +6,11 @@ samba (3.9.0+SVN12743-1) experimental; urgency=low
   * Make samba-clients depend on samba-common.
   * Make samba-common depend on debconf.
   * Make all debconf dependencies have debconf-2.0 as a valid alternative.
-  * Include the newuser binary in samba-server package. 
+  * Include the newuser binary in samba-server package.
+  * Build-Depend on libgnutls-dev, so we get SSL in the LDAP and WWW
+    servers.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Sun,  8 Jan 2006 03:07:19 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Tue, 10 Jan 2006 01:31:45 +0100
 
 samba (3.9.0+SVN12739-1) experimental; urgency=low
 

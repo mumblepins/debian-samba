@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Jelmer Vernooij <jelmer@samba.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Christian Perrier <bubulle@debian.org>, Noèl Köthe <noel@debian.org>, Steinar H. Gunderson <sesse@debian.org>
 Standards-Version: 3.6.2
-Build-Depends: libgtk2.0-dev, libgconf2-dev, libldap-dev, debhelper (>> 5.0.0), libparse-yapp-perl, perl, docbook-xsl, docbook-xml, xsltproc, po-debconf
+Build-Depends: libgtk2.0-dev, libgconf2-dev, libldap-dev, debhelper (>> 5.0.0), libparse-yapp-perl, perl, docbook-xsl, docbook-xml, xsltproc, po-debconf, libgnutls-dev
 
 Package: samba
 Architecture: any
