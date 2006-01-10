@@ -10,6 +10,7 @@ samba (3.9.0+SVN12743-1) experimental; urgency=low
   * Add missing Build-Depends on: libgnutls-dev, libreadline5-dev,
     libpam0g-dev. All were causing silent build failures (ie. the package
     was simply built without the features).
+  * Remove Build-Depends on libldap-dev.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Tue, 10 Jan 2006 01:31:45 +0100
 
