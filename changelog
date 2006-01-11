@@ -4,8 +4,11 @@ samba (3.9.0+SVN12857-1) experimental; urgency=low
     * libparse-pidl-perl: perl
     * samba-dev: devel
     * samba-gtk-frontends: x11
+  * Adjust our export procedure we get the Subversion revision number in
+    include/version.h (and thus in the build itself), and document how in
+    README.building.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Wed, 11 Jan 2006 23:51:59 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Thu, 12 Jan 2006 00:57:41 +0100
 
 samba (3.9.0+SVN12856-1) experimental; urgency=low
 
