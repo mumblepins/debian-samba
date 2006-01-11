@@ -68,7 +68,7 @@ binary-arch: build install
 	dh_testdir
 	dh_testroot
 	dh_install -a --sourcedir=debian/tmp
-	dh_installdocs -a debian/README.building
+	dh_installdocs -a debian/README.building NEWS
 	dh_installchangelogs -a
 	dh_strip -a
 	dh_perl -a

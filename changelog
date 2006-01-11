@@ -12,8 +12,9 @@ samba (3.9.0+SVN12743-1) experimental; urgency=low
     libpam0g-dev. All were causing silent build failures (ie. the package
     was simply built without the features).
   * Remove Build-Depends on libldap-dev.
+  * Include NEWS file.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Tue, 10 Jan 2006 01:31:45 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Wed, 11 Jan 2006 22:08:32 +0100
 
 samba (3.9.0+SVN12739-1) experimental; urgency=low
 
