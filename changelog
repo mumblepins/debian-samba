@@ -1,5 +1,6 @@
-samba (3.9.0+SVN12743-1) experimental; urgency=low
+samba (3.9.0+SVN12856-1) experimental; urgency=low
 
+  * New upstream version.
   * Move testparm from samba into samba-common.
     * Make samba-common Architecture: any.
     * Make samba-common replace/conflict samba (<= 3.9.0+SVN12739-1).
