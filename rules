@@ -61,14 +61,14 @@ install: build
 	mkdir -p $(CURDIR)/debian/tmp/etc/samba
 	$(MAKE) -C $(SOURCEPATH) install DESTDIR=$(CURDIR)/debian/tmp
 	$(MAKE) -C $(SOURCEPATH) manpages installman DESTDIR=$(CURDIR)/debian/tmp
-	cp $(SOURCEPATH)/setup/{provision,upgrade} $(CURDIR)/debian/tmp/usr/lib/samba/setup
+	cp $(SOURCEPATH)/setup/{provision,upgrade,newuser} $(CURDIR)/debian/tmp/usr/lib/samba/setup
 	$(MAKE) -C $(SOURCEPATH)/pidl install DESTDIR=$(CURDIR)/debian/tmp
 
 binary-arch: build install
 	dh_testdir
 	dh_testroot
 	dh_install -a --sourcedir=debian/tmp
-	dh_installdocs -a debian/README.building
+	dh_installdocs -a debian/README.building NEWS
 	dh_installchangelogs -a
 	dh_strip -a
 	dh_perl -a

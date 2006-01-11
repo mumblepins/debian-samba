@@ -4,28 +4,6 @@ set -e
 
 . /usr/share/debconf/confmodule
 
-# Function for grabbing a parameter from an smb.conf file
-smbconf_retr() {
-	if [ -z "$1" ]; then
-		return
-	fi
-
-	if [ -n "$2" ]; then
-		local FILE="$2"
-	fi
-
-	if [ -z "$FILE" ]; then
-		return
-	fi
-
-	sed -n -e"
-		s/^[[:space:]]*\[global\]/\[global\]/i
-		/^\[global\]/,/^[[:space:]]*\[/ {
-			s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//pi
-		}" $FILE \
-	| tail -n 1
-}
-
 if [ "$1" = "configure" ]; then
 	# See if we're upgrading from Samba 3
 	if [ ! -z "$2" ]; then
@@ -47,10 +25,10 @@ if [ "$1" = "configure" ]; then
 				mv /etc/samba/smb.conf.new /etc/samba/smb.conf
 			fi
 
-			REALM=$( smbconf_retr realm )
-			DOMAIN=$( smbconf_retr workgroup )
+			if [ -f /etc/samba/smb.conf ]; then
+				REALM=$( testparm --parameter-name=realm --suppress-prompt )
+				DOMAIN=$( testparm --parameter-name=workgroup --suppress-prompt )
 
-			if [ -n "$REALM" -a -n "$DOMAIN" ]; then
 				/usr/lib/samba/setup/provision --realm="$REALM" --domain="$DOMAIN"
 			fi
 		fi

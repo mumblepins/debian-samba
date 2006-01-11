@@ -4,12 +4,12 @@ Priority: optional
 Maintainer: Jelmer Vernooij <jelmer@samba.org>
 Uploaders: Steve Langasek <vorlon@debian.org>, Christian Perrier <bubulle@debian.org>, Noèl Köthe <noel@debian.org>, Steinar H. Gunderson <sesse@debian.org>
 Standards-Version: 3.6.2
-Build-Depends: libgtk2.0-dev, libgconf2-dev, libldap-dev, debhelper (>> 5.0.0), libparse-yapp-perl, perl, docbook-xsl, docbook-xml, xsltproc, po-debconf
+Build-Depends: libgtk2.0-dev, libgconf2-dev, debhelper (>> 5.0.0), libparse-yapp-perl, perl, docbook-xsl, docbook-xml, xsltproc, po-debconf, libgnutls-dev, libreadline5-dev, libpam0g-dev
 
 Package: samba
 Architecture: any
 Recommends: swat, ldb-tools
-Depends: ${shlibs:Depends}, samba-common, debconf
+Depends: ${shlibs:Depends}, ${misc:Depends}, samba-common
 Replaces: samba-common (<= 3.9.0+SVN12726-1)
 Description: LanManager-like file and printer server for Unix (version 4)
  The Samba software suite is a collection of programs that
@@ -25,7 +25,10 @@ Description: LanManager-like file and printer server for Unix (version 4)
  This package contains smbd, the Samba file, print and domain server.
 
 Package: samba-common
-Architecture: all
+Architecture: any
+Replaces: samba (<= 3.9.0+SVN12739-1)
+Conflicts: samba (<= 3.9.0+SVN12739-1)
+Depends: ${misc:Depends}
 Description: Samba 4 common files used by both the server and the client
  The Samba software suite is a collection of programs that
  implements the SMB protocol for unix systems, allowing you to serve
@@ -43,7 +46,7 @@ Description: Samba 4 common files used by both the server and the client
 
 Package: samba-clients
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, samba-common (=${Source-Version})
 Replaces: smbclient, samba-common (<< 3.9.0)
 Conflicts: smbclient, samba-common (<< 3.9.0)
 Description: client utilities from Samba 4
