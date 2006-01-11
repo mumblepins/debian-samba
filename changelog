@@ -4,7 +4,7 @@ samba (3.0.21a-2) UNRELEASED; urgency=low
   * Switch to quilt for patches management. Refresh all patches so
     that they apply cleanly. Closes: #345557
   * debian/patches/adapt_machine_creation_script.patch:
-    - adapt example machine creation script to Debian
+    - adapt example machine creation script to Debian. Closes: #346234
 
  -- Christian Perrier <bubulle@debian.org>  Thu,  5 Jan 2006 19:10:38 +0100
 
