@@ -7,7 +7,7 @@ samba (3.9.0+SVN12857-1) experimental; urgency=low
   * Adjust our export procedure we get the Subversion revision number in
     include/version.h (and thus in the build itself), and document how in
     README.building.
-  * Make "reload" in the init script do a restart, since Samba 4 doesn't
+  * Remove "reload" option from the init script, since Samba 4 doesn't
     understand SIGHUP yet.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Thu, 12 Jan 2006 01:35:00 +0100
