@@ -8,6 +8,10 @@ samba (3.0.21a-2) UNRELEASED; urgency=low
   * winbind.dirs:
     - added /var/run/samba. Closes: #347585
 
+  [ Peter Eisentraut ]	
+  * swat.links:
+    - file added. Closes: #346001
+
  -- Christian Perrier <bubulle@debian.org>  Thu,  5 Jan 2006 19:10:38 +0100
 
 samba (3.0.21a-1) unstable; urgency=low
