@@ -119,9 +119,7 @@ clean-patched:
 	rm -f build-stamp configure-stamp
 
 	# Clean first the Samba package
-#	-$(MAKE) -C source realclean
-#	-$(MAKE) -C source clean
-	-$(MAKE) -C source python_clean distclean
+	-$(MAKE) -C source distclean
 
 	# Delete stuff left after a build that is not deleted by 'make clean'
 	rm -f source/bin/wbinfo source/bin/winbindd source/bin/debug2html \
