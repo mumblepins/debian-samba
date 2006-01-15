@@ -1,5 +1,8 @@
-samba (3.9.0+SVN12857-1) experimental; urgency=low
+samba (3.9.0+SVN12946-1) experimental; urgency=low
 
+  * New upstream version.
+    * Fix upgrades from Samba 3 giving too few parameters to provision().
+      (Closes: #348079)
   * Add sections to binary packages to match the archive:
     * libparse-pidl-perl: perl
     * samba-dev: devel
@@ -10,7 +13,7 @@ samba (3.9.0+SVN12857-1) experimental; urgency=low
   * Remove "reload" option from the init script, since Samba 4 doesn't
     understand SIGHUP yet.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Thu, 12 Jan 2006 01:35:00 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Sun, 15 Jan 2006 13:43:43 +0100
 
 samba (3.9.0+SVN12856-1) experimental; urgency=low
 
