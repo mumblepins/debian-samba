@@ -9,7 +9,7 @@ Build-Depends: libgtk2.0-dev, libgconf2-dev, debhelper (>> 5.0.0), libparse-yapp
 Package: samba
 Architecture: any
 Recommends: swat, ldb-tools
-Depends: ${shlibs:Depends}, ${misc:Depends}, samba-common
+Depends: ${shlibs:Depends}, ${misc:Depends}, samba-common (=${Source-Version})
 Replaces: samba-common (<= 3.9.0+SVN12726-1)
 Description: LanManager-like file and printer server for Unix (version 4)
  The Samba software suite is a collection of programs that
