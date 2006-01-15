@@ -1,3 +1,9 @@
+samba (3.9.0+SVN12947-1) UNRELEASED; urgency=low
+
+  * 
+
+ -- Steinar H. Gunderson <sesse@debian.org>  Sun, 15 Jan 2006 23:00:11 +0100
+
 samba (3.9.0+SVN12946-1) experimental; urgency=low
 
   * New upstream version.
