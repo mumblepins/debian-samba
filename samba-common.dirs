@@ -1,4 +1,5 @@
 etc/samba/tls
 usr/lib/samba
+usr/share/samba
 var/cache/samba
 var/run/samba
