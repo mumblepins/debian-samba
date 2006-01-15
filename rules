@@ -125,7 +125,6 @@ clean-patched:
 	rm -f source/bin/wbinfo source/bin/winbindd source/bin/debug2html \
 		source/bin/libsmbclient.a source/client/mount.cifs \
 		source/include/stamp-h
-	rm -rf source/build/lib.linux-i686-2.3
 
 	sed -e "s/@libacl@/`type-handling any linux-gnu`/g" \
 		< debian/control.in > debian/control
