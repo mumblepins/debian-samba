@@ -1,8 +1,10 @@
 samba (3.9.0+SVN12947-1) UNRELEASED; urgency=low
 
   * Forward-port panic-action script from the Samba 3 packaging.
+    * Patch the smb.conf template to use the panic-action script by
+      default.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Sun, 15 Jan 2006 23:02:55 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Sun, 15 Jan 2006 23:18:14 +0100
 
 samba (3.9.0+SVN12946-1) experimental; urgency=low
 

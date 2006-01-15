@@ -65,6 +65,7 @@ install: build
 	$(MAKE) -C $(SOURCEPATH)/pidl install DESTDIR=$(CURDIR)/debian/tmp
 	install -m 755 $(CURDIR)/debian/panic-action $(CURDIR)/debian/tmp/usr/share/samba
 	install -m 755 $(CURDIR)/debian/gdbcommands $(CURDIR)/debian/tmp/etc/samba
+	patch $(CURDIR)/debian/tmp/usr/lib/samba/setup/provision.smb.conf $(CURDIR)/debian/provision.smb.conf.patch
 
 binary-arch: build install
 	dh_testdir
