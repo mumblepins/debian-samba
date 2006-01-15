@@ -3,10 +3,12 @@ samba (3.9.0+SVN12947-1) UNRELEASED; urgency=low
   * Forward-port panic-action script from the Samba 3 packaging.
     * Patch the smb.conf template to use the panic-action script by
       default.
+    * Patch the postinst to generate smb.conf files with the same
+      setting.
   * Include ntlm_auth.1 man page in the samba package.
   * Make the samba dependency on samba-common versioned.
 
- -- Steinar H. Gunderson <sesse@debian.org>  Sun, 15 Jan 2006 23:37:26 +0100
+ -- Steinar H. Gunderson <sesse@debian.org>  Mon, 16 Jan 2006 00:19:30 +0100
 
 samba (3.9.0+SVN12946-1) experimental; urgency=low
 
