@@ -1,1 +1,3 @@
+etc/samba
+usr/share/samba
 var/lib/samba

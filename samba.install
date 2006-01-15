@@ -1,5 +1,7 @@
+etc/samba/gdbcommands
 usr/sbin/smbd
 usr/bin/ntlm_auth
 usr/bin/smbstatus
 usr/bin/smbscript
 usr/lib/samba/setup
+usr/share/samba/panic-action
