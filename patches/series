@@ -17,3 +17,4 @@ smbstatus-locking.patch
 undefined-symbols.patch
 VERSION.patch
 adapt_machine_creation_script.patch
+autoconf.patch
