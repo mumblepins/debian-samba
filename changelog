@@ -1,4 +1,4 @@
-samba (3.0.21a-2) UNRELEASED; urgency=low
+samba (3.0.21a-2) unstable; urgency=low
 
   [ Christian Perrier ]
   * Switch to quilt for patches management. Refresh all patches so
@@ -25,7 +25,7 @@ samba (3.0.21a-2) UNRELEASED; urgency=low
     - also move account_policy.tdb, perfcount, and eventlog into /var/lib/samba
       where they belong
 
- -- Steve Langasek <vorlon@debian.org>  Wed, 18 Jan 2006 07:43:15 -0800
+ -- Christian Perrier <bubulle@debian.org>  Fri, 20 Jan 2006 14:20:35 +0100
 
 samba (3.0.21a-1) unstable; urgency=low
 
