@@ -22,6 +22,8 @@ samba (3.0.21a-2) UNRELEASED; urgency=low
       make debian/rules clean just a little bit cleaner.
   * debian/patches/fhs.patch:
     - fix new references to registry.tdb (closes: #348874).
+    - also move account_policy.tdb, perfcount, and eventlog into /var/lib/samba
+      where they belong
 
  -- Steve Langasek <vorlon@debian.org>  Wed, 18 Jan 2006 07:43:15 -0800
 
