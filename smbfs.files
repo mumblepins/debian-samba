@@ -1,6 +1,7 @@
 sbin/mount.smbfs
 sbin/mount.smb
 sbin/mount.cifs
+sbin/umount.cifs
 usr/bin/smbmount
 usr/bin/smbumount
 usr/bin/smbmnt

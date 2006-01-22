@@ -100,7 +100,7 @@ build-stamp:
 	$(MAKE) -C source headers
 	$(MAKE) -C source all nsswitch/libnss_wins.so python_ext
 ifeq ($(mount_cifs),yes)
-	$(MAKE) -C source client/mount.cifs
+	$(MAKE) -C source client/mount.cifs client/umount.cifs
 endif
 
 	touch build-stamp
@@ -117,7 +117,8 @@ clean-patched:
 
 	# Delete stuff left after a build that is not deleted by 'make clean'
 	rm -f source/bin/wbinfo source/bin/winbindd source/bin/debug2html \
-		source/bin/libsmbclient.a source/client/mount.cifs \
+		source/bin/libsmbclient.a \
+		source/client/mount.cifs source/client/umount.cifs \
 		source/include/stamp-h
 
 	sed -e "s/@libacl@/`type-handling any linux-gnu`/g" \
@@ -186,9 +187,8 @@ ifeq ($(smbfs),yes)
 endif
 
 ifeq ($(mount_cifs),yes)
-	# Install mount.cifs and its man page
-	install -m 04755 source/client/mount.cifs $(DESTDIR)/sbin/
-	install -m 0644 docs/manpages/mount.cifs.8 $(DESTDIR)/usr/share/man/man8/
+	install -m 0755 source/client/mount.cifs $(DESTDIR)/sbin/
+	install -m 0755 source/client/umount.cifs $(DESTDIR)/sbin/
 endif
 
 	# For CUPS to support printing to samba printers, it's necessary
@@ -290,14 +290,18 @@ binary-arch: build install
 	# it becomes executable
 	chmod a-x debian/libsmbclient-dev/usr/include/libsmbclient.h
 
-ifeq ($(smbfs),yes)
 	# You may want to make some executables suid here.
+ifeq ($(smbfs),yes)
 	# The smbmnt and smbumount binaries should be setuid-root. This
 	#	has security implications because these programs haven't had
 	#	a thorough security audit. smbmount _does not_ have to have
 	#	the setuid bit set. In fact, it is a security hole.
 	chmod u+s debian/smbfs/usr/bin/smbmnt
 	chmod u+s debian/smbfs/usr/bin/smbumount
+endif
+ifeq ($(mount_cifs),yes)
+	chmod u+s debian/smbfs/sbin/mount.cifs
+	chmod u+s debian/smbfs/sbin/umount.cifs
 endif
 
 	# Set some reasonable default perms for the samba logdir.
