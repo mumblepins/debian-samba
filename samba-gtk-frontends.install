@@ -1,5 +1,6 @@
 usr/bin/gregedit
-usr/bin/gwsam
 usr/bin/gepdump
 usr/bin/gwcrontab
 usr/share/man/man1/gregedit.1
+usr/share/man/man1/gepdump.1
+usr/share/man/man1/gwcrontab.1

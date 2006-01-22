@@ -7,6 +7,9 @@ samba (3.9.0+SVN12947-1) UNRELEASED; urgency=low
       same setting.
   * Include ntlm_auth.1 man page in the samba package.
   * Make the samba dependency on samba-common versioned.
+  * Remove gwsam utility.
+  * Include gwcrontab.1 and gepdump.1 man pages in the samba-gtk-frontends
+    package.
 
  -- Steinar H. Gunderson <sesse@debian.org>  Mon, 16 Jan 2006 00:19:30 +0100
 
