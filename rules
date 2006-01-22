@@ -245,10 +245,6 @@ binary-indep: build install
 	dh_link
 	dh_compress
 	dh_fixperms
-
-	# Get rid of those pesky .cvsignore files to make lintian happy
-	find debian/ -name .cvsignore -exec rm -f {} \;
-
 	dh_installdeb
 #	dh_perl
 	dh_gencontrol
@@ -314,11 +310,6 @@ endif
 	# Set some reasonable default perms for the samba logdir.
 	chmod 0750 debian/samba/var/log/samba/
 	chown root.adm debian/samba/var/log/samba/
-
-	# Get rid of those pesky .cvsignore files to make lintian happy
-	# (maybe we only need the "find ... -exec rm -f {} ;" we have
-	# in the binary-indep target?) peloy.-
-	find debian/ -name .cvsignore -exec rm -f {} \;
 
 	dh_installdeb
 #	dh_makeshlibs
