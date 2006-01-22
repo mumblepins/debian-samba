@@ -265,15 +265,7 @@ binary-arch: build install
 	dh_installdocs -A debian/README.build
 	dh_installexamples
 #	dh_installmenu
-	# dh_installlogrotate is not available in Debian Potato...
-	if [ -x /usr/bin/dh_installlogrotate ]; then \
-		dh_installlogrotate; \
-	else \
-		mkdir -p debian/samba/etc/logrotate.d; \
-		cp debian/samba.logrotate debian/samba/etc/logrotate.d/samba; \
-		mkdir -p debian/winbind/etc/logrotate.d; \
-		cp debian/winbind.logrotate debian/winbind/etc/logrotate.d/winbind; \
-	fi
+	dh_installlogrotate
 #	dh_installemacsen
 #	dh_installpam
 	DH_OPTIONS= dh_installinit -psamba -- "defaults 20 19"
