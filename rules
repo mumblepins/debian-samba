@@ -286,6 +286,10 @@ binary-arch: build install
 	dh_compress
 	dh_fixperms
 
+	# Upstream makefile installs this using "install" without -m, so
+	# it becomes executable
+	chmod a-x debian/libsmbclient-dev/usr/include/libsmbclient.h
+
 ifeq ($(smbfs),yes)
 	# You may want to make some executables suid here.
 	# The smbmnt and smbumount binaries should be setuid-root. This
