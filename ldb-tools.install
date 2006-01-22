@@ -4,7 +4,6 @@ usr/bin/ldbedit
 usr/bin/ldbmodify
 usr/bin/ldbrename
 usr/bin/ldbsearch
-usr/bin/ldbtest
 usr/bin/oLschema2ldif
 usr/share/man/man1/ldbadd.1
 usr/share/man/man1/ldbdel.1
