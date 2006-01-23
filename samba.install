@@ -4,4 +4,4 @@ usr/bin/smbstatus
 usr/bin/smbscript
 usr/lib/samba/setup
 usr/share/man/man1/ntlm_auth.1
-usr/share/man/man8/samba.8
+usr/share/man/man8/smbd.8
