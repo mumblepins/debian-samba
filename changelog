@@ -8,7 +8,12 @@ samba (3.0.21a-4) UNRELEASED; urgency=low
   * Add "bind interfaces only" and "interfaces" options (commented)
     to the default smb.conf file. Closes: #349043
 
- -- Christian Perrier <bubulle@debian.org>  Sun, 22 Jan 2006 14:48:27 +0100
+  [ Steve Langasek ]
+  * Add missing changes to source/include/config.h.in into the
+    autoconf.patch, so that samba looks for files in /var/lib/samba like it's
+    supposed to instead of in /var/run/samba!  Closes: #349372, #349464.
+
+ -- Steve Langasek <vorlon@debian.org>  Mon, 23 Jan 2006 00:55:07 -0800
 
 samba (3.0.21a-3) unstable; urgency=low
 

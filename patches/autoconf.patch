@@ -1,7 +1,7 @@
 Index: samba-3.0.21a/source/configure
 ===================================================================
---- samba-3.0.21a.orig/source/configure	2005-12-29 15:50:51.000000000 -0800
-+++ samba-3.0.21a/source/configure	2006-01-18 07:37:42.000000000 -0800
+--- samba-3.0.21a.orig/source/configure	2006-01-23 00:49:17.000000000 -0800
++++ samba-3.0.21a/source/configure	2006-01-23 00:53:26.000000000 -0800
 @@ -310,7 +310,7 @@
  # include <unistd.h>
  #endif"
@@ -4144,3 +4144,17 @@ Index: samba-3.0.21a/source/configure
  _ACEOF
  cat >>$CONFIG_STATUS <<_ACEOF
    sed "$ac_vpsub
+Index: samba-3.0.21a/source/include/config.h.in
+===================================================================
+--- samba-3.0.21a.orig/source/include/config.h.in	2006-01-23 00:53:02.000000000 -0800
++++ samba-3.0.21a/source/include/config.h.in	2006-01-23 00:54:38.000000000 -0800
+@@ -48,6 +48,9 @@
+ /* Define to turn on dmalloc debugging */
+ #undef ENABLE_DMALLOC
+ 
++/* Whether to use fully FHS-compatible paths */
++#undef FHS_COMPATIBLE
++
+ /* Whether the host os is FreeBSD */
+ #undef FREEBSD
+ 
