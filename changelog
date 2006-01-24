@@ -1,4 +1,4 @@
-samba (3.9.0+SVN12947-1) UNRELEASED; urgency=low
+samba (3.9.0+4.0.0-tp1) UNRELEASED; urgency=low
 
   * Forward-port panic-action script from the Samba 3 packaging.
     * Patch the smb.conf provisioning template (only used by swat in the
