@@ -273,9 +273,9 @@ binary-arch: build install
 	dh_installcron 
 #	dh_installmanpages
 #	dh_installinfo
-	cp debian/winbind.lintian debian/winbind/usr/share/lintian/overrides/winbind
-	cp debian/samba.lintian debian/samba/usr/share/lintian/overrides/samba
-	cp debian/python2.3-samba.lintian debian/samba/usr/share/lintian/overrides/python2.3-samba
+	for pkg in python2.3-samba samba smbfs winbind; do \
+	  install -m 0644 -D debian/$$pkg.lintian debian/$$pkg/usr/share/lintian/overrides/$$pkg || exit; \
+	done
 #	dh_undocumented
 	dh_installchangelogs -Nlibpam-smbpass
 	DH_OPTIONS= dh_installchangelogs -plibpam-smbpass source/pam_smbpass/CHANGELOG
