@@ -1,5 +1,6 @@
 samba (3.0.21a-5) UNRELEASED; urgency=low
 
+  * The "Tridge" release: celebrates the 2005 FSF Award winner
   * Put correct paths for Debian installations into the man pages, and
     remove outdated swat setup instructions therein. Closes: #321005
   * Fix lintian overrides and install them into the right packages.
