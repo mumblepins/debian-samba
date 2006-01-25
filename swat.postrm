@@ -4,9 +4,9 @@
 
 case "$1" in
 	purge)
-		update-inetd --remove swat
 		;;
 	remove)
+		update-inetd --remove swat
 		;;
 	upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
 		;;

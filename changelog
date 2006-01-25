@@ -3,8 +3,9 @@ samba (3.0.21a-5) UNRELEASED; urgency=low
   * Put correct paths for Debian installations into the man pages, and
     remove outdated swat setup instructions therein. Closes: #321005
   * Fix lintian overrides and install them into the right packages.
+  * Remove swat inetd registration in remove, not purge. Closes: #313214
 
- -- Peter Eisentraut <petere@debian.org>  Wed, 25 Jan 2006 00:25:25 +0100
+ -- Peter Eisentraut <petere@debian.org>  Wed, 25 Jan 2006 00:59:32 +0100
 
 samba (3.0.21a-4) unstable; urgency=low
 
