@@ -160,13 +160,13 @@ install: build
 
 	# Install winbind stuff not installed by 'make install'
 	install -m 0644 source/nsswitch/libnss_winbind.so \
-		$(DESTDIR)/lib/libnss_winbind.so.2
+		$(DESTDIR)/lib/libnss_winbind.so
 	install -m 0644 source/nsswitch/pam_winbind.so \
 		$(DESTDIR)/lib/security/
 
 	# Install libnss_wins.so, which is not installed by 'make install' either.
 	install -m 0644 source/nsswitch/libnss_wins.so \
-		$(DESTDIR)/lib/libnss_wins.so.2
+		$(DESTDIR)/lib/libnss_wins.so
 
 	# pam_smbpass.so isn't being installed by 'make install'.
 	#	We'll move it here to $(DESTDIR)/lib/security/ and then

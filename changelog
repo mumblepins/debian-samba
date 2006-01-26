@@ -6,8 +6,9 @@ samba (3.0.21a-5) UNRELEASED; urgency=low
   * Fix lintian overrides and install them into the right packages.
   * Remove swat inetd registration in remove, not purge. Closes: #313214
   * Add findsmb script. Closes: #231806
+  * Remove sonames from libnss_win{bind,s}.so. Closes: #333290
 
- -- Peter Eisentraut <petere@debian.org>  Wed, 25 Jan 2006 01:11:56 +0100
+ -- Peter Eisentraut <petere@debian.org>  Wed, 25 Jan 2006 18:05:42 +0100
 
 samba (3.0.21a-4) unstable; urgency=low
 

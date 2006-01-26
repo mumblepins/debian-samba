@@ -6,5 +6,5 @@ usr/share/man/man1/ntlm_auth.1
 usr/share/man/man7/pam_winbind.7
 usr/share/man/man8/winbindd.8
 lib/security/pam_winbind.so
-lib/libnss_winbind.so.2
-lib/libnss_wins.so.2
+lib/libnss_winbind.so
+lib/libnss_wins.so
