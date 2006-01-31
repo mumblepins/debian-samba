@@ -1,20 +1,20 @@
 Index: samba-3.0.21a/source/Makefile.in
 ===================================================================
---- samba-3.0.21a.orig/source/Makefile.in	2006-01-23 01:08:53.000000000 +0100
-+++ samba-3.0.21a/source/Makefile.in	2006-01-23 01:50:26.000000000 +0100
-@@ -1180,13 +1180,12 @@
+--- samba-3.0.21a.orig/source/Makefile.in	2006-01-25 18:19:25.000000000 +0100
++++ samba-3.0.21a/source/Makefile.in	2006-01-31 00:33:27.000000000 +0100
+@@ -1180,13 +1180,13 @@
  @WINBIND_NSS@: $(WINBIND_NSS_PICOBJS)
  	@echo "Linking $@"
  	@$(SHLD) $(WINBIND_NSS_LDSHFLAGS) -o $@ $(WINBIND_NSS_PICOBJS) \
 -		@WINBIND_NSS_EXTRA_LIBS@ @SONAMEFLAG@`basename $@`
-+		@WINBIND_NSS_EXTRA_LIBS@
++		@WINBIND_NSS_EXTRA_LIBS@ @SONAMEFLAG@`basename $@`.2
  
  @WINBIND_WINS_NSS@: $(WINBIND_WINS_NSS_PICOBJS)
  	@echo "Linking $@"
  	@$(SHLD) $(LDSHFLAGS) -o $@ $(WINBIND_WINS_NSS_PICOBJS) \
--		$(LDAP_LIBS) $(KRB5LIBS) -lc \
+ 		$(LDAP_LIBS) $(KRB5LIBS) -lc \
 -		@SONAMEFLAG@`basename $@`
-+		$(LDAP_LIBS) $(KRB5LIBS) -lc
++		@SONAMEFLAG@`basename $@`.2
  
  nsswitch/pam_winbind.@SHLIBEXT@: $(PAM_WINBIND_PICOBJ) bin/.dummy
  	@echo "Linking $@"
