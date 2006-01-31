@@ -293,7 +293,7 @@ ifeq ($(smbfs),yes)
 	#	a thorough security audit. smbmount _does not_ have to have
 	#	the setuid bit set. In fact, it is a security hole.
 	chmod u+s debian/smbfs/usr/bin/smbmnt
-	chmod u+s debian/smbfs/usr/bin/smbumount
+	chmod ug+s debian/smbfs/usr/bin/smbumount
 endif
 ifeq ($(mount_cifs),yes)
 	chmod u+s debian/smbfs/sbin/mount.cifs
