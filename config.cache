@@ -30,15 +30,6 @@ if [ -n "$DEB_HOST_GNU_TYPE" \
 fi
 
 
-# This is at the top because it's most in need of regular tweaking.
-# These are options which are supported on 2.4 kernels, but not on 2.2
-# kernels.
-
-samba_cv_HAVE_KERNEL_OPLOCKS_LINUX=${samba_cv_HAVE_KERNEL_OPLOCKS_LINUX=no}
-samba_cv_HAVE_KERNEL_CHANGE_NOTIFY=${samba_cv_HAVE_KERNEL_CHANGE_NOTIFY=no}
-samba_cv_HAVE_KERNEL_SHARE_MODES=${samba_cv_HAVE_KERNEL_SHARE_MODES=no}
-
-
 # These are present in 2.2 kernels, but not in 2.0...
 
 samba_cv_have_setresuid=${samba_cv_have_setresuid=yes}

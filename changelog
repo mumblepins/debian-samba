@@ -13,12 +13,13 @@ samba (3.0.21a-5) UNRELEASED; urgency=low
   * Remove remnants of old patch system.
   * Install smbumount setgid root. Closes: #253437
   * Add watch file.
+  * Activate kernel oplocks. Closes: #218511
 
   [ Christian Perrier ]
   * activate building of idmap_rid. Closes: #284681.
     Thanks to Ubuntu patches
 
- -- Peter Eisentraut <petere@debian.org>  Wed,  1 Feb 2006 08:41:41 +0100
+ -- Peter Eisentraut <petere@debian.org>  Fri,  3 Feb 2006 16:23:32 +0100
 
 samba (3.0.21a-4) unstable; urgency=low
 
