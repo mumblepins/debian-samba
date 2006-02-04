@@ -2,6 +2,7 @@ usr/sbin/winbindd
 usr/bin/wbinfo
 usr/bin/ntlm_auth
 usr/lib/samba/idmap/rid.so
+usr/lib/samba/idmap/ad.so
 usr/share/man/man1/wbinfo.1
 usr/share/man/man1/ntlm_auth.1
 usr/share/man/man7/pam_winbind.7

@@ -28,6 +28,7 @@ samba (3.0.21b-1) UNRELEASED; urgency=low
   [ Christian Perrier ]
   * activate building of idmap_rid. Closes: #284681.
     Thanks to Ubuntu patches
+  * activate building of idmap_ad. Closes: #341814
   * modify the long description of the libsmbclient-dev package to
     avoid repeating the long description. Thanks, linda.
 
