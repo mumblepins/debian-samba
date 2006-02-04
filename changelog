@@ -19,7 +19,11 @@ samba (3.0.21a-5) UNRELEASED; urgency=low
   * activate building of idmap_rid. Closes: #284681.
     Thanks to Ubuntu patches
 
- -- Peter Eisentraut <petere@debian.org>  Fri,  3 Feb 2006 16:23:32 +0100
+  [ Steve Langasek ]
+  * Also enable setresuid()/setresgid() on alpha and sparc now that support
+    for Linux 2.2 is dropped.
+
+ -- Steve Langasek <vorlon@debian.org>  Fri,  3 Feb 2006 16:42:57 -0800
 
 samba (3.0.21a-4) unstable; urgency=low
 
