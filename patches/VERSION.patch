@@ -1,10 +1,11 @@
-Index: samba-3.0.21a.new/source/VERSION
+Index: samba-3.0.21b/source/VERSION
 ===================================================================
---- samba-3.0.21a.new.orig/source/VERSION	2005-12-29 21:48:50.000000000 +0100
-+++ samba-3.0.21a.new/source/VERSION	2006-01-02 09:57:54.054746861 +0100
-@@ -90,4 +90,4 @@
+--- samba-3.0.21b.orig/source/VERSION	2006-01-25 00:46:41.000000000 +0100
++++ samba-3.0.21b/source/VERSION	2006-02-04 08:11:10.649710209 +0100
+@@ -96,5 +96,5 @@
  # e.g. SAMBA_VERSION_VENDOR_SUFFIX=vendor_version()    #
  #  ->  "CVS 3.0.0rc2-VendorVersion"                    #
  ########################################################
 -SAMBA_VERSION_VENDOR_SUFFIX=
 +SAMBA_VERSION_VENDOR_SUFFIX="Debian"
+ SAMBA_VENDOR_PATCH=
