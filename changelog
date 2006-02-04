@@ -5,7 +5,7 @@ samba (3.0.21b-1) UNRELEASED; urgency=low
   * New upstream release
 
   * Upstream bugs fixed by the new upstream release:
-    - Support changing expired passwords in 
+    - Support changing expired passwords in
       pam_winbindd. Closes: #258302
     - vfs_full_audit fixes for multiple connections. Closes: #348419
     - crashes of smbd in security=server mode
@@ -23,6 +23,7 @@ samba (3.0.21b-1) UNRELEASED; urgency=low
   * Install smbumount setgid root. Closes: #253437
   * Add watch file.
   * Activate kernel oplocks. Closes: #218511
+  * Disable PIE compilation. Closes: #346416
 
   [ Christian Perrier ]
   * activate building of idmap_rid. Closes: #284681.
@@ -32,7 +33,7 @@ samba (3.0.21b-1) UNRELEASED; urgency=low
   * Also enable setresuid()/setresgid() on alpha and sparc now that support
     for Linux 2.2 is dropped.
 
- -- Steve Langasek <vorlon@debian.org>  Fri,  3 Feb 2006 16:42:57 -0800
+ -- Peter Eisentraut <petere@debian.org>  Sat,  4 Feb 2006 10:01:52 +0100
 
 samba (3.0.21a-4) unstable; urgency=low
 

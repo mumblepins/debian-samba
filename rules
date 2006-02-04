@@ -42,6 +42,7 @@ conf_args = \
 		--with-fhs \
 		--enable-shared \
 		--enable-static \
+		--disable-pie \
 		--prefix=/usr \
 		--sysconfdir=/etc \
 		--libdir=/etc/samba \
