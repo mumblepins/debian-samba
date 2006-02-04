@@ -1,6 +1,15 @@
-samba (3.0.21a-5) UNRELEASED; urgency=low
+samba (3.0.21b-1) UNRELEASED; urgency=low
 
   * The "Tridge" release: celebrates the 2005 Free Software Award winner
+
+  * New upstream release
+
+  * Upstream bugs fixed by the new upstream release:
+    - Support changing expired passwords in 
+      pam_winbindd. Closes: #258302
+    - vfs_full_audit fixes for multiple connections. Closes: #348419
+    - crashes of smbd in security=server mode
+      Closes: #346045, #346069, #350598
 
   [ Peter Eisentraut ]
   * Put correct paths for Debian installations into the man pages, and
