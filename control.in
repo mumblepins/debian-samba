@@ -169,8 +169,8 @@ Description: libsmbclient static libraries and headers
  This gives applications the ability to talk to Microsoft Windows servers
  and Unix servers running Samba.
  .
- This package contains the libsmbclient static libraries and headers
- needed to build applications that use SMB services.
+ This package contains libraries and headers needed to build applications
+ that use SMB services.
 
 Package: winbind
 Section: net
