@@ -1,7 +1,7 @@
-Index: samba-3.0.21a.new/source/configure.in
+Index: samba-3.0.21b/source/configure.in
 ===================================================================
---- samba-3.0.21a.new.orig/source/configure.in	2006-01-02 09:43:36.355337696 +0100
-+++ samba-3.0.21a.new/source/configure.in	2006-01-02 09:53:12.969563953 +0100
+--- samba-3.0.21b.orig/source/configure.in	2006-02-06 00:00:28.000000000 -0800
++++ samba-3.0.21b/source/configure.in	2006-02-06 00:00:29.000000000 -0800
 @@ -638,6 +638,15 @@
        fi
      ;;
@@ -27,7 +27,7 @@ Index: samba-3.0.21a.new/source/configure.in
         # glibc <= 2.3.2 has a broken getgrouplist
         AC_TRY_RUN([
  #include <unistd.h>
-@@ -1392,7 +1401,10 @@
+@@ -1403,7 +1412,10 @@
  
    # and these are for particular systems
    case "$host_os" in
@@ -39,7 +39,7 @@ Index: samba-3.0.21a.new/source/configure.in
  			BLDSHARED="true"
  			if test "${ac_cv_gnu_ld_no_default_allow_shlib_undefined}" = "yes"; then
  				LDSHFLAGS="-shared -Wl,-Bsymbolic -Wl,--allow-shlib-undefined" 
-@@ -4622,7 +4634,7 @@
+@@ -4651,7 +4663,7 @@
  	AC_MSG_RESULT(yes);
  
  	case "$host_os" in
@@ -48,7 +48,7 @@ Index: samba-3.0.21a.new/source/configure.in
  		AC_CACHE_CHECK([for linux sendfile64 support],samba_cv_HAVE_SENDFILE64,[
  		AC_TRY_LINK([#include <sys/sendfile.h>],
  [\
-@@ -4885,10 +4897,10 @@
+@@ -4914,10 +4926,10 @@
  WINBIND_NSS_LDSHFLAGS=$LDSHFLAGS
  
  case "$host_os" in

@@ -3,11 +3,11 @@ Fixes: #346234
 
 Status wrt upstream: Debian specific
 
-Index: samba-3.0.21a/docs/manpages/smb.conf.5
+Index: samba-3.0.21b/docs/manpages/smb.conf.5
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/smb.conf.5	2005-12-29 17:19:48.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/smb.conf.5	2006-01-07 17:44:20.210534570 +0100
-@@ -450,7 +450,7 @@
+--- samba-3.0.21b.orig/docs/manpages/smb.conf.5	2006-02-05 23:58:28.000000000 -0800
++++ samba-3.0.21b/docs/manpages/smb.conf.5	2006-02-05 23:58:36.000000000 -0800
+@@ -454,7 +454,7 @@
  
  Default: \fB\fIadd machine script\fR = \fR 
  

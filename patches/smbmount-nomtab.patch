@@ -1,7 +1,7 @@
-Index: samba-3.0.21a.new/source/client/smbmnt.c
+Index: samba-3.0.21b/source/client/smbmnt.c
 ===================================================================
---- samba-3.0.21a.new.orig/source/client/smbmnt.c	2006-01-02 09:57:47.068158819 +0100
-+++ samba-3.0.21a.new/source/client/smbmnt.c	2006-01-02 09:57:48.390891503 +0100
+--- samba-3.0.21b.orig/source/client/smbmnt.c	2006-02-05 23:59:39.000000000 -0800
++++ samba-3.0.21b/source/client/smbmnt.c	2006-02-05 23:59:39.000000000 -0800
 @@ -44,6 +44,7 @@
  static uid_t mount_uid;
  static gid_t mount_gid;
@@ -103,10 +103,10 @@ Index: samba-3.0.21a.new/source/client/smbmnt.c
  
  	return 0;
  }	
-Index: samba-3.0.21a.new/source/client/smbmount.c
+Index: samba-3.0.21b/source/client/smbmount.c
 ===================================================================
---- samba-3.0.21a.new.orig/source/client/smbmount.c	2006-01-02 09:53:33.819339256 +0100
-+++ samba-3.0.21a.new/source/client/smbmount.c	2006-01-02 09:58:17.214066308 +0100
+--- samba-3.0.21b.orig/source/client/smbmount.c	2006-02-05 23:59:39.000000000 -0800
++++ samba-3.0.21b/source/client/smbmount.c	2006-02-05 23:59:53.000000000 -0800
 @@ -46,6 +46,7 @@
  static int mount_ro;
  static unsigned mount_fmask;
@@ -125,7 +125,7 @@ Index: samba-3.0.21a.new/source/client/smbmount.c
          if ((fd = open(MOUNTED"~", O_RDWR|O_CREAT|O_EXCL, 0600)) == -1) {
                  DEBUG(0,("%d: Can't get "MOUNTED"~ lock file", sys_getpid()));
                  return;
-@@ -465,6 +469,9 @@
+@@ -468,6 +472,9 @@
  	args[i++] = "-s";
  	args[i++] = svc2;
  
@@ -135,7 +135,7 @@ Index: samba-3.0.21a.new/source/client/smbmount.c
  	if (mount_ro) {
  		args[i++] = "-r";
  	}
-@@ -660,7 +667,7 @@
+@@ -663,7 +670,7 @@
  ****************************************************************************/
  static void usage(void)
  {
@@ -144,7 +144,7 @@ Index: samba-3.0.21a.new/source/client/smbmount.c
  
  	printf("Version %s\n\n",SAMBA_VERSION_STRING);
  
-@@ -738,8 +745,13 @@
+@@ -741,8 +748,13 @@
  	argc -= 2;
  	argv += 2;
  
