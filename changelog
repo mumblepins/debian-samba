@@ -1,4 +1,4 @@
-samba (3.0.21b-1) UNRELEASED; urgency=low
+samba (3.0.21b-1) unstable; urgency=low
 
   * The "Tridge" release: celebrates the 2005 Free Software Award winner
 
@@ -9,7 +9,7 @@ samba (3.0.21b-1) UNRELEASED; urgency=low
       pam_winbindd. Closes: #258302
     - vfs_full_audit fixes for multiple connections. Closes: #348419
     - crashes of smbd in security=server mode
-      Closes: #346045, #346069, #350598
+      Closes: #346045, #346069, #350598, #351448
 
   [ Peter Eisentraut ]
   * Put correct paths for Debian installations into the man pages, and
@@ -36,7 +36,7 @@ samba (3.0.21b-1) UNRELEASED; urgency=low
   * Also enable setresuid()/setresgid() on alpha and sparc now that support
     for Linux 2.2 is dropped.
 
- -- Peter Eisentraut <petere@debian.org>  Sat,  4 Feb 2006 10:01:52 +0100
+ -- Christian Perrier <bubulle@debian.org>  Mon,  6 Feb 2006 07:02:20 +0100
 
 samba (3.0.21a-4) unstable; urgency=low
 
