@@ -1,9 +1,5 @@
 samba (3.0.21b-2) UNRELEASED; urgency=low
 
-  * Default smb.conf changes:
-    - activate "preserve case" and "short preserve case" in the
-      default smb.conf file. Closes: #349047  
-    - add safe network browsing parameters . Closes: #349048
   
  -- Christian Perrier <bubulle@debian.org>  Wed,  8 Feb 2006 18:39:15 +0100
 
