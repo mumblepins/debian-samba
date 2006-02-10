@@ -2,6 +2,7 @@ samba (3.0.21b-2) UNRELEASED; urgency=low
 
   * add a few logon-related parameters as good and safe
     examples for *DC-type settings. Closes: #349051
+  * add an example "add user script". Closes: #349050
   
  -- Christian Perrier <bubulle@debian.org>  Wed,  8 Feb 2006 18:39:15 +0100
 
