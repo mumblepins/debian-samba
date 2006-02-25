@@ -18,5 +18,3 @@ undefined-symbols.patch
 VERSION.patch
 adapt_machine_creation_script.patch
 autoconf.patch
-# This has been applied upstream
-# libnss-soname.patch
