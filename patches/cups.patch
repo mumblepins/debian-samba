@@ -1,8 +1,8 @@
-Index: samba-3.0.21b/source/include/includes.h
+Index: samba-3.0.21c/source/include/includes.h
 ===================================================================
---- samba-3.0.21b.orig/source/include/includes.h	2006-02-06 00:01:10.000000000 -0800
-+++ samba-3.0.21b/source/include/includes.h	2006-02-06 00:01:15.000000000 -0800
-@@ -1066,10 +1066,7 @@
+--- samba-3.0.21c.orig/source/include/includes.h	2006-02-25 11:57:11.836310142 +0100
++++ samba-3.0.21c/source/include/includes.h	2006-02-25 11:58:13.919783766 +0100
+@@ -1068,10 +1068,7 @@
  #endif
  
  #ifndef DEFAULT_PRINTING

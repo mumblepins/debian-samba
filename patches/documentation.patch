@@ -1,7 +1,7 @@
-Index: samba-3.0.21a/docs/manpages/swat.8
+Index: samba-3.0.21c/docs/manpages/swat.8
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/swat.8	2005-12-29 17:21:21.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/swat.8	2006-01-24 23:05:53.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/swat.8	2006-02-25 11:57:11.752327087 +0100
++++ samba-3.0.21c/docs/manpages/swat.8	2006-02-25 11:58:14.717622783 +0100
 @@ -81,51 +81,6 @@
  \-h|\-\-help
  Print a summary of command line options\&.
@@ -65,10 +65,10 @@ Index: samba-3.0.21a/docs/manpages/swat.8
  
  .SH "WARNINGS"
  
-Index: samba-3.0.21a/docs/manpages/nmbd.8
+Index: samba-3.0.21c/docs/manpages/nmbd.8
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/nmbd.8	2005-12-29 17:19:14.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/nmbd.8	2006-01-24 23:17:44.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/nmbd.8	2006-02-25 11:57:11.753326885 +0100
++++ samba-3.0.21c/docs/manpages/nmbd.8	2006-02-25 11:58:14.719622379 +0100
 @@ -74,7 +74,7 @@
  \-H <filename>
  NetBIOS lmhosts file\&. The lmhosts file is a list of NetBIOS names to IP addresses that is loaded by the nmbd server and used via the name resolution mechanism name resolve order described in \fBsmb\&.conf\fR(5) to resolve any NetBIOS name queries needed by the server\&. Note that the contents of this file are \fBNOT\fR used by \fBnmbd\fR to answer any name queries\&. Adding a line to this file affects name NetBIOS resolution from this host \fBONLY\fR\&.
@@ -98,10 +98,10 @@ Index: samba-3.0.21a/docs/manpages/nmbd.8
  
  .PP
  The debug log level of nmbd may be raised or lowered using \fBsmbcontrol\fR(1) (SIGUSR[1|2] signals are no longer used since Samba 2\&.2)\&. This is to allow transient problems to be diagnosed, whilst still running at a normally low log level\&.
-Index: samba-3.0.21a/docs/manpages/smbd.8
+Index: samba-3.0.21c/docs/manpages/smbd.8
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/smbd.8	2005-12-29 17:20:29.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/smbd.8	2006-01-24 23:10:20.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/smbd.8	2006-02-25 11:57:11.754326683 +0100
++++ samba-3.0.21c/docs/manpages/smbd.8	2006-02-25 11:58:14.721621976 +0100
 @@ -119,8 +119,8 @@
  If running the server via the meta\-daemon \fBinetd\fR, this file must contain a mapping of service name (e\&.g\&., netbios\-ssn) to service port (e\&.g\&., 139) and protocol type (e\&.g\&., tcp)\&.
  
@@ -113,10 +113,10 @@ Index: samba-3.0.21a/docs/manpages/smbd.8
  
  This file describes all the services the server is to make available to clients\&. See \fBsmb\&.conf\fR(5) for more information\&.
  
-Index: samba-3.0.21a/docs/manpages/lmhosts.5
+Index: samba-3.0.21c/docs/manpages/lmhosts.5
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/lmhosts.5	2005-12-29 17:18:53.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/lmhosts.5	2006-01-24 23:27:15.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/lmhosts.5	2006-02-25 11:57:11.755326481 +0100
++++ samba-3.0.21c/docs/manpages/lmhosts.5	2006-02-25 11:58:14.722621774 +0100
 @@ -73,7 +73,7 @@
  .SH "FILES"
  
@@ -126,10 +126,10 @@ Index: samba-3.0.21a/docs/manpages/lmhosts.5
  
  .SH "VERSION"
  
-Index: samba-3.0.21a/docs/manpages/ntlm_auth.1
+Index: samba-3.0.21c/docs/manpages/ntlm_auth.1
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/ntlm_auth.1	2005-12-29 17:19:24.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/ntlm_auth.1	2006-01-24 23:21:35.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/ntlm_auth.1	2006-02-25 11:57:11.756326280 +0100
++++ samba-3.0.21c/docs/manpages/ntlm_auth.1	2006-02-25 11:58:14.723621572 +0100
 @@ -42,7 +42,7 @@
  The \fBwinbindd\fR(8) daemon must be operational for many of these commands to function\&.
  
@@ -157,10 +157,10 @@ Index: samba-3.0.21a/docs/manpages/ntlm_auth.1
  
  .TP
  gss\-spnego\-client
-Index: samba-3.0.21a/docs/manpages/tdbbackup.8
+Index: samba-3.0.21c/docs/manpages/tdbbackup.8
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/tdbbackup.8	2005-12-29 17:21:24.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/tdbbackup.8	2006-01-24 23:26:18.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/tdbbackup.8	2006-02-25 11:57:11.757326078 +0100
++++ samba-3.0.21c/docs/manpages/tdbbackup.8	2006-02-25 11:58:14.724621371 +0100
 @@ -72,13 +72,13 @@
  
  .TP 3
@@ -178,10 +178,10 @@ Index: samba-3.0.21a/docs/manpages/tdbbackup.8
  .LP
  
  .SH "VERSION"
-Index: samba-3.0.21a/docs/manpages/winbindd.8
+Index: samba-3.0.21c/docs/manpages/winbindd.8
 ===================================================================
---- samba-3.0.21a.orig/docs/manpages/winbindd.8	2005-12-29 17:21:42.000000000 +0100
-+++ samba-3.0.21a/docs/manpages/winbindd.8	2006-01-24 23:23:25.000000000 +0100
+--- samba-3.0.21c.orig/docs/manpages/winbindd.8	2006-02-25 11:57:11.758325876 +0100
++++ samba-3.0.21c/docs/manpages/winbindd.8	2006-02-25 11:58:14.726620967 +0100
 @@ -298,19 +298,19 @@
  The UNIX pipe over which clients communicate with the \fBwinbindd\fR program\&. For security reasons, the winbind client will only attempt to connect to the winbindd daemon if both the \fI/tmp/\&.winbindd\fR directory and \fI/tmp/\&.winbindd/pipe\fR file are owned by root\&.
  

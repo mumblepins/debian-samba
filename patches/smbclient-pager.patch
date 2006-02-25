@@ -1,7 +1,7 @@
-Index: samba-3.0.21a.new/source/include/local.h
+Index: samba-3.0.21c/source/include/local.h
 ===================================================================
---- samba-3.0.21a.new.orig/source/include/local.h	2005-11-09 19:29:00.000000000 +0100
-+++ samba-3.0.21a.new/source/include/local.h	2006-01-02 09:53:35.411016735 +0100
+--- samba-3.0.21c.orig/source/include/local.h	2006-02-25 11:57:10.314617157 +0100
++++ samba-3.0.21c/source/include/local.h	2006-02-25 11:58:24.566635487 +0100
 @@ -109,7 +109,7 @@
  /* the default pager to use for the client "more" command. Users can
     override this with the PAGER environment variable */

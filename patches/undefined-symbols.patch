@@ -1,9 +1,9 @@
-Index: samba-3.0.21a.new/source/Makefile.in
+Index: samba-3.0.21c/source/Makefile.in
 ===================================================================
---- samba-3.0.21a.new.orig/source/Makefile.in	2006-01-02 09:53:29.905132385 +0100
-+++ samba-3.0.21a.new/source/Makefile.in	2006-01-02 09:57:52.987962455 +0100
-@@ -673,7 +673,8 @@
-             $(RPC_NTSVCS_OBJ)
+--- samba-3.0.21c.orig/source/Makefile.in	2006-02-25 11:58:21.336287297 +0100
++++ samba-3.0.21c/source/Makefile.in	2006-02-25 11:58:30.862365147 +0100
+@@ -674,7 +674,8 @@
+             $(RPC_NTSVCS_OBJ) utils/passwd_util.o
  
  WINBIND_WINS_NSS_OBJ = nsswitch/wins.o $(PARAM_OBJ) \
 -	$(LIBSMB_OBJ) $(LIB_NONSMBD_OBJ) $(NSSWINS_OBJ) $(KRBCLIENT_OBJ)
@@ -12,7 +12,7 @@ Index: samba-3.0.21a.new/source/Makefile.in
  
  WINBIND_WINS_NSS_PICOBJS = $(WINBIND_WINS_NSS_OBJ:.o=.@PICSUFFIX@)
  
-@@ -1060,7 +1061,7 @@
+@@ -1061,7 +1062,7 @@
  
  bin/libsmbclient.@SHLIBEXT@: $(LIBSMBCLIENT_PICOBJS)
  	@echo Linking libsmbclient shared library $@

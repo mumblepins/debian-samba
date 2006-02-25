@@ -1,7 +1,7 @@
-Index: samba-3.0.21a.new/source/script/installswat.sh
+Index: samba-3.0.21c/source/script/installswat.sh
 ===================================================================
---- samba-3.0.21a.new.orig/source/script/installswat.sh	2005-12-20 16:28:39.000000000 +0100
-+++ samba-3.0.21a.new/source/script/installswat.sh	2006-01-02 09:45:50.547172952 +0100
+--- samba-3.0.21c.orig/source/script/installswat.sh	2006-02-25 11:57:11.178442873 +0100
++++ samba-3.0.21c/source/script/installswat.sh	2006-02-25 11:58:18.019956453 +0100
 @@ -114,7 +114,11 @@
  
  # Install Using Samba book (but only if it is there)

@@ -1,7 +1,7 @@
-Index: samba-3.0.21a.new/examples/LDAP/README
+Index: samba-3.0.21c/examples/LDAP/README
 ===================================================================
---- samba-3.0.21a.new.orig/examples/LDAP/README	2005-02-25 18:59:51.000000000 +0100
-+++ samba-3.0.21a.new/examples/LDAP/README	2006-01-02 09:53:32.809543869 +0100
+--- samba-3.0.21c.orig/examples/LDAP/README	2006-02-25 11:57:10.555568543 +0100
++++ samba-3.0.21c/examples/LDAP/README	2006-02-25 11:58:22.890973598 +0100
 @@ -59,6 +59,9 @@
  The smbldap-tools package can be downloaded individually from 
  http://samba.idealx.org/dist/

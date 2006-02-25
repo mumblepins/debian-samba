@@ -1,7 +1,7 @@
-Index: samba-3.0.21b/source/client/smbmount.c
+Index: samba-3.0.21c/source/client/smbmount.c
 ===================================================================
---- samba-3.0.21b.orig/source/client/smbmount.c	2006-02-05 23:59:59.000000000 -0800
-+++ samba-3.0.21b/source/client/smbmount.c	2006-02-06 00:00:14.000000000 -0800
+--- samba-3.0.21c.orig/source/client/smbmount.c	2006-02-25 11:57:10.475584681 +0100
++++ samba-3.0.21c/source/client/smbmount.c	2006-02-25 11:58:23.681814024 +0100
 @@ -767,7 +767,7 @@
  					*lp = 0;
  					pstrcpy(password,lp+1);
@@ -20,7 +20,7 @@ Index: samba-3.0.21b/source/client/smbmount.c
  			} else if(!strcmp(opts, "credentials")) {
  				pstrcpy(credentials,opteq+1);
  			} else if(!strcmp(opts, "netbiosname")) {
-@@ -891,7 +891,7 @@
+@@ -893,7 +893,7 @@
  			*p = 0;
  			pstrcpy(password,p+1);
  			got_pass = True;
@@ -29,10 +29,10 @@ Index: samba-3.0.21b/source/client/smbmount.c
  		}
  		strupper_m(username);
  	}
-Index: samba-3.0.21b/source/web/diagnose.c
+Index: samba-3.0.21c/source/web/diagnose.c
 ===================================================================
---- samba-3.0.21b.orig/source/web/diagnose.c	2006-02-05 23:59:59.000000000 -0800
-+++ samba-3.0.21b/source/web/diagnose.c	2006-02-06 00:00:05.000000000 -0800
+--- samba-3.0.21c.orig/source/web/diagnose.c	2006-02-25 11:57:10.476584479 +0100
++++ samba-3.0.21c/source/web/diagnose.c	2006-02-25 11:58:23.683813621 +0100
 @@ -62,6 +62,7 @@
  {
  	static struct cli_state cli;
@@ -41,10 +41,10 @@ Index: samba-3.0.21b/source/web/diagnose.c
  	if (!cli_initialise(&cli))
  		return False;
  
-Index: samba-3.0.21b/source/script/installbin.sh
+Index: samba-3.0.21c/source/script/installbin.sh
 ===================================================================
---- samba-3.0.21b.orig/source/script/installbin.sh	2006-02-05 23:59:59.000000000 -0800
-+++ samba-3.0.21b/source/script/installbin.sh	2006-02-06 00:00:05.000000000 -0800
+--- samba-3.0.21c.orig/source/script/installbin.sh	2006-02-25 11:57:10.477584277 +0100
++++ samba-3.0.21c/source/script/installbin.sh	2006-02-25 11:58:23.684813419 +0100
 @@ -24,12 +24,14 @@
   chmod $INSTALLPERMS $BINDIR/$p2
  

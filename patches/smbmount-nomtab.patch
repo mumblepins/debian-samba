@@ -1,7 +1,7 @@
-Index: samba-3.0.21b/source/client/smbmnt.c
+Index: samba-3.0.21c/source/client/smbmnt.c
 ===================================================================
---- samba-3.0.21b.orig/source/client/smbmnt.c	2006-02-05 23:59:39.000000000 -0800
-+++ samba-3.0.21b/source/client/smbmnt.c	2006-02-05 23:59:39.000000000 -0800
+--- samba-3.0.21c.orig/source/client/smbmnt.c	2006-02-25 11:58:25.369473493 +0100
++++ samba-3.0.21c/source/client/smbmnt.c	2006-02-25 11:58:26.169312103 +0100
 @@ -44,6 +44,7 @@
  static uid_t mount_uid;
  static gid_t mount_gid;
@@ -103,10 +103,10 @@ Index: samba-3.0.21b/source/client/smbmnt.c
  
  	return 0;
  }	
-Index: samba-3.0.21b/source/client/smbmount.c
+Index: samba-3.0.21c/source/client/smbmount.c
 ===================================================================
---- samba-3.0.21b.orig/source/client/smbmount.c	2006-02-05 23:59:39.000000000 -0800
-+++ samba-3.0.21b/source/client/smbmount.c	2006-02-05 23:59:53.000000000 -0800
+--- samba-3.0.21c.orig/source/client/smbmount.c	2006-02-25 11:58:23.681814024 +0100
++++ samba-3.0.21c/source/client/smbmount.c	2006-02-25 11:58:26.184309077 +0100
 @@ -46,6 +46,7 @@
  static int mount_ro;
  static unsigned mount_fmask;
