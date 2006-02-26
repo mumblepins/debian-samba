@@ -1,4 +1,4 @@
-samba (3.0.21c-1) UNRELEASED; urgency=low
+samba (3.0.21c-1) unstable; urgency=low
 
   * New upstream release
   * add a few logon-related parameters as good and safe
