@@ -13,7 +13,7 @@ Recommends: smbldap-tools
 Replaces: samba-common (<= 2.0.5a-2)
 Description: a LanManager-like file and printer server for Unix
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
@@ -29,14 +29,14 @@ Description: a LanManager-like file and printer server for Unix
   samba-doc - Samba documentation.
   samba-doc-pdf - Samba documentation in PDF format.
   smbfs - Mount and umount commands for the smbfs (kernels 2.2.x and above).
-  libpam-smbpass - pluggable authentication module for SMB password database
-  libsmbclient - Shared library that allows applications to talk to SMB servers
+  libpam-smbpass - pluggable authentication module for SMB/CIFS password database
+  libsmbclient - Shared library that allows applications to talk to SMB/CIFS servers
   libsmbclient-dev - libsmbclient shared libraries
   winbind: Service to resolve user and group information from Windows NT servers
   python2.3-samba: Python bindings that allow access to various aspects of Samba
  .
  It is possible to install a subset of these packages depending on
- your particular needs. For example, to access other SMB servers you
+ your particular needs. For example, to access other SMB/CIFS servers you
  should only need the smbclient and samba-common packages.
  .
  http://www.samba.org/
@@ -47,7 +47,7 @@ Depends: libpam-modules, ${shlibs:Depends}, ${misc:Depends}
 Replaces: samba (<< 3.0.20b-1)
 Description: Samba common files used by both the server and the client
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
@@ -64,7 +64,7 @@ Provides: samba-client
 Suggests: smbfs
 Description: a LanManager-like simple client for Unix
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
@@ -78,7 +78,7 @@ Architecture: any
 Depends: samba (= ${Source-Version}), samba-doc (= ${Source-Version}), ${shlibs:Depends}, ${misc:Depends}, netbase
 Description: Samba Web Administration Tool
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
@@ -91,7 +91,7 @@ Architecture: all
 Suggests: samba-doc-pdf
 Description: Samba documentation
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
@@ -103,7 +103,7 @@ Section: doc
 Architecture: all
 Description: Samba documentation (PDF format)
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
@@ -119,7 +119,7 @@ Suggests: smbclient
 Replaces: smbfsx
 Conflicts: smbfsx, suidmanager (<< 0.50)
 Description: mount and umount commands for the smbfs (for kernels >= than 2.2.x)
- Smbfs is a filesystem which understands the SMB protocol.
+ Smbfs is a filesystem which understands the SMB/CIFS protocol.
  This is the protocol Windows for Workgroups, Windows NT or
  LAN Manager use to talk to each other. It was inspired by
  samba, the program by Andrew Tridgell that turns any unix
@@ -134,7 +134,7 @@ Priority: extra
 Architecture: any
 Depends: ${shlibs:Depends}, samba-common (= ${Source-Version})
 Suggests: samba
-Description: pluggable authentication module for SMB password database
+Description: pluggable authentication module for SMB/CIFS password database
  This is a stackable PAM module that allows a system administrator to easily
  migrate to using encrypted passwords for Samba and to keep smb passwords in
  sync with unix passwords.  Unlike other solutions, it does this without
@@ -146,8 +146,8 @@ Section: libs
 Priority: optional
 Architecture: any
 Depends: ${shlibs:Depends}
-Description: shared library that allows applications to talk to SMB servers
- libsmbclient allows to write applications that use the SMB protocol.
+Description: shared library that allows applications to talk to SMB/CIFS servers
+ libsmbclient allows to write applications that use the SMB/CIFS protocol.
  This gives applications the ability to talk to Microsoft Windows servers
  and Unix servers running Samba.
  .
@@ -159,12 +159,12 @@ Priority: extra
 Architecture: any
 Depends: libsmbclient (= ${Source-Version})
 Description: libsmbclient static libraries and headers
- libsmbclient allows to write applications that use the SMB protocol.
+ libsmbclient allows to write applications that use the SMB/CIFS protocol.
  This gives applications the ability to talk to Microsoft Windows servers
  and Unix servers running Samba.
  .
  This package contains libraries and headers needed to build applications
- that use SMB services.
+ that use SMB/CIFS services.
 
 Package: winbind
 Section: net
@@ -200,7 +200,7 @@ Architecture: any
 Depends: samba (= ${Source-Version})
 Description: Samba debugging symbols
  The Samba software suite is a collection of programs that
- implements the SMB protocol for unix systems, allowing you to serve
+ implements the SMB/CIFS protocol for unix systems, allowing you to serve
  files and printers to Windows, NT, OS/2 and DOS clients. This protocol
  is sometimes also referred to as the LanManager or NetBIOS protocol.
  .
