@@ -1,6 +1,7 @@
 samba (3.0.22-2) UNRELEASED; urgency=low
 
   * Fix typo in smb.conf that causes all samba apps to whine.
+  * Add myself to Uploaders, on the off chance that I might upload.
 
  -- Adam Conrad <adconrad@0c3.net>  Thu,  6 Apr 2006 01:52:33 +1000
 
