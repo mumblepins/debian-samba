@@ -1,3 +1,9 @@
+samba (3.0.22-2) UNRELEASED; urgency=low
+
+  * Fix typo in smb.conf that causes all samba apps to whine.
+
+ -- Adam Conrad <adconrad@0c3.net>  Thu,  6 Apr 2006 01:52:33 +1000
+
 samba (3.0.22-1) unstable; urgency=medium
 
   [ Steve Langasek ]
