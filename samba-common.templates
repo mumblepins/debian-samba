@@ -3,7 +3,7 @@ Type: string
 _Description: Character Set for Unix filesystem
  You currently have a "character set" configured in your smb.conf.  In
  Samba 3.0, this option is replaced by a new option, "unix charset".
- Please specify the character set you wish to use for theis new option,
+ Please specify the character set you wish to use for this new option,
  which controls how Samba interprets filenames on the file system.
  .
  If you leave this option blank, your smb.conf will not be changed.
@@ -37,7 +37,7 @@ Default: true
 _Description: Configure smb.conf through debconf?
  The rest of the configuration of Samba deals with questions that affect
  parameters in /etc/samba/smb.conf, which is the file used to configure the
- Samba programs (nmbd and smbd.) Your current smb.conf contains an
+ Samba programs (nmbd and smbd). Your current smb.conf contains an
  'include' line or an option that spans multiple lines, which could confuse
  debconf and require you to edit your smb.conf by hand to get it working
  again.
