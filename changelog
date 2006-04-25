@@ -8,7 +8,9 @@ samba (3.0.23pre1-1) UNRELEASED; urgency=low
   * Add Galician translation of debconf templates. Closes: #361204
 
   [ Christian Perrier ]
-  * New upstream release
+  * New upstream release. Fixes the following Debian bugs:
+    - winbind: panic()s when started outside of a domain context
+      Closes: #337070
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
 
