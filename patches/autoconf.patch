@@ -1,17 +1,17 @@
-Index: samba-3.0.21c/source/configure
+Index: samba-3.0.23pre1/source/configure
 ===================================================================
---- samba-3.0.21c.orig/source/configure	2006-02-25 11:57:09.379805763 +0100
-+++ samba-3.0.21c/source/configure	2006-02-25 11:58:34.257680043 +0100
+--- samba-3.0.23pre1.orig/source/configure	2006-04-23 00:12:27.000000000 +0200
++++ samba-3.0.23pre1/source/configure	2006-04-25 10:52:20.658853656 +0200
 @@ -310,7 +310,7 @@
  # include <unistd.h>
  #endif"
  
--ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS configdir lockdir piddir logfilebase privatedir swatdir LDSHFLAGS SONAMEFLAG SONAMEVERSIONSUFFIX SHLD HOST_OS PICFLAGS PICSUFFIX libc_cv_fpie PIE_CFLAGS PIE_LDFLAGS SHLIBEXT INSTALLLIBCMD_SH INSTALLLIBCMD_A INSTALL_LIBMSRPC LIBMSRPC_SHARED LIBMSRPC INSTALL_LIBSMBCLIENT LIBSMBCLIENT_SHARED LIBSMBCLIENT INSTALL_LIBSMBSHAREMODES LIBSMBSHAREMODES_SHARED LIBSMBSHAREMODES PRINT_LIBS AUTH_LIBS ACL_LIBS PASSDB_LIBS IDMAP_LIBS KRB5_LIBS LDAP_LIBS SHLIB_PROGS SMBWRAPPER SMBWRAP_OBJS SMBWRAP_INC EXTRA_BIN_PROGS EXTRA_SBIN_PROGS EXTRA_ALL_TARGETS CONFIG_LIBS SOCKWRAP CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT CPP INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA AWK PERL AR ac_ct_AR BROKEN_CC build build_cpu build_vendor build_os host host_cpu host_vendor host_os target target_cpu target_vendor target_os EGREP CUPS_CONFIG LIBOBJS TERMLIBS TERMLDFLAGS ROFF DYNEXP SMBLDAP SMBLDAPUTIL KRB5CONFIG XML2_CONFIG XML_CFLAGS XML_LIBS MYSQL_CONFIG MYSQL_CFLAGS MYSQL_LIBS PGSQL_CONFIG PGSQL_CFLAGS PGSQL_LIBS WINBIND_NSS WINBIND_WINS_NSS WINBIND_NSS_LDSHFLAGS WINBIND_NSS_EXTRA_OBJS WINBIND_NSS_EXTRA_LIBS BUILD_POPT POPTLIBS FLAGS1 PYTHON PDB_STATIC PDB_MODULES RPC_STATIC RPC_MODULES IDMAP_STATIC IDMAP_MODULES CHARSET_STATIC CHARSET_MODULES AUTH_STATIC AUTH_MODULES VFS_STATIC VFS_MODULES builddir LTLIBOBJS'
-+ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS configdir lockdir piddir logfilebase privatedir swatdir codepagedir statedir cachedir LDSHFLAGS SONAMEFLAG SONAMEVERSIONSUFFIX SHLD HOST_OS PICFLAGS PICSUFFIX libc_cv_fpie PIE_CFLAGS PIE_LDFLAGS SHLIBEXT INSTALLLIBCMD_SH INSTALLLIBCMD_A INSTALL_LIBMSRPC LIBMSRPC_SHARED LIBMSRPC INSTALL_LIBSMBCLIENT LIBSMBCLIENT_SHARED LIBSMBCLIENT INSTALL_LIBSMBSHAREMODES LIBSMBSHAREMODES_SHARED LIBSMBSHAREMODES PRINT_LIBS AUTH_LIBS ACL_LIBS PASSDB_LIBS IDMAP_LIBS KRB5_LIBS LDAP_LIBS SHLIB_PROGS SMBWRAPPER SMBWRAP_OBJS SMBWRAP_INC EXTRA_BIN_PROGS EXTRA_SBIN_PROGS EXTRA_ALL_TARGETS CONFIG_LIBS SOCKWRAP CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT CPP INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA AWK PERL AR ac_ct_AR BROKEN_CC build build_cpu build_vendor build_os host host_cpu host_vendor host_os target target_cpu target_vendor target_os EGREP CUPS_CONFIG LIBOBJS TERMLIBS TERMLDFLAGS ROFF DYNEXP SMBLDAP SMBLDAPUTIL KRB5CONFIG XML2_CONFIG XML_CFLAGS XML_LIBS MYSQL_CONFIG MYSQL_CFLAGS MYSQL_LIBS PGSQL_CONFIG PGSQL_CFLAGS PGSQL_LIBS WINBIND_NSS WINBIND_WINS_NSS WINBIND_NSS_LDSHFLAGS WINBIND_NSS_EXTRA_OBJS WINBIND_NSS_EXTRA_LIBS BUILD_POPT POPTLIBS FLAGS1 PYTHON PDB_STATIC PDB_MODULES RPC_STATIC RPC_MODULES IDMAP_STATIC IDMAP_MODULES CHARSET_STATIC CHARSET_MODULES AUTH_STATIC AUTH_MODULES VFS_STATIC VFS_MODULES builddir LTLIBOBJS'
+-ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS configdir lockdir piddir logfilebase privatedir swatdir rootsbindir pammodulesdir LDSHFLAGS SONAMEFLAG NSSSONAMEVERSIONSUFFIX SHLD HOST_OS PICFLAGS PICSUFFIX libc_cv_fpie PIE_CFLAGS PIE_LDFLAGS SHLIBEXT INSTALLLIBCMD_SH INSTALLLIBCMD_A UNINSTALLLIBCMD_SH UNINSTALLLIBCMD_A INSTALL_LIBMSRPC UNINSTALL_LIBMSRPC LIBMSRPC_SHARED LIBMSRPC INSTALL_LIBSMBCLIENT UNINSTALL_LIBSMBCLIENT LIBSMBCLIENT_SHARED LIBSMBCLIENT INSTALL_LIBSMBSHAREMODES LIBSMBSHAREMODES_SHARED LIBSMBSHAREMODES PRINT_LIBS AUTH_LIBS ACL_LIBS PASSDB_LIBS IDMAP_LIBS KRB5_LIBS LDAP_LIBS SHLIB_PROGS PAM_MODULES INSTALL_PAM_MODULES UNINSTALL_PAM_MODULES SMBWRAPPER SMBWRAP_OBJS SMBWRAP_INC EXTRA_BIN_PROGS CIFSMOUNT_PROGS INSTALL_CIFSMOUNT UNINSTALL_CIFSMOUNT EXTRA_SBIN_PROGS EXTRA_ALL_TARGETS CONFIG_LIBS NSCD_LIBS SOCKWRAP selftest_prefix smbtorture4_path CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT CPP INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA AWK PERL AR ac_ct_AR BROKEN_CC build build_cpu build_vendor build_os host host_cpu host_vendor host_os target target_cpu target_vendor target_os EGREP CUPS_CONFIG LIBOBJS TERMLIBS TERMLDFLAGS ROFF DYNEXP SMBLDAP SMBLDAPUTIL KRB5CONFIG WINBIND_NSS WINBIND_WINS_NSS WINBIND_NSS_LDSHFLAGS WINBIND_NSS_EXTRA_OBJS WINBIND_NSS_EXTRA_LIBS BUILD_POPT POPTLIBS FLAGS1 BUILD_INIPARSER INIPARSERLIBS PYTHON PDB_STATIC PDB_MODULES RPC_STATIC RPC_MODULES IDMAP_STATIC IDMAP_MODULES CHARSET_STATIC CHARSET_MODULES AUTH_STATIC AUTH_MODULES VFS_STATIC VFS_MODULES builddir SMBD_LIBS LTLIBOBJS'
++ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS configdir lockdir piddir logfilebase privatedir swatdir codepagedir statedir cachedir rootsbindir pammodulesdir LDSHFLAGS SONAMEFLAG NSSSONAMEVERSIONSUFFIX SHLD HOST_OS PICFLAGS PICSUFFIX libc_cv_fpie PIE_CFLAGS PIE_LDFLAGS SHLIBEXT INSTALLLIBCMD_SH INSTALLLIBCMD_A UNINSTALLLIBCMD_SH UNINSTALLLIBCMD_A INSTALL_LIBMSRPC UNINSTALL_LIBMSRPC LIBMSRPC_SHARED LIBMSRPC INSTALL_LIBSMBCLIENT UNINSTALL_LIBSMBCLIENT LIBSMBCLIENT_SHARED LIBSMBCLIENT INSTALL_LIBSMBSHAREMODES LIBSMBSHAREMODES_SHARED LIBSMBSHAREMODES PRINT_LIBS AUTH_LIBS ACL_LIBS PASSDB_LIBS IDMAP_LIBS KRB5_LIBS LDAP_LIBS SHLIB_PROGS PAM_MODULES INSTALL_PAM_MODULES UNINSTALL_PAM_MODULES SMBWRAPPER SMBWRAP_OBJS SMBWRAP_INC EXTRA_BIN_PROGS CIFSMOUNT_PROGS INSTALL_CIFSMOUNT UNINSTALL_CIFSMOUNT EXTRA_SBIN_PROGS EXTRA_ALL_TARGETS CONFIG_LIBS NSCD_LIBS SOCKWRAP selftest_prefix smbtorture4_path CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT CPP INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA AWK PERL AR ac_ct_AR BROKEN_CC build build_cpu build_vendor build_os host host_cpu host_vendor host_os target target_cpu target_vendor target_os EGREP CUPS_CONFIG LIBOBJS TERMLIBS TERMLDFLAGS ROFF DYNEXP SMBLDAP SMBLDAPUTIL KRB5CONFIG WINBIND_NSS WINBIND_WINS_NSS WINBIND_NSS_LDSHFLAGS WINBIND_NSS_EXTRA_OBJS WINBIND_NSS_EXTRA_LIBS BUILD_POPT POPTLIBS FLAGS1 BUILD_INIPARSER INIPARSERLIBS PYTHON PDB_STATIC PDB_MODULES RPC_STATIC RPC_MODULES IDMAP_STATIC IDMAP_MODULES CHARSET_STATIC CHARSET_MODULES AUTH_STATIC AUTH_MODULES VFS_STATIC VFS_MODULES builddir SMBD_LIBS LTLIBOBJS'
  ac_subst_files=''
  
  # Initialize some variables set by options.
-@@ -1015,7 +1015,7 @@
+@@ -1011,7 +1011,7 @@
      else
        echo "$as_me: WARNING: no configuration information is in $ac_dir" >&2
      fi
@@ -20,7 +20,7 @@ Index: samba-3.0.21c/source/configure
    done
  fi
  
-@@ -1440,7 +1440,7 @@
+@@ -1438,7 +1438,7 @@
    withval="$with_fhs"
     case "$withval" in
    yes)
@@ -29,7 +29,7 @@ Index: samba-3.0.21c/source/configure
      piddir="\${VARDIR}/run"
      mandir="\${prefix}/share/man"
      logfilebase="\${VARDIR}/log/samba"
-@@ -1448,6 +1448,14 @@
+@@ -1446,6 +1446,14 @@
      libdir="\${prefix}/lib/samba"
      configdir="${sysconfdir}/samba"
      swatdir="\${DATADIR}/samba/swat"
@@ -44,7 +44,7 @@ Index: samba-3.0.21c/source/configure
      ;;
    esac
  fi;
-@@ -1681,6 +1689,9 @@
+@@ -1732,6 +1740,9 @@
  
  
  
@@ -54,7 +54,7 @@ Index: samba-3.0.21c/source/configure
  # Set defaults
  PIE_CFLAGS=""
  PIE_LDFLAGS=""
-@@ -2323,8 +2334,7 @@
+@@ -2420,8 +2431,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -64,7 +64,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -2382,8 +2392,7 @@
+@@ -2479,8 +2489,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -74,7 +74,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -2499,8 +2508,7 @@
+@@ -2596,8 +2605,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -84,7 +84,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -2554,8 +2562,7 @@
+@@ -2651,8 +2659,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -94,7 +94,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -2600,8 +2607,7 @@
+@@ -2697,8 +2704,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -104,7 +104,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -2645,8 +2651,7 @@
+@@ -2742,8 +2748,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -114,7 +114,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -3169,8 +3174,7 @@
+@@ -3266,8 +3271,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -124,7 +124,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -3228,8 +3232,7 @@
+@@ -3325,8 +3329,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -134,7 +134,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -3345,8 +3348,7 @@
+@@ -3442,8 +3445,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -144,7 +144,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -3400,8 +3402,7 @@
+@@ -3497,8 +3499,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -154,7 +154,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -3446,8 +3447,7 @@
+@@ -3543,8 +3544,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -164,7 +164,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -3491,8 +3491,7 @@
+@@ -3588,8 +3588,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -174,7 +174,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -4122,8 +4121,7 @@
+@@ -4219,8 +4218,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -184,7 +184,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -4177,8 +4175,7 @@
+@@ -4274,8 +4272,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -194,7 +194,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -4480,8 +4477,7 @@
+@@ -4577,8 +4574,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -204,7 +204,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -4970,6 +4966,27 @@
+@@ -5067,6 +5063,27 @@
        fi
      ;;
  
@@ -232,7 +232,7 @@ Index: samba-3.0.21c/source/configure
  # Tests for linux LFS support. Need kernel 2.4 and glibc2.2 or greater support.
  #
      *linux*)
-@@ -5127,8 +5144,7 @@
+@@ -5224,8 +5241,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -242,7 +242,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5231,8 +5247,7 @@
+@@ -5328,8 +5344,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -252,7 +252,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5364,8 +5379,7 @@
+@@ -5461,8 +5476,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -262,7 +262,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5455,8 +5469,7 @@
+@@ -5552,8 +5566,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -272,7 +272,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5628,8 +5641,7 @@
+@@ -5725,8 +5738,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -282,7 +282,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5701,8 +5713,7 @@
+@@ -5798,8 +5810,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -292,7 +292,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5756,8 +5767,7 @@
+@@ -5853,8 +5864,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -302,7 +302,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5828,8 +5838,7 @@
+@@ -5925,8 +5935,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -312,7 +312,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5883,8 +5892,7 @@
+@@ -5980,8 +5989,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -322,7 +322,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -5951,8 +5959,7 @@
+@@ -6048,8 +6056,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -332,7 +332,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6022,8 +6029,7 @@
+@@ -6119,8 +6126,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -342,7 +342,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6092,8 +6098,7 @@
+@@ -6189,8 +6195,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -352,7 +352,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6167,8 +6172,7 @@
+@@ -6264,8 +6269,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -362,7 +362,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6323,8 +6327,7 @@
+@@ -6420,8 +6424,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -372,7 +372,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6475,8 +6478,7 @@
+@@ -6572,8 +6575,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -382,7 +382,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6631,8 +6633,7 @@
+@@ -6728,8 +6730,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -392,7 +392,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6788,8 +6789,7 @@
+@@ -6885,8 +6886,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -402,7 +402,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -6938,8 +6938,7 @@
+@@ -7035,8 +7035,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -412,7 +412,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7093,8 +7092,7 @@
+@@ -7190,8 +7189,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -422,7 +422,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7248,8 +7246,7 @@
+@@ -7345,8 +7343,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -432,7 +432,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7400,8 +7397,7 @@
+@@ -7497,8 +7494,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -442,7 +442,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7552,8 +7548,7 @@
+@@ -7648,8 +7644,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -452,7 +452,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7703,8 +7698,7 @@
+@@ -7799,8 +7794,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -462,7 +462,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7852,8 +7846,7 @@
+@@ -7952,8 +7946,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -472,7 +472,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -7921,8 +7914,7 @@
+@@ -8101,8 +8094,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -482,7 +482,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8075,8 +8067,7 @@
+@@ -8324,8 +8316,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -492,7 +492,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8222,8 +8213,7 @@
+@@ -8471,8 +8462,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -502,7 +502,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8382,8 +8372,7 @@
+@@ -8631,8 +8621,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -512,7 +512,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8545,8 +8534,7 @@
+@@ -8794,8 +8783,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -522,7 +522,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8612,8 +8600,7 @@
+@@ -8861,8 +8849,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -532,7 +532,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8767,8 +8754,7 @@
+@@ -9016,8 +9003,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -542,7 +542,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -8918,8 +8904,7 @@
+@@ -9167,8 +9153,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -552,7 +552,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9070,8 +9055,7 @@
+@@ -9318,8 +9303,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -562,7 +562,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9226,8 +9210,7 @@
+@@ -9474,8 +9458,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -572,7 +572,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9377,8 +9360,7 @@
+@@ -9625,8 +9608,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -582,7 +582,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9531,8 +9513,7 @@
+@@ -9777,8 +9759,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -592,7 +592,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9598,8 +9579,7 @@
+@@ -9931,8 +9912,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -602,7 +602,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9664,8 +9644,7 @@
+@@ -9998,8 +9978,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -612,7 +612,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9735,8 +9714,7 @@
+@@ -10064,8 +10043,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -622,7 +622,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9884,8 +9862,7 @@
+@@ -10284,8 +10262,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -632,7 +632,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9947,8 +9924,7 @@
+@@ -10347,8 +10324,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -642,7 +642,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -9988,8 +9964,7 @@
+@@ -10388,8 +10364,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -652,7 +652,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10045,8 +10020,7 @@
+@@ -10445,8 +10420,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -662,7 +662,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10086,8 +10060,7 @@
+@@ -10486,8 +10460,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -672,7 +672,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10151,8 +10124,7 @@
+@@ -10551,8 +10524,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -682,7 +682,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10183,10 +10155,8 @@
+@@ -10583,10 +10555,8 @@
  esac
  else
    if test "$cross_compiling" = yes; then
@@ -695,7 +695,7 @@ Index: samba-3.0.21c/source/configure
     { (exit 1); exit 1; }; }
  else
    cat >conftest.$ac_ext <<_ACEOF
-@@ -10298,8 +10268,7 @@
+@@ -10698,8 +10668,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -705,7 +705,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10361,8 +10330,7 @@
+@@ -10761,8 +10730,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -715,7 +715,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10402,8 +10370,7 @@
+@@ -10802,8 +10770,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -725,7 +725,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10459,8 +10426,7 @@
+@@ -10859,8 +10826,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -735,7 +735,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10500,8 +10466,7 @@
+@@ -10900,8 +10866,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -745,7 +745,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10565,8 +10530,7 @@
+@@ -10965,8 +10930,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -755,7 +755,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10597,10 +10561,8 @@
+@@ -10997,10 +10961,8 @@
  esac
  else
    if test "$cross_compiling" = yes; then
@@ -768,7 +768,7 @@ Index: samba-3.0.21c/source/configure
     { (exit 1); exit 1; }; }
  else
    cat >conftest.$ac_ext <<_ACEOF
-@@ -10712,8 +10674,7 @@
+@@ -11112,8 +11074,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -778,7 +778,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10775,8 +10736,7 @@
+@@ -11175,8 +11136,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -788,7 +788,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10816,8 +10776,7 @@
+@@ -11216,8 +11176,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -798,7 +798,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10873,8 +10832,7 @@
+@@ -11273,8 +11232,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -808,7 +808,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10914,8 +10872,7 @@
+@@ -11314,8 +11272,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -818,7 +818,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -10979,8 +10936,7 @@
+@@ -11379,8 +11336,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -828,7 +828,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11011,10 +10967,8 @@
+@@ -11411,10 +11367,8 @@
  esac
  else
    if test "$cross_compiling" = yes; then
@@ -841,7 +841,7 @@ Index: samba-3.0.21c/source/configure
     { (exit 1); exit 1; }; }
  else
    cat >conftest.$ac_ext <<_ACEOF
-@@ -11170,8 +11124,7 @@
+@@ -11589,8 +11543,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -851,7 +851,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11231,8 +11184,7 @@
+@@ -11630,8 +11583,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -861,7 +861,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11308,8 +11260,7 @@
+@@ -11687,8 +11639,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -871,7 +871,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11351,8 +11302,7 @@
+@@ -11728,8 +11679,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -881,7 +881,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11409,8 +11359,7 @@
+@@ -11793,8 +11743,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -891,7 +891,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11535,8 +11484,7 @@
+@@ -11984,8 +11933,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -901,7 +901,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11606,8 +11554,7 @@
+@@ -12045,8 +11993,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -911,7 +911,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11706,8 +11653,7 @@
+@@ -12165,8 +12112,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -921,7 +921,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11772,8 +11718,7 @@
+@@ -12223,8 +12169,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -931,7 +931,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11838,8 +11783,7 @@
+@@ -12349,8 +12294,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -941,7 +941,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11904,8 +11848,7 @@
+@@ -12420,8 +12364,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -951,7 +951,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -11970,8 +11913,7 @@
+@@ -12520,8 +12463,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -961,7 +961,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12014,8 +11956,7 @@
+@@ -12586,8 +12528,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -971,7 +971,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12086,8 +12027,7 @@
+@@ -12652,8 +12593,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -981,7 +981,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12150,8 +12090,7 @@
+@@ -12718,8 +12658,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -991,7 +991,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12216,8 +12155,7 @@
+@@ -12784,8 +12723,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1001,7 +1001,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12282,8 +12220,7 @@
+@@ -12828,8 +12766,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1011,7 +1011,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12348,8 +12285,7 @@
+@@ -12900,8 +12837,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1021,7 +1021,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12414,8 +12350,7 @@
+@@ -12964,8 +12900,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1031,7 +1031,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12575,8 +12510,7 @@
+@@ -13096,8 +13031,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1041,7 +1041,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12630,8 +12564,7 @@
+@@ -13162,8 +13096,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1051,7 +1051,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12708,8 +12641,7 @@
+@@ -13228,8 +13161,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1061,7 +1061,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12780,8 +12712,7 @@
+@@ -13389,8 +13321,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1071,7 +1071,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12853,8 +12784,7 @@
+@@ -13444,8 +13375,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1081,7 +1081,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12922,8 +12852,7 @@
+@@ -13522,8 +13452,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1091,7 +1091,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -12990,8 +12919,7 @@
+@@ -13594,8 +13523,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1101,7 +1101,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13071,8 +12999,7 @@
+@@ -13667,8 +13595,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1111,7 +1111,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13135,8 +13062,7 @@
+@@ -13736,8 +13663,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1121,7 +1121,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13198,8 +13124,7 @@
+@@ -13804,8 +13730,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1131,7 +1131,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13261,8 +13186,7 @@
+@@ -13885,8 +13810,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1141,7 +1141,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13324,8 +13248,7 @@
+@@ -13949,8 +13873,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1151,7 +1151,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13387,8 +13310,7 @@
+@@ -14012,8 +13935,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1161,7 +1161,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13450,8 +13372,7 @@
+@@ -14075,8 +13997,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1171,7 +1171,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13513,8 +13434,7 @@
+@@ -14138,8 +14059,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1181,7 +1181,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13787,8 +13707,7 @@
+@@ -14327,8 +14247,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1191,7 +1191,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -13937,8 +13856,7 @@
+@@ -14601,8 +14520,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1201,7 +1201,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14089,8 +14007,7 @@
+@@ -14751,8 +14669,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1211,7 +1211,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14241,8 +14158,7 @@
+@@ -14903,8 +14820,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1221,7 +1221,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14310,8 +14226,7 @@
+@@ -15055,8 +14971,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1231,7 +1231,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14406,8 +14321,7 @@
+@@ -15124,8 +15039,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1241,7 +1241,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14556,8 +14470,7 @@
+@@ -15220,8 +15134,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1251,7 +1251,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14708,8 +14621,7 @@
+@@ -15370,8 +15283,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1261,7 +1261,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14860,8 +14772,7 @@
+@@ -15522,8 +15434,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1271,7 +1271,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -14929,8 +14840,7 @@
+@@ -15674,8 +15585,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1281,7 +1281,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15027,8 +14937,7 @@
+@@ -15743,8 +15653,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1291,7 +1291,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15137,8 +15046,7 @@
+@@ -15841,8 +15750,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1301,7 +1301,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15212,8 +15120,7 @@
+@@ -15951,8 +15859,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1311,7 +1311,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15289,8 +15196,7 @@
+@@ -16026,8 +15933,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1321,7 +1321,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15366,8 +15272,7 @@
+@@ -16103,8 +16009,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1331,7 +1331,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15443,8 +15348,7 @@
+@@ -16180,8 +16085,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1341,7 +1341,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15531,8 +15435,7 @@
+@@ -16257,8 +16161,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1351,7 +1351,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15586,8 +15489,7 @@
+@@ -16345,8 +16248,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1361,7 +1361,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15688,8 +15590,7 @@
+@@ -16400,8 +16302,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1371,7 +1371,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15792,8 +15693,7 @@
+@@ -16502,8 +16403,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1381,7 +1381,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -15916,8 +15816,7 @@
+@@ -16606,8 +16506,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1391,7 +1391,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16027,8 +15926,7 @@
+@@ -16730,8 +16629,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1401,7 +1401,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16139,8 +16037,7 @@
+@@ -16841,8 +16739,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1411,7 +1411,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16249,8 +16146,7 @@
+@@ -16953,8 +16850,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1421,7 +1421,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16358,8 +16254,7 @@
+@@ -17063,8 +16959,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1431,7 +1431,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16470,8 +16365,7 @@
+@@ -17172,8 +17067,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1441,7 +1441,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16578,8 +16472,7 @@
+@@ -17284,8 +17178,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1451,7 +1451,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16686,8 +16579,7 @@
+@@ -17392,8 +17285,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1461,7 +1461,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16793,8 +16685,7 @@
+@@ -17500,8 +17392,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1471,7 +1471,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -16905,8 +16796,7 @@
+@@ -17607,8 +17498,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1481,7 +1481,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17009,8 +16899,7 @@
+@@ -17710,8 +17600,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1491,7 +1491,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17112,8 +17001,7 @@
+@@ -17822,8 +17711,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1501,7 +1501,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17214,8 +17102,7 @@
+@@ -17926,8 +17814,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1511,7 +1511,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17320,8 +17207,7 @@
+@@ -18029,8 +17916,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1521,7 +1521,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17387,8 +17273,7 @@
+@@ -18131,8 +18017,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1531,7 +1531,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17542,8 +17427,7 @@
+@@ -18307,8 +18192,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1541,7 +1541,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17648,8 +17532,7 @@
+@@ -18492,8 +18376,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1551,7 +1551,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17757,8 +17640,7 @@
+@@ -18564,8 +18447,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1561,7 +1561,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17865,8 +17747,7 @@
+@@ -18648,8 +18530,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1571,7 +1571,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -17968,8 +17849,7 @@
+@@ -18753,8 +18634,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1581,7 +1581,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18072,8 +17952,7 @@
+@@ -18862,8 +18742,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1591,7 +1591,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18179,8 +18058,7 @@
+@@ -18970,8 +18849,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1601,7 +1601,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18288,8 +18166,7 @@
+@@ -19073,8 +18951,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1611,7 +1611,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18395,8 +18272,7 @@
+@@ -19177,8 +19054,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1621,7 +1621,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18503,8 +18379,7 @@
+@@ -19284,8 +19160,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1631,7 +1631,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18609,8 +18484,7 @@
+@@ -19393,8 +19268,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1641,7 +1641,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18716,8 +18590,7 @@
+@@ -19500,8 +19374,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1651,7 +1651,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18824,8 +18697,7 @@
+@@ -19607,8 +19480,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1661,7 +1661,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -18931,8 +18803,7 @@
+@@ -19713,8 +19585,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1671,7 +1671,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19038,8 +18909,7 @@
+@@ -19820,8 +19691,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1681,7 +1681,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19143,8 +19013,7 @@
+@@ -19928,8 +19798,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1691,7 +1691,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19245,8 +19114,7 @@
+@@ -20035,8 +19904,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1701,7 +1701,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19307,8 +19175,7 @@
+@@ -20142,8 +20010,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1711,7 +1711,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19336,7 +19203,7 @@
+@@ -20440,7 +20307,7 @@
  #
  #
  case "$host_os" in
@@ -1720,7 +1720,7 @@ Index: samba-3.0.21c/source/configure
         # glibc <= 2.3.2 has a broken getgrouplist
         if test "$cross_compiling" = yes; then
    { { echo "$as_me:$LINENO: error: cannot run test program while cross compiling
-@@ -19469,8 +19336,7 @@
+@@ -20573,8 +20440,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1730,7 +1730,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19541,8 +19407,7 @@
+@@ -20645,8 +20511,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1740,7 +1740,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19605,8 +19470,7 @@
+@@ -20709,8 +20574,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1750,7 +1750,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19668,8 +19532,7 @@
+@@ -20772,8 +20636,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1760,7 +1760,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19765,8 +19628,7 @@
+@@ -20869,8 +20732,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1770,7 +1770,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19855,8 +19717,7 @@
+@@ -20971,8 +20833,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1780,7 +1780,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -19967,8 +19828,7 @@
+@@ -21061,8 +20922,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1790,7 +1790,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20068,8 +19928,7 @@
+@@ -21173,8 +21033,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1800,7 +1800,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20140,8 +19999,7 @@
+@@ -21274,8 +21133,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1810,7 +1810,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20244,8 +20102,7 @@
+@@ -21346,8 +21204,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1820,7 +1820,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20354,8 +20211,7 @@
+@@ -21450,8 +21307,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1830,7 +1830,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20455,8 +20311,7 @@
+@@ -21560,8 +21416,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1840,7 +1840,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20527,8 +20382,7 @@
+@@ -21661,8 +21516,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1850,7 +1850,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20631,8 +20485,7 @@
+@@ -21733,8 +21587,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1860,7 +1860,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20742,8 +20595,7 @@
+@@ -21837,8 +21690,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1870,7 +1870,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20843,8 +20695,7 @@
+@@ -21948,8 +21800,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1880,7 +1880,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -20915,8 +20766,7 @@
+@@ -22049,8 +21900,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1890,7 +1890,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21019,8 +20869,7 @@
+@@ -22121,8 +21971,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1900,7 +1900,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21129,8 +20978,7 @@
+@@ -22225,8 +22074,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1910,7 +1910,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21230,8 +21078,7 @@
+@@ -22335,8 +22183,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1920,7 +1920,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21302,8 +21149,7 @@
+@@ -22436,8 +22283,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1930,7 +1930,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21406,8 +21252,7 @@
+@@ -22508,8 +22354,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1940,7 +1940,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21518,8 +21363,7 @@
+@@ -22612,8 +22457,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1950,7 +1950,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21619,8 +21463,7 @@
+@@ -22724,8 +22568,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1960,7 +1960,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21691,8 +21534,7 @@
+@@ -22825,8 +22668,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1970,7 +1970,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21795,8 +21637,7 @@
+@@ -22897,8 +22739,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1980,7 +1980,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -21906,8 +21747,7 @@
+@@ -23001,8 +22842,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -1990,7 +1990,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22007,8 +21847,7 @@
+@@ -23112,8 +22952,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2000,7 +2000,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22079,8 +21918,7 @@
+@@ -23213,8 +23052,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2010,7 +2010,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22183,8 +22021,7 @@
+@@ -23285,8 +23123,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2020,7 +2020,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22293,8 +22130,7 @@
+@@ -23389,8 +23226,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2030,7 +2030,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22394,8 +22230,7 @@
+@@ -23499,8 +23335,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2040,7 +2040,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22466,8 +22301,7 @@
+@@ -23600,8 +23435,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2050,7 +2050,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22570,8 +22404,7 @@
+@@ -23672,8 +23506,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2060,7 +2060,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22681,8 +22514,7 @@
+@@ -23776,8 +23609,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2070,7 +2070,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22782,8 +22614,7 @@
+@@ -23887,8 +23719,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2080,7 +2080,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22854,8 +22685,7 @@
+@@ -23988,8 +23819,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2090,7 +2090,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -22958,8 +22788,7 @@
+@@ -24060,8 +23890,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2100,7 +2100,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23068,8 +22897,7 @@
+@@ -24164,8 +23993,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2110,7 +2110,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23169,8 +22997,7 @@
+@@ -24274,8 +24102,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2120,7 +2120,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23241,8 +23068,7 @@
+@@ -24375,8 +24202,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2130,7 +2130,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23345,8 +23171,7 @@
+@@ -24447,8 +24273,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2140,7 +2140,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23456,8 +23281,7 @@
+@@ -24551,8 +24376,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2150,7 +2150,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23557,8 +23381,7 @@
+@@ -24662,8 +24486,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2160,7 +2160,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23629,8 +23452,7 @@
+@@ -24763,8 +24586,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2170,7 +2170,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23733,8 +23555,7 @@
+@@ -24835,8 +24657,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2180,7 +2180,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23843,8 +23664,7 @@
+@@ -24939,8 +24760,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2190,7 +2190,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -23944,8 +23764,7 @@
+@@ -25049,8 +24869,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2200,7 +2200,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24016,8 +23835,7 @@
+@@ -25150,8 +24969,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2210,7 +2210,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24120,8 +23938,7 @@
+@@ -25222,8 +25040,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2220,7 +2220,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24203,8 +24020,7 @@
+@@ -25326,8 +25143,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2230,7 +2230,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24258,8 +24074,7 @@
+@@ -25436,8 +25252,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2240,7 +2240,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24363,8 +24178,7 @@
+@@ -25567,8 +25382,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2250,7 +2250,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24468,8 +24282,7 @@
+@@ -25672,8 +25486,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2260,7 +2260,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24570,8 +24383,7 @@
+@@ -25777,8 +25590,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2270,7 +2270,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24643,8 +24455,7 @@
+@@ -25879,8 +25691,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2280,7 +2280,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24698,8 +24509,7 @@
+@@ -25952,8 +25763,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2290,7 +2290,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24804,8 +24614,7 @@
+@@ -26007,8 +25817,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2300,7 +2300,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -24909,8 +24718,7 @@
+@@ -26113,8 +25922,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2310,7 +2310,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25013,8 +24821,7 @@
+@@ -26220,8 +26028,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2320,7 +2320,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25118,8 +24925,7 @@
+@@ -26327,8 +26134,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2330,7 +2330,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25223,8 +25029,7 @@
+@@ -26432,8 +26238,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2340,7 +2340,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25340,8 +25145,7 @@
+@@ -26536,8 +26341,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2350,7 +2350,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25444,8 +25248,7 @@
+@@ -26641,8 +26445,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2360,7 +2360,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25548,8 +25351,7 @@
+@@ -26746,8 +26549,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2370,7 +2370,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25652,8 +25454,7 @@
+@@ -26863,8 +26665,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2380,7 +2380,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -25711,11 +25512,14 @@
+@@ -27234,11 +27035,14 @@
  
    # and these are for particular systems
    case "$host_os" in
@@ -2397,7 +2397,7 @@ Index: samba-3.0.21c/source/configure
  			BLDSHARED="true"
  			if test "${ac_cv_gnu_ld_no_default_allow_shlib_undefined}" = "yes"; then
  				LDSHFLAGS="-shared -Wl,-Bsymbolic -Wl,--allow-shlib-undefined"
-@@ -26210,8 +26014,7 @@
+@@ -27735,8 +27539,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2407,7 +2407,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -26610,8 +26413,7 @@
+@@ -28135,8 +27938,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2417,7 +2417,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -26677,8 +26479,7 @@
+@@ -28202,8 +28004,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2427,7 +2427,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -26957,8 +26758,7 @@
+@@ -28482,8 +28283,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2437,7 +2437,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27021,8 +26821,7 @@
+@@ -28546,8 +28346,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2447,7 +2447,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27083,8 +26882,7 @@
+@@ -28608,8 +28407,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2457,7 +2457,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27199,8 +26997,7 @@
+@@ -28724,8 +28522,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2467,7 +2467,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27262,8 +27059,7 @@
+@@ -28787,8 +28584,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2477,7 +2477,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27454,8 +27250,7 @@
+@@ -28979,8 +28775,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2487,7 +2487,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27563,8 +27358,7 @@
+@@ -29088,8 +28883,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2497,7 +2497,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27628,8 +27422,7 @@
+@@ -29153,8 +28947,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2507,7 +2507,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27691,8 +27484,7 @@
+@@ -29216,8 +29009,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2517,7 +2517,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27754,8 +27546,7 @@
+@@ -29279,8 +29071,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2527,7 +2527,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27817,8 +27608,7 @@
+@@ -29342,8 +29133,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2537,7 +2537,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27880,8 +27670,7 @@
+@@ -29405,8 +29195,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2547,7 +2547,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -27943,8 +27732,7 @@
+@@ -29468,8 +29257,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2557,7 +2557,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28006,8 +27794,7 @@
+@@ -29531,8 +29319,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2567,7 +2567,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28069,8 +27856,7 @@
+@@ -29594,8 +29381,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2577,7 +2577,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28132,8 +27918,7 @@
+@@ -29657,8 +29443,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2587,7 +2587,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28195,8 +27980,7 @@
+@@ -29720,8 +29505,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2597,7 +2597,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28259,8 +28043,7 @@
+@@ -29784,8 +29568,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2607,7 +2607,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28323,8 +28106,7 @@
+@@ -29848,8 +29631,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2617,7 +2617,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28428,8 +28210,7 @@
+@@ -29953,8 +29735,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2627,7 +2627,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28481,8 +28262,7 @@
+@@ -30006,8 +29787,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2637,7 +2637,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28535,8 +28315,7 @@
+@@ -30060,8 +29840,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2647,7 +2647,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -28593,8 +28372,7 @@
+@@ -30118,8 +29897,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2657,7 +2657,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29166,8 +28944,7 @@
+@@ -30634,8 +30412,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2667,7 +2667,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29297,8 +29074,7 @@
+@@ -30793,8 +30570,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2677,7 +2677,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29362,8 +29138,7 @@
+@@ -30873,8 +30649,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2687,7 +2687,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29427,8 +29202,7 @@
+@@ -30952,8 +30727,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2697,7 +2697,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29492,8 +29266,7 @@
+@@ -31019,8 +30793,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2707,7 +2707,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29562,8 +29335,7 @@
+@@ -31098,8 +30871,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2717,7 +2717,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -29824,8 +29596,7 @@
+@@ -31377,8 +31149,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2727,7 +2727,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -30791,8 +30562,7 @@
+@@ -32257,8 +32028,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2737,7 +2737,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -30855,8 +30625,7 @@
+@@ -32519,8 +32289,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2747,7 +2747,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -30926,8 +30695,7 @@
+@@ -33588,8 +33357,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2757,7 +2757,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -30995,8 +30763,7 @@
+@@ -33652,8 +33420,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2767,7 +2767,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -31245,8 +31012,7 @@
+@@ -33792,8 +33559,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2777,7 +2777,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -31516,8 +31282,7 @@
+@@ -34042,8 +33808,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2787,7 +2787,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -31698,8 +31463,7 @@
+@@ -34313,8 +34078,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2797,7 +2797,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -31799,8 +31563,7 @@
+@@ -34495,8 +34259,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2807,7 +2807,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -31926,8 +31689,7 @@
+@@ -34596,8 +34359,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2817,7 +2817,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -31993,8 +31755,7 @@
+@@ -34723,8 +34485,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2827,7 +2827,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -32165,8 +31926,7 @@
+@@ -34893,8 +34654,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2837,7 +2837,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -32280,8 +32040,7 @@
+@@ -35071,8 +34831,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2847,7 +2847,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -32395,8 +32154,7 @@
+@@ -35187,8 +34946,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2857,7 +2857,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -32633,8 +32391,7 @@
+@@ -35544,8 +35302,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2867,7 +2867,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -32818,8 +32575,7 @@
+@@ -35729,8 +35486,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2877,7 +2877,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -32982,8 +32738,7 @@
+@@ -35893,8 +35649,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2887,7 +2887,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33080,8 +32835,7 @@
+@@ -35991,8 +35746,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2897,7 +2897,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33180,8 +32934,7 @@
+@@ -36091,8 +35845,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2907,7 +2907,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33278,8 +33031,7 @@
+@@ -36189,8 +35942,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2917,7 +2917,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33376,8 +33128,7 @@
+@@ -36287,8 +36039,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2927,7 +2927,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33476,8 +33227,7 @@
+@@ -36387,8 +36138,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2937,7 +2937,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33582,8 +33332,7 @@
+@@ -36493,8 +36243,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2947,7 +2947,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33680,8 +33429,7 @@
+@@ -36591,8 +36340,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2957,7 +2957,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33781,8 +33529,7 @@
+@@ -36692,8 +36440,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2967,7 +2967,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -33909,8 +33656,7 @@
+@@ -36820,8 +36567,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2977,7 +2977,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34012,8 +33758,7 @@
+@@ -36923,8 +36669,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2987,7 +2987,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34115,8 +33860,7 @@
+@@ -37026,8 +36771,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -2997,7 +2997,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34218,8 +33962,7 @@
+@@ -37129,8 +36873,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3007,7 +3007,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34321,8 +34064,7 @@
+@@ -37232,8 +36975,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3017,7 +3017,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34424,8 +34166,7 @@
+@@ -37335,8 +37077,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3027,7 +3027,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34527,8 +34268,7 @@
+@@ -37438,8 +37179,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3037,7 +3037,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34630,8 +34370,7 @@
+@@ -37541,8 +37281,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3047,7 +3047,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34733,8 +34472,7 @@
+@@ -37644,8 +37383,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3057,7 +3057,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34836,8 +34574,7 @@
+@@ -37747,8 +37485,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3067,7 +3067,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -34939,8 +34676,7 @@
+@@ -37850,8 +37587,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3077,7 +3077,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35042,8 +34778,7 @@
+@@ -37953,8 +37689,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3087,7 +3087,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35145,8 +34880,7 @@
+@@ -38056,8 +37791,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3097,7 +3097,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35248,8 +34982,7 @@
+@@ -38159,8 +37893,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3107,7 +3107,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35351,8 +35084,7 @@
+@@ -38262,8 +37995,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3117,7 +3117,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35454,8 +35186,7 @@
+@@ -38365,8 +38097,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3127,7 +3127,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35557,8 +35288,7 @@
+@@ -38468,8 +38199,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3137,7 +3137,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35660,8 +35390,7 @@
+@@ -38571,8 +38301,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3147,7 +3147,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35763,8 +35492,7 @@
+@@ -38674,8 +38403,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3157,7 +3157,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35866,8 +35594,7 @@
+@@ -38777,8 +38505,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3167,7 +3167,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -35969,8 +35696,7 @@
+@@ -38880,8 +38607,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3177,7 +3177,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36072,8 +35798,7 @@
+@@ -38983,8 +38709,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3187,7 +3187,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36175,8 +35900,7 @@
+@@ -39086,8 +38811,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3197,7 +3197,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36278,8 +36002,7 @@
+@@ -39189,8 +38913,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3207,7 +3207,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36381,8 +36104,7 @@
+@@ -39292,8 +39015,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3217,7 +3217,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36484,8 +36206,7 @@
+@@ -39395,8 +39117,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3227,7 +3227,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36587,8 +36308,7 @@
+@@ -39498,8 +39219,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3237,7 +3237,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36690,8 +36410,7 @@
+@@ -39601,8 +39321,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3247,7 +3247,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36793,8 +36512,7 @@
+@@ -39704,8 +39423,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3257,7 +3257,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36896,8 +36614,7 @@
+@@ -39807,8 +39525,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3267,7 +3267,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -36999,8 +36716,7 @@
+@@ -39910,8 +39627,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3277,7 +3277,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37102,8 +36818,7 @@
+@@ -40013,8 +39729,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3287,7 +3287,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37169,8 +36884,7 @@
+@@ -40116,8 +39831,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3297,7 +3297,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37230,8 +36944,7 @@
+@@ -40219,8 +39933,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3307,7 +3307,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37293,8 +37006,7 @@
+@@ -40322,8 +40035,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3317,7 +3317,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37356,8 +37068,7 @@
+@@ -40389,8 +40101,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3327,7 +3327,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37419,8 +37130,7 @@
+@@ -40450,8 +40161,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3337,7 +3337,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37482,8 +37192,7 @@
+@@ -40513,8 +40223,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3347,7 +3347,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37545,8 +37254,7 @@
+@@ -40576,8 +40285,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3357,7 +3357,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37608,8 +37316,7 @@
+@@ -40639,8 +40347,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3367,7 +3367,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37670,8 +37377,7 @@
+@@ -40702,8 +40409,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3377,7 +3377,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37733,8 +37439,7 @@
+@@ -40765,8 +40471,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3387,7 +3387,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37796,8 +37501,7 @@
+@@ -40828,8 +40533,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3397,7 +3397,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37859,8 +37563,7 @@
+@@ -40890,8 +40594,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3407,7 +3407,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37922,8 +37625,7 @@
+@@ -40953,8 +40656,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3417,7 +3417,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -37976,8 +37678,7 @@
+@@ -41016,8 +40718,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3427,7 +3427,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38041,8 +37742,7 @@
+@@ -41079,8 +40780,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3437,7 +3437,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38104,8 +37804,7 @@
+@@ -41142,8 +40842,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3447,7 +3447,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38167,8 +37866,7 @@
+@@ -41196,8 +40895,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3457,7 +3457,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38230,8 +37928,7 @@
+@@ -41261,8 +40959,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3467,7 +3467,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38293,8 +37990,7 @@
+@@ -41324,8 +41021,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3477,7 +3477,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38357,8 +38053,7 @@
+@@ -41387,8 +41083,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3487,7 +3487,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38420,8 +38115,7 @@
+@@ -41450,8 +41145,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3497,7 +3497,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38578,8 +38272,7 @@
+@@ -41577,8 +41271,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3507,7 +3507,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -38892,8 +38585,7 @@
+@@ -41879,8 +41572,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3517,436 +3517,16 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -39295,8 +38987,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -39414,8 +39105,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -39469,8 +39159,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -39877,8 +39566,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40035,8 +39723,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40187,8 +39874,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40345,8 +40031,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40412,8 +40097,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40719,8 +40403,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40908,8 +40591,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -40978,8 +40660,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -41165,8 +40846,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -41254,8 +40934,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -41344,8 +41023,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -41418,8 +41096,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -41788,8 +41465,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42191,8 +41867,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42392,8 +42067,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42460,8 +42134,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42523,8 +42196,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42590,8 +42262,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42664,8 +42335,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42727,8 +42397,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42794,8 +42463,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42906,8 +42574,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -42974,8 +42641,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43037,8 +42703,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43096,8 +42761,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43159,8 +42823,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43203,8 +42866,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43247,8 +42909,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43291,8 +42952,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43335,8 +42995,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43379,8 +43038,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43423,8 +43081,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43469,8 +43126,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43513,8 +43169,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43557,8 +43212,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43601,8 +43255,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43645,8 +43298,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43689,8 +43341,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43733,8 +43384,7 @@
-   cat conftest.err >&5
-   echo "$as_me:$LINENO: \$? = $ac_status" >&5
-   (exit $ac_status); } &&
--	 { ac_try='test -z "$ac_c_werror_flag"
--			 || test ! -s conftest.err'
-+	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
-   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
-   (eval $ac_try) 2>&5
-   ac_status=$?
-@@ -43803,7 +43453,7 @@
- echo "${ECHO_T}yes" >&6;
- 
+@@ -41973,7 +41665,7 @@
+    case "$withval" in
+   yes)
  	case "$host_os" in
 -	*linux*)
-+	linux*-gnu* | gnu* | k*bsd*-gnu)
- 		echo "$as_me:$LINENO: checking for linux sendfile64 support" >&5
- echo $ECHO_N "checking for linux sendfile64 support... $ECHO_C" >&6
- if test "${samba_cv_HAVE_SENDFILE64+set}" = set; then
-@@ -43839,8 +43489,7 @@
++ 	linux*-gnu* | gnu* | k*bsd*-gnu)
+ 		echo "$as_me:$LINENO: result: yes" >&5
+ echo "${ECHO_T}yes" >&6
+ 
+@@ -42266,8 +41958,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3956,7 +3536,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -43900,8 +43549,7 @@
+@@ -42321,8 +42012,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3966,7 +3546,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -43966,8 +43614,7 @@
+@@ -42729,8 +42419,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3976,7 +3556,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44088,8 +43735,7 @@
+@@ -43197,8 +42886,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3986,7 +3566,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44180,8 +43826,7 @@
+@@ -43264,8 +42952,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -3996,7 +3576,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44269,8 +43914,7 @@
+@@ -43571,8 +43258,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4006,7 +3586,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44356,8 +44000,7 @@
+@@ -43760,8 +43446,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4016,7 +3596,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44441,8 +44084,7 @@
+@@ -43830,8 +43515,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4026,7 +3606,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44538,8 +44180,7 @@
+@@ -44106,8 +43790,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4036,7 +3616,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44633,8 +44274,7 @@
+@@ -44270,8 +43953,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4046,20 +3626,230 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44714,10 +44354,10 @@
+@@ -44650,8 +44332,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -45053,8 +44734,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -45254,8 +44934,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -45322,8 +45001,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -45385,8 +45063,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -45768,8 +45445,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46153,8 +45829,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46375,8 +46050,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46463,8 +46137,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46507,8 +46180,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46595,8 +46267,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46701,8 +46372,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46762,8 +46432,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46828,8 +46497,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -46950,8 +46618,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47042,8 +46709,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47131,8 +46797,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47218,8 +46883,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47303,8 +46967,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47400,8 +47063,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47495,8 +47157,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -47576,10 +47237,10 @@
  WINBIND_NSS_LDSHFLAGS=$LDSHFLAGS
  
  case "$host_os" in
 -	*linux*)
-+	linux*-gnu* | gnu* | k*bsd*-gnu)
++ 	linux*-gnu* | gnu* | k*bsd*-gnu)
  		WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_linux.o"
  		;;
 -	*freebsd[5-9]*)
-+	freebsd5*|*freebsd[6-9]*)
++ 	freebsd5*|*freebsd[6-9]*)
  		# FreeBSD winbind client is implemented as a wrapper around
  		# the Linux version.
  		WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_freebsd.o \
-@@ -44846,8 +44486,7 @@
+@@ -47710,8 +47371,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4069,7 +3859,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44891,8 +44530,7 @@
+@@ -47755,8 +47415,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4079,7 +3869,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -44961,8 +44599,7 @@
+@@ -47825,8 +47484,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4089,7 +3879,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45006,8 +44643,7 @@
+@@ -47870,8 +47528,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4099,7 +3889,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45073,8 +44709,7 @@
+@@ -47937,8 +47594,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4109,7 +3899,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45118,8 +44753,7 @@
+@@ -47982,8 +47638,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4119,7 +3909,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45187,8 +44821,7 @@
+@@ -48051,8 +47706,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4129,7 +3919,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45232,8 +44865,7 @@
+@@ -48096,8 +47750,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4139,7 +3929,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45299,8 +44931,7 @@
+@@ -48163,8 +47816,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4149,7 +3939,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45344,8 +44975,7 @@
+@@ -48208,8 +47860,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4159,7 +3949,7 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -45437,8 +45067,7 @@
+@@ -48301,8 +47952,7 @@
    cat conftest.err >&5
    echo "$as_me:$LINENO: \$? = $ac_status" >&5
    (exit $ac_status); } &&
@@ -4169,17 +3959,27 @@ Index: samba-3.0.21c/source/configure
    { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
    (eval $ac_try) 2>&5
    ac_status=$?
-@@ -48142,6 +47771,9 @@
+@@ -48409,8 +48059,7 @@
+   cat conftest.err >&5
+   echo "$as_me:$LINENO: \$? = $ac_status" >&5
+   (exit $ac_status); } &&
+-	 { ac_try='test -z "$ac_c_werror_flag"
+-			 || test ! -s conftest.err'
++	 { ac_try='test -z "$ac_c_werror_flag"			 || test ! -s conftest.err'
+   { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+   (eval $ac_try) 2>&5
+   ac_status=$?
+@@ -50971,6 +50620,9 @@
  s,@logfilebase@,$logfilebase,;t t
  s,@privatedir@,$privatedir,;t t
  s,@swatdir@,$swatdir,;t t
 +s,@codepagedir@,$codepagedir,;t t
 +s,@statedir@,$statedir,;t t
 +s,@cachedir@,$cachedir,;t t
+ s,@rootsbindir@,$rootsbindir,;t t
+ s,@pammodulesdir@,$pammodulesdir,;t t
  s,@LDSHFLAGS@,$LDSHFLAGS,;t t
- s,@SONAMEFLAG@,$SONAMEFLAG,;t t
- s,@SONAMEVERSIONSUFFIX@,$SONAMEVERSIONSUFFIX,;t t
-@@ -48416,11 +48048,6 @@
+@@ -51254,11 +50906,6 @@
    *) ac_INSTALL=$ac_top_builddir$INSTALL ;;
    esac
  
@@ -4191,7 +3991,7 @@ Index: samba-3.0.21c/source/configure
    # Let's still pretend it is `configure' which instantiates (i.e., don't
    # use $as_me), people would be surprised to read:
    #    /* config.h.  Generated by config.status.  */
-@@ -48459,6 +48086,12 @@
+@@ -51297,6 +50944,12 @@
  	 fi;;
        esac
      done` || { (exit 1); exit 1; }
@@ -4204,10 +4004,10 @@ Index: samba-3.0.21c/source/configure
  _ACEOF
  cat >>$CONFIG_STATUS <<_ACEOF
    sed "$ac_vpsub
-Index: samba-3.0.21c/source/include/config.h.in
+Index: samba-3.0.23pre1/source/include/config.h.in
 ===================================================================
---- samba-3.0.21c.orig/source/include/config.h.in	2006-02-25 11:57:09.380805562 +0100
-+++ samba-3.0.21c/source/include/config.h.in	2006-02-25 11:58:34.265678429 +0100
+--- samba-3.0.23pre1.orig/source/include/config.h.in	2006-04-23 00:12:25.000000000 +0200
++++ samba-3.0.23pre1/source/include/config.h.in	2006-04-25 10:44:10.779326664 +0200
 @@ -48,6 +48,9 @@
  /* Define to turn on dmalloc debugging */
  #undef ENABLE_DMALLOC
