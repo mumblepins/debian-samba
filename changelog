@@ -13,6 +13,8 @@ samba (3.0.23pre1-1) UNRELEASED; urgency=low
       Closes: #337070
     - Make smbclient -L use RPC to list shares, fall back to RAP.
       Closes: #168732
+  * Add dependency on procps for samba, as ps is used in init scripts.
+    Thanks to Bastian Blank for reporting. Closes: #365618
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
 
