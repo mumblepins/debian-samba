@@ -17,6 +17,8 @@ samba (3.0.23pre1-1) UNRELEASED; urgency=low
       Closes: #367472
   * Add dependency on procps for samba, as ps is used in init scripts.
     Thanks to Bastian Blank for reporting. Closes: #365618
+  * py_tdb-3.0.23pre1_fix.patch added to allow compiling 3.0.23pre1
+    (unneeded for 3.0.23final)
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
 
