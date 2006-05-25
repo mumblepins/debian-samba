@@ -1,10 +1,10 @@
-Index: samba-3.0.21c/source/script/installswat.sh
+Index: samba-3.0.23rc1/source/script/installswat.sh
 ===================================================================
---- samba-3.0.21c.orig/source/script/installswat.sh	2006-02-25 11:57:11.178442873 +0100
-+++ samba-3.0.21c/source/script/installswat.sh	2006-02-25 11:58:18.019956453 +0100
-@@ -114,7 +114,11 @@
+--- samba-3.0.23rc1.orig/source/script/installswat.sh	2006-05-25 19:35:03.288683208 +0200
++++ samba-3.0.23rc1/source/script/installswat.sh	2006-05-25 19:38:11.563061152 +0200
+@@ -194,7 +194,11 @@
  
- # Install Using Samba book (but only if it is there)
+ # Install/ remove Using Samba book (but only if it is there)
  
 -if [ "x$BOOKDIR" != "x" -a -f $SRCDIR../docs/htmldocs/using_samba/toc.html ]; then
 +# Under Debian we don't actually install the book. The book is part of

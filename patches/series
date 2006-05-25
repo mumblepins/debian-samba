@@ -18,4 +18,3 @@ undefined-symbols.patch
 VERSION.patch
 adapt_machine_creation_script.patch
 autoconf.patch
-py_tdb-3.0.23pre1_fix.patch

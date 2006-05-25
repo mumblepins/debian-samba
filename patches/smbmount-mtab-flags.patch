@@ -1,7 +1,7 @@
-Index: samba-3.0.21c/source/client/smbmnt.c
+Index: samba-3.0.23rc1/source/client/smbmnt.c
 ===================================================================
---- samba-3.0.21c.orig/source/client/smbmnt.c	2006-02-25 11:57:10.224635312 +0100
-+++ samba-3.0.21c/source/client/smbmnt.c	2006-02-25 11:58:25.369473493 +0100
+--- samba-3.0.23rc1.orig/source/client/smbmnt.c	2006-05-25 19:34:58.320438496 +0200
++++ samba-3.0.23rc1/source/client/smbmnt.c	2006-05-25 19:38:39.046882976 +0200
 @@ -276,7 +276,10 @@
          ment.mnt_fsname = share_name ? share_name : "none";
          ment.mnt_dir = mount_point;

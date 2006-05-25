@@ -1,7 +1,7 @@
-Index: samba-3.0.21c/source/client/smbmount.c
+Index: samba-3.0.23rc1/source/client/smbmount.c
 ===================================================================
---- samba-3.0.21c.orig/source/client/smbmount.c	2006-02-25 11:58:26.184309077 +0100
-+++ samba-3.0.21c/source/client/smbmount.c	2006-02-25 11:58:26.999144662 +0100
+--- samba-3.0.23rc1.orig/source/client/smbmount.c	2006-05-25 19:38:42.318385632 +0200
++++ samba-3.0.23rc1/source/client/smbmount.c	2006-05-25 19:38:45.914838888 +0200
 @@ -211,6 +211,10 @@
    		c->capabilities &= ~CAP_STATUS32;
  		c->force_dos_errors = True;

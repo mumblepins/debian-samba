@@ -1,8 +1,8 @@
-Index: samba-3.0.21c/source/Makefile.in
+Index: samba-3.0.23rc1/source/Makefile.in
 ===================================================================
---- samba-3.0.21c.orig/source/Makefile.in	2006-02-25 11:58:15.760412374 +0100
-+++ samba-3.0.21c/source/Makefile.in	2006-02-25 11:58:18.819795065 +0100
-@@ -1491,6 +1491,7 @@
+--- samba-3.0.23rc1.orig/source/Makefile.in	2006-05-25 19:38:04.053202824 +0200
++++ samba-3.0.23rc1/source/Makefile.in	2006-05-25 19:38:14.511612904 +0200
+@@ -1520,6 +1520,7 @@
  
  python_clean:
  	@-if test -n "$(PYTHON)"; then $(PYTHON) python/setup.py clean; fi
@@ -10,15 +10,15 @@ Index: samba-3.0.21c/source/Makefile.in
  
  # revert to the previously installed version
  revert:
-@@ -1559,6 +1560,7 @@
- 	@rm -f include/proto.h include/build_env.h  include/wrepld_proto.h \
+@@ -1620,6 +1621,7 @@
+ 	@rm -f include/proto.h include/build_env.h  \
  		nsswitch/winbindd_proto.h web/swat_proto.h \
  		client/client_proto.h utils/net_proto.h \
 +	        utils/ntlm_auth_proto.h \
  		smbd/build_options.c
  
  MKPROTO_SH = $(srcdir)/script/mkproto.sh
-@@ -1641,6 +1643,7 @@
+@@ -1696,6 +1698,7 @@
  
  distclean: realclean
  	-rm -f include/stamp-h
