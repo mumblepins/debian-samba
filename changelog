@@ -1,4 +1,4 @@
-samba (3.0.23pre1-1) UNRELEASED; urgency=low
+samba (3.0.23rc1-1) UNRELEASED; urgency=low
 
   [ Adam Conrad ]
   * Fix typo in smb.conf that causes all samba apps to whine.
@@ -17,8 +17,6 @@ samba (3.0.23pre1-1) UNRELEASED; urgency=low
       Closes: #367472
   * Add dependency on procps for samba, as ps is used in init scripts.
     Thanks to Bastian Blank for reporting. Closes: #365618
-  * py_tdb-3.0.23pre1_fix.patch added to allow compiling 3.0.23pre1
-    (unneeded for 3.0.23final)
   * Add (U)MOUNT_CIFS_VENDOR_SUFFIX to VERSION.patch
 
   [ Peter Eisentraut ]
