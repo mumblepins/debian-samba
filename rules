@@ -1,13 +1,4 @@
 #!/usr/bin/make -f
-# 
-# Important modifications (introduction of a saved config.cache to
-#	solve build problems) introduced in Samba 2.2.1a-5. These
-#	modification were made by Steve Langasek <vorlon@netexpress.net>.
-#
-#
-
-# Uncomment this to turn on verbose mode. 
-#export DH_VERBOSE=1
 
 # This has to be exported to make some magic below work.
 export DH_OPTIONS
@@ -30,7 +21,7 @@ else
   CFLAGS += -O2
 endif
 
-	include /usr/share/quilt/quilt.make
+include /usr/share/quilt/quilt.make
 
 DESTDIR=`pwd`/debian/tmp
 
@@ -138,7 +129,6 @@ install: build
 	         $(DESTDIR)/etc/pam.d $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d \
 	         $(DESTDIR)/usr/lib/python2.3/site-packages/samba
 
-	# Add here commands to install the package into debian/tmp.
 	$(MAKE) -C source install DESTDIR=$(DESTDIR)
 
 	# libsmbclient files are not installed by the standard
@@ -228,20 +218,11 @@ binary-indep: build install
 	# Ignore COPYING. Otherwise, an extra copy of the GPL licence 
 	# in smbldap-tools example is included in samba-doc
 	dh_installexamples -Xsmbldap-tools-*
-#	dh_installmenu
-#	dh_installemacsen
-#	dh_installpam
-#	dh_installinit
-#	dh_installcron
-#	dh_installmanpages
-#	dh_installinfo
-#	dh_undocumented
 	dh_installchangelogs
 	dh_link
 	dh_compress
 	dh_fixperms
 	dh_installdeb
-#	dh_perl
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb
@@ -259,19 +240,13 @@ binary-arch: build install
 	dh_installdebconf
 	dh_installdocs -A debian/README.build
 	dh_installexamples
-#	dh_installmenu
 	dh_installlogrotate
-#	dh_installemacsen
-#	dh_installpam
 	DH_OPTIONS= dh_installinit -psamba -- "defaults 20 19"
 	DH_OPTIONS= dh_installinit -pwinbind
 	dh_installcron 
-#	dh_installmanpages
-#	dh_installinfo
 	for pkg in python2.3-samba samba smbfs winbind; do \
 	  install -m 0644 -D debian/$$pkg.lintian debian/$$pkg/usr/share/lintian/overrides/$$pkg || exit; \
 	done
-#	dh_undocumented
 	dh_installchangelogs -Nlibpam-smbpass
 	DH_OPTIONS= dh_installchangelogs -plibpam-smbpass source/pam_smbpass/CHANGELOG
 	dh_strip --dbg-package=samba --dbg-package=smbclient
@@ -285,12 +260,11 @@ binary-arch: build install
 	# it becomes executable
 	chmod a-x debian/libsmbclient-dev/usr/include/libsmbclient.h
 
-	# You may want to make some executables suid here.
 ifeq ($(smbfs),yes)
 	# The smbmnt and smbumount binaries should be setuid-root. This
-	#	has security implications because these programs haven't had
-	#	a thorough security audit. smbmount _does not_ have to have
-	#	the setuid bit set. In fact, it is a security hole.
+	# has security implications because these programs haven't had
+	# a thorough security audit. smbmount _does not_ have to have
+	# the setuid bit set. In fact, it is a security hole.
 	chmod u+s debian/smbfs/usr/bin/smbmnt
 	chmod ug+s debian/smbfs/usr/bin/smbumount
 endif
@@ -304,8 +278,6 @@ endif
 	chown root.adm debian/samba/var/log/samba/
 
 	dh_installdeb
-#	dh_makeshlibs
-#	dh_perl
 	dh_shlibdeps
 	dh_gencontrol
 	dh_md5sums
