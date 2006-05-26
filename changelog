@@ -21,6 +21,7 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
 
   [ Peter Eisentraut ]
   * Use debian/compat instead of DH_COMPAT
+  * Updated Standards-Version to 3.7.2 (no changes needed)
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
 
