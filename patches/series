@@ -3,6 +3,7 @@ documentation.patch
 fhs.patch
 installswat.sh.patch
 make-distclean.patch
+mount-cifs-include.patch
 nmbd-signalling.patch
 non-linux-ports.patch
 nonpic-libsmbclient.patch

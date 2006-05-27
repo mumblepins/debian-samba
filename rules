@@ -37,6 +37,8 @@ conf_args = \
 		--with-privatedir=/etc/samba \
 		--with-piddir=/var/run/samba \
 		--localstatedir=/var \
+		--with-rootsbindir=/sbin \
+		--with-pammodulesdir=/lib/security \
 		--with-netatalk \
 		--with-pam \
 		--with-syslog \
@@ -89,9 +91,6 @@ build-stamp:
 
 	$(MAKE) -C source headers
 	$(MAKE) -C source all nsswitch/libnss_wins.so python_ext
-ifeq ($(mount_cifs),yes)
-	$(MAKE) -C source client/mount.cifs client/umount.cifs
-endif
 
 	touch build-stamp
 
@@ -106,10 +105,7 @@ clean-patched:
 	-$(MAKE) -C source distclean
 
 	# Delete stuff left after a build that is not deleted by 'make clean'
-	rm -f source/bin/wbinfo source/bin/winbindd source/bin/debug2html \
-		source/bin/libsmbclient.a \
-		source/client/mount.cifs source/client/umount.cifs \
-		source/include/stamp-h
+	rm -f source/utils/passwd_proto.h source/iniparser/src/*.po
 
 	sed -e "s/@libacl@/`type-handling any linux-gnu`/g" \
 		< debian/control.in > debian/control
@@ -123,17 +119,12 @@ install: build
 	dh_clean -k
 	dh_installdirs
 
-	mkdir -p $(DESTDIR)/usr/share/man $(DESTDIR)/usr/lib/samba \
-	         $(DESTDIR)/lib/security $(DESTDIR)/sbin \
-	         $(DESTDIR)/usr/lib/cups/backend $(DESTDIR)/usr/share/samba \
+	mkdir -p $(DESTDIR)/usr/lib/cups/backend $(DESTDIR)/usr/share/samba \
 	         $(DESTDIR)/etc/pam.d $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d \
 	         $(DESTDIR)/usr/lib/python2.3/site-packages/samba
 
 	$(MAKE) -C source install DESTDIR=$(DESTDIR)
 
-	# libsmbclient files are not installed by the standard
-	#	'make install' - do it manually.
-	$(MAKE) -C source installclientlib DESTDIR=$(DESTDIR)
 	mv $(DESTDIR)/usr/lib/samba/libsmbclient.so $(DESTDIR)/usr/lib/samba/libsmbclient.so.0.1
 	ln -s libsmbclient.so.0.1 $(DESTDIR)/usr/lib/samba/libsmbclient.so.0
 	ln -s libsmbclient.so.0.1 $(DESTDIR)/usr/lib/samba/libsmbclient.so
@@ -141,27 +132,13 @@ install: build
 	# Starting with Samba 3.0.6 libsmbclient.so is installed in
 	# /usr/lib/samba. We don't want it there since it is not in the
 	# default library path. Here we move it to /usr/lib/.
-	mv $(DESTDIR)/usr/lib/samba/libsmbclient* \
-		$(DESTDIR)/usr/lib/
+	mv $(DESTDIR)/usr/lib/samba/libsmbclient* $(DESTDIR)/usr/lib/
 
 	# Install other stuff not installed by "make install"
 	install -m 0755 debian/mksmbpasswd.awk $(DESTDIR)/usr/sbin/mksmbpasswd
-
-	# Install winbind stuff not installed by 'make install'
-	install -m 0644 source/nsswitch/libnss_winbind.so \
-		$(DESTDIR)/lib/libnss_winbind.so.2
-	install -m 0644 source/nsswitch/pam_winbind.so \
-		$(DESTDIR)/lib/security/
-
-	# Install libnss_wins.so, which is not installed by 'make install' either.
-	install -m 0644 source/nsswitch/libnss_wins.so \
-		$(DESTDIR)/lib/libnss_wins.so.2
-
-	# pam_smbpass.so isn't being installed by 'make install'.
-	#	We'll move it here to $(DESTDIR)/lib/security/ and then
-	#	libpam-smbpass.files will make dh_movefiles move it to the
-	#	right location in the libpam-smbpass package.
-	install -m 0644 source/bin/pam_smbpass.so $(DESTDIR)/lib/security/
+	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8
+	install -m 0644 source/nsswitch/libnss_winbind.so $(DESTDIR)/lib/libnss_winbind.so.2
+	install -m 0644 source/nsswitch/libnss_wins.so $(DESTDIR)/lib/libnss_wins.so.2
 
 ifeq ($(smbfs),yes)
 	# Create the symlinks that will allow us to do "mount -t smbfs ..."
@@ -175,21 +152,13 @@ ifeq ($(smbfs),yes)
 	ln -s smbmount.8 $(DESTDIR)/usr/share/man/man8/mount.smbfs.8
 endif
 
-ifeq ($(mount_cifs),yes)
-	install -m 0755 source/client/mount.cifs $(DESTDIR)/sbin/
-	install -m 0755 source/client/umount.cifs $(DESTDIR)/sbin/
-endif
-
 	# For CUPS to support printing to samba printers, it's necessary
 	#	to make the following symlink (according to
 	#	Erich Schubert <debian@vitavonni.de> in #109509):
 	ln -s ../../../bin/smbspool $(DESTDIR)/usr/lib/cups/backend/smb
 
-	# Install man pages for files without man pages in the upstream sources
-	install -m 0644 debian/mksmbpasswd.8 $(DESTDIR)/usr/share/man/man8/mksmbpasswd.8
-
 	# Install samba-common's conffiles - they'll get moved later to their
-	#	correct place by dh_movefiles.
+	# correct place by dh_movefiles.
 	cp debian/smb.conf $(DESTDIR)/usr/share/samba/
 	install -m755 debian/panic-action $(DESTDIR)/usr/share/samba/
 	cp debian/gdbcommands $(DESTDIR)/etc/samba/

@@ -24,6 +24,7 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Updated Standards-Version to 3.7.2 (no changes needed)
   * Replaced libsmbclient shlibs file by dh_makeshlibs call, so the
     required ldconfig calls appear in the maintainer scripts
+  * Adjusted debian/rules to get 3.0.23rc1 to build
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
 
