@@ -277,6 +277,7 @@ endif
 	chmod 0750 debian/samba/var/log/samba/
 	chown root.adm debian/samba/var/log/samba/
 
+	DH_OPTIONS= dh_makeshlibs -plibsmbclient -V'libsmbclient (>= 3.0.2a-1)'
 	dh_installdeb
 	dh_shlibdeps
 	dh_gencontrol
