@@ -218,9 +218,8 @@ binary-arch: build install
 	done
 	dh_installchangelogs -Nlibpam-smbpass
 	DH_OPTIONS= dh_installchangelogs -plibpam-smbpass source/pam_smbpass/CHANGELOG
-	dh_strip --dbg-package=samba --dbg-package=smbclient
-	cp -a debian/smbclient-dbg/* debian/samba-dbg
-	rm -rf debian/smbclient-dbg
+	DH_OPTIONS= dh_strip -psamba -psmbclient --dbg-package=samba-dbg
+	DH_OPTIONS= dh_strip -Nsamba -Nsmbclient
 	dh_link
 	dh_compress
 	dh_fixperms
