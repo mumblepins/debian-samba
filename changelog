@@ -18,6 +18,8 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Add dependency on procps for samba, as ps is used in init scripts.
     Thanks to Bastian Blank for reporting. Closes: #365618
   * Add (U)MOUNT_CIFS_VENDOR_SUFFIX to VERSION.patch
+  * Rewrite debconf templates to be compliant with 6.5.2 of the Developer's
+    Reference
 
   [ Peter Eisentraut ]
   * Use debian/compat instead of DH_COMPAT

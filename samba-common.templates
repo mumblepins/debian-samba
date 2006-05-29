@@ -1,22 +1,23 @@
 Template: samba-common/character_set
 Type: string
 _Description: Character Set for Unix filesystem
- You currently have a "character set" configured in your smb.conf.  In
+ The "character set" option is currently configured in smb.conf.  In
  Samba 3.0, this option is replaced by a new option, "unix charset".
  Please specify the character set you wish to use for this new option,
  which controls how Samba interprets filenames on the file system.
  .
- If you leave this option blank, your smb.conf will not be changed.
+ If you leave this option blank, the smb.conf file will not be changed.
 
 Template: samba-common/codepage
 Type: string
 _Description: Character Set for DOS clients
- You currently have a "client code page" set in your smb.conf.  In Samba
+ The "client code page" option is currently configured in smb.conf.  In Samba
  3.0, this option is replaced by the option "dos charset".  Please specify
  the character set you wish to use for this new option.  In most cases, the
  default chosen for you will be sufficient.  Note that this option is not
- needed to support Windows clients, it is only for DOS clients.  If you
- leave this option blank, your smb.conf will not be changed.
+ needed to support Windows clients, it is only for DOS clients.
+ .
+ If you leave this option blank, the smb.conf file will not be changed.
 
 Template: samba-common/dhcp
 Type: boolean
@@ -28,29 +29,28 @@ _Description: Modify smb.conf to use WINS settings from DHCP?
  change to your smb.conf file so that DHCP-provided WINS settings will
  automatically be read from /etc/samba/dhcp.conf.
  .
- You must have the dhcp3-client package installed to take advantage of this
+ The dhcp3-client package must be installed to take advantage of this
  feature.
 
 Template: samba-common/do_debconf
 Type: boolean
 Default: true
-_Description: Configure smb.conf through debconf?
- The rest of the configuration of Samba deals with questions that affect
- parameters in /etc/samba/smb.conf, which is the file used to configure the
- Samba programs (nmbd and smbd). Your current smb.conf contains an
- 'include' line or an option that spans multiple lines, which could confuse
- debconf and require you to edit your smb.conf by hand to get it working
- again.
+_Description: Configure smb.conf automatically?
+ The rest of the configuration of Samba deals with questions that
+ affect parameters in /etc/samba/smb.conf, which is the file used to
+ configure the Samba programs (nmbd and smbd). Your current smb.conf
+ contains an 'include' line or an option that spans multiple lines,
+ which could confuse the automated configuration process and require
+ you to edit your smb.conf by hand to get it working again.
  .
- If you don't use debconf to configure smb.conf, you will have to handle
+ If you do not choose this option, you will have to handle
  any configuration changes yourself, and will not be able to take
- advantage of periodic configuration enhancements.  Therefore, use of
- debconf is recommended if possible.
+ advantage of periodic configuration enhancements.
 
 Template: samba-common/workgroup
 Type: string
-_Description: Workgroup/Domain Name?
- This controls what workgroup your server will appear to be in when queried
+_Description: Workgroup/Domain Name:
+ Please specify the workgroup this server will appear to be in when queried
  by clients. Note that this parameter also controls the Domain name used
  with the security=domain setting.
 
@@ -58,9 +58,10 @@ Template: samba-common/encrypt_passwords
 Type: boolean
 Default: true
 _Description: Use password encryption?
- Recent Windows clients communicate with SMB servers using encrypted
+ Most Windows clients communicate with SMB servers using encrypted
  passwords. If you want to use clear text passwords you will need to change
- a parameter in your Windows registry. It is recommended that you use
- encrypted passwords. If you do, make sure you have a valid
- /etc/samba/smbpasswd file and that you set passwords in there for each
- user using the smbpasswd command.
+ a parameter in your Windows registry. 
+ .
+ Choosing this option is highly recommended. If you do, make sure you
+ have a valid /etc/samba/smbpasswd file and that you set passwords in
+ there for each user using the smbpasswd command.
