@@ -4,8 +4,9 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Fix typo in smb.conf that causes all samba apps to whine.
   * Add myself to Uploaders, on the off chance that I might upload.
 
-  [ Translations ]
+  [ Debconf translations ]
   * Add Galician translation of debconf templates. Closes: #361204
+  * Updated Russian. Closes: #369375
 
   [ Christian Perrier ]
   * New upstream release. Fixes the following Debian bugs:
