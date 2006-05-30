@@ -5,8 +5,10 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Add myself to Uploaders, on the off chance that I might upload.
 
   [ Debconf translations ]
-  * Add Galician translation of debconf templates. Closes: #361204
+  * Add Galician translation of debconf templates. Closes: #361204, #369403
   * Updated Russian. Closes: #369375
+  * Updated Czech. Closes: #369408
+  * Updated Japanese. Closes: #369457
 
   [ Christian Perrier ]
   * New upstream release. Fixes the following Debian bugs:
