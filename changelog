@@ -10,6 +10,7 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Updated Czech. Closes: #369408
   * Updated Japanese. Closes: #369457
   * Updated Italian. Closes: #369587
+  * Updated Swedish. Closes: #369730
   * Updated Vietnamese.
 
   [ Christian Perrier ]
@@ -20,6 +21,8 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
       Closes: #168732
     - Potential hang in nmbd. Upstream bug #3779
       Closes: #367472
+    - Typos in "ldap group suffix" in smb.conf(5). Upstream bug  #3780
+      Closes: #367507
   * Add dependency on procps for samba, as ps is used in init scripts.
     Thanks to Bastian Blank for reporting. Closes: #365618
   * Add (U)MOUNT_CIFS_VENDOR_SUFFIX to VERSION.patch
