@@ -5,3 +5,4 @@ var/lib/samba/printers/W32X86
 var/lib/samba/printers/WIN40
 var/run/samba
 var/cache/samba
+var/spool/samba

@@ -244,6 +244,7 @@ endif
 	# Set some reasonable default perms for the samba logdir.
 	chmod 0750 debian/samba/var/log/samba/
 	chown root.adm debian/samba/var/log/samba/
+	chmod 1777 debian/samba/var/spool/samba/
 
 	DH_OPTIONS= dh_makeshlibs -plibsmbclient -V'libsmbclient (>= 3.0.2a-1)'
 	dh_installdeb

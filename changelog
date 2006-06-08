@@ -39,6 +39,8 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Updated to debhelper level 5
   * Rearranged dh_strip calls so that build succeeds with
     DEB_BUILD_OPTIONS=nostrip. Closes: #288995
+  * Create /var/spool/samba and use it as default printer spool
+    (closes: #275241)
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
 
