@@ -1,3 +1,4 @@
+# translation of fr2.po to French
 #
 #    Translators, if you are not familiar with the PO format, gettext
 #    documentation is worth reading, especially sections dedicated to
@@ -11,17 +12,19 @@
 #
 #    Developers do not need to manually edit POT or PO files.
 #
+# Christian Perrier <bubulle@debian.org>, 2006.
 msgid ""
 msgstr ""
-"Project-Id-Version: Samba for Debian 3.0.0beta2-1\n"
+"Project-Id-Version: fr2\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-05-29 07:59+0200\n"
-"PO-Revision-Date: 2003-07-02 21:52-0500\n"
-"Last-Translator: Steve Langasek <vorlon@debian.org>\n"
+"PO-Revision-Date: 2006-05-29 09:35+0200\n"
+"Last-Translator: Christian Perrier <bubulle@debian.org>\n"
 "Language-Team: French <debian-l10n-french@lists.debian.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=ISO-8859-15\n"
 "Content-Transfer-Encoding: 8bit\n"
+"X-Generator: KBabel 1.11.2\n"
 
 #. Type: string
 #. Description
@@ -32,15 +35,14 @@ msgstr "Jeu de caractères pour les systèmes de fichiers Unix"
 #. Type: string
 #. Description
 #: ../samba-common.templates:3
-#, fuzzy
 msgid ""
 "The \"character set\" option is currently configured in smb.conf.  In Samba "
 "3.0, this option is replaced by a new option, \"unix charset\". Please "
 "specify the character set you wish to use for this new option, which "
 "controls how Samba interprets filenames on the file system."
 msgstr ""
-"Une instruction « character set » (jeu de caractères) est utilisée dans "
-"votre fichier smb.conf. Avec Samba 3.0, cette option est remplacée par une "
+"L'option « character set » (jeu de caractères) est utilisée dans le "
+"fichier smb.conf. Avec Samba 3.0, cette option est remplacée par une "
 "nouvelle option, « unix charset » (jeu de caractères Unix).  Veuillez "
 "indiquer le jeu de caractères que vous voulez utiliser avec cette option, "
 "qui permet d'interpréter les noms de fichiers sur le système."
@@ -54,7 +56,6 @@ msgstr "Jeu de caractères pour les clients DOS"
 #. Type: string
 #. Description
 #: ../samba-common.templates:13
-#, fuzzy
 msgid ""
 "The \"client code page\" option is currently configured in smb.conf.  In "
 "Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
@@ -62,19 +63,17 @@ msgid ""
 "cases, the default chosen for you will be sufficient.  Note that this option "
 "is not needed to support Windows clients, it is only for DOS clients."
 msgstr ""
-"Votre fichier smb.conf contient une option « client code page » (page de "
-"codes du client). Avec Samba 3.0, cette option a été remplacée par l'option "
-"« dos charset » (jeu de caractères DOS). Veuillez indiquer le jeu de "
-"caractères que vous voulez utiliser avec la nouvelle option. En général le "
-"jeu de caractères choisi par défaut est suffisant. Veuillez noter que cette "
-"option ne sert pas pour les clients Windows mais seulement pour les clients "
-"DOS. Le fichier smb.conf ne sera pas modifié si vous laissez cette option "
-"sans réponse. "
+"L'option « client code page » (page de codes du client) est actuellement "
+"utilisée dans le fichier smb.conf. Avec Samba 3.0, cette option a été "
+"remplacée par l'option « dos charset » (jeu de caractères DOS). Veuillez "
+"indiquer le jeu de caractères que vous voulez utiliser avec la nouvelle "
+"option. En général le jeu de caractères choisi par défaut est suffisant. "
+"Veuillez noter que cette option ne sert pas pour les clients Windows mais "
+"seulement pour les clients DOS."
 
 #. Type: string
 #. Description
 #: ../samba-common.templates:13
-#, fuzzy
 msgid "If you leave this option blank, the smb.conf file will not be changed."
 msgstr ""
 "Le fichier smb.conf ne sera pas modifié si vous laissez cette option sans "
@@ -105,22 +104,20 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:25
-#, fuzzy
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
-msgstr "Pour cela, le paquet dhcp3-client doit être installé."
+msgstr ""
+"Le paquet dhcp3-client doit être installé pour utiliser cette fonctionnalité."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:38
-#, fuzzy
 msgid "Configure smb.conf automatically?"
-msgstr "Voulez-vous configurer smb.conf avec debconf ?"
+msgstr "Voulez-vous configurer smb.conf automatiquement ?"
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:38
-#, fuzzy
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -129,45 +126,42 @@ msgid ""
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
 msgstr ""
-"La suite de la configuration de Samba pose des questions sur des paramètres "
-"de /etc/samba/smb.conf, le fichier utilisé pour configurer les programmes de "
-"Samba (nmbd et smbd). Votre fichier actuel contient une ligne « include » ou "
-"une option qui s'étale sur plusieurs lignes : cela peut perturber debconf et "
-"il vaut mieux gérer manuellement le contenu de ce fichier."
+"La suite de la configuration de Samba pose des questions relatives aux "
+"paramètres de /etc/samba/smb.conf, le fichier utilisé pour configurer les "
+"programmes de Samba (nmbd et smbd). Le fichier actuel contient une ligne "
+"« include » ou une option qui s'étale sur plusieurs lignes : cela peut "
+"perturber la configuration automatique. Il est donc conseillé de gérer le "
+"contenu de ce fichier vous-même."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:38
-#, fuzzy
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
 msgstr ""
-"Si vous n'utilisez pas debconf pour configurer smb.conf, vous devrez vous-"
-"même gérer les modifications de configuration et vous ne pourrez pas "
-"bénéficier des améliorations faites dans la configuration. Si possible, il "
-"est conseillé d'utiliser debconf."
+"Si vous ne choisissez pas cette option, vous devrez gérer vous-même les "
+"modifications de configuration et vous ne pourrez pas bénéficier des "
+"améliorations faites dans la configuration."
 
 #. Type: string
 #. Description
 #: ../samba-common.templates:52
-#, fuzzy
 msgid "Workgroup/Domain Name:"
-msgstr "Groupe de travail et nom de domaine ?"
+msgstr "Nom de domaine ou de groupe de travail :"
 
 #. Type: string
 #. Description
 #: ../samba-common.templates:52
-#, fuzzy
 msgid ""
 "Please specify the workgroup this server will appear to be in when queried "
 "by clients. Note that this parameter also controls the Domain name used with "
 "the security=domain setting."
 msgstr ""
-"Ce paramètre indique le groupe de travail où les clients trouveront le "
-"serveur. Il indique aussi le nom de domaine utilisé par le paramètre "
-"« security=domain »."
+"Veuillez indiquer le groupe de travail où les clients trouveront le serveur. "
+"Il indique aussi le nom de domaine utilisé par le paramètre "
+"« security=domain » quand celui-ci est utilisé."
 
 #. Type: boolean
 #. Description
@@ -178,36 +172,28 @@ msgstr "Voulez-vous chiffrer les mots de passe ?"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:60
-#, fuzzy
 msgid ""
 "Most Windows clients communicate with SMB servers using encrypted passwords. "
 "If you want to use clear text passwords you will need to change a parameter "
 "in your Windows registry."
 msgstr ""
-"Des clients Windows récents communiquent avec les serveurs SMB en utilisant "
-"des mots de passe chiffrés. Si vous voulez utiliser des mots de passe sans "
-"chiffrement, vous devez modifier un paramètre dans le registre de Windows. "
-"Il est recommandé d'utiliser des mots de passe chiffrés. Si vous le faites, "
-"n'oubliez pas de créer un fichier /etc/samba/smbpasswd et d'y mettre les "
-"mots de passe de tous les utilisateurs qui se servent de la commande "
-"smbpasswd."
+"La plupart des clients Windows communiquent avec les serveurs SMB en "
+"utilisant des mots de passe chiffrés. Si vous voulez utiliser des mots de "
+"passe sans chiffrement, vous devez modifier un paramètre dans le registre de "
+"Windows."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:60
-#, fuzzy
 msgid ""
 "Choosing this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"Des clients Windows récents communiquent avec les serveurs SMB en utilisant "
-"des mots de passe chiffrés. Si vous voulez utiliser des mots de passe sans "
-"chiffrement, vous devez modifier un paramètre dans le registre de Windows. "
 "Il est recommandé d'utiliser des mots de passe chiffrés. Si vous le faites, "
-"n'oubliez pas de créer un fichier /etc/samba/smbpasswd et d'y mettre les "
-"mots de passe de tous les utilisateurs qui se servent de la commande "
-"smbpasswd."
+"n'oubliez pas de créer un fichier /etc/samba/smbpasswd et d'y établir les "
+"mots de passe de tous les utilisateurs, à l'aide de la commande "
+"« smbpasswd »."
 
 #. Type: boolean
 #. Description
@@ -223,27 +209,25 @@ msgid ""
 "be configured to use encrypted passwords.  This requires user passwords to "
 "be stored in a file separate from /etc/passwd."
 msgstr ""
+"Pour rester compatible avec les réglages par défaut de la majorité des "
+"versions de Windows, Samba doit être configuré pour utiliser des mots de "
+"passe chiffrés. Cela impose de conserver les mots de passe dans un fichier "
+"distinct de /etc/passwd."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:4
-#, fuzzy
 msgid ""
 "This file can be created automatically, but the passwords must be added "
 "manually (by running smbpasswd) and be kept up-to-date in the future.  If "
 "you do not create it, you will have to reconfigure samba (and probably your "
 "client machines) to use plaintext passwords."
 msgstr ""
-"Pour préserver la compatibilité avec le comportement par défaut de la "
-"plupart des systèmes Windows, Samba doit utiliser les mots de passe "
-"chiffrés. Cela exige la création d'un fichier, distinct du fichier /etc/"
-"passwd, pour mettre les mots de passe des utilisateurs. Ce fichier peut être "
-"créé automatiquement, mais quelqu'un (vous ou l'utilisateur) devra ajouter "
-"les mots de passe manuellement en utilisant la commande smbpasswd ; et vous "
-"devrez maintenir à jour ce fichier. Si vous ne voulez pas créer le fichier "
-"maintenant, Samba (et peut-être les ordinateurs Windows) devra utiliser des "
-"mots de passe non chiffrés. Voyez /usr/share/doc/samba-doc/htmldocs/"
-"ENCRYPTION.html dans le paquet samba-doc pour plus de détails."
+"Ce fichier peut être créé automatiquement, mais les mots de passe doivent y "
+"être ajoutés manuellement (avec la commande « smbpasswd ») et être tenus à "
+"jour. Si vous ne voulez pas créer le fichier maintenant, Samba (ainsi, "
+"probablement, que les clients Windows) devra utiliser des mots de passe non "
+"chiffrés."
 
 #. Type: boolean
 #. Description
@@ -252,58 +236,56 @@ msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
 msgstr ""
+"Veuillez consulter le fichier /usr/share/doc/samba-doc/htmldocs/ENCRYPTION."
+"html dans le paquet samba-doc pour plus d'informations."
 
 #. Type: note
 #. Description
 #: ../samba.templates:19
-#, fuzzy
 msgid "Samba's log files moved"
-msgstr "Les fichiers-journaux de Samba ont changé de place."
+msgstr "Déplacement des journaux de Samba"
 
 #. Type: note
 #. Description
 #: ../samba.templates:19
-#, fuzzy
 msgid ""
 "The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
 "log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
 "smbd respectively."
 msgstr ""
-"À partir des premiers paquets de Samba 2.2 pour Debian, les fichiers-"
-"journaux des démons nmbd et smbd se trouvent dans /var/log/samba/. Les noms "
-"de ces fichiers sont log.nmbd et log.smbd pour, respectivement, nmbd et smbd."
+"Les fichiers-journaux des démons nmbd et smbd se trouvent désormais dans /"
+"var/log/samba/. Pour nmbd et smbd, les noms de ces fichiers sont "
+"respectivement log.nmbd et log.smbd."
 
 #. Type: note
 #. Description
 #: ../samba.templates:19
-#, fuzzy
 msgid ""
 "The old log files from /var/log/ will automatically be moved to the new "
 "location."
 msgstr ""
-"Les anciens fichiers-journaux dans /var/log/ seront mis au bon endroit."
+"Les anciens fichiers-journaux dans /var/log/ seront déplacés à cet endroit."
 
 #. Type: note
 #. Description
 #: ../samba.templates:29
-#, fuzzy
 msgid "Running nmbd from inetd no longer supported"
-msgstr "L'utilisation de nmbd à partir d'inetd n'est plus supportée"
+msgstr "Lancement de nmbd à partir d'inetd non géré"
 
 #. Type: note
 #. Description
 #: ../samba.templates:29
-#, fuzzy
 msgid ""
 "This system was previously configured to start nmbd and smbd from inetd. In "
 "recent Samba versions, nmbd cannot be started from inetd. If you have "
 "modified your /etc/init.d/samba startup script, you may need to adjust it "
 "now so that nmbd will start."
 msgstr ""
-"Votre système lançait nmbd et smbd à partir d'inetd. Depuis la version 2.999"
-"+3.0.alpha20-4, on ne peut plus exécuter nmbd à partir d'inetd. Si vous avez "
-"modifié le script de lancement /etc/init.d/samba, vous avez peut-être besoin "
-"de le corriger manuellement pour permettre le lancement de nmbd. "
+"Ce système était configuré pour lancer nmbd et smbd à partir d'inetd. Les "
+"versions récentes de Samba ne permettent plus d'exécuter nmbd à partir "
+"d'inetd. Si vous avez modifié le script de lancement /etc/init.d/samba, vous "
+"avez peut-être besoin de le corriger à nouveau pour permettre le lancement "
+"de nmbd. "
 
 #. Type: select
 #. Choices
@@ -315,7 +297,7 @@ msgstr "démons, inetd"
 #. Description
 #: ../samba.templates:39
 msgid "Samba run method:"
-msgstr ""
+msgstr "Méthode de lancement de Samba :"
 
 #. Type: select
 #. Description
@@ -325,8 +307,7 @@ msgid ""
 "daemon is the recommended approach."
 msgstr ""
 "Le service de Samba smbd peut s'exécuter en tant que démon classique ou bien "
-"être lancé par inetd. L'approche recommandée est qu'il s'exécute en tant que "
-"démon."
+"être lancé par inetd. Il est recommandé de l'exécuter en tant que démon."
 
 #. Type: boolean
 #. Description
@@ -341,44 +322,42 @@ msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
 msgstr ""
+"Avec Samba 3.0, une nouvelle interface pour les bases de données SAM, plus "
+"complète, vient remplacer le fichier /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:46
-#, fuzzy
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
 msgstr ""
-"Avec Samba 3.0, une nouvelle interface pour les bases de données SAM, plus "
-"complète, vient remplacer le fichier /etc/samba/smbpasswd. Voulez-vous que "
-"votre fichier existant soit remplacé par /var/lib/samba/passdb.tdb ? Si vous "
-"envisagez d'utiliser une autre interface d'authentification (p.ex. LDAP), "
-"refusez la proposition maintenant."
+"Veuillez confirmer si vous souhaitez que le fichier actuel soit remplacé "
+"par /var/lib/samba/passdb.tdb. Ne choisissez pas cette option si vous "
+"envisagez d'utiliser une autre interface d'authentification (p. ex. LDAP)."
 
 #. Type: note
 #. Description
 #: ../swat.templates:3
 msgid "Configuration file rewritten by SWAT"
-msgstr ""
+msgstr "Réécriture du fichier de configuration par SWAT"
 
 #. Type: note
 #. Description
 #: ../swat.templates:3
-#, fuzzy
 msgid ""
 "SWAT will rewrite the smb.conf file. It will rearrange the entries and "
 "delete all comments, include= and copy= options. If you use a carefully "
 "crafted smb.conf, you should probably avoid using SWAT."
 msgstr ""
-"SWAT va modifier votre fichier smb.conf. Les entrées seront réorganisées et "
-"les commentaires détruits ainsi que les entrées « include = » et « copy = ». "
-"Si votre smb.conf était soigneusement construit, sauvegardez-le ou "
-"n'utilisez pas SWAT !"
+"SWAT va modifier le fichier smb.conf. Les entrées seront réorganisées et les "
+"commentaires détruits, ainsi que les entrées « include = » et « copy = ». Si "
+"le fichier smb.conf de ce système a été soigneusement personnalisé, vous "
+"devriez éviter d'utiliser SWAT."
 
-#~ msgid "How do you want to run Samba?"
-#~ msgstr "Comment voulez-vous lancer Samba ?"
+msgid "How do you want to run Samba?"
+msgstr "Comment voulez-vous lancer Samba ?"
 
-#~ msgid "Your smb.conf will be re-written!"
-#~ msgstr "Ré-écriture de votre fichier smb.conf !"
+msgid "Your smb.conf will be re-written!"
+msgstr "Ré-écriture de votre fichier smb.conf !"
