@@ -15,6 +15,7 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Updated Vietnamese.
   * Updated French.
   * Updated Brazilian.
+  * Updated Portuguese.
 
   [ Christian Perrier ]
   * New upstream release. Fixes the following Debian bugs:
