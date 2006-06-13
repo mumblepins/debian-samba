@@ -1,4 +1,4 @@
-samba (3.0.23rc1-1) UNRELEASED; urgency=low
+samba (3.0.23rc2-1) UNRELEASED; urgency=low
 
   [ Adam Conrad ]
   * Fix typo in smb.conf that causes all samba apps to whine.
@@ -45,7 +45,7 @@ samba (3.0.23rc1-1) UNRELEASED; urgency=low
   * Create /var/spool/samba and use it as default printer spool
     (closes: #275241)
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 25 Apr 2006 11:27:23 +0200
+ -- Christian Perrier <bubulle@debian.org>  Tue, 13 Jun 2006 22:09:03 +0200
 
 samba (3.0.22-1) unstable; urgency=medium
 
