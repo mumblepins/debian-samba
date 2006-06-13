@@ -1,8 +1,8 @@
-Index: samba-3.0.23rc1/source/configure.in
+Index: samba-3.0.23rc2/source/configure.in
 ===================================================================
---- samba-3.0.23rc1.orig/source/configure.in	2006-05-25 19:38:04.077199176 +0200
-+++ samba-3.0.23rc1/source/configure.in	2006-05-25 19:38:20.175751824 +0200
-@@ -721,6 +721,15 @@
+--- samba-3.0.23rc2.orig/source/configure.in	2006-06-13 22:25:56.729415500 +0200
++++ samba-3.0.23rc2/source/configure.in	2006-06-13 22:26:05.889988000 +0200
+@@ -740,6 +740,15 @@
        fi
      ;;
  
@@ -18,7 +18,7 @@ Index: samba-3.0.23rc1/source/configure.in
  # Tests for linux LFS support. Need kernel 2.4 and glibc2.2 or greater support.
  #
      *linux*)
-@@ -1376,7 +1385,7 @@
+@@ -1394,7 +1403,7 @@
  # 
  #
  case "$host_os" in
@@ -27,7 +27,7 @@ Index: samba-3.0.23rc1/source/configure.in
         # glibc <= 2.3.2 has a broken getgrouplist
         AC_TRY_RUN([
  #include <unistd.h>
-@@ -1628,7 +1637,10 @@
+@@ -1646,7 +1655,10 @@
  
    # and these are for particular systems
    case "$host_os" in
@@ -39,7 +39,7 @@ Index: samba-3.0.23rc1/source/configure.in
  			BLDSHARED="true"
  			if test "${ac_cv_gnu_ld_no_default_allow_shlib_undefined}" = "yes"; then
  				LDSHFLAGS="-shared -Wl,-Bsymbolic -Wl,--allow-shlib-undefined" 
-@@ -4982,7 +4994,7 @@
+@@ -4980,7 +4992,7 @@
  	AC_MSG_RESULT(yes);
  
  	case "$host_os" in
@@ -48,7 +48,7 @@ Index: samba-3.0.23rc1/source/configure.in
  		AC_CACHE_CHECK([for linux sendfile64 support],samba_cv_HAVE_SENDFILE64,[
  		AC_TRY_LINK([#include <sys/sendfile.h>],
  [\
-@@ -5245,10 +5257,10 @@
+@@ -5243,10 +5255,10 @@
  WINBIND_NSS_LDSHFLAGS=$LDSHFLAGS
  
  case "$host_os" in

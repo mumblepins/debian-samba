@@ -1,7 +1,7 @@
 Index: samba-3.0.23rc2/source/Makefile.in
 ===================================================================
---- samba-3.0.23rc2.orig/source/Makefile.in	2006-06-09 21:30:32.000000000 +0200
-+++ samba-3.0.23rc2/source/Makefile.in	2006-06-13 22:11:18.570534000 +0200
+--- samba-3.0.23rc2.orig/source/Makefile.in	2006-06-13 22:25:08.110377000 +0200
++++ samba-3.0.23rc2/source/Makefile.in	2006-06-13 22:25:56.717414750 +0200
 @@ -100,6 +100,13 @@
  # the directory where lock files go
  LOCKDIR = @lockdir@
@@ -36,8 +36,8 @@ Index: samba-3.0.23rc2/source/Makefile.in
  	@$(SHELL) $(srcdir)/script/installmsg.sh $(DESTDIR) $(LIBDIR) $(srcdir)
 Index: samba-3.0.23rc2/source/configure.in
 ===================================================================
---- samba-3.0.23rc2.orig/source/configure.in	2006-06-09 21:30:32.000000000 +0200
-+++ samba-3.0.23rc2/source/configure.in	2006-06-13 22:11:18.614536750 +0200
+--- samba-3.0.23rc2.orig/source/configure.in	2006-06-13 22:25:08.142379000 +0200
++++ samba-3.0.23rc2/source/configure.in	2006-06-13 22:25:56.729415500 +0200
 @@ -37,7 +37,7 @@
  [  --with-fhs              Use FHS-compliant paths (default=no)],
  [ case "$withval" in
@@ -70,8 +70,8 @@ Index: samba-3.0.23rc2/source/configure.in
  
 Index: samba-3.0.23rc2/source/dynconfig.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/dynconfig.c	2006-06-09 21:30:32.000000000 +0200
-+++ samba-3.0.23rc2/source/dynconfig.c	2006-06-13 22:13:20.398147750 +0200
+--- samba-3.0.23rc2.orig/source/dynconfig.c	2006-06-13 22:25:08.174381000 +0200
++++ samba-3.0.23rc2/source/dynconfig.c	2006-06-13 22:25:56.729415500 +0200
 @@ -53,6 +53,13 @@
  pstring dyn_LMHOSTSFILE = LMHOSTSFILE;
  
@@ -116,8 +116,8 @@ Index: samba-3.0.23rc2/source/dynconfig.c
 +}
 Index: samba-3.0.23rc2/source/groupdb/mapping.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/groupdb/mapping.c	2006-04-20 04:29:21.000000000 +0200
-+++ samba-3.0.23rc2/source/groupdb/mapping.c	2006-06-13 22:11:18.638538250 +0200
+--- samba-3.0.23rc2.orig/source/groupdb/mapping.c	2006-06-13 22:25:08.210383250 +0200
++++ samba-3.0.23rc2/source/groupdb/mapping.c	2006-06-13 22:25:56.733415750 +0200
 @@ -56,7 +56,7 @@
  	if (tdb)
  		return True;
@@ -129,8 +129,8 @@ Index: samba-3.0.23rc2/source/groupdb/mapping.c
  		return False;
 Index: samba-3.0.23rc2/source/include/dynconfig.h
 ===================================================================
---- samba-3.0.23rc2.orig/source/include/dynconfig.h	2006-06-09 21:30:31.000000000 +0200
-+++ samba-3.0.23rc2/source/include/dynconfig.h	2006-06-13 22:12:28.198885500 +0200
+--- samba-3.0.23rc2.orig/source/include/dynconfig.h	2006-06-13 22:25:08.250385750 +0200
++++ samba-3.0.23rc2/source/include/dynconfig.h	2006-06-13 22:25:56.733415750 +0200
 @@ -31,8 +31,12 @@
  extern pstring dyn_CONFIGFILE;
  extern pstring dyn_LOGFILEBASE, dyn_LMHOSTSFILE;
@@ -146,8 +146,8 @@ Index: samba-3.0.23rc2/source/include/dynconfig.h
 +char *dyn_CACHEDIR(void);
 Index: samba-3.0.23rc2/source/intl/lang_tdb.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/intl/lang_tdb.c	2006-04-20 04:29:23.000000000 +0200
-+++ samba-3.0.23rc2/source/intl/lang_tdb.c	2006-06-13 22:11:18.646538750 +0200
+--- samba-3.0.23rc2.orig/source/intl/lang_tdb.c	2006-06-13 22:25:08.286388000 +0200
++++ samba-3.0.23rc2/source/intl/lang_tdb.c	2006-06-13 22:25:56.733415750 +0200
 @@ -131,7 +131,7 @@
  	if (!lang) 
  		return True;
@@ -159,8 +159,8 @@ Index: samba-3.0.23rc2/source/intl/lang_tdb.c
  		DEBUG(10, ("lang_tdb_init: %s: %s\n", msg_path, 
 Index: samba-3.0.23rc2/source/lib/util.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/lib/util.c	2006-05-23 20:54:32.000000000 +0200
-+++ samba-3.0.23rc2/source/lib/util.c	2006-06-13 22:11:18.658539500 +0200
+--- samba-3.0.23rc2.orig/source/lib/util.c	2006-06-13 22:25:08.318390000 +0200
++++ samba-3.0.23rc2/source/lib/util.c	2006-06-13 22:25:56.741416250 +0200
 @@ -2567,6 +2567,61 @@
  }
  
@@ -225,8 +225,8 @@ Index: samba-3.0.23rc2/source/lib/util.c
   * @retval Pointer to a static #fstring containing the extension.
 Index: samba-3.0.23rc2/source/lib/util_unistr.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/lib/util_unistr.c	2006-04-20 04:29:23.000000000 +0200
-+++ samba-3.0.23rc2/source/lib/util_unistr.c	2006-06-13 22:11:18.658539500 +0200
+--- samba-3.0.23rc2.orig/source/lib/util_unistr.c	2006-06-13 22:25:08.350392000 +0200
++++ samba-3.0.23rc2/source/lib/util_unistr.c	2006-06-13 22:25:56.741416250 +0200
 @@ -88,10 +88,10 @@
  	}
  	initialised = 1;
@@ -251,8 +251,8 @@ Index: samba-3.0.23rc2/source/lib/util_unistr.c
  		mapped_file = 1;
 Index: samba-3.0.23rc2/source/libsmb/samlogon_cache.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/libsmb/samlogon_cache.c	2006-05-23 20:54:32.000000000 +0200
-+++ samba-3.0.23rc2/source/libsmb/samlogon_cache.c	2006-06-13 22:11:18.662539750 +0200
+--- samba-3.0.23rc2.orig/source/libsmb/samlogon_cache.c	2006-06-13 22:25:08.422396500 +0200
++++ samba-3.0.23rc2/source/libsmb/samlogon_cache.c	2006-06-13 22:25:56.741416250 +0200
 @@ -34,7 +34,7 @@
  BOOL netsamlogon_cache_init(void)
  {
@@ -273,8 +273,8 @@ Index: samba-3.0.23rc2/source/libsmb/samlogon_cache.c
  			DEBUG(5, ("netsamlogon_clear_cached_user: failed to open cache\n"));
 Index: samba-3.0.23rc2/source/nmbd/nmbd_serverlistdb.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/nmbd/nmbd_serverlistdb.c	2006-05-23 20:54:33.000000000 +0200
-+++ samba-3.0.23rc2/source/nmbd/nmbd_serverlistdb.c	2006-06-13 22:11:18.666540000 +0200
+--- samba-3.0.23rc2.orig/source/nmbd/nmbd_serverlistdb.c	2006-06-13 22:25:08.454398500 +0200
++++ samba-3.0.23rc2/source/nmbd/nmbd_serverlistdb.c	2006-06-13 22:25:56.745416500 +0200
 @@ -325,7 +325,7 @@
  
  	updatecount++;
@@ -286,8 +286,8 @@ Index: samba-3.0.23rc2/source/nmbd/nmbd_serverlistdb.c
  	pstrcat(fname,SERVER_LIST);
 Index: samba-3.0.23rc2/source/nmbd/nmbd_winsserver.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/nmbd/nmbd_winsserver.c	2006-04-20 04:29:33.000000000 +0200
-+++ samba-3.0.23rc2/source/nmbd/nmbd_winsserver.c	2006-06-13 22:11:18.670540250 +0200
+--- samba-3.0.23rc2.orig/source/nmbd/nmbd_winsserver.c	2006-06-13 22:25:08.490400750 +0200
++++ samba-3.0.23rc2/source/nmbd/nmbd_winsserver.c	2006-06-13 22:25:56.753417000 +0200
 @@ -559,7 +559,7 @@
  
  	add_samba_names_to_subnet(wins_server_subnet);
@@ -308,8 +308,8 @@ Index: samba-3.0.23rc2/source/nmbd/nmbd_winsserver.c
  
 Index: samba-3.0.23rc2/source/passdb/login_cache.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/passdb/login_cache.c	2006-04-20 04:29:28.000000000 +0200
-+++ samba-3.0.23rc2/source/passdb/login_cache.c	2006-06-13 22:11:18.674540500 +0200
+--- samba-3.0.23rc2.orig/source/passdb/login_cache.c	2006-06-13 22:25:08.522402750 +0200
++++ samba-3.0.23rc2/source/passdb/login_cache.c	2006-06-13 22:25:56.753417000 +0200
 @@ -36,7 +36,7 @@
  	/* skip file open if it's already opened */
  	if (cache) return True;
@@ -321,8 +321,8 @@ Index: samba-3.0.23rc2/source/passdb/login_cache.c
  	else {
 Index: samba-3.0.23rc2/source/nsswitch/winbindd_cache.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/nsswitch/winbindd_cache.c	2006-05-23 20:54:32.000000000 +0200
-+++ samba-3.0.23rc2/source/nsswitch/winbindd_cache.c	2006-06-13 22:11:18.678540750 +0200
+--- samba-3.0.23rc2.orig/source/nsswitch/winbindd_cache.c	2006-06-13 22:25:08.626409250 +0200
++++ samba-3.0.23rc2/source/nsswitch/winbindd_cache.c	2006-06-13 22:25:56.757417250 +0200
 @@ -1889,7 +1889,7 @@
  		return True;
  
@@ -343,8 +343,8 @@ Index: samba-3.0.23rc2/source/nsswitch/winbindd_cache.c
  
 Index: samba-3.0.23rc2/source/nsswitch/winbindd_util.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/nsswitch/winbindd_util.c	2006-06-09 21:30:30.000000000 +0200
-+++ samba-3.0.23rc2/source/nsswitch/winbindd_util.c	2006-06-13 22:11:18.686541250 +0200
+--- samba-3.0.23rc2.orig/source/nsswitch/winbindd_util.c	2006-06-13 22:25:08.662411500 +0200
++++ samba-3.0.23rc2/source/nsswitch/winbindd_util.c	2006-06-13 22:25:56.757417250 +0200
 @@ -1175,7 +1175,7 @@
  	SMB_STRUCT_STAT stbuf;
  	TDB_CONTEXT *idmap_tdb;
@@ -356,8 +356,8 @@ Index: samba-3.0.23rc2/source/nsswitch/winbindd_util.c
  		/* nothing to convert return */
 Index: samba-3.0.23rc2/source/param/loadparm.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/param/loadparm.c	2006-06-09 21:30:30.000000000 +0200
-+++ samba-3.0.23rc2/source/param/loadparm.c	2006-06-13 22:11:18.702542250 +0200
+--- samba-3.0.23rc2.orig/source/param/loadparm.c	2006-06-13 22:25:08.698413750 +0200
++++ samba-3.0.23rc2/source/param/loadparm.c	2006-06-13 22:25:56.769418000 +0200
 @@ -107,6 +107,9 @@
  	char *szAddPrinterCommand;
  	char *szDeletePrinterCommand;
@@ -384,8 +384,8 @@ Index: samba-3.0.23rc2/source/param/loadparm.c
  	{"utmp directory", P_STRING, P_GLOBAL, &Globals.szUtmpDir, NULL, NULL, FLAG_ADVANCED}, 
 Index: samba-3.0.23rc2/source/passdb/secrets.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/passdb/secrets.c	2006-06-09 21:30:31.000000000 +0200
-+++ samba-3.0.23rc2/source/passdb/secrets.c	2006-06-13 22:11:18.706542500 +0200
+--- samba-3.0.23rc2.orig/source/passdb/secrets.c	2006-06-13 22:25:08.554404750 +0200
++++ samba-3.0.23rc2/source/passdb/secrets.c	2006-06-13 22:25:56.773418250 +0200
 @@ -58,8 +58,7 @@
  	if (tdb)
  		return True;
@@ -398,8 +398,8 @@ Index: samba-3.0.23rc2/source/passdb/secrets.c
  
 Index: samba-3.0.23rc2/source/printing/nt_printing.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/printing/nt_printing.c	2006-05-23 20:54:30.000000000 +0200
-+++ samba-3.0.23rc2/source/printing/nt_printing.c	2006-06-13 22:11:18.822549750 +0200
+--- samba-3.0.23rc2.orig/source/printing/nt_printing.c	2006-06-13 22:25:08.730415750 +0200
++++ samba-3.0.23rc2/source/printing/nt_printing.c	2006-06-13 22:25:56.781418750 +0200
 @@ -530,28 +530,28 @@
   
  	if (tdb_drivers)
@@ -446,8 +446,8 @@ Index: samba-3.0.23rc2/source/printing/nt_printing.c
  
 Index: samba-3.0.23rc2/source/printing/printing.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/printing/printing.c	2006-04-20 04:29:19.000000000 +0200
-+++ samba-3.0.23rc2/source/printing/printing.c	2006-06-13 22:11:18.830550250 +0200
+--- samba-3.0.23rc2.orig/source/printing/printing.c	2006-06-13 22:25:08.762417750 +0200
++++ samba-3.0.23rc2/source/printing/printing.c	2006-06-13 22:25:56.785419000 +0200
 @@ -183,8 +183,8 @@
  	int services = lp_numservices();
  	int snum;
@@ -461,8 +461,8 @@ Index: samba-3.0.23rc2/source/printing/printing.c
  	/* handle a Samba upgrade */
 Index: samba-3.0.23rc2/source/printing/printing_db.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/printing/printing_db.c	2005-10-18 04:44:57.000000000 +0200
-+++ samba-3.0.23rc2/source/printing/printing_db.c	2006-06-13 22:11:18.830550250 +0200
+--- samba-3.0.23rc2.orig/source/printing/printing_db.c	2006-06-13 22:25:08.798420000 +0200
++++ samba-3.0.23rc2/source/printing/printing_db.c	2006-06-13 22:25:56.789419250 +0200
 @@ -89,7 +89,7 @@
  		DLIST_ADD(print_db_head, p);
  	}
@@ -474,8 +474,8 @@ Index: samba-3.0.23rc2/source/printing/printing_db.c
  
 Index: samba-3.0.23rc2/source/sam/idmap_tdb.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/sam/idmap_tdb.c	2006-04-20 04:29:35.000000000 +0200
-+++ samba-3.0.23rc2/source/sam/idmap_tdb.c	2006-06-13 22:11:18.834550500 +0200
+--- samba-3.0.23rc2.orig/source/sam/idmap_tdb.c	2006-06-13 22:25:08.830422000 +0200
++++ samba-3.0.23rc2/source/sam/idmap_tdb.c	2006-06-13 22:25:56.789419250 +0200
 @@ -449,7 +449,7 @@
  	BOOL tdb_is_new = False;
  
@@ -487,8 +487,8 @@ Index: samba-3.0.23rc2/source/sam/idmap_tdb.c
  		return NT_STATUS_NO_MEMORY;
 Index: samba-3.0.23rc2/source/smbd/lanman.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/smbd/lanman.c	2006-04-20 04:29:18.000000000 +0200
-+++ samba-3.0.23rc2/source/smbd/lanman.c	2006-06-13 22:11:18.846551250 +0200
+--- samba-3.0.23rc2.orig/source/smbd/lanman.c	2006-06-13 22:25:08.866424250 +0200
++++ samba-3.0.23rc2/source/smbd/lanman.c	2006-06-13 22:25:56.797419750 +0200
 @@ -1052,9 +1052,9 @@
  	BOOL local_list_only;
  	int i;
@@ -503,8 +503,8 @@ Index: samba-3.0.23rc2/source/smbd/lanman.c
  
 Index: samba-3.0.23rc2/source/utils/net_idmap.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/utils/net_idmap.c	2006-01-25 00:46:40.000000000 +0100
-+++ samba-3.0.23rc2/source/utils/net_idmap.c	2006-06-13 22:11:18.950557750 +0200
+--- samba-3.0.23rc2.orig/source/utils/net_idmap.c	2006-06-13 22:25:08.902426500 +0200
++++ samba-3.0.23rc2/source/utils/net_idmap.c	2006-06-13 22:25:56.797419750 +0200
 @@ -136,7 +136,7 @@
  		return NT_STATUS_UNSUCCESSFUL;
  	}
@@ -516,8 +516,8 @@ Index: samba-3.0.23rc2/source/utils/net_idmap.c
  		return NT_STATUS_NO_MEMORY;
 Index: samba-3.0.23rc2/source/registry/reg_db.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/registry/reg_db.c	2006-04-20 04:29:45.000000000 +0200
-+++ samba-3.0.23rc2/source/registry/reg_db.c	2006-06-13 22:11:18.950557750 +0200
+--- samba-3.0.23rc2.orig/source/registry/reg_db.c	2006-06-13 22:25:08.934428500 +0200
++++ samba-3.0.23rc2/source/registry/reg_db.c	2006-06-13 22:25:56.801420000 +0200
 @@ -205,12 +205,12 @@
  	if ( tdb_reg )
  		return True;
@@ -550,8 +550,8 @@ Index: samba-3.0.23rc2/source/registry/reg_db.c
  	unbecome_root();
 Index: samba-3.0.23rc2/source/lib/account_pol.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/lib/account_pol.c	2006-04-20 04:29:23.000000000 +0200
-+++ samba-3.0.23rc2/source/lib/account_pol.c	2006-06-13 22:11:18.954558000 +0200
+--- samba-3.0.23rc2.orig/source/lib/account_pol.c	2006-06-13 22:25:08.386394250 +0200
++++ samba-3.0.23rc2/source/lib/account_pol.c	2006-06-13 22:25:56.801420000 +0200
 @@ -262,7 +262,7 @@
  		return True;
  	}
@@ -563,8 +563,8 @@ Index: samba-3.0.23rc2/source/lib/account_pol.c
  		return False;
 Index: samba-3.0.23rc2/source/registry/reg_perfcount.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/registry/reg_perfcount.c	2006-04-20 04:29:45.000000000 +0200
-+++ samba-3.0.23rc2/source/registry/reg_perfcount.c	2006-06-13 22:11:18.958558250 +0200
+--- samba-3.0.23rc2.orig/source/registry/reg_perfcount.c	2006-06-13 22:25:08.970430750 +0200
++++ samba-3.0.23rc2/source/registry/reg_perfcount.c	2006-06-13 22:25:56.805420250 +0200
 @@ -44,7 +44,7 @@
  	
  	fstr_sprintf( path, "%s/%s", PERFCOUNTDIR, dbname );
@@ -585,8 +585,8 @@ Index: samba-3.0.23rc2/source/registry/reg_perfcount.c
  	
 Index: samba-3.0.23rc2/source/rpc_server/srv_eventlog_lib.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/rpc_server/srv_eventlog_lib.c	2006-05-23 20:54:33.000000000 +0200
-+++ samba-3.0.23rc2/source/rpc_server/srv_eventlog_lib.c	2006-06-13 22:11:18.962558500 +0200
+--- samba-3.0.23rc2.orig/source/rpc_server/srv_eventlog_lib.c	2006-06-13 22:25:09.014433500 +0200
++++ samba-3.0.23rc2/source/rpc_server/srv_eventlog_lib.c	2006-06-13 22:25:56.805420250 +0200
 @@ -67,7 +67,7 @@
  {
  	fstring path;
@@ -607,8 +607,8 @@ Index: samba-3.0.23rc2/source/rpc_server/srv_eventlog_lib.c
  	
 Index: samba-3.0.23rc2/source/passdb/pdb_tdb.c
 ===================================================================
---- samba-3.0.23rc2.orig/source/passdb/pdb_tdb.c	2006-06-09 21:30:31.000000000 +0200
-+++ samba-3.0.23rc2/source/passdb/pdb_tdb.c	2006-06-13 22:11:18.966558750 +0200
+--- samba-3.0.23rc2.orig/source/passdb/pdb_tdb.c	2006-06-13 22:25:08.590407000 +0200
++++ samba-3.0.23rc2/source/passdb/pdb_tdb.c	2006-06-13 22:25:56.809420500 +0200
 @@ -1593,7 +1593,7 @@
  	/* save the path for later */
  			   
