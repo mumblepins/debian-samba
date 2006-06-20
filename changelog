@@ -32,6 +32,7 @@ samba (3.0.23rc2-1) UNRELEASED; urgency=low
   * Add (U)MOUNT_CIFS_VENDOR_SUFFIX to VERSION.patch
   * Rewrite debconf templates to be compliant with 6.5.2 of the Developer's
     Reference
+  * Add support for /etc/default/winbind. Closes: #262313, #374411
 
   [ Peter Eisentraut ]
   * Use debian/compat instead of DH_COMPAT

@@ -6,6 +6,8 @@
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
+[ -r /etc/default/winbind ] && . /etc/default/winbind
+
 DAEMON=/usr/sbin/winbindd
 
 # clear conflicting settings from the environment
@@ -20,7 +22,7 @@ case "$1" in
 	start)
 		log_daemon_msg "Starting the Winbind daemon" "winbind"
 
-		start-stop-daemon --start --quiet --exec $DAEMON
+		start-stop-daemon --start --quiet --exec $DAEMON -- $WINBINDD_OPTS
 
 		log_end_msg $?
 		;;
@@ -38,7 +40,7 @@ case "$1" in
 
 		start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
 		sleep 2
-		start-stop-daemon --start --quiet --exec $DAEMON
+		start-stop-daemon --start --quiet --exec $DAEMON -- $WINBINDD_OPTS
 
 		log_end_msg $?
 		;;
