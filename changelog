@@ -45,10 +45,13 @@ samba (3.0.23rc2-1) UNRELEASED; urgency=low
   * Updated to debhelper level 5
   * Rearranged dh_strip calls so that build succeeds with
     DEB_BUILD_OPTIONS=nostrip. Closes: #288995
-  * Create /var/spool/samba and use it as default printer spool
-    (closes: #275241)
+  * Create /var/spool/samba and use it as default printer spool.
+    Closes: #275241
+  * Made winbind init script more careful about returning proper exit code
+  * Added winbindd_priv group as owner of winbindd_privileged directory.
+    Closes: #307257
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 13 Jun 2006 22:09:03 +0200
+ -- Christian Perrier <bubulle@debian.org>  Tue, 20 Jun 2006 18:18:47 +0200
 
 samba (3.0.22-1) unstable; urgency=medium
 
