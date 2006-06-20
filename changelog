@@ -33,6 +33,8 @@ samba (3.0.23rc2-1) UNRELEASED; urgency=low
   * Rewrite debconf templates to be compliant with 6.5.2 of the Developer's
     Reference
   * Add support for /etc/default/winbind. Closes: #262313, #374411
+    Thanks to Guido Guenther for the old patch and to Jérôme Warnier
+    for reminding us about it.
 
   [ Peter Eisentraut ]
   * Use debian/compat instead of DH_COMPAT
