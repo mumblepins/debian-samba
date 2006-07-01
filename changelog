@@ -36,6 +36,8 @@ samba (3.0.23rc3-1) UNRELEASED; urgency=low
   * Add support for /etc/default/winbind. Closes: #262313, #374411
     Thanks to Guido Guenther for the old patch and to Jérôme Warnier
     for reminding us about it.
+  * Compile with --with-cifsmount which is now needed to properly compile
+    mount.cifs and umount.cifs. See samba bug #3799
 
   [ Peter Eisentraut ]
   * Use debian/compat instead of DH_COMPAT

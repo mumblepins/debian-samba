@@ -52,6 +52,7 @@ conf_args = \
 		--with-automount \
 		--with-tdbsam \
 		--with-ldap \
+		--with-cifsmount \
 		--with-python=python2.3
 
 ifeq ($(DEB_HOST_ARCH_OS),linux)
