@@ -13,6 +13,7 @@ samba (3.0.23rc3-1) UNRELEASED; urgency=low
   * Updated Japanese. Closes: #369457
   * Updated Italian. Closes: #369587
   * Updated Swedish. Closes: #369730
+  * Updated Dutch. Closes: #376515
   * Updated Vietnamese.
   * Updated French.
   * Updated Brazilian.
