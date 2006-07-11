@@ -1,7 +1,7 @@
-Index: samba-3.0.23rc3/source/configure.in
+Index: samba-3.0.23/source/configure.in
 ===================================================================
---- samba-3.0.23rc3.orig/source/configure.in	2006-06-24 13:46:45.018579000 +0200
-+++ samba-3.0.23rc3/source/configure.in	2006-06-24 13:46:50.818941500 +0200
+--- samba-3.0.23.orig/source/configure.in	2006-07-11 08:59:29.334658759 +0200
++++ samba-3.0.23/source/configure.in	2006-07-11 08:59:34.602694945 +0200
 @@ -755,6 +755,15 @@
        fi
      ;;

@@ -1,7 +1,7 @@
-Index: samba-3.0.23rc3/source/configure
+Index: samba-3.0.23/source/configure
 ===================================================================
---- samba-3.0.23rc3.orig/source/configure	2006-06-24 13:46:15.188714750 +0200
-+++ samba-3.0.23rc3/source/configure	2006-06-24 13:47:04.031767250 +0200
+--- samba-3.0.23.orig/source/configure	2006-07-11 08:58:28.138241077 +0200
++++ samba-3.0.23/source/configure	2006-07-11 08:59:46.462776537 +0200
 @@ -310,7 +310,7 @@
  # include <unistd.h>
  #endif"
@@ -3124,10 +3124,10 @@ Index: samba-3.0.23rc3/source/configure
  _ACEOF
  cat >>$CONFIG_STATUS <<_ACEOF
    sed "$ac_vpsub
-Index: samba-3.0.23rc3/source/include/config.h.in
+Index: samba-3.0.23/source/include/config.h.in
 ===================================================================
---- samba-3.0.23rc3.orig/source/include/config.h.in	2006-06-24 13:46:15.228717250 +0200
-+++ samba-3.0.23rc3/source/include/config.h.in	2006-06-24 13:47:04.035767500 +0200
+--- samba-3.0.23.orig/source/include/config.h.in	2006-07-11 08:58:28.178241348 +0200
++++ samba-3.0.23/source/include/config.h.in	2006-07-11 08:59:46.470776592 +0200
 @@ -48,6 +48,9 @@
  /* Define to turn on dmalloc debugging */
  #undef ENABLE_DMALLOC

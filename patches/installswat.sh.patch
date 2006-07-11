@@ -1,7 +1,7 @@
-Index: samba-3.0.23rc3/source/script/installswat.sh
+Index: samba-3.0.23/source/script/installswat.sh
 ===================================================================
---- samba-3.0.23rc3.orig/source/script/installswat.sh	2006-06-24 13:46:18.488921000 +0200
-+++ samba-3.0.23rc3/source/script/installswat.sh	2006-06-24 13:46:47.218716500 +0200
+--- samba-3.0.23.orig/source/script/installswat.sh	2006-07-11 08:58:31.342262818 +0200
++++ samba-3.0.23/source/script/installswat.sh	2006-07-11 08:59:31.930676587 +0200
 @@ -194,7 +194,11 @@
  
  # Install/ remove Using Samba book (but only if it is there)
