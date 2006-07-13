@@ -29,6 +29,8 @@ samba (3.0.23-1) UNRELEASED; urgency=low
       Closes: #367472
     - Typos in "ldap group suffix" in smb.conf(5). Upstream bug  #3780
       Closes: #367507
+    - Erroneous permissions checks after 3.0.10 -> 3.0.14a. Closes: #307626
+      (Upstream bug #2591)
   * Add dependency on procps for samba, as ps is used in init scripts.
     Thanks to Bastian Blank for reporting. Closes: #365618
   * Add (U)MOUNT_CIFS_VENDOR_SUFFIX to VERSION.patch
