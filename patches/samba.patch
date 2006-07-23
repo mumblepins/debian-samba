@@ -1,7 +1,7 @@
-Index: samba-3.0.23/source/client/smbmount.c
+Index: samba-3.0.23a/source/client/smbmount.c
 ===================================================================
---- samba-3.0.23.orig/source/client/smbmount.c	2006-07-11 08:58:29.918253154 +0200
-+++ samba-3.0.23/source/client/smbmount.c	2006-07-11 08:59:38.182719556 +0200
+--- samba-3.0.23a.orig/source/client/smbmount.c	2006-07-23 18:51:07.662364679 +0200
++++ samba-3.0.23a/source/client/smbmount.c	2006-07-23 18:52:30.375034680 +0200
 @@ -767,7 +767,7 @@
  					*lp = 0;
  					pstrcpy(password,lp+1);
@@ -29,10 +29,10 @@ Index: samba-3.0.23/source/client/smbmount.c
  		}
  		strupper_m(username);
  	}
-Index: samba-3.0.23/source/web/diagnose.c
+Index: samba-3.0.23a/source/web/diagnose.c
 ===================================================================
---- samba-3.0.23.orig/source/web/diagnose.c	2006-07-11 08:58:29.950253371 +0200
-+++ samba-3.0.23/source/web/diagnose.c	2006-07-11 08:59:38.182719556 +0200
+--- samba-3.0.23a.orig/source/web/diagnose.c	2006-07-23 18:51:07.718365132 +0200
++++ samba-3.0.23a/source/web/diagnose.c	2006-07-23 18:52:30.379034712 +0200
 @@ -62,6 +62,7 @@
  {
  	static struct cli_state cli;
@@ -41,10 +41,10 @@ Index: samba-3.0.23/source/web/diagnose.c
  	if (!cli_initialise(&cli))
  		return False;
  
-Index: samba-3.0.23/source/script/installbin.sh.in
+Index: samba-3.0.23a/source/script/installbin.sh.in
 ===================================================================
---- samba-3.0.23.orig/source/script/installbin.sh.in	2006-07-11 08:58:29.990253642 +0200
-+++ samba-3.0.23/source/script/installbin.sh.in	2006-07-11 08:59:38.182719556 +0200
+--- samba-3.0.23a.orig/source/script/installbin.sh.in	2006-07-23 18:51:07.782365651 +0200
++++ samba-3.0.23a/source/script/installbin.sh.in	2006-07-23 18:52:30.379034712 +0200
 @@ -21,13 +21,15 @@
   chmod $INSTALLPERMS $DESTDIR/$BINDIR/$p2
  

@@ -1,7 +1,7 @@
-Index: samba-3.0.23/source/configure.in
+Index: samba-3.0.23a/source/configure.in
 ===================================================================
---- samba-3.0.23.orig/source/configure.in	2006-07-11 08:59:29.334658759 +0200
-+++ samba-3.0.23/source/configure.in	2006-07-11 08:59:34.602694945 +0200
+--- samba-3.0.23a.orig/source/configure.in	2006-07-23 18:52:13.222895700 +0200
++++ samba-3.0.23a/source/configure.in	2006-07-23 18:52:23.610979870 +0200
 @@ -755,6 +755,15 @@
        fi
      ;;
@@ -39,7 +39,7 @@ Index: samba-3.0.23/source/configure.in
  			BLDSHARED="true"
  			if test "${ac_cv_gnu_ld_no_default_allow_shlib_undefined}" = "yes"; then
  				LDSHFLAGS="-shared -Wl,-Bsymbolic -Wl,--allow-shlib-undefined" 
-@@ -5014,7 +5026,7 @@
+@@ -5028,7 +5040,7 @@
  	AC_MSG_RESULT(yes);
  
  	case "$host_os" in
@@ -48,7 +48,7 @@ Index: samba-3.0.23/source/configure.in
  		AC_CACHE_CHECK([for linux sendfile64 support],samba_cv_HAVE_SENDFILE64,[
  		AC_TRY_LINK([#include <sys/sendfile.h>],
  [\
-@@ -5277,10 +5289,10 @@
+@@ -5291,10 +5303,10 @@
  WINBIND_NSS_LDSHFLAGS=$LDSHFLAGS
  
  case "$host_os" in

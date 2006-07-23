@@ -1,4 +1,4 @@
-samba (3.0.23-1) UNRELEASED; urgency=low
+samba (3.0.23a-1) UNRELEASED; urgency=low
 
   [ Adam Conrad ]
   * Fix typo in smb.conf that causes all samba apps to whine.
@@ -58,7 +58,7 @@ samba (3.0.23-1) UNRELEASED; urgency=low
   * Added winbindd_priv group as owner of winbindd_privileged directory.
     Closes: #307257
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 11 Jul 2006 08:57:26 +0200
+ -- Christian Perrier <bubulle@debian.org>  Sun, 23 Jul 2006 18:50:35 +0200
 
 samba (3.0.22-1) unstable; urgency=medium
 
