@@ -8,6 +8,7 @@ samba (3.0.23-1) UNRELEASED; urgency=low
   [ Debconf translations ]
   * Add Galician translation of debconf templates. Closes: #361204, #369403
   * Add Basque translation of debconf templates. Closes: #375104
+  * Add Romanian translation of debconf templates. Closes: #379246
   * Updated Russian. Closes: #369375
   * Updated Czech. Closes: #369408
   * Updated Japanese. Closes: #369457
