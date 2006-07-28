@@ -20,6 +20,7 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Updated French.
   * Updated Brazilian.
   * Updated Portuguese.
+  * Updated Arabic.
 
   [ Christian Perrier ]
   * New upstream release. Fixes the following Debian bugs:
