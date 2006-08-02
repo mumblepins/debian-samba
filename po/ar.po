@@ -1,7 +1,6 @@
 # translation of samba_po.po to Arabic
-# xserver-xorg translation
 # Copyright (C) 2006 The Arabeyes Project
-# This file is distributed under the same license as the xserver-xorg package.
+# This file is distributed under the same license as the samba package.
 #
 # younes <behloul.younes@gmail.com>, 2006.
 msgid ""
