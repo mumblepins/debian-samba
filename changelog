@@ -59,6 +59,8 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Made winbind init script more careful about returning proper exit code
   * Added winbindd_priv group as owner of winbindd_privileged directory.
     Closes: #307257
+  * Python transition preparations: renamed package to python-samba,
+    removed hardcoded references to Python version 2.3. Closes: #380939
 
  -- Christian Perrier <bubulle@debian.org>  Sun, 23 Jul 2006 18:50:35 +0200
 

@@ -13,6 +13,8 @@ export DEB_HOST_GNU_TYPE
 export DEB_BUILD_GNU_TYPE
 export DEB_HOST_ARCH_OS
 
+pyversion := $(shell pyversions -vd)
+
 CFLAGS = -g -Wall
 
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
@@ -53,7 +55,7 @@ conf_args = \
 		--with-tdbsam \
 		--with-ldap \
 		--with-cifsmount \
-		--with-python=python2.3
+		--with-python=python
 
 ifeq ($(DEB_HOST_ARCH_OS),linux)
   conf_args += \
@@ -122,7 +124,7 @@ install: build
 
 	mkdir -p $(DESTDIR)/usr/lib/cups/backend $(DESTDIR)/usr/share/samba \
 	         $(DESTDIR)/etc/pam.d $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d \
-	         $(DESTDIR)/usr/lib/python2.3/site-packages/samba
+	         $(DESTDIR)/usr/lib/python$(pyversion)/site-packages/samba
 
 	$(MAKE) -C source install DESTDIR=$(DESTDIR)
 
@@ -167,13 +169,8 @@ endif
 	install -m755 debian/samba-common.dhcp $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d/samba
 
 	# Install the Python modules
-	#
-	# Hmmm... need to figure this out. We have lib.linux-i686-2.2
-	# and lib.linux-i686-2.3 directories. Using only the stuff from
-	# the 2.3 directory for now. peloy.-
-	#cp source/build/lib.*/samba/*.so $(DESTDIR)/usr/lib/python2.3/site-packages/
-	cp source/build/lib.*-*-2.3/samba/*.so $(DESTDIR)/usr/lib/python2.3/site-packages/samba/
-	cp source/python/samba/* $(DESTDIR)/usr/lib/python2.3/site-packages/samba/
+	cp source/build/lib.*-*-$(pyversion)/samba/*.so $(DESTDIR)/usr/lib/python$(pyversion)/site-packages/samba/
+	cp source/python/samba/* $(DESTDIR)/usr/lib/python$(pyversion)/site-packages/samba/
 
 	dh_movefiles
 
@@ -214,7 +211,7 @@ binary-arch: build install
 	DH_OPTIONS= dh_installinit -psamba -- "defaults 20 19"
 	DH_OPTIONS= dh_installinit -pwinbind
 	dh_installcron 
-	for pkg in python2.3-samba samba smbfs winbind; do \
+	for pkg in python-samba samba smbfs winbind; do \
 	  install -m 0644 -D debian/$$pkg.lintian debian/$$pkg/usr/share/lintian/overrides/$$pkg || exit; \
 	done
 	dh_installchangelogs -Nlibpam-smbpass
@@ -222,6 +219,7 @@ binary-arch: build install
 	DH_OPTIONS= dh_strip -psamba -psmbclient --dbg-package=samba-dbg
 	DH_OPTIONS= dh_strip -Nsamba -Nsmbclient
 	dh_link
+	dh_python
 	dh_compress
 	dh_fixperms
 
