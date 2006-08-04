@@ -14,7 +14,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: samba_po_ro\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-05-29 07:59+0200\n"
+"POT-Creation-Date: 2006-08-03 20:39-0500\n"
 "PO-Revision-Date: 2006-07-22 16:24+0300\n"
 "Last-Translator: Eddy Petrişor <eddy.petrisor@gmail.com>\n"
 "Language-Team: Romanian <debian-l10n-romanian@lists.debian.org>\n"
@@ -22,80 +22,103 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: KBabel 1.11.2\n"
-"Plural-Forms: nplurals=3;plural=(n==1?0:(((n%100>19)||((n%100==0)&&(n!=0)))?2:1))\n"
+"Plural-Forms: nplurals=3;plural=(n==1?0:(((n%100>19)||((n%100==0)&&(n!=0)))?"
+"2:1))\n"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:3
+#: ../samba-common.templates:1001
 msgid "Character Set for Unix filesystem"
 msgstr "Setul de caractere pentru sisteme de fişiere Unix"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:3
+#: ../samba-common.templates:1001
 msgid ""
 "The \"character set\" option is currently configured in smb.conf.  In Samba "
 "3.0, this option is replaced by a new option, \"unix charset\". Please "
 "specify the character set you wish to use for this new option, which "
 "controls how Samba interprets filenames on the file system."
-msgstr "Opţiunea „character set” (setul de caractere) se configurează acum în smb.conf. În Samba 3.0, această opţiune este înlocuită de una nouă, „unix charset” (setul de caractere unix). Vă rugăm să specificaţi setul de caractere pe care-l doriţi pentru această nouă opţiune ce controlează felul în care Samba interpretează numele de fişiere în sistemul de fişiere."
+msgstr ""
+"Opţiunea „character set” (setul de caractere) se configurează acum în smb."
+"conf. În Samba 3.0, această opţiune este înlocuită de una nouă, „unix "
+"charset” (setul de caractere unix). Vă rugăm să specificaţi setul de "
+"caractere pe care-l doriţi pentru această nouă opţiune ce controlează felul "
+"în care Samba interpretează numele de fişiere în sistemul de fişiere."
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:13
+#. Type: string
+#. Description
+#: ../samba-common.templates:1001 ../samba-common.templates:2001
+msgid "If you leave this option blank, the smb.conf file will not be changed."
+msgstr "Dacă lăsaţi această opţiune vidă, fişierul smb.conf nu va fi schimbat."
+
+#. Type: string
+#. Description
+#: ../samba-common.templates:2001
 msgid "Character Set for DOS clients"
 msgstr "Setul de caractere pentru clienţii DOS"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:13
+#: ../samba-common.templates:2001
 msgid ""
 "The \"client code page\" option is currently configured in smb.conf.  In "
 "Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
 "specify the character set you wish to use for this new option.  In most "
 "cases, the default chosen for you will be sufficient.  Note that this option "
 "is not needed to support Windows clients, it is only for DOS clients."
-msgstr "Opţiunea „client code page” (pagina de coduri a clientului) se configurează acum în smb.conf. În Samba 3.0, această opţiune este înlocuită de opţiunea „dos charset” (setul de caractere DOS). Vă rugăm să specificaţi setul de caractere pe care-l doriţi pentru această nouă opţiune. În cele mai multe cazuri valoarea implicită aleasă deja pentru dvs. va fi suficientă. A se reţine că această opţiune nu este necesară pentru a ofri suport pentru clienţii Windows, este necesară doar pentru clienţii DOS."
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:13
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr "Dacă lăsaţi această opţiune vidă, fişierul smb.conf nu va fi schimbat."
+msgstr ""
+"Opţiunea „client code page” (pagina de coduri a clientului) se configurează "
+"acum în smb.conf. În Samba 3.0, această opţiune este înlocuită de opţiunea "
+"„dos charset” (setul de caractere DOS). Vă rugăm să specificaţi setul de "
+"caractere pe care-l doriţi pentru această nouă opţiune. În cele mai multe "
+"cazuri valoarea implicită aleasă deja pentru dvs. va fi suficientă. A se "
+"reţine că această opţiune nu este necesară pentru a ofri suport pentru "
+"clienţii Windows, este necesară doar pentru clienţii DOS."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:25
+#: ../samba-common.templates:3001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Se modifică smb.conf pentru a folosi configuraţiile WINS din DHCP?"
 
+# RO: prefer să nu folosesc termeni de genul „calculatorul dvs.”; de multe ori nu e cazul şi sună mai puţin profesional.
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:25
-# RO: prefer să nu folosesc termeni de genul „calculatorul dvs.”; de multe ori nu e cazul şi sună mai puţin profesional.
+#: ../samba-common.templates:3001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
 "(\"NetBIOS name servers\") present on the network.  This requires a change "
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
-msgstr "Dacă acest calculator primeşte informaţiile IP (de configurare a reţelei) de la un server DHCP din reţea, acel server ar putea să ofere informaţii şi despre serverele WINS („Serverele NetBIOS de nume”) prezente în reţea. Acest lucru necesită o schimbare a fişierului smb.conf astfel încât configuraţiile WINS oferite prin DHCP vor fi citite automat din /etc/samba/dhcp.conf."
+msgstr ""
+"Dacă acest calculator primeşte informaţiile IP (de configurare a reţelei) de "
+"la un server DHCP din reţea, acel server ar putea să ofere informaţii şi "
+"despre serverele WINS („Serverele NetBIOS de nume”) prezente în reţea. Acest "
+"lucru necesită o schimbare a fişierului smb.conf astfel încât configuraţiile "
+"WINS oferite prin DHCP vor fi citite automat din /etc/samba/dhcp.conf."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:25
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
-msgstr "Pachetul dhcp3-client trebuie să fie instalat pentru a beneficia de această facilitate."
+#: ../samba-common.templates:3001
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
+msgstr ""
+"Pachetul dhcp3-client trebuie să fie instalat pentru a beneficia de această "
+"facilitate."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:38
+#: ../samba-common.templates:4001
 msgid "Configure smb.conf automatically?"
 msgstr "Se configură smb.conf automat?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:38
+#: ../samba-common.templates:4001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -103,186 +126,226 @@ msgid ""
 "line or an option that spans multiple lines, which could confuse the "
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
-msgstr "Restul configuraţiei Samba tratează întrebările care afectează parametrii din /etc/samba/smb.conf, fişierul utilizat pentru a configura programele Samba (nmbd şi smbd). Actualul fişier smb.conf conţine o linie „include” sau o opţiune care se desfăşoară de-a lungul a mai multor linii, lucru care ar putea să creeze confuzie în procesul de configurare automată şi ar putea duce la necesitatea editării manuale a fişierului smb.conf pentru a-l face din nou funcţional."
+msgstr ""
+"Restul configuraţiei Samba tratează întrebările care afectează parametrii "
+"din /etc/samba/smb.conf, fişierul utilizat pentru a configura programele "
+"Samba (nmbd şi smbd). Actualul fişier smb.conf conţine o linie „include” sau "
+"o opţiune care se desfăşoară de-a lungul a mai multor linii, lucru care ar "
+"putea să creeze confuzie în procesul de configurare automată şi ar putea "
+"duce la necesitatea editării manuale a fişierului smb.conf pentru a-l face "
+"din nou funcţional."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:38
+#: ../samba-common.templates:4001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
-msgstr "Dacă nu selectaţi aceasta opţiune, va trebui să gestionaţi personal orice schimbare a configuraţiei şi nu veţi putea beneficia de îmbunătăţirile periodice ale configuraţiei."
+msgstr ""
+"Dacă nu selectaţi aceasta opţiune, va trebui să gestionaţi personal orice "
+"schimbare a configuraţiei şi nu veţi putea beneficia de îmbunătăţirile "
+"periodice ale configuraţiei."
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:52
+#: ../samba-common.templates:5001
 msgid "Workgroup/Domain Name:"
 msgstr "Grupul de lucru/Numele de domeniu:"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:52
+#: ../samba-common.templates:5001
 msgid ""
 "Please specify the workgroup this server will appear to be in when queried "
 "by clients. Note that this parameter also controls the Domain name used with "
 "the security=domain setting."
-msgstr "Vă rugăm să specificaţi grupul de lucru de care acest server va aparţine când va fi chestionat de clienţi. A se reţine că acest parametru controlează şi numele de domeniu folosit cu opţiunea security=domain."
+msgstr ""
+"Vă rugăm să specificaţi grupul de lucru de care acest server va aparţine "
+"când va fi chestionat de clienţi. A se reţine că acest parametru controlează "
+"şi numele de domeniu folosit cu opţiunea security=domain."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:60
+#: ../samba-common.templates:6001
 msgid "Use password encryption?"
 msgstr "Se folosc parole criptate? "
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:60
+#: ../samba-common.templates:6001
 msgid ""
 "Most Windows clients communicate with SMB servers using encrypted passwords. "
 "If you want to use clear text passwords you will need to change a parameter "
 "in your Windows registry."
-msgstr "Cei mai mulţi clienţi Windows comunică cu serverele SMB folosind parole criptate. Dacă doriţi să folosiţi parole necriptate, va trebui să schimbaţi un parametru în registrul Windows."
+msgstr ""
+"Cei mai mulţi clienţi Windows comunică cu serverele SMB folosind parole "
+"criptate. Dacă doriţi să folosiţi parole necriptate, va trebui să schimbaţi "
+"un parametru în registrul Windows."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:60
+#: ../samba-common.templates:6001
+#, fuzzy
 msgid ""
-"Choosing this option is highly recommended. If you do, make sure you have a "
+"Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
-msgstr "Alegerea acestei opţiuni este puternic recomandată. Dacă o alegeţi, asiguraţi-vă că fişierul /etc/samba/smbpasswd este valid şi că aţi pus acolo o parolă pentru fiecare utillizator folosind comanda smbpasswd."
+msgstr ""
+"Alegerea acestei opţiuni este puternic recomandată. Dacă o alegeţi, "
+"asiguraţi-vă că fişierul /etc/samba/smbpasswd este valid şi că aţi pus acolo "
+"o parolă pentru fiecare utillizator folosind comanda smbpasswd."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "Se creează baza de date cu parole /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
+#, fuzzy
 msgid ""
 "To be compatible with the defaults in most versions of Windows, Samba must "
 "be configured to use encrypted passwords.  This requires user passwords to "
-"be stored in a file separate from /etc/passwd."
-msgstr "Pentru compatibilitate cu majoritatea versiunilor de Windows, Samba trebuie să fie configurată să folosească parole criptate. Acest lucru necesită ca parolele utilizatorilor să fie stocate în alt fişier decât /etc/passwd."
+"be stored in a file separate from /etc/passwd.  This file can be created "
+"automatically, but the passwords must be added manually by running smbpasswd "
+"and be kept up-to-date in the future."
+msgstr ""
+"Pentru compatibilitate cu majoritatea versiunilor de Windows, Samba trebuie "
+"să fie configurată să folosească parole criptate. Acest lucru necesită ca "
+"parolele utilizatorilor să fie stocate în alt fişier decât /etc/passwd."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
+#, fuzzy
 msgid ""
-"This file can be created automatically, but the passwords must be added "
-"manually (by running smbpasswd) and be kept up-to-date in the future.  If "
-"you do not create it, you will have to reconfigure samba (and probably your "
-"client machines) to use plaintext passwords."
-msgstr "Acest fişier poate fi creat automat, dar parolele trebuie adăugate manual (prin rularea smbpasswd) şi trebuie actualizat de acum înainte. Dacă nu-l creaţi va trebui să reconfiguraţi samba (probabil şi calculatoarele client) să folosească parole necriptate."
+"If you do not create it, you will have to reconfigure Samba (and probably "
+"your client machines) to use plaintext passwords."
+msgstr ""
+"Acest fişier poate fi creat automat, dar parolele trebuie adăugate manual "
+"(prin rularea smbpasswd) şi trebuie actualizat de acum înainte. Dacă nu-l "
+"creaţi va trebui să reconfiguraţi samba (probabil şi calculatoarele client) "
+"să folosească parole necriptate."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
 msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
-msgstr "A se vedea /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html din pachetul samba-doc pentru mai multe detalii."
+msgstr ""
+"A se vedea /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html din pachetul "
+"samba-doc pentru mai multe detalii."
 
 #. Type: note
 #. Description
-#: ../samba.templates:19
+#: ../samba.templates:2001
 msgid "Samba's log files moved"
 msgstr "Jurnalele lui Samba s-au mutat"
 
 #. Type: note
 #. Description
-#: ../samba.templates:19
+#: ../samba.templates:2001
 msgid ""
 "The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
 "log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
 "smbd respectively."
 msgstr ""
 "Jurnalele atât pentru demonii Samba (nmbd şi smbd) sunt stocate acum în var/"
-"log/samba/. Numele fişierelor sunt log.nmbd şi log.smbd, pentru nmbd şi respectiv smbd."
+"log/samba/. Numele fişierelor sunt log.nmbd şi log.smbd, pentru nmbd şi "
+"respectiv smbd."
 
 #. Type: note
 #. Description
-#: ../samba.templates:19
+#: ../samba.templates:2001
 msgid ""
 "The old log files from /var/log/ will automatically be moved to the new "
 "location."
-msgstr "Vechile fişiere jurnal din /var/log/ vor fi mutate automat în noul loc."
+msgstr ""
+"Vechile fişiere jurnal din /var/log/ vor fi mutate automat în noul loc."
 
 #. Type: note
 #. Description
-#: ../samba.templates:29
+#: ../samba.templates:3001
 msgid "Running nmbd from inetd no longer supported"
 msgstr "Rularea nmbd din inetd nu mai este posibilă"
 
 #. Type: note
 #. Description
-#: ../samba.templates:29
+#: ../samba.templates:3001
 msgid ""
 "This system was previously configured to start nmbd and smbd from inetd. In "
 "recent Samba versions, nmbd cannot be started from inetd. If you have "
 "modified your /etc/init.d/samba startup script, you may need to adjust it "
 "now so that nmbd will start."
-msgstr "Acest sistem a fost anterior configurat să pornească nmbd şi smbd din inetd. În versiunile recente de Samba nmbd nu mai poate fi pornit din inetd. Dacă aţi modificat fişierul-script de pornire /etc/init.d/samba, probabil că va trebui să-l modificaţi ca nmbd să pornească."
+msgstr ""
+"Acest sistem a fost anterior configurat să pornească nmbd şi smbd din inetd. "
+"În versiunile recente de Samba nmbd nu mai poate fi pornit din inetd. Dacă "
+"aţi modificat fişierul-script de pornire /etc/init.d/samba, probabil că va "
+"trebui să-l modificaţi ca nmbd să pornească."
 
 #. Type: select
 #. Choices
-#: ../samba.templates:37
+#: ../samba.templates:4001
 msgid "daemons, inetd"
 msgstr "demoni, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:39
+#: ../samba.templates:4002
 msgid "Samba run method:"
 msgstr "Metoda de rulare a Samba:"
 
 #. Type: select
 #. Description
-#: ../samba.templates:39
+#: ../samba.templates:4002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
-msgstr "Demonul Samba smbd poate rula ca un demon normal sau din inetd. Rularea ca demon este abordarea recomandată."
+msgstr ""
+"Demonul Samba smbd poate rula ca un demon normal sau din inetd. Rularea ca "
+"demon este abordarea recomandată."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:46
+#: ../samba.templates:5001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Se mută /etc/samba/smbpasswd în /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:46
+#: ../samba.templates:5001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
-msgstr "Samba 3.0 a introdus o interfaţă pentru baza de date SAM mai completă care înlocuieşte fişierul /etc/samba/smbpasswd."
+msgstr ""
+"Samba 3.0 a introdus o interfaţă pentru baza de date SAM mai completă care "
+"înlocuieşte fişierul /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:46
+#: ../samba.templates:5001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
-msgstr "Vă rugăm să confirmaţi dacă doriţi ca fişierul smbpasswd existent să fie migrat automat în /var/lib/samba/passdb.tdb. Nu alegeţi această opţiune dacă plănuiţi să folosiţi un alt suport pentru pdb (ex. LDAP)."
+msgstr ""
+"Vă rugăm să confirmaţi dacă doriţi ca fişierul smbpasswd existent să fie "
+"migrat automat în /var/lib/samba/passdb.tdb. Nu alegeţi această opţiune dacă "
+"plănuiţi să folosiţi un alt suport pentru pdb (ex. LDAP)."
 
-#. Type: note
-#. Description
-#: ../swat.templates:3
-msgid "Configuration file rewritten by SWAT"
-msgstr "Fişier de configurare rescris de SWAT"
+#~ msgid "Configuration file rewritten by SWAT"
+#~ msgstr "Fişier de configurare rescris de SWAT"
 
-#. Type: note
-#. Description
-#: ../swat.templates:3
-msgid ""
-"SWAT will rewrite the smb.conf file. It will rearrange the entries and "
-"delete all comments, include= and copy= options. If you use a carefully "
-"crafted smb.conf, you should probably avoid using SWAT."
-msgstr "SWAT va rescrie fişierul smb.conf. Va rearanja intrările şi va şterge toate comentariile, şi opţiunile include= şi copy=. Dacă folosiţi un fişier smb.conf modificat mult, probabil că ar trebui sa evitaţi să folosiţi SWAT."
-
-
+#~ msgid ""
+#~ "SWAT will rewrite the smb.conf file. It will rearrange the entries and "
+#~ "delete all comments, include= and copy= options. If you use a carefully "
+#~ "crafted smb.conf, you should probably avoid using SWAT."
+#~ msgstr ""
+#~ "SWAT va rescrie fişierul smb.conf. Va rearanja intrările şi va şterge "
+#~ "toate comentariile, şi opţiunile include= şi copy=. Dacă folosiţi un "
+#~ "fişier smb.conf modificat mult, probabil că ar trebui sa evitaţi să "
+#~ "folosiţi SWAT."

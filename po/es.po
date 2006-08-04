@@ -15,7 +15,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Samba for Debian 3.0.0beta2-1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-05-29 07:59+0200\n"
+"POT-Creation-Date: 2006-08-03 20:39-0500\n"
 "PO-Revision-Date: 2003-07-02 21:51-0500\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Spanish <debian-l10n-spanish@lists.debian.org>\n"
@@ -25,14 +25,14 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:3
+#: ../samba-common.templates:1001
 msgid "Character Set for Unix filesystem"
 msgstr "Juego de caracteres para el sistema de ficheros Unix"
 
 #
 #. Type: string
 #. Description
-#: ../samba-common.templates:3
+#: ../samba-common.templates:1001
 #, fuzzy
 msgid ""
 "The \"character set\" option is currently configured in smb.conf.  In Samba "
@@ -47,13 +47,22 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:13
+#. Type: string
+#. Description
+#: ../samba-common.templates:1001 ../samba-common.templates:2001
+#, fuzzy
+msgid "If you leave this option blank, the smb.conf file will not be changed."
+msgstr "Si deja en blanco este campo, no se cambiará smb.conf."
+
+#. Type: string
+#. Description
+#: ../samba-common.templates:2001
 msgid "Character Set for DOS clients"
 msgstr "Juego de caracteres para los clientes DOS"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:13
+#: ../samba-common.templates:2001
 #, fuzzy
 msgid ""
 "The \"client code page\" option is currently configured in smb.conf.  In "
@@ -69,23 +78,16 @@ msgstr ""
 "exclusivamente para los clientes DOS.  Si deja en blanco este campo, no se "
 "cambiará smb.conf."
 
-#. Type: string
-#. Description
-#: ../samba-common.templates:13
-#, fuzzy
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr "Si deja en blanco este campo, no se cambiará smb.conf."
-
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:25
+#: ../samba-common.templates:3001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr ""
 "¿Modificar smb.conf para usar la configuración WINS que proviene de DHCP?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:25
+#: ../samba-common.templates:3001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -101,7 +103,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:25
+#: ../samba-common.templates:3001
 #, fuzzy
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
@@ -110,14 +112,14 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:38
+#: ../samba-common.templates:4001
 #, fuzzy
 msgid "Configure smb.conf automatically?"
 msgstr "¿Configurar smb.conf mediante debconf?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:38
+#: ../samba-common.templates:4001
 #, fuzzy
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
@@ -136,7 +138,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:38
+#: ../samba-common.templates:4001
 #, fuzzy
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
@@ -150,14 +152,14 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:52
+#: ../samba-common.templates:5001
 #, fuzzy
 msgid "Workgroup/Domain Name:"
 msgstr "Nombre del dominio o del grupo de trabajo"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:52
+#: ../samba-common.templates:5001
 #, fuzzy
 msgid ""
 "Please specify the workgroup this server will appear to be in when queried "
@@ -170,13 +172,13 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:60
+#: ../samba-common.templates:6001
 msgid "Use password encryption?"
 msgstr "¿Utilizar contraseñas cifradas?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:60
+#: ../samba-common.templates:6001
 #, fuzzy
 msgid ""
 "Most Windows clients communicate with SMB servers using encrypted passwords. "
@@ -192,10 +194,10 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:60
+#: ../samba-common.templates:6001
 #, fuzzy
 msgid ""
-"Choosing this option is highly recommended. If you do, make sure you have a "
+"Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
@@ -208,28 +210,28 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
 msgstr "¿Crear el base de dados de contraseñas /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
 msgid ""
 "To be compatible with the defaults in most versions of Windows, Samba must "
 "be configured to use encrypted passwords.  This requires user passwords to "
-"be stored in a file separate from /etc/passwd."
+"be stored in a file separate from /etc/passwd.  This file can be created "
+"automatically, but the passwords must be added manually by running smbpasswd "
+"and be kept up-to-date in the future."
 msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
 #, fuzzy
 msgid ""
-"This file can be created automatically, but the passwords must be added "
-"manually (by running smbpasswd) and be kept up-to-date in the future.  If "
-"you do not create it, you will have to reconfigure samba (and probably your "
-"client machines) to use plaintext passwords."
+"If you do not create it, you will have to reconfigure Samba (and probably "
+"your client machines) to use plaintext passwords."
 msgstr ""
 "Para manterner la compatibilidad con el comportamiento por defecto de la "
 "mayoria de los sistemas Windows, hay que configurar Samba para que use "
@@ -245,7 +247,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:4
+#: ../samba.templates:1001
 msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
@@ -253,14 +255,14 @@ msgstr ""
 
 #. Type: note
 #. Description
-#: ../samba.templates:19
+#: ../samba.templates:2001
 #, fuzzy
 msgid "Samba's log files moved"
 msgstr "Se han cambiado de lugar los ficheros de registro de Samba."
 
 #. Type: note
 #. Description
-#: ../samba.templates:19
+#: ../samba.templates:2001
 #, fuzzy
 msgid ""
 "The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
@@ -274,7 +276,7 @@ msgstr ""
 
 #. Type: note
 #. Description
-#: ../samba.templates:19
+#: ../samba.templates:2001
 #, fuzzy
 msgid ""
 "The old log files from /var/log/ will automatically be moved to the new "
@@ -285,14 +287,14 @@ msgstr ""
 
 #. Type: note
 #. Description
-#: ../samba.templates:29
+#: ../samba.templates:3001
 #, fuzzy
 msgid "Running nmbd from inetd no longer supported"
 msgstr "Ya no se puede ejecutar nmbd desde el inetd"
 
 #. Type: note
 #. Description
-#: ../samba.templates:29
+#: ../samba.templates:3001
 #, fuzzy
 msgid ""
 "This system was previously configured to start nmbd and smbd from inetd. In "
@@ -307,19 +309,19 @@ msgstr ""
 
 #. Type: select
 #. Choices
-#: ../samba.templates:37
+#: ../samba.templates:4001
 msgid "daemons, inetd"
 msgstr "demonios, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:39
+#: ../samba.templates:4002
 msgid "Samba run method:"
 msgstr ""
 
 #. Type: select
 #. Description
-#: ../samba.templates:39
+#: ../samba.templates:4002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
@@ -329,14 +331,14 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:46
+#: ../samba.templates:5001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr ""
 "¿Convertir el fichero /etc/samba/smbpasswd en /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:46
+#: ../samba.templates:5001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
@@ -344,7 +346,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:46
+#: ../samba.templates:5001
 #, fuzzy
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
@@ -355,21 +357,6 @@ msgstr ""
 "completo que suplanta al fichero /etc/samba/smbpasswd.  ¿Quiere que el "
 "fichero corriente smbpasswd sea convertido en /var/lib/samba/passdb.tdb?  Si "
 "pretende usar otro  "
-
-#. Type: note
-#. Description
-#: ../swat.templates:3
-msgid "Configuration file rewritten by SWAT"
-msgstr ""
-
-#. Type: note
-#. Description
-#: ../swat.templates:3
-msgid ""
-"SWAT will rewrite the smb.conf file. It will rearrange the entries and "
-"delete all comments, include= and copy= options. If you use a carefully "
-"crafted smb.conf, you should probably avoid using SWAT."
-msgstr ""
 
 #~ msgid "How do you want to run Samba?"
 #~ msgstr "¿Cómo quiere que se ejecute Samba?"
