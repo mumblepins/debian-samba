@@ -1,5 +1,24 @@
 samba (3.0.23a-1) UNRELEASED; urgency=low
 
+  * New upstream release
+
+  * Fixes the following Debian bugs:
+    - winbind: panic()s when started outside of a domain context.
+      Closes: #337070
+    - Make smbclient -L use RPC to list shares, fall back to RAP.
+      Closes: #168732
+    - Potential hang in nmbd. Upstream bug #3779. Closes: #367472
+    - Typos in "ldap group suffix" in smb.conf(5) (upstream #3780).
+      Closes: #367507
+    - Erroneous permissions checks after 3.0.10 -> 3.0.14a
+      (upstream #2591). Closes: #307626
+    - Anonymous memory exhaustion DoS (CVE-2006-3403). Closes: #378070
+    - ImportError exception raised when trying to import samba.smb
+      (upstream #3567). Closes: #350050
+    - Changed references from pam_pwdb to pam_unix (upstream #3225).
+      Closes: #206672
+    - SWAT segfault (upstream #3702). Closes: #363523
+
   [ Adam Conrad ]
   * Fix typo in smb.conf that causes all samba apps to whine.
     Closes: #369782
@@ -23,17 +42,6 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Updated Arabic.
 
   [ Christian Perrier ]
-  * New upstream release. Fixes the following Debian bugs:
-    - winbind: panic()s when started outside of a domain context
-      Closes: #337070
-    - Make smbclient -L use RPC to list shares, fall back to RAP.
-      Closes: #168732
-    - Potential hang in nmbd. Upstream bug #3779
-      Closes: #367472
-    - Typos in "ldap group suffix" in smb.conf(5). Upstream bug  #3780
-      Closes: #367507
-    - Erroneous permissions checks after 3.0.10 -> 3.0.14a. Closes: #307626
-      (Upstream bug #2591)
   * Add dependency on procps for samba, as ps is used in init scripts.
     Thanks to Bastian Blank for reporting. Closes: #365618
   * Add (U)MOUNT_CIFS_VENDOR_SUFFIX to VERSION.patch
