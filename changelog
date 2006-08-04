@@ -62,6 +62,8 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Python transition preparations: renamed package to python-samba,
     removed hardcoded references to Python version 2.3. Closes: #380939
   * Removed unwanted swat debconf warning
+  * Put localized swat messages into /usr/share/samba, where swat looks for
+    them. Closes: #376991
 
  -- Christian Perrier <bubulle@debian.org>  Sun, 23 Jul 2006 18:50:35 +0200
 
