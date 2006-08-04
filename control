@@ -84,6 +84,10 @@ Description: Samba Web Administration Tool
  .
  This package contains the components of the Samba suite that are needed
  for Web administration of the Samba server.
+ .
+ SWAT will rewrite the smb.conf file. It will rearrange the entries and
+ delete all comments, include= and copy= options. If you use a carefully
+ crafted smb.conf, you should probably avoid using SWAT.
 
 Package: samba-doc
 Section: doc
