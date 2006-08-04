@@ -19,7 +19,7 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Updated Vietnamese.
   * Updated French.
   * Updated Brazilian.
-  * Updated Portuguese.
+  * Updated Portuguese. Closes: #372632
   * Updated Arabic.
 
   [ Christian Perrier ]
