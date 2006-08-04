@@ -4,12 +4,12 @@ Default: false
 _Description: Create samba password database, /var/lib/samba/passdb.tdb?
  To be compatible with the defaults in most versions of Windows, Samba must
  be configured to use encrypted passwords.  This requires user passwords to
- be stored in a file separate from /etc/passwd.
+ be stored in a file separate from /etc/passwd.  This file can be created
+ automatically, but the passwords must be added manually by running
+ smbpasswd and be kept up-to-date in the future.
  .
- This file can be created automatically, but the passwords must be
- added manually (by running smbpasswd) and be kept up-to-date in the
- future.  If you do not create it, you will have to reconfigure samba
- (and probably your client machines) to use plaintext passwords.
+ If you do not create it, you will have to reconfigure Samba (and probably
+ your client machines) to use plaintext passwords.
  .
  See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the
  samba-doc package for more details.

@@ -62,6 +62,6 @@ _Description: Use password encryption?
  passwords. If you want to use clear text passwords you will need to change
  a parameter in your Windows registry. 
  .
- Choosing this option is highly recommended. If you do, make sure you
+ Enabling this option is highly recommended. If you do, make sure you
  have a valid /etc/samba/smbpasswd file and that you set passwords in
  there for each user using the smbpasswd command.
