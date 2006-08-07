@@ -28,6 +28,7 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Add Galician translation of debconf templates. Closes: #361204, #369403
   * Add Basque translation of debconf templates. Closes: #375104
   * Add Romanian translation of debconf templates. Closes: #379246
+  * Add Khmer translation of debconf templates. Closes: #381833
   * Add Dzongkha translation of debconf templates.
   * Updated Russian. Closes: #369375
   * Updated Czech. Closes: #369408
@@ -35,7 +36,7 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Updated Italian. Closes: #369587
   * Updated Swedish. Closes: #369730
   * Updated Dutch. Closes: #376515
-  * Updated Vietnamese.
+  * Updated Vietnamese. Closes: #381557
   * Updated French.
   * Updated Brazilian.
   * Updated Portuguese. Closes: #372632
