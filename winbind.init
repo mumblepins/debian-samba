@@ -18,37 +18,26 @@ test -x $DAEMON || exit 0
 
 . /lib/lsb/init-functions
 
-
-d_start() {
-	mkdir -p /var/run/samba/winbindd_privileged || return 1
-	chgrp winbindd_priv /var/run/samba/winbindd_privileged/ || return 1
-	chmod 0750 /var/run/samba/winbindd_privileged/ || return 1
-	start-stop-daemon --start --quiet --oknodo --exec $DAEMON -- $WINBINDD_OPTS
-}
-
-
-d_stop() {
-	start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
-}
-
-
 case "$1" in
 	start)
 		log_daemon_msg "Starting the Winbind daemon" "winbind"
-		d_start
+
+		mkdir -p /var/run/samba/winbindd_privileged || return 1
+		chgrp winbindd_priv /var/run/samba/winbindd_privileged/ || return 1
+		chmod 0750 /var/run/samba/winbindd_privileged/ || return 1
+		start-stop-daemon --start --quiet --oknodo --exec $DAEMON -- $WINBINDD_OPTS
+
 		log_end_msg $?
 		;;
 
 	stop)
 		log_daemon_msg "Stopping the Winbind daemon" "winbind"
-		d_stop
+		start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
 		log_end_msg $?
 		;;
 
 	restart|force-reload)
-		log_daemon_msg "Restarting the Winbind daemon" "winbind"
-		d_start && sleep 2 && d_stop
-		log_end_msg $?
+		$0 stop && sleep 2 && $0 start
 		;;
 
 	*)
