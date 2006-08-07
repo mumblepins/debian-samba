@@ -1,4 +1,4 @@
-samba (3.0.23a-1) UNRELEASED; urgency=low
+samba (3.0.23a-1) unstable; urgency=medium
 
   * New upstream release
 
@@ -73,7 +73,7 @@ samba (3.0.23a-1) UNRELEASED; urgency=low
   * Put localized swat messages into /usr/share/samba, where swat looks for
     them. Closes: #376991
 
- -- Christian Perrier <bubulle@debian.org>  Sun, 23 Jul 2006 18:50:35 +0200
+ -- Peter Eisentraut <petere@debian.org>  Mon,  7 Aug 2006 23:00:49 +0200
 
 samba (3.0.22-1) unstable; urgency=medium
 
