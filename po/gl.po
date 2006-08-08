@@ -16,7 +16,7 @@ msgstr ""
 "Project-Id-Version: samba\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-08-03 20:39-0500\n"
-"PO-Revision-Date: 2006-05-29 17:47+0200\n"
+"PO-Revision-Date: 2006-08-08 08:59+0200\n"
 "Last-Translator: Jacobo Tarrio <jtarrio@debian.org>\n"
 "Language-Team: Galician <trasno@ceu.fi.udc.es>\n"
 "MIME-Version: 1.0\n"
@@ -181,15 +181,14 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:6001
-#, fuzzy
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"Recoméndase escoller esta opción. Se o fai, asegúrese de ter un ficheiro /"
-"etc/samba/smbpasswd válido e de estabrecer nel os contrasinais de cada "
-"usuario co programa smbpasswd."
+"Recoméndase activar esta opción. Se o fai, asegúrese de ter un ficheiro /etc/"
+"samba/smbpasswd válido e de establecer nel os contrasinais de cada usuario "
+"coa orde smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -201,7 +200,6 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
-#, fuzzy
 msgid ""
 "To be compatible with the defaults in most versions of Windows, Samba must "
 "be configured to use encrypted passwords.  This requires user passwords to "
@@ -212,20 +210,19 @@ msgstr ""
 "Para que sexa compatible coa configuración por defecto da maioría das "
 "versións de Windows, Samba ten que se configurar para empregar contrasinais "
 "cifrados. Para facelo, hai que armacenar os contrasinais dos usuarios nun "
-"ficheiro separado de /etc/passwd."
+"ficheiro separado de /etc/passwd. Este ficheiro pódese crear "
+"automaticamente, pero os contrasinais hai que engadilos á man empregando "
+"smbpasswd e hai que mantelo actualizado no futuro."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
-#, fuzzy
 msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"Este ficheiro pódese crear automaticamente, pero os contrasinais hai que "
-"engadilos a man (executando smbpasswd), e debe manterse actualizado no "
-"futuro. Se non o crea ha ter que reconfigurar samba (e probablemente tamén "
-"as máquinas cliente) para que empreguen contrasinais en texto normal."
+"Se non o crea ha ter que reconfigurar samba (e probablemente tamén as "
+"máquinas cliente) para que empreguen contrasinais en texto normal."
 
 #. Type: boolean
 #. Description
