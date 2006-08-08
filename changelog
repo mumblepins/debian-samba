@@ -1,3 +1,9 @@
+samba (3.0.23b-2) UNRELEASED; urgency=low
+
+  * 
+
+ -- Noèl Köthe <noel@debian.org>  Tue, 08 Aug 2006 22:52:57 +0200
+
 samba (3.0.23b-1) unstable; urgency=low
 
   * New upstream release
