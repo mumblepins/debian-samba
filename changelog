@@ -4,6 +4,7 @@ samba (3.0.23b-2) UNRELEASED; urgency=low
   * Updated Romanian. Closes: #382358
   * Updated Dzongkha. Closes: #382448
   * Updated Basque. Closes: #382456
+  * Added Simplified Chinese. Closes: #382489
 
  -- Noèl Köthe <noel@debian.org>  Tue, 08 Aug 2006 22:52:57 +0200
 
