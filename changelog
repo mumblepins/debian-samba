@@ -3,6 +3,7 @@ samba (3.0.23b-2) UNRELEASED; urgency=low
   [ Debconf translations ]
   * Updated Romanian. Closes: #382358
   * Updated Dzongkha. Closes: #382448
+  * Updated Basque. Closes: #382456
 
  -- Noèl Köthe <noel@debian.org>  Tue, 08 Aug 2006 22:52:57 +0200
 
