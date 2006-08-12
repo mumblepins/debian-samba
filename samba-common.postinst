@@ -136,4 +136,8 @@ chmod a+r /etc/samba/smb.conf
 
 db_stop
 
+if [ -n "$2" ] && dpkg --compare-versions "$2" lt 3.0.23b-2; then
+	sed -i -e 's/^\([[:space:]]*passdb backend[[:space:]]*=[[:space:]]*[[:alpha:]][[:alpha:]]*\) guest$/\1/' /etc/samba/smb.conf
+fi
+
 #DEBHELPER#

@@ -6,7 +6,11 @@ samba (3.0.23b-2) UNRELEASED; urgency=low
   * Updated Basque. Closes: #382456
   * Added Simplified Chinese. Closes: #382489
 
- -- Noèl Köthe <noel@debian.org>  Tue, 08 Aug 2006 22:52:57 +0200
+  [ Peter Eisentraut ]
+  * Remove no longer functioning "guest" value from "passdb backend"
+    setting in smb.conf on upgrade. Closes: #382296
+
+ -- Peter Eisentraut <petere@debian.org>  Sat, 12 Aug 2006 19:21:59 +0200
 
 samba (3.0.23b-1) unstable; urgency=low
 
