@@ -14,29 +14,11 @@ _Description: Create samba password database, /var/lib/samba/passdb.tdb?
  See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the
  samba-doc package for more details.
 
-Template: samba/log_files_moved
-Type: note
-_Description: Samba's log files moved
- The log files for both Samba daemons (nmbd and smbd) are now stored
- in /var/log/samba/. The names of the files are log.nmbd and log.smbd,
- for nmbd and smbd respectively.
- .
- The old log files from /var/log/ will automatically be moved to
- the new location.
-
-Template: samba/nmbd_from_inetd
-Type: note
-_Description: Running nmbd from inetd no longer supported
- This system was previously configured to start nmbd and smbd from
- inetd. In recent Samba versions, nmbd cannot be started from inetd.
- If you have modified your /etc/init.d/samba startup script, you may
- need to adjust it now so that nmbd will start.
-
 Template: samba/run_mode
 Type: select
 _Choices: daemons, inetd
 Default: daemons
-_Description: Samba run method:
+_Description: How do you want to run Samba?
  The Samba daemon smbd can run as a normal daemon or from inetd. Running as
  a daemon is the recommended approach.
 

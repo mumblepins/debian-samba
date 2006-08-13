@@ -1,24 +1,3 @@
-Template: samba-common/character_set
-Type: string
-_Description: Character Set for Unix filesystem
- The "character set" option is currently configured in smb.conf.  In
- Samba 3.0, this option is replaced by a new option, "unix charset".
- Please specify the character set you wish to use for this new option,
- which controls how Samba interprets filenames on the file system.
- .
- If you leave this option blank, the smb.conf file will not be changed.
-
-Template: samba-common/codepage
-Type: string
-_Description: Character Set for DOS clients
- The "client code page" option is currently configured in smb.conf.  In Samba
- 3.0, this option is replaced by the option "dos charset".  Please specify
- the character set you wish to use for this new option.  In most cases, the
- default chosen for you will be sufficient.  Note that this option is not
- needed to support Windows clients, it is only for DOS clients.
- .
- If you leave this option blank, the smb.conf file will not be changed.
-
 Template: samba-common/dhcp
 Type: boolean
 Default: false
@@ -50,15 +29,15 @@ _Description: Configure smb.conf automatically?
 Template: samba-common/workgroup
 Type: string
 _Description: Workgroup/Domain Name:
- Please specify the workgroup this server will appear to be in when queried
- by clients. Note that this parameter also controls the Domain name used
- with the security=domain setting.
+ Please specify the workgroup you want this server to appear to be in
+ when queried by clients. Note that this parameter also controls the
+ domain name used with the security=domain setting.
 
 Template: samba-common/encrypt_passwords
 Type: boolean
 Default: true
 _Description: Use password encryption?
- Most Windows clients communicate with SMB servers using encrypted
+ All recent Windows clients communicate with SMB servers using encrypted
  passwords. If you want to use clear text passwords you will need to change
  a parameter in your Windows registry. 
  .

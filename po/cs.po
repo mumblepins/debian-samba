@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-08-03 20:39-0500\n"
+"Report-Msgid-Bugs-To: peloy@debian.org\n"
+"POT-Creation-Date: 2006-08-13 12:55-0700\n"
 "PO-Revision-Date: 2006-05-29 18:03+0200\n"
 "Last-Translator: Miroslav Kure <kurem@debian.cz>\n"
 "Language-Team: Czech <debian-l10n-czech@lists.debian.org>\n"
@@ -23,65 +23,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid "Character Set for Unix filesystem"
-msgstr "Znaková sada pro unixový souborový systém"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid ""
-"The \"character set\" option is currently configured in smb.conf.  In Samba "
-"3.0, this option is replaced by a new option, \"unix charset\". Please "
-"specify the character set you wish to use for this new option, which "
-"controls how Samba interprets filenames on the file system."
-msgstr ""
-"Momentálně máte ve svém smb.conf nastavenou volbu \"character set\". V Sambě "
-"3.0 je tato volba nahrazena volbou \"unix charset\". Zadejte, prosím, "
-"znakovou sadu, kterou chcete použít pro novou volbu. Tímto nastavíte, jak má "
-"Samba interpretovat názvy souborů v souborovém systému."
-
-#. Type: string
-#. Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001 ../samba-common.templates:2001
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr "Pokud nezadáte nic, váš soubor smb.conf se nezmění."
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid "Character Set for DOS clients"
-msgstr "Znaková sada pro DOSové klienty."
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid ""
-"The \"client code page\" option is currently configured in smb.conf.  In "
-"Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
-"specify the character set you wish to use for this new option.  In most "
-"cases, the default chosen for you will be sufficient.  Note that this option "
-"is not needed to support Windows clients, it is only for DOS clients."
-msgstr ""
-"Momentálně máte ve svém smb.conf nastavenou volbu \"client code page\". V "
-"Sambě 3.0 je tato volba nahrazena volbou \"dos charset\". Zadejte, prosím, "
-"znakovou sadu, kterou chcete použít pro novou volbu. Ve většině případů "
-"postačuje implicitní hodnota. Tato volba není potřebná pro Windowsové "
-"klienty, pouze pro ty DOSové."
-
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Upravit smb.conf, aby používal WINS nastavení z DHCP?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -97,7 +47,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
@@ -105,13 +55,13 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid "Configure smb.conf automatically?"
 msgstr "Konfigurovat smb.conf automaticky?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -129,7 +79,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
@@ -140,17 +90,18 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
 msgid "Workgroup/Domain Name:"
 msgstr "Skupina/Doménové jméno:"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
+#, fuzzy
 msgid ""
-"Please specify the workgroup this server will appear to be in when queried "
-"by clients. Note that this parameter also controls the Domain name used with "
-"the security=domain setting."
+"Please specify the workgroup you want this server to appear to be in when "
+"queried by clients. Note that this parameter also controls the domain name "
+"used with the security=domain setting."
 msgstr ""
 "Zadejte prosím jméno skupiny, do které má server patřit (resp. se to tak "
 "bude jevit klientům. Tento parametr také určuje doménové jméno používané s "
@@ -158,17 +109,18 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid "Use password encryption?"
 msgstr "Použít šifrování hesel?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
+#, fuzzy
 msgid ""
-"Most Windows clients communicate with SMB servers using encrypted passwords. "
-"If you want to use clear text passwords you will need to change a parameter "
-"in your Windows registry."
+"All recent Windows clients communicate with SMB servers using encrypted "
+"passwords. If you want to use clear text passwords you will need to change a "
+"parameter in your Windows registry."
 msgstr ""
 "Většina windowsových klientů používá pro komunikaci se SMB servery šifrovaná "
 "hesla. Pokud chcete použít hesla nešifrovaná, musíte změnit jeden parametr v "
@@ -176,7 +128,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 #, fuzzy
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
@@ -230,67 +182,21 @@ msgstr ""
 "Podrobnosti naleznete v souboru /usr/share/doc/samba-doc/htmldocs/ENCRYPTION."
 "html z balíku samba-doc."
 
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid "Samba's log files moved"
-msgstr "Logovací soubory Samby se přesunuly"
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
-"log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
-"smbd respectively."
-msgstr ""
-"Logovací soubory obou daemonů (nmbd a smbd) jsou umístěny ve /var/log/"
-"samba/. Jména příslušných souborů jsou log.nmbd a log.smbd."
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The old log files from /var/log/ will automatically be moved to the new "
-"location."
-msgstr ""
-"Staré soubory z adresáře /var/log/ budou přesunuty na nové místo automaticky."
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid "Running nmbd from inetd no longer supported"
-msgstr "Spouštění nmbd z inetd již není podporováno"
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid ""
-"This system was previously configured to start nmbd and smbd from inetd. In "
-"recent Samba versions, nmbd cannot be started from inetd. If you have "
-"modified your /etc/init.d/samba startup script, you may need to adjust it "
-"now so that nmbd will start."
-msgstr ""
-"Váš systém byl dříve nastaven, aby spouštěl nmbd a smbd z inetd. V novějších "
-"verzích Samby to již není možné. Pokud jste si upravili startovací skript /"
-"etc/init.d/samba, možná jej nyní budete muset upravit, aby se mohl nmbd "
-"spustit."
-
 #. Type: select
 #. Choices
-#: ../samba.templates:4001
+#: ../samba.templates:2001
 msgid "daemons, inetd"
 msgstr "démoni, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
-msgid "Samba run method:"
-msgstr "Způsob spouštění Samby:"
+#: ../samba.templates:2002
+msgid "How do you want to run Samba?"
+msgstr "Jak chcete spouštět Sambu?"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
+#: ../samba.templates:2002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
@@ -300,13 +206,13 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Přesunout /etc/samba/smbpasswd do /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
@@ -316,7 +222,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
@@ -326,14 +232,3 @@ msgstr ""
 "na /var/lib/samba/passwd.tdb. Pokud plánujete použít jinou pdb databázi "
 "(třeba LDAP), měli byste odpovědět záporně."
 
-#~ msgid "Configuration file rewritten by SWAT"
-#~ msgstr "SWAT přepíše konfigurační soubor"
-
-#~ msgid ""
-#~ "SWAT will rewrite the smb.conf file. It will rearrange the entries and "
-#~ "delete all comments, include= and copy= options. If you use a carefully "
-#~ "crafted smb.conf, you should probably avoid using SWAT."
-#~ msgstr ""
-#~ "SWAT přepíše váš soubor smb.conf. Mj. přeskládá položky a smaže všechny "
-#~ "komentáře a volby include= a copy=. Pokud máte svůj pracně odladěný smb."
-#~ "conf, tak byste se asi měli SWATu vyhnout."

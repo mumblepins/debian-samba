@@ -5,81 +5,26 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_3.0.0beta2-1_templates\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-08-03 20:39-0500\n"
-"PO-Revision-Date: 2004-03-13 21:32-0500\n"
+"Report-Msgid-Bugs-To: peloy@debian.org\n"
+"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"PO-Revision-Date: 2006-08-13 15:16-0700\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Debian L10n Catalan <debian-l10n-catalan@lists.debian.org>\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=ISO-8859-1\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid "Character Set for Unix filesystem"
-msgstr "Joc de caràcters pel sistema de fitxers de Unix"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-#, fuzzy
-msgid ""
-"The \"character set\" option is currently configured in smb.conf.  In Samba "
-"3.0, this option is replaced by a new option, \"unix charset\". Please "
-"specify the character set you wish to use for this new option, which "
-"controls how Samba interprets filenames on the file system."
-msgstr ""
-"El fitxer smb.conf actual té configurat un \"character set\".  En la versió "
-"3.0 de Samba, aquesta opció es reemplaça per l'opció \"unix charset\". "
-"Especifiqueu el joc de caràcters que voleu utilitzar per a aquesta nova "
-"opció que controla el mode que el Samba interpreta els noms de fitxers del "
-"sistema de fitxers."
-
-#. Type: string
-#. Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001 ../samba-common.templates:2001
-#, fuzzy
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr "Si deixeu aquesta opció en blanc no es modificarà el smb.conf."
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid "Character Set for DOS clients"
-msgstr "Joc de caràcters pels clients DOS"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-#, fuzzy
-msgid ""
-"The \"client code page\" option is currently configured in smb.conf.  In "
-"Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
-"specify the character set you wish to use for this new option.  In most "
-"cases, the default chosen for you will be sufficient.  Note that this option "
-"is not needed to support Windows clients, it is only for DOS clients."
-msgstr ""
-"El fitxer smb.conf actual té configurat un \"client code page\".  En la "
-"versió 3.0 de Samba, aquesta opció es reemplaça per l'opció \"dos charset\". "
-"L'opció per defecte és suficient en la majoria del casos. Recordeu que "
-"aquesta opció no és necessària pel suport dels clients de Windows, només és "
-"pels clients de DOS. Si deixeu aquesta opció en blanc no es canviarà el smb."
-"conf."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr ""
-"Voleu modificar el smb.conf perquè utilitza els paràmetres de configuració "
+"Voleu modificar el smb.conf perquÃ¨ utilitza els parÃ metres de configuraciÃ³ "
 "del WINS del DHCP?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -87,34 +32,31 @@ msgid ""
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
-"Si el vostre ordinador obté la informació referent a la IP a través d'un "
-"servidor de DHCP, aquest també li donarà informació sobre els servidors de "
-"WINS (\"servidors de nom de NetBIOS\") presents a la xarxa. Aquesta opció "
-"precisa d'una modificació del fitxer smb.conf per tal que els paràmetres de "
-"WINS obtinguts a través del DHCP s'obtinguin a través de la lectura de /etc/"
+"Si el vostre ordinador obtÃ© la informaciÃ³ referent a la IP a travÃ©s d'un "
+"servidor de DHCP, aquest tambÃ© li donarÃ  informaciÃ³ sobre els servidors de "
+"WINS (\"servidors de nom de NetBIOS\") presents a la xarxa. Aquesta opciÃ³ "
+"precisa d'una modificaciÃ³ del fitxer smb.conf per tal que els parÃ metres de "
+"WINS obtinguts a travÃ©s del DHCP s'obtinguin a travÃ©s de la lectura de /etc/"
 "samba/dhcp.conf"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
-#, fuzzy
+#: ../samba-common.templates:1001
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
-"Per beneficiar-vos d'aquesta característica cal que tingueu instal·lat el "
+"Per beneficiar-vos d'aquesta caracterÃ­stica cal que sigui instalÂ·lat el "
 "paquet dhcp3-client."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
-#, fuzzy
+#: ../samba-common.templates:2001
 msgid "Configure smb.conf automatically?"
-msgstr "Voleu configurar el smb.conf a través del debconf?"
+msgstr "Voleu configurar el smb.conf automÃ ticament?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
-#, fuzzy
+#: ../samba-common.templates:2001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -123,81 +65,70 @@ msgid ""
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
 msgstr ""
-"La resta de la configuració del Samba tracta amb qüestions que afecten els "
-"paràmetres del fitxer de configuració els programes de Samba /etc/samba/smb."
-"conf. La versió actual del smb.conf conté una línia 'include' o una opció "
-"que abarca múltiples línies que podria confondre al debconf i precisa de la "
-"seva edició manual per poder-lo fer funcionar de nou."
+"La resta de la configuraciÃ³ del Samba tracta amb qÃ¼estions que afecten els "
+"parÃ metres del fitxer de configuraciÃ³ dels programes de Samba /etc/samba/smb."
+"conf. La versiÃ³ actual del smb.conf contÃ© una lÃ­nia 'include' o una opciÃ³ "
+"que abarca mÃºltiples lÃ­nies que podria confondre a la configuraciÃ³ "
+"automÃ tica i precisar de la seva ediciÃ³ manual per poder-lo fer funcionar de "
+"nou."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
-#, fuzzy
+#: ../samba-common.templates:2001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
 msgstr ""
-"Si no utilitzeu el debconf per configurar el smb.conf, haureu de gestionar "
-"manualment qualsevol canvi de la configuració, i no us podreu beneficiar de "
-"les millores.  La seva utilització és recomenable en cas que sigui possible."
+"Si no escolliu aquesta opciÃ³, haureu de gestionar manualment qualsevol canvi "
+"de la configuraciÃ³, i no us podreu beneficiar de les millores."
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
-#, fuzzy
+#: ../samba-common.templates:3001
 msgid "Workgroup/Domain Name:"
-msgstr "Grup de treball/nom del domini?"
+msgstr "Grup de treball/nom del domini:"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
-#, fuzzy
+#: ../samba-common.templates:3001
 msgid ""
-"Please specify the workgroup this server will appear to be in when queried "
-"by clients. Note that this parameter also controls the Domain name used with "
-"the security=domain setting."
+"Please specify the workgroup you want this server to appear to be in when "
+"queried by clients. Note that this parameter also controls the domain name "
+"used with the security=domain setting."
 msgstr ""
-"Aquesta opció defineix en quin grup de treball apareixerà el vostre servidor "
-"quan ho consultin els clients. Recordeu que aquest paràmetre també controla "
-"el nom de domini utilitzat pel paràmetre de configuració security=domain."
+"Indiqueu en quin grup de treball voleu que aparegui el vostre servidor "
+"quan ho consultin els clients. Recordeu que aquest parÃ metre tambÃ© controla "
+"el nom de domini utilitzat pel parÃ metre de configuraciÃ³ security=domain."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid "Use password encryption?"
-msgstr "Voleu utilitzar l'encriptació de contrasenyes?"
+msgstr "Voleu utilitzar l'encriptaciÃ³ de contrasenyes?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
-#, fuzzy
+#: ../samba-common.templates:4001
 msgid ""
-"Most Windows clients communicate with SMB servers using encrypted passwords. "
-"If you want to use clear text passwords you will need to change a parameter "
-"in your Windows registry."
+"All recent Windows clients communicate with SMB servers using encrypted "
+"passwords. If you want to use clear text passwords you will need to change a "
+"parameter in your Windows registry."
 msgstr ""
-"Els clients de Windows més recents es comuniquen amb els servidors de Samba "
+"Tots els clients de Windows recents es comuniquen amb els servidors de Samba "
 "utilitzant contrasenyes encriptades. Si voleu utilitzar contrasenyes amb "
-"text pla, haureu de modificar el vostre registre de Windows. És recomanable "
-"utilitzar contrasenyes encriptades. Si ho feu, assegureu-vos de tenir un "
-"fitxer /etc/samba/smbpasswd vàlid i que hi especifiqueu la contrasenya de "
-"cada usuari utilitzant l'ordre smbpasswd."
+"text pla, haureu de modificar el vostre registre de Windows."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
-#, fuzzy
+#: ../samba-common.templates:4001
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"Els clients de Windows més recents es comuniquen amb els servidors de Samba "
-"utilitzant contrasenyes encriptades. Si voleu utilitzar contrasenyes amb "
-"text pla, haureu de modificar el vostre registre de Windows. És recomanable "
-"utilitzar contrasenyes encriptades. Si ho feu, assegureu-vos de tenir un "
-"fitxer /etc/samba/smbpasswd vàlid i que hi especifiqueu la contrasenya de "
+"Ã‰s recomanable habilitar aquesta opciÃ³. Si ho feu, assegureu-vos de tenir un "
+"fitxer /etc/samba/smbpasswd vÃ lid i que hi especifiqueu la contrasenya de "
 "cada usuari utilitzant l'ordre smbpasswd."
 
 #. Type: boolean
@@ -217,25 +148,22 @@ msgid ""
 "automatically, but the passwords must be added manually by running smbpasswd "
 "and be kept up-to-date in the future."
 msgstr ""
+"El Samba s'ha de configurar perquÃ¨ utilitzi contrasenyes encriptades per tal "
+"que sigui compatible amb la majoria de versions de Windows per defecte. AixÃ² "
+"implica que les contrasenyes d'usuari s'emmagatzemin a un fitxer diferent "
+"del /etc/passwd. Aquest fitxer es pot crear automÃ ticament, perÃ² les "
+"contrasenyes s'han d'afegir manualment executant l'ordre smbpasswd i s'han "
+"d'actualitzar en un futur."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
-#, fuzzy
 msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"El Samba s'ha de configurar perquè utilitzi contrasenyes encriptades per tal "
-"que sigui compatible amb la majoria de versions de Windows per defecte. Això "
-"implica que les contrasenyes d'usuari s'emmagatzemin a un fitxer diferent "
-"del /etc/passwd. Aquest fitxer es pot crear automàticament, però les "
-"contrasenyes s'han d'afegir manualment (per vós o per l'usuari) executant "
-"l'ordre smbpasswd i cal que us organitzeu per tenir-lo actualitzat en un "
-"futur.  Si no el creeu, haureu de reconfigurar el Samba (i probablement els "
+"Si no el creeu, haureu de reconfigurar el Samba (i probablement els "
 "vostres ordinadors clients) per tal que utilitzin contrasenyes de text pla. "
-"Per més informació feu una ullada a /usr/share/doc/samba-doc/htmldocs/"
-"ENCRYPTION.html del paquet samba-doc."
 
 #. Type: boolean
 #. Description
@@ -244,123 +172,55 @@ msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
 msgstr ""
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-#, fuzzy
-msgid "Samba's log files moved"
-msgstr "S'han desplaçat els fitxers de registre de Samba."
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-#, fuzzy
-msgid ""
-"The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
-"log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
-"smbd respectively."
-msgstr ""
-"Els fitxers de registre dels dos dimonis de Samba (nmbd i smbd) es desen a /"
-"var/log/samba des de la primera versió dels paquets de Samba 2.2 per Debian. "
-"Els noms dels fitxers són, respectivament, log.nmbd i log.smbd."
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-#, fuzzy
-msgid ""
-"The old log files from /var/log/ will automatically be moved to the new "
-"location."
-msgstr ""
-"Els fitxers de registre antics que estaven a /var/log/ es desplacen a la "
-"nova ubicació."
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-#, fuzzy
-msgid "Running nmbd from inetd no longer supported"
-msgstr "L'execució del nmbd a través del inetd ja no estarà suportada."
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-#, fuzzy
-msgid ""
-"This system was previously configured to start nmbd and smbd from inetd. In "
-"recent Samba versions, nmbd cannot be started from inetd. If you have "
-"modified your /etc/init.d/samba startup script, you may need to adjust it "
-"now so that nmbd will start."
-msgstr ""
-"El vostre sistema estava prèviament configurat perquè inicies el nmbd i el "
-"smbd a través del inetd. A partir de la versió 2.999+3.0alpha20-4 el nmbd no "
-"es pot iniciar a través del inetd.  Si heu modificat la seqüència "
-"d'arrencada /etc/init.d/samba, l'haureu de modificar manualment per tal que "
-"s'iniciï com a dimoni."
+"Per mÃ©s informaciÃ³ feu una ullada a /usr/share/doc/samba-doc/htmldocs/"
+"ENCRYPTION.html del paquet samba-doc."
 
 #. Type: select
 #. Choices
-#: ../samba.templates:4001
+#: ../samba.templates:2001
 msgid "daemons, inetd"
 msgstr "dimonis, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
-msgid "Samba run method:"
-msgstr ""
+#: ../samba.templates:2002
+msgid "How do you want to run Samba?"
+msgstr "Com voleu executar el Samba?"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
+#: ../samba.templates:2002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
 msgstr ""
-"El dimoni de Samba pot executar-se com un dimoni normal o des del inetd. És "
+"El dimoni de Samba pot executar-se com un dimoni normal o des del inetd. Ã‰s "
 "recomanable executar-lo com un dimoni."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
-msgstr "Es desplaça etc/samba/smbpasswd a /var/lib/samba/passdb.tdb?"
+msgstr "Es desplaÃ§a etc/samba/smbpasswd a /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
 msgstr ""
+"El Samba 3.0 introdueix una interfÃ­cie de base de dades de SAM mÃ©s completa "
+"que reemplaÃ§a el fitxer /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
-#, fuzzy
+#: ../samba.templates:3001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
 msgstr ""
-"El Samba 3.0 introdueix una interfície de base de dades de SAM més nova i "
-"completa que reemplaça el fitxer /etc/samba/smbpassd.  Voleu que es migri el "
-"fitxer smbpasswd a /var/lib/samba/passdb.tdb?  Si la vostra intenció és "
-"utilitzar un altre pdb (ex, LDAP), haurieu de respondre 'no' aquí."
-
-#, fuzzy
-#~ msgid ""
-#~ "SWAT will rewrite the smb.conf file. It will rearrange the entries and "
-#~ "delete all comments, include= and copy= options. If you use a carefully "
-#~ "crafted smb.conf, you should probably avoid using SWAT."
-#~ msgstr ""
-#~ "El SWAT reescriurà el vostre fitxer smb.conf. Reorganitzarà les entrades "
-#~ "i suprimirà els comentaris i les opcions include= i copy=.  Si teniu un "
-#~ "smb.conf molt elaborat feu una còpia de seguretat o no utilitzeu el SWAT."
-
-#~ msgid "How do you want to run Samba?"
-#~ msgstr "Com voleu executar el Samba?"
-
-#~ msgid "Your smb.conf will be re-written!"
-#~ msgstr "El vostre smb.conf es reescriurà"
+"Confirmeu si voleu que es migri el fitxer smbpasswd a /var/lib/samba/passdb."
+"tdb.  No esculliu aquesta opciÃ³ si la vostra intenciÃ³ Ã©s utilitzar un altre "
+"pdb (ex, LDAP)."

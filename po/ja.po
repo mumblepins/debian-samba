@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-08-03 20:39-0500\n"
+"Report-Msgid-Bugs-To: peloy@debian.org\n"
+"POT-Creation-Date: 2006-08-13 12:55-0700\n"
 "PO-Revision-Date: 2006-05-30 08:03+0900\n"
 "Last-Translator: Kenshi Muto <kmuto@debian.org>\n"
 "Language-Team: Japanese <debian-japanese@lists.debian.org>\n"
@@ -23,66 +23,15 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid "Character Set for Unix filesystem"
-msgstr "Unix ファイルシステム向けの文字セット"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid ""
-"The \"character set\" option is currently configured in smb.conf.  In Samba "
-"3.0, this option is replaced by a new option, \"unix charset\". Please "
-"specify the character set you wish to use for this new option, which "
-"controls how Samba interprets filenames on the file system."
-msgstr ""
-"現在、smb.conf に設定済みの \"character set\" があります。Samba 3.0 では、こ"
-"のオプションは新しいオプション \"unix charset\" に置き換えられています。"
-"Samba がファイルシステムのファイル名をどのように解釈するかを制御するこの新し"
-"いオプションのために、利用を希望する文字セットを指定してください。"
-
-#. Type: string
-#. Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001 ../samba-common.templates:2001
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr "このオプションを空のままにすると、smb.conf ファイルは変更されません。"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid "Character Set for DOS clients"
-msgstr "DOS クライアント向けの文字セット"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid ""
-"The \"client code page\" option is currently configured in smb.conf.  In "
-"Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
-"specify the character set you wish to use for this new option.  In most "
-"cases, the default chosen for you will be sufficient.  Note that this option "
-"is not needed to support Windows clients, it is only for DOS clients."
-msgstr ""
-"現在、smb.conf に設定済みの \"client code page\" があります。Samba 3.0 では、"
-"このオプションは新しいオプション \"dos charset\" に置き換えられています。この"
-"新しいオプションのために、利用を希望する文字セットを指定してください。ほとん"
-"どの場合、デフォルトの選択のままで十分でしょう。このオプションは Windows クラ"
-"イアントサポートには必要なく、DOS クライアントのみのためであることを注意して"
-"おきます。"
-
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "DHCP から WINS 設定を使うよう smb.conf を変更しますか?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -98,7 +47,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
@@ -107,13 +56,13 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid "Configure smb.conf automatically?"
 msgstr "自動的に smb.conf を設定しますか?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -130,7 +79,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
@@ -141,17 +90,18 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
 msgid "Workgroup/Domain Name:"
 msgstr "ワークグループ/ドメイン名:"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
+#, fuzzy
 msgid ""
-"Please specify the workgroup this server will appear to be in when queried "
-"by clients. Note that this parameter also controls the Domain name used with "
-"the security=domain setting."
+"Please specify the workgroup you want this server to appear to be in when "
+"queried by clients. Note that this parameter also controls the domain name "
+"used with the security=domain setting."
 msgstr ""
 "クライアントから照会された際にあなたのサーバが現れることになるワークグループ"
 "を指定してください。このパラメータは security=domain 設定が使われたときのドメ"
@@ -159,17 +109,18 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid "Use password encryption?"
 msgstr "パスワードの暗号化を使いますか?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
+#, fuzzy
 msgid ""
-"Most Windows clients communicate with SMB servers using encrypted passwords. "
-"If you want to use clear text passwords you will need to change a parameter "
-"in your Windows registry."
+"All recent Windows clients communicate with SMB servers using encrypted "
+"passwords. If you want to use clear text passwords you will need to change a "
+"parameter in your Windows registry."
 msgstr ""
 "ほとんどの Windows クライアントは暗号化されたパスワードを使って SMB サーバと"
 "やり取りします。クリアテキストパスワードを使いたい場合は、あなたの Windows の"
@@ -177,7 +128,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 #, fuzzy
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
@@ -233,67 +184,21 @@ msgstr ""
 "詳細については、samba-doc パッケージにある /usr/share/doc/samba-doc/htmldocs/"
 "ENCRYPTION.html を参照してください。"
 
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid "Samba's log files moved"
-msgstr "Samba のログファイルは移動されました"
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
-"log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
-"smbd respectively."
-msgstr ""
-"現在、両 Samba デーモン (nmbd および smbd) のログファイルは /var/log/samba/ "
-"に格納されるようになっています。ファイル名は nmbd と smbd で別個になるよう、"
-"log.nmbd および log.smbd となります。"
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The old log files from /var/log/ will automatically be moved to the new "
-"location."
-msgstr "/var/log/ にあった古いログファイルは自動的に新しい場所に移動されます。"
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid "Running nmbd from inetd no longer supported"
-msgstr "inetd からの nmbd の実行はもうサポートされません"
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid ""
-"This system was previously configured to start nmbd and smbd from inetd. In "
-"recent Samba versions, nmbd cannot be started from inetd. If you have "
-"modified your /etc/init.d/samba startup script, you may need to adjust it "
-"now so that nmbd will start."
-msgstr ""
-"このシステムは以前に inetd から nmbd および smbd を起動するよう設定されていま"
-"した。最近の Samba バージョンでは、nmbd は inetd からは起動できません。/etc/"
-"init.d/samba スタートアップスクリプトを変更しているのであれば、nmbd が起動す"
-"るよう今調整する必要があるでしょう。"
-
 #. Type: select
 #. Choices
-#: ../samba.templates:4001
+#: ../samba.templates:2001
 msgid "daemons, inetd"
 msgstr "デーモン, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
-msgid "Samba run method:"
-msgstr "Samba の実行方式:"
+#: ../samba.templates:2002
+msgid "How do you want to run Samba?"
+msgstr "どのように Samba を実行したいですか?"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
+#: ../samba.templates:2002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
@@ -303,13 +208,13 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "/etc/samba/smbpasswd を /var/lib/samba/passdb.tdb に移動しますか?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
@@ -319,7 +224,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
@@ -329,15 +234,3 @@ msgstr ""
 "かどうか確認してください。別の pdb バックエンド (LDAP など) を代わりに計画し"
 "ているのであれば、ここでは「いいえ」と答えてください。"
 
-#~ msgid "Configuration file rewritten by SWAT"
-#~ msgstr "SWAT によって書き直された設定ファイル"
-
-#~ msgid ""
-#~ "SWAT will rewrite the smb.conf file. It will rearrange the entries and "
-#~ "delete all comments, include= and copy= options. If you use a carefully "
-#~ "crafted smb.conf, you should probably avoid using SWAT."
-#~ msgstr ""
-#~ "SWAT は smb.conf ファイルを書き直します。SWAT はエントリを再編成し、すべて"
-#~ "のコメントおよび include= と copy= オプションを削除します。慎重に作成され"
-#~ "た smb.conf を使っているのであれば、SWAT を使うのは避けたほうがよいでしょ"
-#~ "う。"

@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.23rc1-1\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-08-03 20:39-0500\n"
+"Report-Msgid-Bugs-To: peloy@debian.org\n"
+"POT-Creation-Date: 2006-08-13 12:55-0700\n"
 "PO-Revision-Date: 2006-08-05 22:20+0930\n"
 "Last-Translator: Clytie Siddall <clytie@riverland.net.au>\n"
 "Language-Team: Vietnamese <vi-VN@googlegroups.com>\n"
@@ -16,70 +16,15 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0\n"
 "X-Generator: LocFactoryEditor 1.6fc1\n"
 
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid "Character Set for Unix filesystem"
-msgstr "Bộ ký tự cho hệ thống tập tin UNIX"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid ""
-"The \"character set\" option is currently configured in smb.conf.  In Samba "
-"3.0, this option is replaced by a new option, \"unix charset\". Please "
-"specify the character set you wish to use for this new option, which "
-"controls how Samba interprets filenames on the file system."
-msgstr ""
-"Tùy chọn « character set » (bộ ký tự) hiện thời được cấu hình trong tập tin "
-"« smb.conf ». Trong Samba phiên bản 3.0, tùy chọn này bị thay thế bằng một "
-"tùy chọn mới, « unix charset » (bộ ký tự UNIX: 'charset' là viết tắt cho "
-"'character set'). Bạn hãy xác định bộ ký tự nào bạn muốn sử dụng cho tùy "
-"chọn mới này, mà điều khiển cách Samba giải thích tên tập tin trong hệ thống "
-"tập tin này."
-
-#. Type: string
-#. Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001 ../samba-common.templates:2001
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr ""
-"Nếu bạn bỏ rỗng tùy chọn này tập tin cấu hình « smb.conf » sẽ không được "
-"thay đổi."
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid "Character Set for DOS clients"
-msgstr "Bộ ký tự cho ứng dụng khách DOS"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid ""
-"The \"client code page\" option is currently configured in smb.conf.  In "
-"Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
-"specify the character set you wish to use for this new option.  In most "
-"cases, the default chosen for you will be sufficient.  Note that this option "
-"is not needed to support Windows clients, it is only for DOS clients."
-msgstr ""
-"Tùy chọn « client code page » (trang mã khách) hiện thời được cấu hình trong "
-"tập tin « smb.conf ». Trong Samba phiên bản 3.0, tùy chọn này bị thay thế "
-"bằng tùy chọn « dos charset » (bộ ký tự DOS). Bạn hãy xác định bộ ký tự nào "
-"bạn muốn sử dụng cho tùy chọn mới này. Trong phần lớn trường hợp, giá trị "
-"mặc định là đúng. Hãy ghi chú rằng không cần thiết tùy chọn này để hỗ trợ "
-"ứng dụng khách Windows: chỉ ứng dụng khách DOS cần thiết nó thôi."
-
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Sửa đổi <smb.conf> để dùng thiết lập WINS từ DHCP không?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -96,20 +41,20 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr "Để nhớ dịp tính năng này, bạn cần phải cài đặt gói « dhcp3-client »."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid "Configure smb.conf automatically?"
 msgstr "Cấu hình tự động tập tin « smb.conf » không?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -127,7 +72,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
@@ -138,17 +83,18 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
 msgid "Workgroup/Domain Name:"
 msgstr "Tên nhóm làm việc/miền:"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
+#, fuzzy
 msgid ""
-"Please specify the workgroup this server will appear to be in when queried "
-"by clients. Note that this parameter also controls the Domain name used with "
-"the security=domain setting."
+"Please specify the workgroup you want this server to appear to be in when "
+"queried by clients. Note that this parameter also controls the domain name "
+"used with the security=domain setting."
 msgstr ""
 "Hãy xác định nhóm làm việc nơi có vẻ nằm trình phục vụ này, khi ứng dụng "
 "khách yêu cầu. Hãy ghi chú rằng tham số này cũng điều khiển tên Miền được "
@@ -156,17 +102,18 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid "Use password encryption?"
 msgstr "Sử dụng khả năng mật mã hoá mật khẩu không?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
+#, fuzzy
 msgid ""
-"Most Windows clients communicate with SMB servers using encrypted passwords. "
-"If you want to use clear text passwords you will need to change a parameter "
-"in your Windows registry."
+"All recent Windows clients communicate with SMB servers using encrypted "
+"passwords. If you want to use clear text passwords you will need to change a "
+"parameter in your Windows registry."
 msgstr ""
 "Phần lớn ứng dụng khách Windows liên lạc với trình phục vụ SMB bằng mật khẩu "
 "đã mật mã. Nếu bạn có muốn sử dụng mật khẩu « chữ rõ » (chữ thô, không có "
@@ -175,7 +122,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
@@ -227,69 +174,21 @@ msgstr ""
 "Xem tài liệu </usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html> từ gói "
 "samba-doc để tìm chi tiết."
 
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid "Samba's log files moved"
-msgstr "Các tập tin bản ghi Samba đã di chuyển"
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
-"log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
-"smbd respectively."
-msgstr ""
-"Các tập tin bản ghi của cả hai trình nền Samba (nmbd và smbd) lúc này được "
-"cất giữ trong </var/log/samba/>. Hai tập tin bản ghi đó có tên <log.nmbd> và "
-"<log.smbd>, cho trình nền nmbd và smbd riêng từng cái."
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The old log files from /var/log/ will automatically be moved to the new "
-"location."
-msgstr ""
-"Các tập tin bản ghi cũ đã nằm trong </var/log/> sẽ được di chuyển sang vị "
-"trí mới."
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid "Running nmbd from inetd no longer supported"
-msgstr "Không còn hỗ trợ lại khả năng chạy trình nền nmbd từ inetd."
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid ""
-"This system was previously configured to start nmbd and smbd from inetd. In "
-"recent Samba versions, nmbd cannot be started from inetd. If you have "
-"modified your /etc/init.d/samba startup script, you may need to adjust it "
-"now so that nmbd will start."
-msgstr ""
-"Lúc trước, hệ thống này được cấu hình để khởi chạy trình nền nmbd và smbd từ "
-"inetd. Trong các phiên bản Samba gần đây, không thể khởi chạy nmbd từ inetd. "
-"Nếu bạn đã sửa đổi tập lệnh khởi chạy </etc/init.d/samba> của mình, có lẽ "
-"bạn cần phải điều chỉnh nó để mà nmbd sẽ khởi chạy được."
-
 #. Type: select
 #. Choices
-#: ../samba.templates:4001
+#: ../samba.templates:2001
 msgid "daemons, inetd"
 msgstr "trình nền, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
-msgid "Samba run method:"
-msgstr "Cách chạy Samba:"
+#: ../samba.templates:2002
+msgid "How do you want to run Samba?"
+msgstr "Bạn có muốn chạy Samba như thế nào?"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
+#: ../samba.templates:2002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
@@ -299,7 +198,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr ""
 "Di chuyển tập tin </etc/samba/smbpasswd> sang </var/lib/samba/passdb.tdb> "
@@ -307,7 +206,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
@@ -317,7 +216,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
@@ -327,21 +226,3 @@ msgstr ""
 "tự động sang </var/lib/samba/passdb.tdb>. Đừng bật tùy chọn này nếu bạn định "
 "sử dụng một hậu phương PBD khác (v.d. LDAP) thay thế."
 
-#~ msgid "Configuration file rewritten by SWAT"
-#~ msgstr "Tập tin cấu hình bị ghi lại bởi SWAT"
-
-#~ msgid ""
-#~ "SWAT will rewrite the smb.conf file. It will rearrange the entries and "
-#~ "delete all comments, include= and copy= options. If you use a carefully "
-#~ "crafted smb.conf, you should probably avoid using SWAT."
-#~ msgstr ""
-#~ "SWAT sẽ ghi lại tập tin <smb.conf>. Nó sẽ sắp xếp lại các mục nhập nằm "
-#~ "trong nó, và xóa bỏ mọi chú thích và tùy chon bao gồm «nclude= » và sao "
-#~ "chép « copy= ». Nếu bạn sử dụng tập tin <smb.conf> riêng, rất có thể là "
-#~ "bạn nên tránh sử dụng SWAT."
-
-#~ msgid "How do you want to run Samba?"
-#~ msgstr "Bạn có muốn chạy Samba như thế nào?"
-
-#~ msgid "Your smb.conf will be re-written!"
-#~ msgstr "• Sẽ ghi lại tập tin «smb.conf» của bạn. •"

@@ -10,7 +10,17 @@ samba (3.0.23b-2) UNRELEASED; urgency=low
   * Remove no longer functioning "guest" value from "passdb backend"
     setting in smb.conf on upgrade. Closes: #382296
 
- -- Peter Eisentraut <petere@debian.org>  Sat, 12 Aug 2006 19:21:59 +0200
+  [ Steve Langasek ]
+  * Drop code and debconf questions specific to upgrades from samba <= 2.2.
+  * Reword some debconf translations as discussed on the list.
+  * Rerun debconf-updatepo.
+  * Switch debian/ca.po to UTF-8.
+  * Restore some reverted strings for Galician, Czech, Brazilian Portuguese,
+    Spanish, French, Italian, Catalan, Portuguese, Russian, and Japanese.
+  * Update translations for Brazilian Portuguese, Spanish, French, Italian,
+    Catalan, and Portuguese.
+
+ -- Steve Langasek <vorlon@debian.org>  Sun, 13 Aug 2006 16:14:21 -0700
 
 samba (3.0.23b-1) unstable; urgency=low
 

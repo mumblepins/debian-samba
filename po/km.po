@@ -16,8 +16,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_po\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-08-03 20:39-0500\n"
+"Report-Msgid-Bugs-To: peloy@debian.org\n"
+"POT-Creation-Date: 2006-08-13 12:55-0700\n"
 "PO-Revision-Date: 2006-08-07 15:41+0700\n"
 "Last-Translator: Khoem Sokhem <khoemsokhem@khmeros.info>\n"
 "Language-Team: Khmer <support@khmeros.info>\n"
@@ -26,71 +26,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: KBabel 1.11.2\n"
 
-#  Type: string
-#  Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid "Character Set for Unix filesystem"
-msgstr "សំណុំ​តួអក្សរ​សម្រាប់​​ឯកសារ​ប្រព័ន្ធ​យូនីក"
-
-#  Type: string
-#  Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid ""
-"The \"character set\" option is currently configured in smb.conf.  In Samba "
-"3.0, this option is replaced by a new option, \"unix charset\". Please "
-"specify the character set you wish to use for this new option, which "
-"controls how Samba interprets filenames on the file system."
-msgstr ""
-"ជម្រើស \"សំណុំតួអក្សរ\" ត្រូវ​បាន​​កំណត់​រចនាសម្ព័ន្ធ​ថ្មីក្នុង smb.conf.  នៅក្នុង Samba 3.0 ជម្រើស​ត្រូវ​"
-"បានជំនួស​ដោយ​ជម្រើស​ថ្មី​មួយ \"សំណុំ​តួអក្សរ​យូនីក\" ។ សូម​បញ្ជាក់​សំណុំ​តួអក្សរ ដែល​អ្នក​ចង់​ប្រើ​សម្រាប់​ជម្រើស​ថ្មី​"
-"នេះ ដែល​ត្រួតពិនិត្យ​វិធី​ដែល​ Samba បក​ប្រើ​ឈ្មោះ​ឯកសារ​នៅ​ក្នុង​ប្រព័ន្ធ​ឯកសារ ។"
-
-#  Type: string
-#  Description
-#  Type: string
-#  Description
-#. Type: string
-#. Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001 ../samba-common.templates:2001
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr "ប្រសិន​បើ​អ្នក​ទុក​ឲ្យ​ជម្រើស​នេះ​ទទេ ឯកសារ smb.conf នឹង​មិន​ត្រូវ​បាន​ផ្លាស់ប្ដូរ ។"
-
-#  Type: string
-#  Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid "Character Set for DOS clients"
-msgstr "សំណុំ​តួអក្សរ​សម្រាប់​ម៉ាស៊ីន​ភ្ញៀវ DOS"
-
-#  Type: string
-#  Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid ""
-"The \"client code page\" option is currently configured in smb.conf.  In "
-"Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
-"specify the character set you wish to use for this new option.  In most "
-"cases, the default chosen for you will be sufficient.  Note that this option "
-"is not needed to support Windows clients, it is only for DOS clients."
-msgstr ""
-"ជម្រើស \"ទំព័រ​កូដ​ម៉ាស៊ីន​ភ្ញៀវ\" ត្រូវ​បាន​កំណត់​រចនាសម្ព័ន្ធ​ថ្មី​នៅ​ក្នុង smb.conf.  នៅ​ក្នុង Samba 3.0 "
-"ជម្រើស​នេះ​ត្រូវ​បានជំនួស​ដោយ​ជម្រើស \"សំណុំ​តួអក្សរ dos\" ។  សូម​បញ្ជាក់​សំណុំ​តួអក្សរ​ដែល​អ្នក​ចង់​ប្រើ​សម្រាប់​"
-"ជម្រើស​ថ្មី​នេះ ។  ក្នុង​ករណី​ភាគច្រើន លំនាំដើម​បាន​ជ្រើស​ម្រាប់អ្នក​​នឹង​មិន​គ្រប់គ្រាន់ ។ ចំណាំថា​ ជម្រើស​នេះ​"
-"មិន​ចាំបាច់​គាំទ្រ​ម៉ាស៊ីន​ភ្ញៀវ​វីនដូ​ទេ វា​សម្រាប់តែ​ម៉ាស៊ីន​ភ្ញៀវ DOS ប៉ុណ្ណោះ ។"
-
 #  Type: boolean
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "កែប្រែ smb.conf ដើម្បី​ប្រើ​ការកំណត់​របស់ WINS ពី DHCP ?"
 
@@ -98,7 +38,7 @@ msgstr "កែប្រែ smb.conf ដើម្បី​ប្រើ​កា�
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -115,7 +55,7 @@ msgstr ""
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr "កញ្ចប់​ម៉ាស៊ីន​ភ្ញៀវ dhcp3 ត្រូវ​តែ​បាន​ដំឡើង​ដើម្បី​ទទួល​បាន​ផលប្រយោជន៍របស់​លក្ខណៈ​ពិសេស​នេះ ។"
@@ -124,7 +64,7 @@ msgstr "កញ្ចប់​ម៉ាស៊ីន​ភ្ញៀវ dhcp3 ត�
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid "Configure smb.conf automatically?"
 msgstr "កំណត់​រចនាសម្ព័ន្ធ smb.conf ដោយ​ស្វ័យ​ប្រវត្តិ ?"
 
@@ -132,7 +72,7 @@ msgstr "កំណត់​រចនាសម្ព័ន្ធ smb.conf ដោ�
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -151,7 +91,7 @@ msgstr ""
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
@@ -164,7 +104,7 @@ msgstr ""
 #  Description
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
 msgid "Workgroup/Domain Name:"
 msgstr "ឈ្មោះ​ក្រុមការងារ/ដែន ៖"
 
@@ -172,11 +112,12 @@ msgstr "ឈ្មោះ​ក្រុមការងារ/ដែន ៖"
 #  Description
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
+#, fuzzy
 msgid ""
-"Please specify the workgroup this server will appear to be in when queried "
-"by clients. Note that this parameter also controls the Domain name used with "
-"the security=domain setting."
+"Please specify the workgroup you want this server to appear to be in when "
+"queried by clients. Note that this parameter also controls the domain name "
+"used with the security=domain setting."
 msgstr ""
 "សូម​បញ្ជាក់​ក្រុមការងារ​របស់​ម៉ាស៊ីន​បម្រើ​នេះ​នឹង​បង្ហាញ​នៅ​ពេល​ត្រូវ​ការ​ដោយ​ម៉ាស៊ីន​បម្រើ ។ ចំណាំថា ប៉ារ៉ាម៉ែត្រ​"
 "នេះ​ក៏​ត្រួតពិនិត្យ​ឈ្មោះ​ដែន​ដែល​បាន​ប្រើ​​ដោយ​សុវត្ថិភាព=ការ​កំណត់​ដែន ។"
@@ -185,7 +126,7 @@ msgstr ""
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid "Use password encryption?"
 msgstr "ប្រើ​ការ​អ៊ិនគ្រីប​ពាក្យ​សម្ងាត់ ?"
 
@@ -193,11 +134,12 @@ msgstr "ប្រើ​ការ​អ៊ិនគ្រីប​ពាក្យ
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
+#, fuzzy
 msgid ""
-"Most Windows clients communicate with SMB servers using encrypted passwords. "
-"If you want to use clear text passwords you will need to change a parameter "
-"in your Windows registry."
+"All recent Windows clients communicate with SMB servers using encrypted "
+"passwords. If you want to use clear text passwords you will need to change a "
+"parameter in your Windows registry."
 msgstr ""
 "ម៉ាស៊ីន​បម្រើ​វីនដូ​​ភាគ​ច្រើន​ទាក់ទង​ជាមួយ​នឹង​ម៉ាស៊ីន​បម្រើ SMB ដោយ​ប្រើ​ពាក្យសម្ងាត់​ដែល​បាន​អ៊ិនគ្រីប ។ ប្រសិន​បើ​"
 "អ្នក​ចង់​ប្រើ​ពាក្យសម្ងាត់​អត្ថបទ​ច្បាស់ៗ អ្នក​ត្រូវតែ​ផ្លាស់ប្ដូរ​ប៉ារ៉ាម៉ែត្រ​ក្នុង​បញ្ជី​ឈ្មោះ​របស់​វីនដូ ។"
@@ -206,7 +148,7 @@ msgstr ""
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
@@ -265,81 +207,25 @@ msgstr ""
 "សម្រាប់​សេចក្តី​លម្អិត​បន្ថែម​សូម​មើល  /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html ពី​"
 "កញ្ចប់ samba-doc ។"
 
-#  Type: note
-#  Description
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid "Samba's log files moved"
-msgstr "បាន​ផ្លាស់ទី​ឯកសារ​​កំណត់​ហេតុ​របស់ Samba"
-
-#  Type: note
-#  Description
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
-"log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
-"smbd respectively."
-msgstr ""
-"ឯកសារ​កំណត់​សម្រាប់ដេមិន Samba ទាំងពីរ (nmbd និង smbd) ឥឡូវ​ត្រូវ​បាន​ទុក​នៅ​ក្នុង /var/log/"
-"samba/ ។ ឈ្មោះ​របស់​ឯកសារ​គឺ log.nmbd និង log.smbd សម្រាប់ nmbd និង smbd ដែល​រំពឹង​ទុក ។"
-
-#  Type: note
-#  Description
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The old log files from /var/log/ will automatically be moved to the new "
-"location."
-msgstr "ឯកសារ​កំណត់​ហតុ​ចាស់ពី /var/log/ នឹង​ត្រូវ​បាន​ផ្លាស់ទី​ដោយ​ស្វ័យប្រវត្តិ​ទៅ​ទីតាំង​ថ្មី ។"
-
-#  Type: note
-#  Description
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid "Running nmbd from inetd no longer supported"
-msgstr "កំពុង​រត់ nmbd ពី inetd ដែល​មិន​បាន​គាំទ្រ​ទៀត​ទេ"
-
-#  Type: note
-#  Description
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid ""
-"This system was previously configured to start nmbd and smbd from inetd. In "
-"recent Samba versions, nmbd cannot be started from inetd. If you have "
-"modified your /etc/init.d/samba startup script, you may need to adjust it "
-"now so that nmbd will start."
-msgstr ""
-"ប្រព័ន្ធនេះត្រូវបានកំណត់រចនាសម្ព័ន្ធពីមុនដើម្បីចាប់ផ្ដើម nmbd និង smbd ពី inetd ។ នៅក្នុងកំណែ "
-"Samba បច្ចុប្បន្ន nmbd មិនអាច​ត្រូវ​បាន​ចាប់ផ្ដើម​ពី inetd ។ ប្រសិន​បើ​អ្នក​មាន​កែប្រែស្គ្រីបចាប់ផ្ដើម /"
-"etc/init.d/samba របស់​អ្នក អ្នក​អាច​ត្រូវ​លៃតម្រូវវា​ឥឡូវ ដូច្នេះ​ nmbd នឹង​ចាប់ផ្ដើម ។"
-
 #  Type: select
 #  Choices
 #. Type: select
 #. Choices
-#: ../samba.templates:4001
+#: ../samba.templates:2001
 msgid "daemons, inetd"
 msgstr "ដេមិន , inetd"
 
-#  Type: select
-#  Description
 #. Type: select
 #. Description
-#: ../samba.templates:4002
-msgid "Samba run method:"
-msgstr "វីធីសាស្ត្រ​រត់​របស់ Samba ៖"
+#: ../samba.templates:2002
+msgid "How do you want to run Samba?"
+msgstr ""
 
 #  Type: select
 #  Description
 #. Type: select
 #. Description
-#: ../samba.templates:4002
+#: ../samba.templates:2002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
@@ -350,7 +236,7 @@ msgstr ""
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "ផ្លាស់ទីពី  /etc/samba/smbpasswd ទៅ /var/lib/samba/passdb.tdb ?"
 
@@ -358,7 +244,7 @@ msgstr "ផ្លាស់ទីពី  /etc/samba/smbpasswd ទៅ /var/lib/sam
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
@@ -370,7 +256,7 @@ msgstr ""
 #  Description
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
@@ -379,3 +265,4 @@ msgstr ""
 "សូម​អះអាង​ថាតើ​អ្នកចង់​ឲ្យ​ឯកសារ​ពាក្យ​សម្ងាត់​ដែល​មាន​ស្រាប់ត្រូវ​បាន​ប្ដូរដោយ​ស្វ័យ​ប្រវត្តិ​ទៅ​ទៅ​ /var/lib/"
 "samba/passdb.tdb ។  កុំជ្រើស​ជម្រើស​នេះ ប្រសិន​បើ​អ្នក​មាន​គម្រោង​ប្រើ​កម្មវិធី​ខាង​ក្រោយ pdb ដទៃ​"
 "ទៀត (ឧទាហរណ៍ LDAP) ជំនួស​វិញ ។"
+

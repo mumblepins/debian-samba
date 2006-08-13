@@ -16,80 +16,25 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: fr\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2006-08-03 20:39-0500\n"
-"PO-Revision-Date: 2006-08-03 20:43-0500\n"
-"Last-Translator: Christian Perrier <bubulle@debian.org>\n"
+"Report-Msgid-Bugs-To: peloy@debian.org\n"
+"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"PO-Revision-Date: 2006-08-13 14:56-0700\n"
+"Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: French <debian-l10n-french@lists.debian.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=ISO-8859-15\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: KBabel 1.11.2\n"
 
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid "Character Set for Unix filesystem"
-msgstr "Jeu de caractères pour les systèmes de fichiers Unix"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001
-msgid ""
-"The \"character set\" option is currently configured in smb.conf.  In Samba "
-"3.0, this option is replaced by a new option, \"unix charset\". Please "
-"specify the character set you wish to use for this new option, which "
-"controls how Samba interprets filenames on the file system."
-msgstr ""
-"L'option « character set » (jeu de caractères) est utilisée dans le fichier "
-"smb.conf. Avec Samba 3.0, cette option est remplacée par une nouvelle "
-"option, « unix charset » (jeu de caractères Unix).  Veuillez indiquer le jeu "
-"de caractères que vous voulez utiliser avec cette option, qui permet "
-"d'interpréter les noms de fichiers sur le système."
-
-#. Type: string
-#. Description
-#. Type: string
-#. Description
-#: ../samba-common.templates:1001 ../samba-common.templates:2001
-msgid "If you leave this option blank, the smb.conf file will not be changed."
-msgstr ""
-"Le fichier smb.conf ne sera pas modifié si vous laissez cette option sans "
-"réponse."
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid "Character Set for DOS clients"
-msgstr "Jeu de caractères pour les clients DOS"
-
-#. Type: string
-#. Description
-#: ../samba-common.templates:2001
-msgid ""
-"The \"client code page\" option is currently configured in smb.conf.  In "
-"Samba 3.0, this option is replaced by the option \"dos charset\".  Please "
-"specify the character set you wish to use for this new option.  In most "
-"cases, the default chosen for you will be sufficient.  Note that this option "
-"is not needed to support Windows clients, it is only for DOS clients."
-msgstr ""
-"L'option « client code page » (page de codes du client) est actuellement "
-"utilisée dans le fichier smb.conf. Avec Samba 3.0, cette option a été "
-"remplacée par l'option « dos charset » (jeu de caractères DOS). Veuillez "
-"indiquer le jeu de caractères que vous voulez utiliser avec la nouvelle "
-"option. En général le jeu de caractères choisi par défaut est suffisant. "
-"Veuillez noter que cette option ne sert pas pour les clients Windows mais "
-"seulement pour les clients DOS."
-
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr "Modifier smb.conf pour utiliser les paramètres WINS fournis par DHCP ?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
+#: ../samba-common.templates:1001
 msgid ""
 "If your computer gets IP address information from a DHCP server on the "
 "network, the DHCP server may also provide information about WINS servers "
@@ -105,19 +50,21 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:3001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
-msgstr "Le paquet dhcp3-client doit être installé pour utiliser cette fonctionnalité."
+#: ../samba-common.templates:1001
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
+msgstr ""
+"Le paquet dhcp3-client doit être installé pour utiliser cette fonctionnalité."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid "Configure smb.conf automatically?"
 msgstr "Voulez-vous configurer smb.conf automatiquement ?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "The rest of the configuration of Samba deals with questions that affect "
 "parameters in /etc/samba/smb.conf, which is the file used to configure the "
@@ -135,7 +82,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:4001
+#: ../samba-common.templates:2001
 msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
@@ -147,44 +94,44 @@ msgstr ""
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
 msgid "Workgroup/Domain Name:"
 msgstr "Nom de domaine ou de groupe de travail :"
 
 #. Type: string
 #. Description
-#: ../samba-common.templates:5001
+#: ../samba-common.templates:3001
 msgid ""
-"Please specify the workgroup this server will appear to be in when queried "
-"by clients. Note that this parameter also controls the Domain name used with "
-"the security=domain setting."
+"Please specify the workgroup you want this server to appear to be in when "
+"queried by clients. Note that this parameter also controls the domain name "
+"used with the security=domain setting."
 msgstr ""
-"Veuillez indiquer le groupe de travail où les clients trouveront le serveur. "
-"Il indique aussi le nom de domaine utilisé par le paramètre "
+"Veuillez indiquer le groupe de travail où les clients doivent trouver le "
+"serveur. Il indique aussi le nom de domaine utilisé par le paramètre "
 "« security=domain » quand celui-ci est utilisé."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid "Use password encryption?"
 msgstr "Voulez-vous chiffrer les mots de passe ?"
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid ""
-"Most Windows clients communicate with SMB servers using encrypted passwords. "
-"If you want to use clear text passwords you will need to change a parameter "
-"in your Windows registry."
+"All recent Windows clients communicate with SMB servers using encrypted "
+"passwords. If you want to use clear text passwords you will need to change a "
+"parameter in your Windows registry."
 msgstr ""
-"La plupart des clients Windows communiquent avec les serveurs SMB en "
+"Tous les clients Windows rÃ©cents communiquent avec les serveurs SMB en "
 "utilisant des mots de passe chiffrés. Si vous voulez utiliser des mots de "
 "passe sans chiffrement, vous devez modifier un paramètre dans le registre de "
 "Windows."
 
 #. Type: boolean
 #. Description
-#: ../samba-common.templates:6001
+#: ../samba-common.templates:4001
 msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
@@ -214,9 +161,9 @@ msgstr ""
 "Pour rester compatible avec les réglages par défaut de la majorité des "
 "versions de Windows, Samba doit être configuré pour utiliser des mots de "
 "passe chiffrés. Cela impose de conserver les mots de passe dans un fichier "
-"distinct de /etc/passwd. Ce fichier peut être créé automatiquement, mais les mots de passe doivent y "
-"être ajoutés manuellement (avec la commande « smbpasswd ») et être tenus à "
-"jour."
+"distinct de /etc/passwd. Ce fichier peut être créé automatiquement, mais les "
+"mots de passe doivent y être ajoutés manuellement avec la commande « "
+"smbpasswd » et être tenus à jour."
 
 #. Type: boolean
 #. Description
@@ -239,68 +186,21 @@ msgstr ""
 "Veuillez consulter le fichier /usr/share/doc/samba-doc/htmldocs/ENCRYPTION."
 "html dans le paquet samba-doc pour plus d'informations."
 
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid "Samba's log files moved"
-msgstr "Déplacement des journaux de Samba"
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The log files for both Samba daemons (nmbd and smbd) are now stored in /var/"
-"log/samba/. The names of the files are log.nmbd and log.smbd, for nmbd and "
-"smbd respectively."
-msgstr ""
-"Les fichiers-journaux des démons nmbd et smbd se trouvent désormais dans /"
-"var/log/samba/. Pour nmbd et smbd, les noms de ces fichiers sont "
-"respectivement log.nmbd et log.smbd."
-
-#. Type: note
-#. Description
-#: ../samba.templates:2001
-msgid ""
-"The old log files from /var/log/ will automatically be moved to the new "
-"location."
-msgstr "Les anciens fichiers-journaux dans /var/log/ seront déplacés à cet endroit."
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid "Running nmbd from inetd no longer supported"
-msgstr "Lancement de nmbd à partir d'inetd non géré"
-
-#. Type: note
-#. Description
-#: ../samba.templates:3001
-msgid ""
-"This system was previously configured to start nmbd and smbd from inetd. In "
-"recent Samba versions, nmbd cannot be started from inetd. If you have "
-"modified your /etc/init.d/samba startup script, you may need to adjust it "
-"now so that nmbd will start."
-msgstr ""
-"Ce système était configuré pour lancer nmbd et smbd à partir d'inetd. Les "
-"versions récentes de Samba ne permettent plus d'exécuter nmbd à partir "
-"d'inetd. Si vous avez modifié le script de lancement /etc/init.d/samba, vous "
-"avez peut-être besoin de le corriger à nouveau pour permettre le lancement "
-"de nmbd. "
-
 #. Type: select
 #. Choices
-#: ../samba.templates:4001
+#: ../samba.templates:2001
 msgid "daemons, inetd"
 msgstr "démons, inetd"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
-msgid "Samba run method:"
-msgstr "Méthode de lancement de Samba :"
+#: ../samba.templates:2002
+msgid "How do you want to run Samba?"
+msgstr "Comment voulez-vous lancer Samba ?"
 
 #. Type: select
 #. Description
-#: ../samba.templates:4002
+#: ../samba.templates:2002
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
@@ -310,13 +210,13 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
 msgstr "Faut-il convertir /etc/samba/smbpasswd en /var/lib/samba/passdb.tdb ?"
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
@@ -326,7 +226,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../samba.templates:5001
+#: ../samba.templates:3001
 msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
