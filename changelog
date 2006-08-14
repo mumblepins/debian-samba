@@ -1,4 +1,4 @@
-samba (3.0.23b-2) UNRELEASED; urgency=low
+samba (3.0.23b-2) unstable; urgency=low
 
   [ Debconf translations ]
   * Updated Romanian. Closes: #382358
@@ -20,7 +20,7 @@ samba (3.0.23b-2) UNRELEASED; urgency=low
   * Update translations for Brazilian Portuguese, Spanish, French, Italian,
     Catalan, and Portuguese.
 
- -- Steve Langasek <vorlon@debian.org>  Sun, 13 Aug 2006 16:14:21 -0700
+ -- Peter Eisentraut <petere@debian.org>  Mon, 14 Aug 2006 19:04:31 +0200
 
 samba (3.0.23b-1) unstable; urgency=low
 
