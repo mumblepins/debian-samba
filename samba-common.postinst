@@ -84,6 +84,16 @@ if [ "${RET}" = "true" ]; then
 		mv -f ${TMPFILE} /etc/samba/smb.conf
 	fi
 
+	if [ -n "$2" ] && dpkg --compare-versions "$2" lt 3.0.23b-2 \
+	   && grep -qi "^[[:space:]]*passdb backend[[:space:]]*=.*guest" /etc/samba/smb.conf
+	then
+		sed -e "s/^\([[:space:]]*\)\[global\]/\1\[global\]/i
+			/^[[:space:]]*\[global\]/,/^[[:space:]]*\[/ \
+			        s/^\([[:space:]]*passdb backend[[:space:]]*=.*\)[[:space:]]*guest[[:space:]]*$/\1/i" \
+			< /etc/samba/smb.conf >${TMPFILE}
+		mv -f ${TMPFILE} /etc/samba/smb.conf
+	fi
+
 	if dpkg --compare-versions "$2" lt 2.999+3.0.alpha20-4 \
 	   && ! grep -q "^[[:space:]]*panic action[[:space:]]*=" /etc/samba/smb.conf
 	then
@@ -102,9 +112,5 @@ chmod a+r /etc/samba/smb.conf
 # ------------------------- Debconf questions end ---------------------
 
 db_stop
-
-if [ -n "$2" ] && dpkg --compare-versions "$2" lt 3.0.23b-2; then
-	sed -i -e 's/^\([[:space:]]*passdb backend[[:space:]]*=[[:space:]]*[[:alpha:]][[:alpha:]]*\) guest$/\1/' /etc/samba/smb.conf
-fi
 
 #DEBHELPER#
