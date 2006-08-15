@@ -1,4 +1,4 @@
-# translation of samba_po.po to Khmer
+# translation of samba_po_km.po to Khmer
 #
 #    Translators, if you are not familiar with the PO format, gettext
 #    documentation is worth reading, especially sections dedicated to
@@ -15,10 +15,10 @@
 # Khoem Sokhem <khoemsokhem@khmeros.info>, 2006.
 msgid ""
 msgstr ""
-"Project-Id-Version: samba_po\n"
+"Project-Id-Version: samba_po_km\n"
 "Report-Msgid-Bugs-To: peloy@debian.org\n"
 "POT-Creation-Date: 2006-08-13 12:55-0700\n"
-"PO-Revision-Date: 2006-08-07 15:41+0700\n"
+"PO-Revision-Date: 2006-08-15 09:31+0700\n"
 "Last-Translator: Khoem Sokhem <khoemsokhem@khmeros.info>\n"
 "Language-Team: Khmer <support@khmeros.info>\n"
 "MIME-Version: 1.0\n"
@@ -56,8 +56,7 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid ""
-"The dhcp3-client package must be installed to take advantage of this feature."
+msgid "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr "កញ្ចប់​ម៉ាស៊ីន​ភ្ញៀវ dhcp3 ត្រូវ​តែ​បាន​ដំឡើង​ដើម្បី​ទទួល​បាន​ផលប្រយោជន៍របស់​លក្ខណៈ​ពិសេស​នេះ ។"
 
 #  Type: boolean
@@ -113,14 +112,13 @@ msgstr "ឈ្មោះ​ក្រុមការងារ/ដែន ៖"
 #. Type: string
 #. Description
 #: ../samba-common.templates:3001
-#, fuzzy
 msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"សូម​បញ្ជាក់​ក្រុមការងារ​របស់​ម៉ាស៊ីន​បម្រើ​នេះ​នឹង​បង្ហាញ​នៅ​ពេល​ត្រូវ​ការ​ដោយ​ម៉ាស៊ីន​បម្រើ ។ ចំណាំថា ប៉ារ៉ាម៉ែត្រ​"
-"នេះ​ក៏​ត្រួតពិនិត្យ​ឈ្មោះ​ដែន​ដែល​បាន​ប្រើ​​ដោយ​សុវត្ថិភាព=ការ​កំណត់​ដែន ។"
+"សូម​បញ្ជាក់​ក្រុម​ការងារ​ដែល​អ្នក​ចង់​ឲ្យ​ម៉ាស៊ីន​បម្រើ​នេះ​បង្ហាញ​នៅ​ពេល​ដែល​បាន​សួរ "
+"ដោយ​ម៉ាស៊ីន​ភ្ញៀវ ។ ចំណាំ​ថា ប៉ារ៉ាម៉ែត្រ​នេះ​ក៏​ត្រួត​ពិនិត្យ​ឈ្មោះ​ដែន ដែល​បាន​ប្រើ​ដោយ​សុវត្ថិភាព=ការ​កំណត់​ដែន ។"
 
 #  Type: boolean
 #  Description
@@ -135,14 +133,13 @@ msgstr "ប្រើ​ការ​អ៊ិនគ្រីប​ពាក្យ
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
 msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"ម៉ាស៊ីន​បម្រើ​វីនដូ​​ភាគ​ច្រើន​ទាក់ទង​ជាមួយ​នឹង​ម៉ាស៊ីន​បម្រើ SMB ដោយ​ប្រើ​ពាក្យសម្ងាត់​ដែល​បាន​អ៊ិនគ្រីប ។ ប្រសិន​បើ​"
-"អ្នក​ចង់​ប្រើ​ពាក្យសម្ងាត់​អត្ថបទ​ច្បាស់ៗ អ្នក​ត្រូវតែ​ផ្លាស់ប្ដូរ​ប៉ារ៉ាម៉ែត្រ​ក្នុង​បញ្ជី​ឈ្មោះ​របស់​វីនដូ ។"
+"គ្រប់​ម៉ាស៊ីន​ភ្ញៀវ​ដែល​ប្រើ​វីនដូ​ថ្មីៗ​ទាំង​អស់​ទាក់ទង​ជា​មួយ​ម៉ាស៊ីន​បម្រើ SMB ដោយ​ប្រើ​ពាក្យសម្ងាត់​ដែល​បាន​អ៊ិនគ្រីប ។ ប្រសិន​បើ​អ្នក​ចង់​ជម្រះ​ពាក្យសម្ងាត់​អត្ថបទ អ្នក​នឹង​ត្រូវតែ​ផ្លាស់ប្ដូរ​ប៉ារ៉ាម៉ែត្រ​នៅ​ក្នុង "
+"បញ្ជី​ឈ្មោះ​របស់​វីនដូ ។"
 
 #  Type: boolean
 #  Description
@@ -219,7 +216,7 @@ msgstr "ដេមិន , inetd"
 #. Description
 #: ../samba.templates:2002
 msgid "How do you want to run Samba?"
-msgstr ""
+msgstr "តើ​អ្នក​ចង់​រត់ Samba តាម​វិធី​ណា ?"
 
 #  Type: select
 #  Description
@@ -229,8 +226,7 @@ msgstr ""
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
-msgstr ""
-"ដេមិន Samba smbd អាចរត់ជាដេមិនធម្មតា ឬពី inetd ។ ការរត់ជាដេមិនមួយត្រូវបានផ្ដល់អនុសាសន៍ ។"
+msgstr "ដេមិន Samba smbd អាចរត់ជាដេមិនធម្មតា ឬពី inetd ។ ការរត់ជាដេមិនមួយត្រូវបានផ្ដល់អនុសាសន៍ ។"
 
 #  Type: boolean
 #  Description
