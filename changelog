@@ -6,8 +6,9 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
 
   [ Debconf translations ]
   * Updated Galician. Closes: #383001.
+  * Updated Danish. Closes: #383025.
 
- -- Steve Langasek <vorlon@debian.org>  Mon, 14 Aug 2006 17:46:00 -0700
+ -- Steve Langasek <vorlon@debian.org>  Tue, 15 Aug 2006 01:17:55 -0700
 
 samba (3.0.23b-2) unstable; urgency=low
 
