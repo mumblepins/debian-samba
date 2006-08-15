@@ -9,6 +9,7 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
   * Updated Danish. Closes: #383025.
   * Added Tagalog. Closes: #383039.
   * Updated Khmer.
+  * Updated Dzongkha. Closes: #383125.
 
  -- Steve Langasek <vorlon@debian.org>  Tue, 15 Aug 2006 01:21:09 -0700
 

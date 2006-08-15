@@ -121,7 +121,7 @@ msgstr "ཁ་གསལ་མཁྱེན་ནིའི་དོན་ལུ་
 #. Choices
 #: ../samba.templates:2001
 msgid "daemons, inetd"
-msgstr "ཌེ་མཱོན་ ཨི་ནི་ཊེཊི།"
+msgstr "ཌེ་མཱོན, ཨི་ནི་ཊེཊི།"
 
 #. Type: select
 #. Description
