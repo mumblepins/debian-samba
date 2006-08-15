@@ -16,7 +16,7 @@ msgstr ""
 "Project-Id-Version: samba\n"
 "Report-Msgid-Bugs-To: peloy@debian.org\n"
 "POT-Creation-Date: 2006-08-13 12:55-0700\n"
-"PO-Revision-Date: 2006-08-08 08:59+0200\n"
+"PO-Revision-Date: 2006-08-14 17:39+0200\n"
 "Last-Translator: Jacobo Tarrio <jtarrio@debian.org>\n"
 "Language-Team: Galician <trasno@ceu.fi.udc.es>\n"
 "MIME-Version: 1.0\n"
@@ -99,15 +99,14 @@ msgstr "Nome do grupo de traballo/dominio:"
 #. Type: string
 #. Description
 #: ../samba-common.templates:3001
-#, fuzzy
 msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"Indique o grupo de traballo no que quere que o seu servidor ha aparecer "
-"cando lle pregunten os clientes. Teña en conta que este parámetro tamén "
-"controla o nome de dominio que se emprega coa configuración security=domain."
+"Indique o grupo de traballo no que quere que apareza este servidor cando lle "
+"pregunten os clientes. Teña en conta que este parámetro tamén controla o "
+"nome de dominio que se emprega coa configuración security=domain."
 
 #. Type: boolean
 #. Description
@@ -118,13 +117,12 @@ msgstr "¿Empregar cifrado de contrasinais?"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
 msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"Todos os clientes recentes Windows comunícanse cos servidores SMB empregando "
+"Todos os clientes Windows recentes comunícanse cos servidores SMB empregando "
 "contrasinais cifrados. Se quere empregar contrasinais de texto claro ha ter "
 "que cambiar un parámetro no rexistro de Windows."
 
@@ -233,4 +231,3 @@ msgstr ""
 "Confirme se quere que se migre automaticamente o ficheiro smbpasswd "
 "existente a /var/lib/samba/passdb.tdb. Non escolla esta opción se pretende "
 "empregar outro motor pdb (por exemplo, LDAP)."
-
