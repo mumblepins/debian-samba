@@ -1,5 +1,9 @@
 samba (3.0.23b-3) UNRELEASED; urgency=low
 
+  [ Noèl Köthe ]
+  * corrected samba override disparity:
+    samba-dbg_3.0.23b-2_i386.deb: package says priority is optional, override says extra.
+
   [ Debconf translations ]
   * Updated Galician. Closes: #383001.
 
