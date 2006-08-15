@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-05-29 18:03+0200\n"
 "Last-Translator: Miroslav Kure <kurem@debian.cz>\n"
 "Language-Team: Czech <debian-l10n-czech@lists.debian.org>\n"
@@ -185,8 +185,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "démoni, inetd"
+msgid "daemons"
+msgstr "démoni"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -232,3 +238,5 @@ msgstr ""
 "na /var/lib/samba/passwd.tdb. Pokud plánujete použít jinou pdb databázi "
 "(třeba LDAP), měli byste odpovědět záporně."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "démoni, inetd"

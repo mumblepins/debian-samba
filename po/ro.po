@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_po_ro\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-10 17:49+0300\n"
 "Last-Translator: Eddy Petrişor <eddy.petrisor@gmail.com>\n"
 "Language-Team: Română <debian-l10n-romanian@lists.debian.org>\n"
@@ -190,8 +190,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "demoni, inetd"
+msgid "daemons"
+msgstr "demoni"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -237,3 +243,5 @@ msgstr ""
 "migrat automat în /var/lib/samba/passdb.tdb. Nu alegeţi această opţiune dacă "
 "plănuiţi să folosiţi un alt suport pentru pdb (ex. LDAP)."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "demoni, inetd"

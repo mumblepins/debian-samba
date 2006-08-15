@@ -16,8 +16,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_po_km\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-15 09:31+0700\n"
 "Last-Translator: Khoem Sokhem <khoemsokhem@khmeros.info>\n"
 "Language-Team: Khmer <support@khmeros.info>\n"
@@ -56,7 +56,8 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
 msgstr "កញ្ចប់​ម៉ាស៊ីន​ភ្ញៀវ dhcp3 ត្រូវ​តែ​បាន​ដំឡើង​ដើម្បី​ទទួល​បាន​ផលប្រយោជន៍របស់​លក្ខណៈ​ពិសេស​នេះ ។"
 
 #  Type: boolean
@@ -117,8 +118,8 @@ msgid ""
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"សូម​បញ្ជាក់​ក្រុម​ការងារ​ដែល​អ្នក​ចង់​ឲ្យ​ម៉ាស៊ីន​បម្រើ​នេះ​បង្ហាញ​នៅ​ពេល​ដែល​បាន​សួរ "
-"ដោយ​ម៉ាស៊ីន​ភ្ញៀវ ។ ចំណាំ​ថា ប៉ារ៉ាម៉ែត្រ​នេះ​ក៏​ត្រួត​ពិនិត្យ​ឈ្មោះ​ដែន ដែល​បាន​ប្រើ​ដោយ​សុវត្ថិភាព=ការ​កំណត់​ដែន ។"
+"សូម​បញ្ជាក់​ក្រុម​ការងារ​ដែល​អ្នក​ចង់​ឲ្យ​ម៉ាស៊ីន​បម្រើ​នេះ​បង្ហាញ​នៅ​ពេល​ដែល​បាន​សួរ ដោយ​ម៉ាស៊ីន​ភ្ញៀវ ។ ចំណាំ​ថា "
+"ប៉ារ៉ាម៉ែត្រ​នេះ​ក៏​ត្រួត​ពិនិត្យ​ឈ្មោះ​ដែន ដែល​បាន​ប្រើ​ដោយ​សុវត្ថិភាព=ការ​កំណត់​ដែន ។"
 
 #  Type: boolean
 #  Description
@@ -138,8 +139,9 @@ msgid ""
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"គ្រប់​ម៉ាស៊ីន​ភ្ញៀវ​ដែល​ប្រើ​វីនដូ​ថ្មីៗ​ទាំង​អស់​ទាក់ទង​ជា​មួយ​ម៉ាស៊ីន​បម្រើ SMB ដោយ​ប្រើ​ពាក្យសម្ងាត់​ដែល​បាន​អ៊ិនគ្រីប ។ ប្រសិន​បើ​អ្នក​ចង់​ជម្រះ​ពាក្យសម្ងាត់​អត្ថបទ អ្នក​នឹង​ត្រូវតែ​ផ្លាស់ប្ដូរ​ប៉ារ៉ាម៉ែត្រ​នៅ​ក្នុង "
-"បញ្ជី​ឈ្មោះ​របស់​វីនដូ ។"
+"គ្រប់​ម៉ាស៊ីន​ភ្ញៀវ​ដែល​ប្រើ​វីនដូ​ថ្មីៗ​ទាំង​អស់​ទាក់ទង​ជា​មួយ​ម៉ាស៊ីន​បម្រើ SMB ដោយ​ប្រើ​ពាក្យសម្ងាត់​ដែល​បាន​"
+"អ៊ិនគ្រីប ។ ប្រសិន​បើ​អ្នក​ចង់​ជម្រះ​ពាក្យសម្ងាត់​អត្ថបទ អ្នក​នឹង​ត្រូវតែ​ផ្លាស់ប្ដូរ​ប៉ារ៉ាម៉ែត្រ​នៅ​ក្នុង បញ្ជី​ឈ្មោះ​"
+"របស់​វីនដូ ។"
 
 #  Type: boolean
 #  Description
@@ -204,13 +206,17 @@ msgstr ""
 "សម្រាប់​សេចក្តី​លម្អិត​បន្ថែម​សូម​មើល  /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html ពី​"
 "កញ្ចប់ samba-doc ។"
 
-#  Type: select
-#  Choices
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "ដេមិន , inetd"
+msgid "daemons"
+msgstr "ដេមិន "
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -226,7 +232,8 @@ msgstr "តើ​អ្នក​ចង់​រត់ Samba តាម​វិ�
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
-msgstr "ដេមិន Samba smbd អាចរត់ជាដេមិនធម្មតា ឬពី inetd ។ ការរត់ជាដេមិនមួយត្រូវបានផ្ដល់អនុសាសន៍ ។"
+msgstr ""
+"ដេមិន Samba smbd អាចរត់ជាដេមិនធម្មតា ឬពី inetd ។ ការរត់ជាដេមិនមួយត្រូវបានផ្ដល់អនុសាសន៍ ។"
 
 #  Type: boolean
 #  Description
@@ -262,3 +269,7 @@ msgstr ""
 "samba/passdb.tdb ។  កុំជ្រើស​ជម្រើស​នេះ ប្រសិន​បើ​អ្នក​មាន​គម្រោង​ប្រើ​កម្មវិធី​ខាង​ក្រោយ pdb ដទៃ​"
 "ទៀត (ឧទាហរណ៍ LDAP) ជំនួស​វិញ ។"
 
+#  Type: select
+#  Choices
+#~ msgid "daemons, inetd"
+#~ msgstr "ដេមិន , inetd"

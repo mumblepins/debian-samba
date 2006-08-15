@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: Samba for Debian 3.0.0beta2-1\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-13 14:33-0700\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Spanish <debian-l10n-spanish@lists.debian.org>\n"
@@ -74,8 +74,8 @@ msgstr ""
 "El resto de la configuración de Samba trata sobre cuestiones que afectan al "
 "contenido de /etc/samba/smb.conf, que es el fichero utilizado para "
 "configurar los programas de Samba (nmbd y smbd). Su smb.conf actual contiene "
-"una línea 'include' o una opción que atraviesa más de una línea, así que "
-"el proceso de configuración automática puede dejarlo con un smb.conf "
+"una línea 'include' o una opción que atraviesa más de una línea, así que el "
+"proceso de configuración automática puede dejarlo con un smb.conf "
 "descompuesto, requiriendo que lo arregle a mano."
 
 #. Type: boolean
@@ -135,9 +135,9 @@ msgid ""
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"Es muy recomendable habilitar esta opción. Si elige hacerlo, compruebe "
-"que tiene un fichero /etc/samba/smbpasswd válido y que ha puesto las "
-"contraseñas con el programa smbpasswd."
+"Es muy recomendable habilitar esta opción. Si elige hacerlo, compruebe que "
+"tiene un fichero /etc/samba/smbpasswd válido y que ha puesto las contraseñas "
+"con el programa smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -170,8 +170,8 @@ msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"Si no crea este fichero, es imprescindible configurar Samba (y posiblemente los "
-"sistemas Windows) para que use contraseñas no cifradas."
+"Si no crea este fichero, es imprescindible configurar Samba (y posiblemente "
+"los sistemas Windows) para que use contraseñas no cifradas."
 
 #. Type: boolean
 #. Description
@@ -186,8 +186,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "demonios, inetd"
+msgid "daemons"
+msgstr "demonios"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -234,3 +240,6 @@ msgstr ""
 "Favor de indicar si quiere que el fichero corriente smbpasswd sea convertido "
 "automaticamente en /var/lib/samba/passdb.tdb.  No escoja esta opción si "
 "pretende usar otro  "
+
+#~ msgid "daemons, inetd"
+#~ msgstr "demonios, inetd"

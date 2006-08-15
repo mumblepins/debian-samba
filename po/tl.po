@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-15 01:28+0800\n"
 "Last-Translator: eric pareja <xenos@upm.edu.ph>\n"
 "Language-Team: Tagalog <debian-tl@banwa.upm.edu.ph>\n"
@@ -191,8 +191,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "mga daemon, inetd"
+msgid "daemons"
+msgstr "mga daemon"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -237,3 +243,6 @@ msgstr ""
 "Pakitiyak kung inyong nais na mailipat ng awtomatiko ang kasalukuyang "
 "talaksang smbpasswd patungong /var/lib/samba/passdb.tdb. Huwag piliin ang "
 "opsiyon na ito kung balak ninyong gumamit ng ibang pdb backend (hal., LDAP)."
+
+#~ msgid "daemons, inetd"
+#~ msgstr "mga daemon, inetd"

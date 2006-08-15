@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_3.0.0beta2-1_templates\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-13 15:16-0700\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Debian L10n Catalan <debian-l10n-catalan@lists.debian.org>\n"
@@ -97,9 +97,9 @@ msgid ""
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"Indiqueu en quin grup de treball voleu que aparegui el vostre servidor "
-"quan ho consultin els clients. Recordeu que aquest paràmetre també controla "
-"el nom de domini utilitzat pel paràmetre de configuració security=domain."
+"Indiqueu en quin grup de treball voleu que aparegui el vostre servidor quan "
+"ho consultin els clients. Recordeu que aquest paràmetre també controla el "
+"nom de domini utilitzat pel paràmetre de configuració security=domain."
 
 #. Type: boolean
 #. Description
@@ -162,8 +162,8 @@ msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"Si no el creeu, haureu de reconfigurar el Samba (i probablement els "
-"vostres ordinadors clients) per tal que utilitzin contrasenyes de text pla. "
+"Si no el creeu, haureu de reconfigurar el Samba (i probablement els vostres "
+"ordinadors clients) per tal que utilitzin contrasenyes de text pla. "
 
 #. Type: boolean
 #. Description
@@ -178,8 +178,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "dimonis, inetd"
+msgid "daemons"
+msgstr "dimonis"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -224,3 +230,6 @@ msgstr ""
 "Confirmeu si voleu que es migri el fitxer smbpasswd a /var/lib/samba/passdb."
 "tdb.  No esculliu aquesta opció si la vostra intenció és utilitzar un altre "
 "pdb (ex, LDAP)."
+
+#~ msgid "daemons, inetd"
+#~ msgstr "dimonis, inetd"

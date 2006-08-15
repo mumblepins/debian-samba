@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-14 17:39+0200\n"
 "Last-Translator: Jacobo Tarrio <jtarrio@debian.org>\n"
 "Language-Team: Galician <trasno@ceu.fi.udc.es>\n"
@@ -185,8 +185,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "servizos, inetd"
+msgid "daemons"
+msgstr "servizos"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -231,3 +237,6 @@ msgstr ""
 "Confirme se quere que se migre automaticamente o ficheiro smbpasswd "
 "existente a /var/lib/samba/passdb.tdb. Non escolla esta opción se pretende "
 "empregar outro motor pdb (por exemplo, LDAP)."
+
+#~ msgid "daemons, inetd"
+#~ msgstr "servizos, inetd"

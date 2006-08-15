@@ -6,8 +6,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.23rc1 italian debconf templates\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-13 16:12-0700\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Italian <debian-l10n-italian@lists.debian.org>\n"
@@ -152,8 +152,8 @@ msgstr ""
 "Windows, Samba deve essere configurato per usare password cifrate. Questo "
 "richiede che le password degli utenti siano memorizzate in un file diverso "
 "da /etc/passwd. Questo file può essere creato automaticamente ma le password "
-"dovranno essere inserite manualmente con smbpasswd e in futuro il file "
-"dovrà essere tenuto aggiornato."
+"dovranno essere inserite manualmente con smbpasswd e in futuro il file dovrà "
+"essere tenuto aggiornato."
 
 #. Type: boolean
 #. Description
@@ -178,8 +178,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "demoni, inetd"
+msgid "daemons"
+msgstr "demoni"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -225,3 +231,5 @@ msgstr ""
 "migrato in /var/lib/samba/passdb.tdb. Invece, se si pensa di usare un "
 "backend pdb diverso (per esempio LDAP) si dovrebbe rifiutare."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "demoni, inetd"

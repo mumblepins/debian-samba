@@ -18,8 +18,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: 3.0.22-1\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-12 01:17+1200\n"
 "Last-Translator: Carlos Z.F. Liu <carlosliu@users.sourceforge.ent>\n"
 "Language-Team: Debian Chinese [GB] <debian-chinese-gb@lists.debian.org>\n"
@@ -177,8 +177,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "守护进程, inetd"
+msgid "daemons"
+msgstr "守护进程"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -223,3 +229,5 @@ msgstr ""
 "请确定您是否想将现有的 smbpasswd 文件自动移植为 /var/lib/samba/passdb.tdb。如"
 "果您计划使用其它的 pdb 后端 (如 LDAP) 的话，请不要选中此选项。"
 
+#~ msgid "daemons, inetd"
+#~ msgstr "守护进程, inetd"

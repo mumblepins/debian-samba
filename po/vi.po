@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.23rc1-1\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-15 14:54+0930\n"
 "Last-Translator: Clytie Siddall <clytie@riverland.net.au>\n"
 "Language-Team: Vietnamese <vi-VN@googlegroups.com>\n"
@@ -175,8 +175,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "trình nền, inetd"
+msgid "daemons"
+msgstr "trình nền"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -223,3 +229,6 @@ msgstr ""
 "Hãy xác nhận nếu bạn muốn tập tin mật khẩu <smbpasswd> tồn tại được nâng cấp "
 "tự động sang </var/lib/samba/passdb.tdb>. Đừng bật tùy chọn này nếu bạn định "
 "sử dụng một hậu phương PBD khác (v.d. LDAP) thay thế."
+
+#~ msgid "daemons, inetd"
+#~ msgstr "trình nền, inetd"

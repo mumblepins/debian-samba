@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-13 14:15-0700\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Debian-BR Project <debian-l10n-portuguese@lists.debian.org>\n"
@@ -135,9 +135,9 @@ msgid ""
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"Habilitar esta opção é altamente recomendado. Caso você o faça, certifique-se "
-"de possuir um arquivo /etc/samba/smbpasswd e que você tenha senhas definidas "
-"no mesmo para cada usuário usando o comando smbpasswd."
+"Habilitar esta opção é altamente recomendado. Caso você o faça, certifique-"
+"se de possuir um arquivo /etc/samba/smbpasswd e que você tenha senhas "
+"definidas no mesmo para cada usuário usando o comando smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -186,8 +186,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "daemons, inetd"
+msgid "daemons"
+msgstr "daemons"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -234,3 +240,5 @@ msgstr ""
 "opção caso você planeje utilizar um outro backend pdb (como LDAP, por "
 "exemplo)."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "daemons, inetd"

@@ -6,8 +6,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: da\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-14 18:37+0200\n"
 "Last-Translator: Claus Hindsgaul <claus.hindsgaul@gmail.com>\n"
 "Language-Team: Danish\n"
@@ -178,8 +178,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "dæmoner, inetd"
+msgid "daemons"
+msgstr "dæmoner"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -224,3 +230,6 @@ msgstr ""
 "Bekræft om du ønsker at migrere den eksisterende smbpasswd-fil til /var/lib/"
 "samba/passdb.tdb automatisk. Vælg ikke denne indstilling, hvis du i stedet "
 "planlægger at benytte en anden pdb-håndtering (f.eks. LDAP)."
+
+#~ msgid "daemons, inetd"
+#~ msgstr "dæmoner, inetd"

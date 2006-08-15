@@ -16,7 +16,7 @@ _Description: Create samba password database, /var/lib/samba/passdb.tdb?
 
 Template: samba/run_mode
 Type: select
-_Choices: daemons, inetd
+__Choices: daemons, inetd
 Default: daemons
 _Description: How do you want to run Samba?
  The Samba daemon smbd can run as a normal daemon or from inetd. Running as

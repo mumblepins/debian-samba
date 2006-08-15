@@ -13,8 +13,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.20b-3\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-06-01 00:19+0100\n"
 "Last-Translator: Daniel Nylander <po@danielnylander.se>\n"
 "Language-Team: Swedish <tp-sv@listor.tp-sv.se>\n"
@@ -186,8 +186,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "demoner, inetd"
+msgid "daemons"
+msgstr "demoner"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -233,3 +239,5 @@ msgstr ""
 "passdb.tdb.  Välj inte detta alternativ om du istället planerar att använda "
 "ett annat pdb-baksystem (till exempel LDAP)."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "demoner, inetd"

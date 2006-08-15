@@ -13,8 +13,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_3.0.14a-6.de\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2005-08-18 08:18+0200\n"
 "Last-Translator: Martin Krüger <mkrueger@mkru.de>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
@@ -205,8 +205,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "daemons, inetd"
+msgid "daemons"
+msgstr "daemons"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -254,3 +260,5 @@ msgstr ""
 "ein anderes pdb-Backend (z.B. LDAP) zu verwenden, sollten Sie hier mit "
 "'Nein' antworten."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "daemons, inetd"

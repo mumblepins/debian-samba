@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba 3.0.9-1\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-08-13 15:44-0700\n"
 "Last-Translator: Steve Langasek <vorlon@debian.org>\n"
 "Language-Team: Portuguese <traduz@debianpt.org>\n"
@@ -177,8 +177,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "daemons, inetd"
+msgid "daemons"
+msgstr "daemons"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -224,3 +230,5 @@ msgstr ""
 "automaticamente migrado para /var/lib/samba/passdb.tdb.  Não escolha esta "
 "opção se em vez disso planeia utilizar outro backend pdb (e.g., LDAP)."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "daemons, inetd"

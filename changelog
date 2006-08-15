@@ -12,7 +12,10 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
   * Updated Dzongkha. Closes: #383125.
   * Updated Vietnamese. Closes: #383126.
 
- -- Steve Langasek <vorlon@debian.org>  Tue, 15 Aug 2006 01:21:09 -0700
+  [ Christian Perrier ]
+  * Split out samba/run_mode with "__Choices".
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 15 Aug 2006 08:01:30 -0500
 
 samba (3.0.23b-2) unstable; urgency=low
 

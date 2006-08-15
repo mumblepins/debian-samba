@@ -4,8 +4,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba-3.0.23rc1-1_ru\n"
-"Report-Msgid-Bugs-To: peloy@debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-05-29 22:08+1000\n"
 "Last-Translator: Yuriy Talakan' <yt@amur.elektra.ru>\n"
 "Language-Team: Russian <debian-l10n-russian@lists.debian.org>\n"
@@ -179,8 +179,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
-msgstr "daemons, inetd"
+msgid "daemons"
+msgstr "daemons"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -226,3 +232,5 @@ msgstr ""
 "passdb.tdb?  Если вы планируете вместо него использовать другой интерфейс "
 "pdb (например, LDAP), вы должны ответить здесь 'нет'."
 
+#~ msgid "daemons, inetd"
+#~ msgstr "daemons, inetd"
