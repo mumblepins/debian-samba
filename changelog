@@ -7,7 +7,7 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
   [ Debconf translations ]
   * Updated Galician. Closes: #383001.
   * Updated Danish. Closes: #383025.
-  * Added Tagalog. Closes: #383039.
+  * Added Tagalog. Closes: #383039, #383252.
   * Updated Khmer.
   * Updated Dzongkha. Closes: #383125.
   * Updated Vietnamese. Closes: #383126.
