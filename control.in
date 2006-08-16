@@ -204,6 +204,7 @@ Description: Python bindings that allow access to various aspects of Samba
 
 Package: samba-dbg
 Section: devel
+Priority: extra
 Architecture: any
 Depends: samba (= ${Source-Version})
 Description: Samba debugging symbols
