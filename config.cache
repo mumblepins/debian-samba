@@ -110,6 +110,9 @@ samba_cv_socklen_t=${samba_cv_socklen_t=yes}
 # any errors caused by building on an NFS mount.
 samba_cv_HAVE_FCNTL_LOCK=${samba_cv_HAVE_FCNTL_LOCK=yes}
 
+# Force the method to detect interfaces, which might fail if there are
+# no interfaces configured at build time (bug #382429).
+samba_cv_HAVE_IFACE_IFCONF=${samba_cv_HAVE_IFACE_IFCONF=yes}
 
 # smbwrapper doesn't work because the glibc maintainers don't want
 # to support transparent userland VFS.  We might as well preempt
