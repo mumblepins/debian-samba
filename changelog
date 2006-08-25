@@ -9,6 +9,7 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
   * Updated Danish. Closes: #383025.
   * Added Tagalog. Closes: #383039, #383252.
   * Updated Khmer.
+  * Updated Arabic.
   * Updated Dzongkha. Closes: #383125.
   * Updated Vietnamese. Closes: #383126.
 
