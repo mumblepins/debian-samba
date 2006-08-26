@@ -12,6 +12,7 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
   * Updated Arabic.
   * Updated Dzongkha. Closes: #383125.
   * Updated Vietnamese. Closes: #383126.
+  * Updated Czech. Closes: #384760.
 
   [ Christian Perrier ]
   * Split out samba/run_mode with "__Choices".
