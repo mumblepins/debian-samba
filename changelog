@@ -21,6 +21,7 @@ samba (3.0.23b-3) UNRELEASED; urgency=low
   * Preseed configure result for method to detect interfaces in
     debian/config.cache; the test might otherwise fail if there are no
     interfaces configured at build time. Closes: #382429.
+  * Refined panic-action script text. Closes: #382500.
 
  -- Christian Perrier <bubulle@debian.org>  Tue, 15 Aug 2006 08:01:30 -0500
 
