@@ -1,7 +1,7 @@
-Index: samba-3.0.23a/source/Makefile.in
+Index: samba-3.0.23c/source/Makefile.in
 ===================================================================
---- samba-3.0.23a.orig/source/Makefile.in	2006-07-23 18:52:13.206895570 +0200
-+++ samba-3.0.23a/source/Makefile.in	2006-07-23 18:52:19.762948690 +0200
+--- samba-3.0.23c.orig/source/Makefile.in	2006-09-02 10:09:15.160794719 +0200
++++ samba-3.0.23c/source/Makefile.in	2006-09-02 10:09:19.872832788 +0200
 @@ -1521,6 +1521,7 @@
  
  python_clean:

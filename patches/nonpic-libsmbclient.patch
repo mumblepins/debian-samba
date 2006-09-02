@@ -1,7 +1,7 @@
-Index: samba-3.0.23a/source/Makefile.in
+Index: samba-3.0.23c/source/Makefile.in
 ===================================================================
---- samba-3.0.23a.orig/source/Makefile.in	2006-07-23 18:52:19.762948690 +0200
-+++ samba-3.0.23a/source/Makefile.in	2006-07-23 18:52:25.458994844 +0200
+--- samba-3.0.23c.orig/source/Makefile.in	2006-09-02 10:09:19.872832788 +0200
++++ samba-3.0.23c/source/Makefile.in	2006-09-02 10:09:22.248851983 +0200
 @@ -1098,9 +1098,9 @@
  		$(KRB5LIBS) $(LDAP_LIBS) \
  		@SONAMEFLAG@`basename $@`.$(LIBSMBCLIENT_MAJOR)
