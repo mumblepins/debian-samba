@@ -15,7 +15,7 @@ msgstr ""
 "Project-Id-Version: samba 3.0.20b-3\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-08-15 07:59-0500\n"
-"PO-Revision-Date: 2006-06-01 00:19+0100\n"
+"PO-Revision-Date: 2006-09-08 08:55+0100\n"
 "Last-Translator: Daniel Nylander <po@danielnylander.se>\n"
 "Language-Team: Swedish <tp-sv@listor.tp-sv.se>\n"
 "MIME-Version: 1.0\n"
@@ -26,31 +26,19 @@ msgstr ""
 #. Description
 #: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
-msgstr "Modifiera smb.conf att använda WINS-inställningar från DHCP?"
+msgstr "Ändra smb.conf till att använda WINS-inställningar från DHCP?"
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid ""
-"If your computer gets IP address information from a DHCP server on the "
-"network, the DHCP server may also provide information about WINS servers "
-"(\"NetBIOS name servers\") present on the network.  This requires a change "
-"to your smb.conf file so that DHCP-provided WINS settings will automatically "
-"be read from /etc/samba/dhcp.conf."
-msgstr ""
-"Om din dator får en IP-address och information från en DHCP-server på "
-"nätverket kan även DHCP-server också skicka information om WINS-servrar "
-"(\"NetBIOS namnservrar\") i ditt nätverk.  Detta kräver en ändring i din fil "
-"smb.conf så att WINS-inställningar från DHCP-servern automatiskt kan läsas "
-"från /etc/samba/dhcp.conf."
+msgid "If your computer gets IP address information from a DHCP server on the network, the DHCP server may also provide information about WINS servers (\"NetBIOS name servers\") present on the network.  This requires a change to your smb.conf file so that DHCP-provided WINS settings will automatically be read from /etc/samba/dhcp.conf."
+msgstr "Om din dator får en IP-address och information från en DHCP-server på nätverket kan även DHCP-server också skicka information om WINS-servrar (\"NetBIOS namnservrar\") i ditt nätverk.  Detta kräver en ändring i din fil smb.conf så att WINS-inställningar från DHCP-servern automatiskt kan läsas från /etc/samba/dhcp.conf."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid ""
-"The dhcp3-client package must be installed to take advantage of this feature."
-msgstr ""
-"Paketet dhcp3-client måste installeras för att kunna använda denna funktion."
+msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgstr "Paketet dhcp3-client måste installeras för att kunna använda denna funktion."
 
 #. Type: boolean
 #. Description
@@ -61,32 +49,14 @@ msgstr "Konfigurera smb.conf automatiskt?"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:2001
-msgid ""
-"The rest of the configuration of Samba deals with questions that affect "
-"parameters in /etc/samba/smb.conf, which is the file used to configure the "
-"Samba programs (nmbd and smbd). Your current smb.conf contains an 'include' "
-"line or an option that spans multiple lines, which could confuse the "
-"automated configuration process and require you to edit your smb.conf by "
-"hand to get it working again."
-msgstr ""
-"Resten av Samba-konfigurationen hanterar frågor som rör parametrar i /etc/"
-"samba/smb.conf, vilken är den fil som används för att konfigurera Samba-"
-"programmen (nmbd och smbd). Din aktuella smb.conf innehåller en \"include\"-"
-"rad eller ett alternativ som spänner över flera rader som kan göra Debconf "
-"förvirrad och kan innebära att du måste redigera din smb.conf på egen hand "
-"för att få det att fungera igen."
+msgid "The rest of the configuration of Samba deals with questions that affect parameters in /etc/samba/smb.conf, which is the file used to configure the Samba programs (nmbd and smbd). Your current smb.conf contains an 'include' line or an option that spans multiple lines, which could confuse the automated configuration process and require you to edit your smb.conf by hand to get it working again."
+msgstr "Resten av Samba-konfigurationen hanterar frågor som rör parametrar i /etc/samba/smb.conf, vilken är den fil som används för att konfigurera Samba-programmen (nmbd och smbd). Din aktuella smb.conf innehåller en \"include\"-rad eller ett alternativ som spänner över flera rader som kan göra Debconf förvirrad och kan innebära att du måste redigera din smb.conf på egen hand för att få det att fungera igen."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:2001
-msgid ""
-"If you do not choose this option, you will have to handle any configuration "
-"changes yourself, and will not be able to take advantage of periodic "
-"configuration enhancements."
-msgstr ""
-"Om du inte väljer detta alternativ måste du hantera alla "
-"konfigurationsändringar på egen hand och kan därför inte utnyttja fördelarna "
-"med periodiska konfigurationsförbättringar."
+msgid "If you do not choose this option, you will have to handle any configuration changes yourself, and will not be able to take advantage of periodic configuration enhancements."
+msgstr "Om du inte väljer detta alternativ måste du hantera alla konfigurationsändringar på egen hand och kan därför inte utnyttja fördelarna med periodiska konfigurationsförbättringar."
 
 #. Type: string
 #. Description
@@ -97,15 +67,8 @@ msgstr "Arbetsgrupp/Domännamn:"
 #. Type: string
 #. Description
 #: ../samba-common.templates:3001
-#, fuzzy
-msgid ""
-"Please specify the workgroup you want this server to appear to be in when "
-"queried by clients. Note that this parameter also controls the domain name "
-"used with the security=domain setting."
-msgstr ""
-"Ange vilken arbetsgrupp som denna server ska synas i när klienterna frågar. "
-"Notera att denna parameter också kontrollerar domännamnet som används med "
-"parametern \"security=domain\"."
+msgid "Please specify the workgroup you want this server to appear to be in when queried by clients. Note that this parameter also controls the domain name used with the security=domain setting."
+msgstr "Ange vilken arbetsgrupp som denna server ska synas i när klienterna frågar. Notera att denna parameter även kontrollerar domännamnet som används med inställningen \"security=domain\"."
 
 #. Type: boolean
 #. Description
@@ -116,28 +79,14 @@ msgstr "Använd lösenordskryptering?"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
-msgid ""
-"All recent Windows clients communicate with SMB servers using encrypted "
-"passwords. If you want to use clear text passwords you will need to change a "
-"parameter in your Windows registry."
-msgstr ""
-"De flesta Windows-klienter kommunicerar med SMB-servrar med krypterade "
-"lösenord. Om du vill använda lösenord i klartext behöver du ändra en "
-"parameter i Windows registry."
+msgid "All recent Windows clients communicate with SMB servers using encrypted passwords. If you want to use clear text passwords you will need to change a parameter in your Windows registry."
+msgstr "De flesta Windows-klienter av senare versioner kommunicerar med krypterade lösenord mot SMB-servrar. Om du vill använda lösenord i klartext behöver du ändra en parameter i ditt Windows-register."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
-msgid ""
-"Enabling this option is highly recommended. If you do, make sure you have a "
-"valid /etc/samba/smbpasswd file and that you set passwords in there for each "
-"user using the smbpasswd command."
-msgstr ""
-"Det rekommenderas att du väljer detta alternativ. Om du gör det, kontrollera "
-"att du har en giltig /etc/samba/smbpasswd och att du har ställt in "
-"lösenorden där för varje användare med kommandot smbpasswd."
+msgid "Enabling this option is highly recommended. If you do, make sure you have a valid /etc/samba/smbpasswd file and that you set passwords in there for each user using the smbpasswd command."
+msgstr "Det rekommenderas att du aktiverar detta alternativ. Om du gör det, kontrollera att du har en giltig /etc/samba/smbpasswd och att du har ställt in lösenorden där för varje användare med kommandot smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -148,40 +97,20 @@ msgstr "Skapa Sambas lösenordsdatabas, /var/lib/samba/passdb.tdb?"
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
-#, fuzzy
-msgid ""
-"To be compatible with the defaults in most versions of Windows, Samba must "
-"be configured to use encrypted passwords.  This requires user passwords to "
-"be stored in a file separate from /etc/passwd.  This file can be created "
-"automatically, but the passwords must be added manually by running smbpasswd "
-"and be kept up-to-date in the future."
-msgstr ""
-"För att vara kompatibel med standardvärden i de flesta versioner av Windows "
-"måste Samba konfigureras att använda krypterade lösenord.  Detta kräver att "
-"användarnas lösenord lagras i en fil separerad från /etc/passwd."
+msgid "To be compatible with the defaults in most versions of Windows, Samba must be configured to use encrypted passwords.  This requires user passwords to be stored in a file separate from /etc/passwd.  This file can be created automatically, but the passwords must be added manually by running smbpasswd and be kept up-to-date in the future."
+msgstr "För att vara kompatibel med de standardvärden i de flesta versioner av Windows måste Samba konfigureras för att använda krypterade lösenord.  Detta kräver att användarnas lösenord lagras i en fil separerad från /etc/passwd.  Denna fil kan skapas automatiskt men lösenorden måste läggas till manuellt genom att köra smbpasswd och hållas uppdaterad i framtiden."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
-#, fuzzy
-msgid ""
-"If you do not create it, you will have to reconfigure Samba (and probably "
-"your client machines) to use plaintext passwords."
-msgstr ""
-"Denna fil kan skapas automatiskt men lösenorden måste läggas till manuellt "
-"(genom att köra smbpasswd) och måste hållas uppdaterad i framtiden.  Om du "
-"inte skapar den måste du konfigurera om samba (och antagligen även dina "
-"klientmaskiner) till att använda lösenord i klartext."
+msgid "If you do not create it, you will have to reconfigure Samba (and probably your client machines) to use plaintext passwords."
+msgstr "Om du inte skapar den måste du konfigurera Samba (och antagligen även dina klientmaskiner) till att använda lösenord i klartext."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
-msgid ""
-"See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
-"package for more details."
-msgstr ""
-"Se /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html från paketet samba-doc "
-"för mer information."
+msgid "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc package for more details."
+msgstr "Se /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html från paketet samba-doc för mer information."
 
 #. Type: select
 #. Choices
@@ -204,12 +133,8 @@ msgstr "Hur vill du köra Samba?"
 #. Type: select
 #. Description
 #: ../samba.templates:2002
-msgid ""
-"The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
-"daemon is the recommended approach."
-msgstr ""
-"Samba-demonen smbd kan köras som en normal demon eller från inetd. Köra som "
-"en demon är den rekommenderade metoden."
+msgid "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a daemon is the recommended approach."
+msgstr "Samba-demonen smbd kan köras som en normal demon eller från inetd. Köra som en demon är den rekommenderade metoden."
 
 #. Type: boolean
 #. Description
@@ -220,24 +145,15 @@ msgstr "Flytta /etc/samba/smbpasswd till /var/lib/samba/passdb.tdb?"
 #. Type: boolean
 #. Description
 #: ../samba.templates:3001
-msgid ""
-"Samba 3.0 introduced a more complete SAM database interface which supersedes "
-"the /etc/samba/smbpasswd file."
-msgstr ""
-"Samba 3.0 introducerade ett mer komplett gränssnitt för SAM-databasen som "
-"åsidosätter filen /etc/samba/smbpasswd."
+msgid "Samba 3.0 introduced a more complete SAM database interface which supersedes the /etc/samba/smbpasswd file."
+msgstr "Samba 3.0 introducerade ett mer komplett gränssnitt för SAM-databasen som åsidosätter filen /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:3001
-msgid ""
-"Please confirm whether you would like the existing smbpasswd file to be "
-"automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
-"option if you plan to use another pdb backend (e.g., LDAP) instead."
-msgstr ""
-"Bekräfta att du vill migrera din existerande smbpasswd till /var/lib/samba/"
-"passdb.tdb.  Välj inte detta alternativ om du istället planerar att använda "
-"ett annat pdb-baksystem (till exempel LDAP)."
+msgid "Please confirm whether you would like the existing smbpasswd file to be automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this option if you plan to use another pdb backend (e.g., LDAP) instead."
+msgstr "Bekräfta att du vill migrera din existerande smbpasswd till /var/lib/samba/passdb.tdb.  Välj inte detta alternativ om du istället planerar att använda ett annat pdb-baksystem (till exempel LDAP)."
 
 #~ msgid "daemons, inetd"
 #~ msgstr "demoner, inetd"
+
