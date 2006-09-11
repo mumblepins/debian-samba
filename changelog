@@ -6,7 +6,11 @@ samba (3.0.23c-1) UNRELEASED; urgency=low
   * Updated Italian. Closes: #386691.
   * Added Slovak. Closes: #386847.
 
- -- Noèl Köthe <noel@debian.org>  Mon, 04 Sep 2006 12:33:39 +0200
+  [ Steve Langasek ]
+  * Change the Maintainer field at last to the mailing list... gives
+    our spam rules some testing, in response to popular demand :)
+
+ -- Steve Langasek <vorlon@debian.org>  Mon, 11 Sep 2006 01:36:27 -0700
 
 samba (3.0.23c-1) unstable; urgency=low
 
