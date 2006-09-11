@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: samba 3.0.23c-1 italian debconf templates\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-08-15 07:59-0500\n"
-"PO-Revision-Date: 2006-09-09 10:29+0200\n"
+"PO-Revision-Date: 2006-09-11 08:45+0200\n"
 "Last-Translator: Luca Monducci <luca.mo@tiscali.it>\n"
 "Language-Team: Italian <debian-l10n-italian@lists.debian.org>\n"
 "MIME-Version: 1.0\n"
@@ -176,15 +176,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-#, fuzzy
 msgid "daemons"
-msgstr "demoni, inetd"
+msgstr "demoni"
 
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
 msgid "inetd"
-msgstr ""
+msgstr "inetd"
 
 #. Type: select
 #. Description
