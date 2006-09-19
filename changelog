@@ -4,6 +4,7 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
   * Updated Swedish. Closes: #386510.
   * Updated Japanese. Closes: #386534.
   * Updated Italian. Closes: #386691.
+  * Updated Romanian. Closes: #388254.
   * Added Slovak. Closes: #386847.
 
   [ Steve Langasek ]
