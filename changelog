@@ -10,6 +10,8 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
   [ Steve Langasek ]
   * Change the Maintainer field at last to the mailing list... gives
     our spam rules some testing, in response to popular demand :)
+  * Check for update-inetd on purge before trying to invoke it;
+    closes: #388606.
 
   [ Peter Eisentraut ]
   * Make swat binNMU-safe by using ${source:Version} for dependency on
@@ -18,7 +20,7 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
     winbind only delete files they know they're exclusive owners of.
     Closes: #370718.
 
- -- Peter Eisentraut <petere@debian.org>  Fri, 15 Sep 2006 15:53:26 +0200
+ -- Steve Langasek <vorlon@debian.org>  Sat, 23 Sep 2006 00:33:11 -0700
 
 samba (3.0.23c-1) unstable; urgency=low
 
