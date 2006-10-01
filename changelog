@@ -24,7 +24,10 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
     winbind only delete files they know they're exclusive owners of.
     Closes: #370718.
 
- -- Steve Langasek <vorlon@debian.org>  Sat, 23 Sep 2006 00:33:11 -0700
+  [ Christian Perrier ]
+  * Add LSB info to the init script
+
+ -- Christian Perrier <bubulle@debian.org>  Sun,  1 Oct 2006 10:26:12 +0200
 
 samba (3.0.23c-1) unstable; urgency=low
 
