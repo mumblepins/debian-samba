@@ -123,10 +123,9 @@ install: build
 	dh_installdirs
 
 	mkdir -p $(DESTDIR)/usr/lib/cups/backend $(DESTDIR)/usr/share/samba \
-	         $(DESTDIR)/etc/pam.d $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d \
-	         $(DESTDIR)/usr/lib/python$(pyversion)/site-packages/samba
+	         $(DESTDIR)/etc/pam.d $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d
 
-	$(MAKE) -C source install DESTDIR=$(DESTDIR)
+	$(MAKE) -C source install python_install DESTDIR=$(DESTDIR)
 
 	mv $(DESTDIR)/usr/lib/samba/libsmbclient.so $(DESTDIR)/usr/lib/samba/libsmbclient.so.0.1
 	ln -s libsmbclient.so.0.1 $(DESTDIR)/usr/lib/samba/libsmbclient.so.0
@@ -167,10 +166,6 @@ endif
 	cp debian/gdbcommands $(DESTDIR)/etc/samba/
 	cp debian/samba.pamd $(DESTDIR)/etc/pam.d/samba
 	install -m755 debian/samba-common.dhcp $(DESTDIR)/etc/dhcp3/dhclient-enter-hooks.d/samba
-
-	# Install the Python modules
-	cp source/build/lib.*-*-$(pyversion)/samba/*.so $(DESTDIR)/usr/lib/python$(pyversion)/site-packages/samba/
-	cp source/python/samba/* $(DESTDIR)/usr/lib/python$(pyversion)/site-packages/samba/
 
 	dh_movefiles
 
@@ -219,6 +214,7 @@ binary-arch: build install
 	DH_OPTIONS= dh_strip -psamba -psmbclient --dbg-package=samba-dbg
 	DH_OPTIONS= dh_strip -Nsamba -Nsmbclient
 	dh_link
+	DH_OPTIONS= dh_pycentral -ppython-samba
 	dh_python
 	dh_compress
 	dh_fixperms
