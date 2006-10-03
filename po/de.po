@@ -14,8 +14,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: samba_3.0.23b-2\n"
-"Report-Msgid-Bugs-To: samba@packages.debian.org\n"
-"POT-Creation-Date: 2006-08-13 12:55-0700\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2006-08-15 07:59-0500\n"
 "PO-Revision-Date: 2006-09-17 08:18+0200\n"
 "Last-Translator: Holger Wansing <linux@wansing-online.de>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
@@ -28,8 +28,8 @@ msgstr ""
 #: ../samba-common.templates:1001
 msgid "Modify smb.conf to use WINS settings from DHCP?"
 msgstr ""
-"Soll smb.conf so abgeändert werden, dass per DHCP angebotene WINS-Einstellungen "
-"verwendet werden?"
+"Soll smb.conf so abgeändert werden, dass per DHCP angebotene WINS-"
+"Einstellungen verwendet werden?"
 
 #. Type: boolean
 #. Description
@@ -41,12 +41,12 @@ msgid ""
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
-"Wenn Ihr Computer IP-Adress-Informationen von einem DHCP-Server im Netzwerk bezieht, "
-"kann es sein, dass auch Informationen über WINS-Server (»NetBIOS-Name-Server«) "
-"zur Verfügung gestellt werden, sollten solche Server im Netzwerk vorhanden sein. "
-"Eine Änderung der Datei smb.conf ist erforderlich, damit die über DHCP "
-"angebotenen WINS-Einstellungen automatisch aus der Datei /etc/samba/dhcp.conf "
-"übernommen werden."
+"Wenn Ihr Computer IP-Adress-Informationen von einem DHCP-Server im Netzwerk "
+"bezieht, kann es sein, dass auch Informationen über WINS-Server (»NetBIOS-"
+"Name-Server«) zur Verfügung gestellt werden, sollten solche Server im "
+"Netzwerk vorhanden sein. Eine Änderung der Datei smb.conf ist erforderlich, "
+"damit die über DHCP angebotenen WINS-Einstellungen automatisch aus der "
+"Datei /etc/samba/dhcp.conf übernommen werden."
 
 #. Type: boolean
 #. Description
@@ -74,13 +74,12 @@ msgid ""
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
 msgstr ""
-"Der Rest der Konfiguration von Samba betrifft Fragen über Parameter in "
-"/etc/samba/smb.conf (das ist die Datei, die genutzt wird, um die Samba-"
-"Programme (nmbd und smbd) zu konfigurieren). Ihre aktuelle smb.conf "
-"enthält eine »include«-Zeile oder eine mehrzeilige Option. Dies kann den "
-"automatischen Konfigurationsprozess stören, so dass Sie eventuell Ihre "
-"smb.conf-Datei manuell korrigieren müssen, um Samba wieder zum Laufen "
-"zu bekommen."
+"Der Rest der Konfiguration von Samba betrifft Fragen über Parameter in /etc/"
+"samba/smb.conf (das ist die Datei, die genutzt wird, um die Samba-Programme "
+"(nmbd und smbd) zu konfigurieren). Ihre aktuelle smb.conf enthält eine "
+"»include«-Zeile oder eine mehrzeilige Option. Dies kann den automatischen "
+"Konfigurationsprozess stören, so dass Sie eventuell Ihre smb.conf-Datei "
+"manuell korrigieren müssen, um Samba wieder zum Laufen zu bekommen."
 
 #. Type: boolean
 #. Description
@@ -90,9 +89,9 @@ msgid ""
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
 msgstr ""
-"Wenn Sie diese Option nicht wählen, werden Sie jede Änderung an der Konfiguration "
-"manuell vornehmen müssen und können nicht den Vorteil von regelmäßigen "
-"Verbesserungen an der Konfiguration nutzen."
+"Wenn Sie diese Option nicht wählen, werden Sie jede Änderung an der "
+"Konfiguration manuell vornehmen müssen und können nicht den Vorteil von "
+"regelmäßigen Verbesserungen an der Konfiguration nutzen."
 
 #. Type: string
 #. Description
@@ -109,8 +108,8 @@ msgid ""
 "used with the security=domain setting."
 msgstr ""
 "Bitte geben Sie die Arbeitsgruppe an, in der der Server bei Anfragen von "
-"Clients erscheinen soll. Beachten Sie, dass dieser Parameter auch den "
-"Domain-Namen festlegt, der für die Einstellung security=domain verwendet wird."
+"Clients erscheinen soll. Beachten Sie, dass dieser Parameter auch den Domain-"
+"Namen festlegt, der für die Einstellung security=domain verwendet wird."
 
 #. Type: boolean
 #. Description
@@ -127,8 +126,8 @@ msgid ""
 "parameter in your Windows registry."
 msgstr ""
 "Alle aktuellen Windows-Clients kommunizieren mit SMB-Servern mittels "
-"verschlüsselter Passwörter. Wenn Sie Passwörter im Klartext verwenden möchten, "
-"müssen Sie einen Parameter in der Windows Registry ändern. "
+"verschlüsselter Passwörter. Wenn Sie Passwörter im Klartext verwenden "
+"möchten, müssen Sie einen Parameter in der Windows Registry ändern. "
 
 #. Type: boolean
 #. Description
@@ -138,9 +137,9 @@ msgid ""
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"Es wird dringendst empfohlen, diese Option zu aktivieren. Stellen Sie "
-"in dem Fall sicher, dass Sie eine gültige /etc/samba/smbpasswd-Datei haben "
-"und dort mittels dem smbpasswd-Befehl Passwörter für alle Benutzer setzen."
+"Es wird dringendst empfohlen, diese Option zu aktivieren. Stellen Sie in dem "
+"Fall sicher, dass Sie eine gültige /etc/samba/smbpasswd-Datei haben und dort "
+"mittels dem smbpasswd-Befehl Passwörter für alle Benutzer setzen."
 
 #. Type: boolean
 #. Description
@@ -172,8 +171,8 @@ msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"Wenn Sie sie nicht erstellen, müssen Sie Samba (und möglicherweise "
-"auch die Clients) neu konfigurieren, so dass diese unverschlüsselte Passwörter "
+"Wenn Sie sie nicht erstellen, müssen Sie Samba (und möglicherweise auch die "
+"Clients) neu konfigurieren, so dass diese unverschlüsselte Passwörter "
 "benutzen."
 
 #. Type: boolean
@@ -183,14 +182,21 @@ msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
 msgstr ""
-"Details finden Sie in /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html "
-"aus dem samba-doc-Paket."
+"Details finden Sie in /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html aus "
+"dem samba-doc-Paket."
 
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-msgid "daemons, inetd"
+#, fuzzy
+msgid "daemons"
 msgstr "Daemon, inetd"
+
+#. Type: select
+#. Choices
+#: ../samba.templates:2001
+msgid "inetd"
+msgstr ""
 
 #. Type: select
 #. Description
@@ -222,8 +228,8 @@ msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
 msgstr ""
-"Mit Samba 3.0 wurde eine vollständigere SAM-Datenbank-Schnittstelle eingeführt, "
-"die die /etc/samba/smbpasswd-Datei ersetzt."
+"Mit Samba 3.0 wurde eine vollständigere SAM-Datenbank-Schnittstelle "
+"eingeführt, die die /etc/samba/smbpasswd-Datei ersetzt."
 
 #. Type: boolean
 #. Description
@@ -233,6 +239,6 @@ msgid ""
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
 msgstr ""
-"Möchten Sie die bestehende smbpasswd-Datei automatisch nach "
-"/var/lib/samba/passdb.tdb migrieren? Wenn Sie vorhaben, ein anderes "
-"pdb-Backend (z.B. LDAP) zu verwenden, sollten Sie hier mit »Nein« antworten."
+"Möchten Sie die bestehende smbpasswd-Datei automatisch nach /var/lib/samba/"
+"passdb.tdb migrieren? Wenn Sie vorhaben, ein anderes pdb-Backend (z.B. LDAP) "
+"zu verwenden, sollten Sie hier mit »Nein« antworten."
