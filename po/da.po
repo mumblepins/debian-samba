@@ -8,13 +8,13 @@ msgstr ""
 "Project-Id-Version: da\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-08-15 07:59-0500\n"
-"PO-Revision-Date: 2006-08-14 18:37+0200\n"
+"PO-Revision-Date: 2006-10-03 14:52+0200\n"
 "Last-Translator: Claus Hindsgaul <claus.hindsgaul@gmail.com>\n"
 "Language-Team: Danish\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=ISO-8859-1\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: KBabel 1.11.2\n"
+"X-Generator: KBabel 1.11.4\n"
 
 #. Type: boolean
 #. Description
@@ -41,8 +41,7 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid ""
-"The dhcp3-client package must be installed to take advantage of this feature."
+msgid "The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
 "Pakken dhcp3-client skal være installeret, for at kunne udnytte denne "
 "funktion."
@@ -92,14 +91,13 @@ msgstr "Arbejdsgruppe/domæne-navn:"
 #. Type: string
 #. Description
 #: ../samba-common.templates:3001
-#, fuzzy
 msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"Angiv den arbejdsgruppe, din server skal tilhøre, når den bliver spurgt af "
-"klienter. Bemærk at dette også styrer det domænenavn, der bruges med "
+"Angiv den arbejdsgruppe, din server skal optræde i, når den bliver spurgt af "
+"klienter. Bemærk at dette også styrer det domænenavn, der bruges ved "
 "indstillingen \"security=domain\"."
 
 #. Type: boolean
@@ -111,14 +109,13 @@ msgstr "Kryptér adgangskoder?"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
 msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"De fleste Windows-klienter kommunikerer med SMB-servere med krypterede "
-"adgangskoder. Hvis du vil bruge adgangkoder i klar tekst, bliver du nødt til "
+"Alle nyere Windows-klienter kommunikerer med SMB-servere ved hjælp af krypterede "
+"adgangskoder. Hvis du vil bruge adgangkoder i klar tekst, er du nødt til "
 "at ændre en indstilling i Windows's registreringsdatabase."
 
 #. Type: boolean
@@ -233,3 +230,4 @@ msgstr ""
 
 #~ msgid "daemons, inetd"
 #~ msgstr "dæmoner, inetd"
+
