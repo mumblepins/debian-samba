@@ -14,7 +14,7 @@ Index: samba-3.0.23c/source/Makefile.in
  
  distclean: realclean
  	-rm -f include/stamp-h
-+	-rm -f script/gen-8bit-gap.sh smbadduser
++	-rm -f smbadduser
  	-rm -f include/config.h Makefile
  	-rm -f config.status config.cache so_locations
  	-rm -rf .deps TAGS

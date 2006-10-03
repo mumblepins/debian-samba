@@ -104,11 +104,7 @@ clean-patched:
 	dh_testroot
 	rm -f build-stamp configure-stamp
 
-	# Clean first the Samba package
 	-$(MAKE) -C source distclean
-
-	# Delete stuff left after a build that is not deleted by 'make clean'
-	rm -f source/utils/passwd_proto.h source/iniparser/src/*.po
 
 	sed -e "s/@libacl@/`type-handling any linux-gnu`/g" \
 		< debian/control.in > debian/control
