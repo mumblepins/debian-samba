@@ -16,7 +16,7 @@ msgstr ""
 "Project-Id-Version: samba_3.0.23b-2\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-08-15 07:59-0500\n"
-"PO-Revision-Date: 2006-09-17 08:18+0200\n"
+"PO-Revision-Date: 2006-10-03 09:02+0200\n"
 "Last-Translator: Holger Wansing <linux@wansing-online.de>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
 "MIME-Version: 1.0\n"
@@ -188,15 +188,14 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-#, fuzzy
 msgid "daemons"
-msgstr "Daemon, inetd"
+msgstr "Daemon"
 
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
 msgid "inetd"
-msgstr ""
+msgstr "inetd"
 
 #. Type: select
 #. Description
@@ -242,3 +241,4 @@ msgstr ""
 "Möchten Sie die bestehende smbpasswd-Datei automatisch nach /var/lib/samba/"
 "passdb.tdb migrieren? Wenn Sie vorhaben, ein anderes pdb-Backend (z.B. LDAP) "
 "zu verwenden, sollten Sie hier mit »Nein« antworten."
+

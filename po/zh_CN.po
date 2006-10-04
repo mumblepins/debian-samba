@@ -12,15 +12,15 @@
 #
 #    Developers do not need to manually edit POT or PO files.
 #
-# Optical, 2006
-# Carlos Z.F. Liu <carlosliu@users.sourceforge.ent>, 2006
+# Haifeng Chen <optical.dlz@gmail.com>, 2006
+# Carlos Z.F. Liu <carlosliu@users.sourceforge.net>, 2006
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: 3.0.22-1\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2006-08-15 07:59-0500\n"
-"PO-Revision-Date: 2006-08-12 01:17+1200\n"
+"PO-Revision-Date: 2006-10-03 19:36-0500\n"
 "Last-Translator: Carlos Z.F. Liu <carlosliu@users.sourceforge.ent>\n"
 "Language-Team: Debian Chinese [GB] <debian-chinese-gb@lists.debian.org>\n"
 "MIME-Version: 1.0\n"
@@ -96,7 +96,6 @@ msgstr "工作组/域名："
 #. Type: string
 #. Description
 #: ../samba-common.templates:3001
-#, fuzzy
 msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
@@ -114,13 +113,12 @@ msgstr "使用口令加密吗？"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
 msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"大多数 Windows clients 使用加密的口令与 SMB 服务器通讯。如果您想使用明文密"
+"较新的 Windows 客户端都使用加密的口令与 SMB 服务器通讯。如果您想使用明文密"
 "码，您将需要修改您的 Windows 注册表中的一个参数。"
 
 #. Type: boolean
@@ -190,7 +188,7 @@ msgstr "inetd"
 #. Description
 #: ../samba.templates:2002
 msgid "How do you want to run Samba?"
-msgstr ""
+msgstr "您想如何运行 Samba？"
 
 #. Type: select
 #. Description
