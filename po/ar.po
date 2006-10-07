@@ -89,13 +89,12 @@ msgstr " اسم مجموعة العمل/الحقل:"
 #. Type: string
 #. Description
 #: ../samba-common.templates:3001
-#, fuzzy
 msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"من فضلك حدِّد مجموعة العمل التي سيظهر داخلها هذا الخادم عند استفساره من طرف "
+"من فضلك حدِّد مجموعة العمل التي تريد أن يظهر داخلها هذا الخادم عند استفساره من طرف "
 "الزبائن. لاحظ أن هذا المقياس يتحكم في إسم الحقل المستعمل مع الخيار "
 "security=domain setting."
 
@@ -108,13 +107,12 @@ msgstr "تشفير كلمة المرور ؟"
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:4001
-#, fuzzy
 msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"أغلبية زبائن Windows يتصلون مع خُدّام SMB مستعملين كلمات مرور مشفرة. إذا أردت "
+"زبائن Windows الجديدة كلّها تتصل مع خُدّام SMB مستعملة كلمات مرور مشفرة. إذا أردت "
 "استعمال كلمات مرور واضخة عليك بتغيير إعداد في قاعدة تسجيلات Windows."
 
 #. Type: boolean
@@ -172,21 +170,20 @@ msgstr ""
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
-#, fuzzy
 msgid "daemons"
-msgstr "رقباء, inetd"
+msgstr "رقباء"
 
 #. Type: select
 #. Choices
 #: ../samba.templates:2001
 msgid "inetd"
-msgstr ""
+msgstr "inetd"
 
 #. Type: select
 #. Description
 #: ../samba.templates:2002
 msgid "How do you want to run Samba?"
-msgstr ""
+msgstr "كيف تريد تشغيل Samba؟"
 
 #. Type: select
 #. Description
