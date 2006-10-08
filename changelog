@@ -13,6 +13,7 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
   * Updated German. Closes: #390813
   * Updated Simplified Chinese. Closes: #390959
   * Updated Arabic.
+  * Updated Spanish. Closes: #391735
   * Added Slovak. Closes: #386847.
   * Added Finnish. Closes: #390150.
   * Added Estonian. Closes: #391102.
