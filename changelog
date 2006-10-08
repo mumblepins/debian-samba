@@ -18,6 +18,7 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
   * Added Finnish. Closes: #390150.
   * Added Estonian. Closes: #391102.
   * Added Norwegian Bokmål. Closes: #391692
+  * Added Hungarian. Closes: #391746
 
   [ Steve Langasek ]
   * Change the Maintainer field at last to the mailing list... gives
