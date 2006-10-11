@@ -89,7 +89,13 @@ msgid ""
 "line or an option that spans multiple lines, which could confuse the "
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
-msgstr "El resto de la configuración de Samba trata sobre cuestiones que afectan al contenido de /etc/samba/smb.conf, que es el fichero utilizado para configurar los programas de Samba (nmbd y smbd). Su smb.conf actual contiene una línea «include» o una opción que atraviesa más de una línea, así que el proceso de configuración automática puede dejarlo con un smb.conf descompuesto, requiriendo que lo arregle a mano."
+msgstr ""
+"El resto de la configuración de Samba trata sobre cuestiones que afectan al "
+"contenido de /etc/samba/smb.conf, que es el fichero utilizado para "
+"configurar los programas de Samba (nmbd y smbd). Su smb.conf actual contiene "
+"una línea «include» o una opción que atraviesa más de una línea, así que el "
+"proceso de configuración automática puede dejarlo con un smb.conf "
+"descompuesto, requiriendo que lo arregle a mano."
 
 #. Type: boolean
 #. Description
@@ -98,7 +104,10 @@ msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
-msgstr "Si no escoge esta opción, tendrá que gestionar a mano cualquier cambio a la configuración de Samba y no disfrutará de las mejoras periódicos que se realicen a la configuración."
+msgstr ""
+"Si no escoge esta opción, tendrá que gestionar a mano cualquier cambio a la "
+"configuración de Samba y no disfrutará de las mejoras periódicos que se "
+"realicen a la configuración."
 
 #. Type: string
 #. Description
@@ -113,7 +122,11 @@ msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
-msgstr "Indique el grupo de trabajo en el cual quiere que su servidor aparezca cuando se lo pregunten los clientes de la red. Este parámetro también controla el nombre de dominio que se usa con la configuración «security=domain»."
+msgstr ""
+"Indique el grupo de trabajo en el cual quiere que su servidor aparezca "
+"cuando se lo pregunten los clientes de la red. Este parámetro también "
+"controla el nombre de dominio que se usa con la configuración "
+"«security=domain»."
 
 #. Type: boolean
 #. Description
@@ -128,7 +141,10 @@ msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
-msgstr "Todos los clientes Windows actuales se comunican con los servidores SMB utilizando contraseñas cifradas. Si quiere usar contraseñas en claro, tendrá que cambiar un parámetro en el registro de sus sistemas Windows."
+msgstr ""
+"Todos los clientes Windows actuales se comunican con los servidores SMB "
+"utilizando contraseñas cifradas. Si quiere usar contraseñas en claro, tendrá "
+"que cambiar un parámetro en el registro de sus sistemas Windows."
 
 #. Type: boolean
 #. Description
@@ -137,7 +153,10 @@ msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
-msgstr "Es muy recomendable habilitar esta opción. Compruebe que tiene un fichero /etc/samba/smbpasswd válido y que configura las contraseñas para cada usuario con el programa smbpasswd si elige hacerlo."
+msgstr ""
+"Es muy recomendable habilitar esta opción. Compruebe que tiene un fichero /"
+"etc/samba/smbpasswd válido y que configura las contraseñas para cada usuario "
+"con el programa smbpasswd si elige hacerlo."
 
 #. Type: boolean
 #. Description
@@ -154,7 +173,14 @@ msgid ""
 "be stored in a file separate from /etc/passwd.  This file can be created "
 "automatically, but the passwords must be added manually by running smbpasswd "
 "and be kept up-to-date in the future."
-msgstr "Hay que configurar Samba para que use contraseñas cifradas para mantener la compatibilidad con el comportamiento por omisión de la mayoria de los sistemas Windows. Para hacer esto es necesario crear un fichero, distinto del /etc/passwd, donde se guarden las contraseñas de los usuarios. El fichero se puede crear automaticamente, aunque es necesario añadir las contraseñas manualmente mediante el programa «smbpasswd» y mantenerlas al día."
+msgstr ""
+"Hay que configurar Samba para que use contraseñas cifradas para mantener la "
+"compatibilidad con el comportamiento por omisión de la mayoria de los "
+"sistemas Windows. Para hacer esto es necesario crear un fichero, distinto "
+"del /etc/passwd, donde se guarden las contraseñas de los usuarios. El "
+"fichero se puede crear automaticamente, aunque es necesario añadir las "
+"contraseñas manualmente mediante el programa «smbpasswd» y mantenerlas al "
+"día."
 
 #. Type: boolean
 #. Description
@@ -162,7 +188,9 @@ msgstr "Hay que configurar Samba para que use contraseñas cifradas para mantene
 msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
-msgstr "Es imprescindible que configure Samba (y probablemente también los sistemas cliente) para que use contraseñas en claro si no crea este fichero."
+msgstr ""
+"Es imprescindible que configure Samba (y probablemente también los sistemas "
+"cliente) para que use contraseñas en claro si no crea este fichero."
 
 #. Type: boolean
 #. Description
@@ -170,7 +198,9 @@ msgstr "Es imprescindible que configure Samba (y probablemente también los sist
 msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
-msgstr "Si desea más información consulte /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html, disponible en el paquete samba-doc."
+msgstr ""
+"Si desea más información consulte /usr/share/doc/samba-doc/htmldocs/"
+"ENCRYPTION.html, disponible en el paquete samba-doc."
 
 #. Type: select
 #. Choices
@@ -196,13 +226,17 @@ msgstr "¿Cómo quiere que se ejecute Samba?"
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
-msgstr "El servicio Samba smbd puede ejecutarse como un demonio normal independiente o lanzarse desde el demonio inetd. Se recomienda que se ejecute como demonio independiente."
+msgstr ""
+"El servicio Samba smbd puede ejecutarse como un demonio normal independiente "
+"o lanzarse desde el demonio inetd. Se recomienda que se ejecute como demonio "
+"independiente."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
-msgstr "¿Convertir el fichero /etc/samba/smbpasswd a /var/lib/samba/passdb.tdb?"
+msgstr ""
+"¿Convertir el fichero /etc/samba/smbpasswd a /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
@@ -210,7 +244,9 @@ msgstr "¿Convertir el fichero /etc/samba/smbpasswd a /var/lib/samba/passdb.tdb?
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
-msgstr "La versión 3.0 de Samba introduce un base de dados «SAM» más completa que sustituye al fichero /etc/samba/smbpasswd."
+msgstr ""
+"La versión 3.0 de Samba introduce un base de dados «SAM» más completa que "
+"sustituye al fichero /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -219,7 +255,10 @@ msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
-msgstr "Confirme si quiere que el fichero smbpasswd existente se migre de forma automática a /var/lib/samba/passdb.tdb.  No escoja esta opción si pretende usar motor para pdb (p.ej. LDAP)."
+msgstr ""
+"Confirme si quiere que el fichero smbpasswd existente se migre de forma "
+"automática a /var/lib/samba/passdb.tdb.  No escoja esta opción si pretende "
+"usar motor para pdb (p.ej. LDAP)."
 
 #~ msgid "daemons, inetd"
 #~ msgstr "demonios, inetd"
