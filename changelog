@@ -38,6 +38,8 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
   * Use upstream makefile to install Python module.
   * Build-Depend on python-dev instead of python-all-dev.
   * Removed old upgrade support.
+  * Remove possibly leftover comma from "passdb backend" setting in
+    smb.conf on upgrade. Closes: ##383307.
 
   [ Christian Perrier ]
   * Add LSB info to the init script

@@ -89,7 +89,7 @@ if [ "${RET}" = "true" ]; then
 	then
 		sed -e "s/^\([[:space:]]*\)\[global\]/\1\[global\]/i
 			/^[[:space:]]*\[global\]/,/^[[:space:]]*\[/ \
-			        s/^\([[:space:]]*passdb backend[[:space:]]*=.*\)[[:space:]]*guest[[:space:]]*$/\1/i" \
+			        s/^\([[:space:]]*passdb backend[[:space:]]*=[^,]*\),\?[[:space:]]*guest[[:space:]]*$/\1/i" \
 			< /etc/samba/smb.conf >${TMPFILE}
 		mv -f ${TMPFILE} /etc/samba/smb.conf
 	fi
