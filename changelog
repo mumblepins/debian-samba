@@ -40,6 +40,8 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
   * Removed old upgrade support.
   * Remove possibly leftover comma from "passdb backend" setting in
     smb.conf on upgrade. Closes: ##383307.
+  * Added libpam-smbpass logcheck file by martin f krafft.
+    Closes: #391487, #391916.
 
   [ Christian Perrier ]
   * Add LSB info to the init script

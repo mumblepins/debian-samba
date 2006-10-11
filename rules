@@ -196,6 +196,7 @@ binary-arch: build install
 	dh_installdocs -A debian/README.build
 	dh_installexamples
 	dh_installlogrotate
+	dh_installlogcheck
 	DH_OPTIONS= dh_installinit -psamba -- "defaults 20 19"
 	DH_OPTIONS= dh_installinit -pwinbind
 	dh_installcron 
