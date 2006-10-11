@@ -37,6 +37,7 @@ samba (3.0.23c-2) UNRELEASED; urgency=low
     Closes: #386499.  (patch by Patrick Winnertz)
   * Use upstream makefile to install Python module.
   * Build-Depend on python-dev instead of python-all-dev.
+  * Removed old upgrade support.
 
   [ Christian Perrier ]
   * Add LSB info to the init script

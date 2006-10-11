@@ -83,45 +83,7 @@ fi
 
 umask 022
 
-if [ -n "$2" -a -e /etc/samba/smbpasswd \
-     -a ! -e /var/lib/samba/passdb.tdb -a "$PDB_MIGRATE" = "true" ] \
-   && dpkg --compare-versions "$2" lt 2.99.cvs.20020713-2
-then
-	umask 066
-	pdbedit -i smbpasswd -e tdbsam
-	rm /etc/samba/smbpasswd
-	umask 022
-
-	# The database has been moved, now make sure we can still find it.
-	PASSDB=`sed -n -e"s/^[[:space:]]*\[global\]/\[global\]/i
-			/^\[global\]/,/^[[:space:]]*\[/ \
-				s/^[[:space:]]*passdb backend[[:space:]]*=[[:space:]]*//pi" \
-			< /etc/samba/smb.conf \
-	 | tail -n 1`
-	if echo "$PASSDB" | egrep -q "(^|[[:space:]])smbpasswd"; then
-		if ! echo "$PASSDB" | egrep -q "(^|[[:space:]])tdbsam"; then
-			PASSDB=`echo $PASSDB | sed -e's/\(^\|[[:space:]]\)smbpasswd/\1tdbsam/'`
-		fi
-	fi
-	if ! echo "$PASSDB" | egrep -q "(^|[[:space:]])tdbsam"; then
-		PASSDB="tdbsam $PASSDB"
-	fi
-	TMPFILE=/etc/samba/smb.conf.dpkg-tmp
-	sed -e "s/^\([[:space:]]*\)\[global\]/\1\[global\]/i
-		/^[[:space:]]*\[global\]/,/^[[:space:]]*\[/ \
-			s/^\([[:space:]]*\)passdb backend[[:space:]]*=.*/\1passdb backend = ${PASSDB}/i" \
-		< /etc/samba/smb.conf >${TMPFILE}
-	chmod a+r ${TMPFILE}
-	mv -f ${TMPFILE} /etc/samba/smb.conf
-fi
-
 # ------------------------- Debconf questions end ---------------------
-
-# Handle removal of nmbd from inetd.conf, which is no longer a supported
-#	configuration.
-if dpkg --compare-versions "$2" lt 2.999+3.0.alpha20-4; then
-	update-inetd --remove netbios-ns
-fi
 
 # We want to add these entries to inetd.conf commented out. Otherwise
 #	UDP traffic could make inetd to start nmbd or smbd right during
