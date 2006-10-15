@@ -105,7 +105,7 @@ msgstr ""
 #. Description
 #: ../samba-common.templates:4001
 msgid "Use password encryption?"
-msgstr "Voleu utilitzar l'encriptació de contrasenyes?"
+msgstr "Voleu utilitzar el xifrat de contrasenyes?"
 
 #. Type: boolean
 #. Description
@@ -116,7 +116,7 @@ msgid ""
 "parameter in your Windows registry."
 msgstr ""
 "Tots els clients de Windows recents es comuniquen amb els servidors de Samba "
-"utilitzant contrasenyes encriptades. Si voleu utilitzar contrasenyes amb "
+"utilitzant contrasenyes xifrades. Si voleu utilitzar contrasenyes amb "
 "text pla, haureu de modificar el vostre registre de Windows."
 
 #. Type: boolean
@@ -148,7 +148,7 @@ msgid ""
 "automatically, but the passwords must be added manually by running smbpasswd "
 "and be kept up-to-date in the future."
 msgstr ""
-"El Samba s'ha de configurar perquè utilitzi contrasenyes encriptades per tal "
+"El Samba s'ha de configurar perquè utilitzi contrasenyes xifrades per tal "
 "que sigui compatible amb la majoria de versions de Windows per defecte. Això "
 "implica que les contrasenyes d'usuari s'emmagatzemin a un fitxer diferent "
 "del /etc/passwd. Aquest fitxer es pot crear automàticament, però les "
@@ -228,7 +228,7 @@ msgid ""
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
 msgstr ""
 "Confirmeu si voleu que es migri el fitxer smbpasswd a /var/lib/samba/passdb."
-"tdb.  No esculliu aquesta opció si la vostra intenció és utilitzar un altre "
+"tdb.  No escolliu aquesta opció si la vostra intenció és utilitzar un altre "
 "pdb (ex, LDAP)."
 
 #~ msgid "daemons, inetd"

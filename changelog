@@ -1,3 +1,9 @@
+samba (3.0.23c-3) UNRELEASED; urgency=low
+
+  * Update the Catalan translation; thanks to Guillem Jover for his help
+
+ -- Steve Langasek <vorlon@debian.org>  Sat, 14 Oct 2006 22:03:50 -0700
+
 samba (3.0.23c-2) unstable; urgency=low
 
   [ Debconf translations ]
