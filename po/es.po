@@ -1,5 +1,7 @@
 # samba translation to spanish
-# Copyright (C) 2003-2006 Software in the Public Interest, SPI Inc.
+
+# Copyright (C) 2003-2006 Steve Langasek <vorlon@debian.org>
+# Copyright (C) 2006 Software in the Public Interest, SPI Inc.
 # This file is distributed under the same license as the samba package.
 #
 #  Changes:
@@ -258,7 +260,7 @@ msgid ""
 msgstr ""
 "Confirme si quiere que el fichero smbpasswd existente se migre de forma "
 "automática a /var/lib/samba/passdb.tdb.  No escoja esta opción si pretende "
-"usar motor para pdb (p.ej. LDAP)."
+"usar otro motor para pdb (p.ej. LDAP)."
 
 #~ msgid "daemons, inetd"
 #~ msgstr "demonios, inetd"

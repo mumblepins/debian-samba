@@ -1,8 +1,10 @@
 samba (3.0.23c-3) UNRELEASED; urgency=low
 
   * Update the Catalan translation; thanks to Guillem Jover for his help
+  * Correct the copyright header in po/es.po.
+  * Add a missing word to the updated Spanish translation.
 
- -- Steve Langasek <vorlon@debian.org>  Sat, 14 Oct 2006 22:03:50 -0700
+ -- Steve Langasek <vorlon@debian.org>  Sat, 14 Oct 2006 23:33:13 -0700
 
 samba (3.0.23c-2) unstable; urgency=low
 
