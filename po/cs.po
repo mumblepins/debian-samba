@@ -104,7 +104,7 @@ msgid ""
 msgstr ""
 "Zadejte prosím jméno skupiny, do které má server patřit (resp. se to tak "
 "bude jevit klientům. Tento parametr také určuje název domény v případech, "
-"kdy používáte nastavení security=domain."
+"kdy používáte nastavení security=domain)."
 
 #. Type: boolean
 #. Description
