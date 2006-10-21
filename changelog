@@ -2,6 +2,7 @@ samba (3.0.23c-3) UNRELEASED; urgency=low
 
   [ Debconf translations ]
   * Updated Catalan; thanks to Guillem Jover for his help
+  * Updated Russian.
   * Updated Spanish. Add a missing word and correct the copyright header
   * Updated Vietnamese. Closes: #394164
   * Added Albanian. Closes: #393777
