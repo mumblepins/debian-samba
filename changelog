@@ -5,6 +5,7 @@ samba (3.0.23c-3) UNRELEASED; urgency=low
   * Updated Spanish. Add a missing word and correct the copyright header
   * Updated Vietnamese. Closes: #394164
   * Added Albanian. Closes: #393777
+  * Added Chinese (Traditional).
   * Added Thai.
 
  -- Steve Langasek <vorlon@debian.org>  Sat, 14 Oct 2006 23:33:13 -0700
