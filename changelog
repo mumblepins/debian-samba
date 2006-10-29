@@ -6,6 +6,7 @@ samba (3.0.23c-4) UNRELEASED; urgency=low
   * Added Korean. Closes: #394509
   * Added Nepali.
   * Updated Czech (typo fixed). 
+  * Added Wolof. Closes: #396079
 
  -- Christian Perrier <bubulle@debian.org>  Sat, 21 Oct 2006 14:04:38 +0200
 
