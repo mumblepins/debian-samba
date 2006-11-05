@@ -1,15 +1,14 @@
-samba (3.0.23c-4) UNRELEASED; urgency=low
+samba (3.0.23c-4) unstable; urgency=low
 
   [ Debconf translations ]
-  * Added Bosnian. Closes: #396634
   * Added Greek.
   * Added Gujarati. Closes: #394430
   * Added Korean. Closes: #394509
   * Added Nepali.
-  * Updated Czech (typo fixed). 
+  * Updated Czech (typo fixed).
   * Added Wolof. Closes: #396079
 
- -- Christian Perrier <bubulle@debian.org>  Sat, 21 Oct 2006 14:04:38 +0200
+ -- Christian Perrier <bubulle@debian.org>  Sun,  5 Nov 2006 09:42:40 +0100
 
 samba (3.0.23c-3) unstable; urgency=low
 
