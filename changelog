@@ -1,3 +1,10 @@
+samba (3.0.23c-5) UNRELEASED; urgency=low
+
+  [ Debconf translations ]
+  * Added Bosnian. Closes: #396634
+
+ -- Christian Perrier <bubulle@debian.org>  Sun,  5 Nov 2006 12:42:40 +0100
+
 samba (3.0.23c-4) unstable; urgency=low
 
   [ Debconf translations ]
