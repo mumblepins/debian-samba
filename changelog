@@ -6,6 +6,7 @@ samba (3.0.23d-1) UNRELEASED; urgency=low
   * updated documentation.patch for 3.0.23d
   * updated non-linux-ports.patch for 3.0.23d
   * updated adapt_machine_creation_script.patch for 3.0.23d
+  * updated autoconf.patch for 3.0.23d
 
   [ Debconf translations ]
   * Added Bosnian. Closes: #396634
