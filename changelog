@@ -2,6 +2,9 @@ samba (3.0.23d-1) UNRELEASED; urgency=low
 
   * new upstream release (2006-11-15)
 
+  [ Noèl Köthe ]
+  * update documentation.patch for 3.0.23d
+
   [ Debconf translations ]
   * Added Bosnian. Closes: #396634
   * Added Bulgarian. Closes: #397773
