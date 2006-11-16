@@ -1,10 +1,12 @@
-samba (3.0.23c-5) UNRELEASED; urgency=low
+samba (3.0.23d-1) UNRELEASED; urgency=low
+
+  * new upstream release (2006-11-15)
 
   [ Debconf translations ]
   * Added Bosnian. Closes: #396634
   * Added Bulgarian. Closes: #397773
 
- -- Christian Perrier <bubulle@debian.org>  Sun,  5 Nov 2006 12:42:40 +0100
+ -- Noèl Köthe <noel@debian.org>  Thu, 16 Nov 2006 13:55:26 +0100
 
 samba (3.0.23c-4) unstable; urgency=low
 
