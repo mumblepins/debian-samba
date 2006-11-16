@@ -54,10 +54,11 @@ Index: samba-3.0.23c/source/configure.in
  case "$host_os" in
 -	*linux*)
 +	linux*-gnu* | gnu* | k*bsd*-gnu)
+		NSSSONAMEVERSIONSUFFIX=".2"
  		WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_linux.o"
  		;;
 -	*freebsd[[5-9]]*)
 +	freebsd5*|*freebsd[[6-9]]*)
  		# FreeBSD winbind client is implemented as a wrapper around
  		# the Linux version.
- 		WINBIND_NSS_EXTRA_OBJS="nsswitch/winbind_nss_freebsd.o \
+		NSSSONAMEVERSIONSUFFIX=".1"
