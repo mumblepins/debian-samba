@@ -1,6 +1,7 @@
 samba (3.0.23d-2) UNRELEASED; urgency=low
 
-  * 
+  [ Debconf translations ]
+  * Added Lituanian. Closes: #400397
 
  -- Noèl Köthe <noel@debian.org>  Thu, 16 Nov 2006 16:52:43 +0100
 
