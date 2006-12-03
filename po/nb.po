@@ -40,15 +40,17 @@ msgid ""
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
-"Hvis din datamaskin får informasjon om IP-adressen fra en DHCP-tjener "
-"på nettet, så kan DHCP-tjeneren også skaffe informasjon om WINS-tjenere "
+"Hvis din datamaskin får informasjon om IP-adressen fra en DHCP-tjener på "
+"nettet, så kan DHCP-tjeneren også skaffe informasjon om WINS-tjenere "
 "(«NetBIOS navnetjenere») på nettet. For å bruke dette må smb.conf-fila "
-"endres slik at WINS-innstillinger fra DHCP automatisk leses fra /etc/samba/dhcp.conf."
+"endres slik at WINS-innstillinger fra DHCP automatisk leses fra /etc/samba/"
+"dhcp.conf."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
 msgstr "For å utnytte denne muligheten må pakka dhcp3-client være installert."
 
 #. Type: boolean
@@ -68,11 +70,12 @@ msgid ""
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
 msgstr ""
-"Resten av Samba-oppsettet dreier seg om spørsmål som påvirker "
-"parametre i /etc/samba/smb.conf, som er oppsettsfila for Samba-programmene "
-"(nmbd og smbd). smb.conf-fila inneholder nå en  «include»-linje eller en parameter "
-"som går over flere linjer, som kanskje kan forvirre den automatiske oppsettsprosessen "
-"slik at du må endre smb.conf for hånd for å få den til å virke igjen."
+"Resten av Samba-oppsettet dreier seg om spørsmål som påvirker parametre i /"
+"etc/samba/smb.conf, som er oppsettsfila for Samba-programmene (nmbd og "
+"smbd). smb.conf-fila inneholder nå en  «include»-linje eller en parameter "
+"som går over flere linjer, som kanskje kan forvirre den automatiske "
+"oppsettsprosessen slik at du må endre smb.conf for hånd for å få den til å "
+"virke igjen."
 
 #. Type: boolean
 #. Description
@@ -99,9 +102,9 @@ msgid ""
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"Oppgi hvilken arbeidsgruppe denne tjeneren skal vise når klienter spør "
-"den. Merk at denne parameteren også styrer domenenavnet som brukes "
-"med innstillingen security=domain."
+"Oppgi hvilken arbeidsgruppe denne tjeneren skal vise når klienter spør den. "
+"Merk at denne parameteren også styrer domenenavnet som brukes med "
+"innstillingen security=domain."
 
 #. Type: boolean
 #. Description
@@ -117,9 +120,9 @@ msgid ""
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"Alle nyere Windows-klienter bruker krypterte passord når de kommuniserer "
-"med SMB-tjenere. Hvis du vil bruke passord i klartekst må du endre en "
-"parameter i Windows registry på klientene."
+"Alle nyere Windows-klienter bruker krypterte passord når de kommuniserer med "
+"SMB-tjenere. Hvis du vil bruke passord i klartekst må du endre en parameter "
+"i Windows registry på klientene."
 
 #. Type: boolean
 #. Description
@@ -150,9 +153,10 @@ msgid ""
 "and be kept up-to-date in the future."
 msgstr ""
 "Samba må settes opp til å bruke krypterte passord for å være kompatibel med "
-"de fleste Windows-versjoner. Dette krever at brukerpassord må lagres i en egen "
-"fil unna /etc/passwd. Denne fila kan opprettes automatisk, men passordene må "
-"legges inn manuelt med smbpasswd og holdes oppdatert i fremtiden."
+"de fleste Windows-versjoner. Dette krever at brukerpassord må lagres i en "
+"egen fil unna /etc/passwd. Denne fila kan opprettes automatisk, men "
+"passordene må legges inn manuelt med smbpasswd og holdes oppdatert i "
+"fremtiden."
 
 #. Type: boolean
 #. Description
@@ -161,8 +165,8 @@ msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"Hvis du ikke oppretter den, må du endre oppsettet på Samba (og trolig "
-"også klientmaskinene) til å bruke klartekst-passord."
+"Hvis du ikke oppretter den, må du endre oppsettet på Samba (og trolig også "
+"klientmaskinene) til å bruke klartekst-passord."
 
 #. Type: boolean
 #. Description
@@ -174,9 +178,9 @@ msgstr ""
 "Mer detaljer finnes i fila /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html "
 "fra pakka samba-doc."
 
+#  Using same translation as in debian.edu/Skolelinux. A bit controversial.
 #. Type: select
 #. Choices
-#  Using same translation as in debian.edu/Skolelinux. A bit controversial.
 #: ../samba.templates:2001
 msgid "daemons"
 msgstr "nisser"
@@ -200,8 +204,8 @@ msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
 msgstr ""
-"Samba-prosessen smbd kan kjøres som en normal nisse eller fra inetd. "
-"Det anbefales å kjøre som en nisse."
+"Samba-prosessen smbd kan kjøres som en normal nisse eller fra inetd. Det "
+"anbefales å kjøre som en nisse."
 
 #. Type: boolean
 #. Description
@@ -230,5 +234,3 @@ msgstr ""
 "Bekreft om du vil at den eksisterende smbpasswd-fila skal automatisk "
 "omgjøres til /var/lib/samba/passdb.tdb. Ikke velg dette om du har til "
 "hensikt å bruke en annen pdb-motor i stedet (f.eks. LDAP)."
-
-

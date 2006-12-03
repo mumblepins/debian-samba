@@ -41,7 +41,8 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
 "Pakken dhcp3-client skal være installeret, for at kunne udnytte denne "
 "funktion."
@@ -114,9 +115,9 @@ msgid ""
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"Alle nyere Windows-klienter kommunikerer med SMB-servere ved hjælp af krypterede "
-"adgangskoder. Hvis du vil bruge adgangkoder i klar tekst, er du nødt til "
-"at ændre en indstilling i Windows's registreringsdatabase."
+"Alle nyere Windows-klienter kommunikerer med SMB-servere ved hjælp af "
+"krypterede adgangskoder. Hvis du vil bruge adgangkoder i klar tekst, er du "
+"nødt til at ændre en indstilling i Windows's registreringsdatabase."
 
 #. Type: boolean
 #. Description
@@ -230,4 +231,3 @@ msgstr ""
 
 #~ msgid "daemons, inetd"
 #~ msgstr "dæmoner, inetd"
-

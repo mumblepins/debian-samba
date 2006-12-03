@@ -43,8 +43,8 @@ msgid ""
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
 "Ak váš počítač získava IP adresu z DHCP servera, môže vám tento server "
-"ponúkať aj údaje o WINS serveroch (menných serveroch NetBIOS-u), ktoré "
-"sa nachádzajú na vašej sieti. To vyžaduje zásah do súboru smb.conf, kde sa "
+"ponúkať aj údaje o WINS serveroch (menných serveroch NetBIOS-u), ktoré sa "
+"nachádzajú na vašej sieti. To vyžaduje zásah do súboru smb.conf, kde sa "
 "nastaví načítavanie údajov o WINS serveroch zo súboru /etc/samba/dhcp.conf."
 
 #. Type: boolean
@@ -74,10 +74,10 @@ msgid ""
 msgstr ""
 "Zvyšok nastavenia Samby sa zaoberá otázkami, ktoré ovplyvňujú parametre "
 "uvedené v /etc/samba/smb.conf, čo je konfiguračný súbor pre Samba programy "
-"(nmbd a smbd). Váš súčasný súbor smb.conf obsahuje riadok 'include' "
-"alebo voľbu, ktorá presahuje viac riadkov. Toto môže zapríčiniť zlé "
-"automatické nastavenie, takže pre správnu funkčnosť možno budete musieť "
-"upraviť smb.conf manuálne."
+"(nmbd a smbd). Váš súčasný súbor smb.conf obsahuje riadok 'include' alebo "
+"voľbu, ktorá presahuje viac riadkov. Toto môže zapríčiniť zlé automatické "
+"nastavenie, takže pre správnu funkčnosť možno budete musieť upraviť smb.conf "
+"manuálne."
 
 #. Type: boolean
 #. Description
@@ -123,8 +123,8 @@ msgid ""
 "parameter in your Windows registry."
 msgstr ""
 "Všetky súčasné Windows počítače používajú na komunikáciu so SMB servermi "
-"šifrované heslá. Ak chcete použiť nešifrované heslá, musíte zmeniť "
-"parameter v registroch systému Windows."
+"šifrované heslá. Ak chcete použiť nešifrované heslá, musíte zmeniť parameter "
+"v registroch systému Windows."
 
 #. Type: boolean
 #. Description
@@ -154,8 +154,8 @@ msgid ""
 "automatically, but the passwords must be added manually by running smbpasswd "
 "and be kept up-to-date in the future."
 msgstr ""
-"Kvôli kompatibilite s predvoleným nastavením väčšiny verzií Windows sa "
-"musí Samba nastaviť na používanie šifrovaných hesiel. To vyžaduje uloženie "
+"Kvôli kompatibilite s predvoleným nastavením väčšiny verzií Windows sa musí "
+"Samba nastaviť na používanie šifrovaných hesiel. To vyžaduje uloženie "
 "používateľských hesiel v inom súbore ako /etc/passwd. Tento súbor sa môže "
 "vytvoriť automaticky, ale heslá do neho musíte pridať manuálne programom "
 "smbpasswd a taktiež ho musíte neustále aktualizovať."
@@ -167,8 +167,8 @@ msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"Ak tento súbor nevytvoríte, budete musieť nastaviť Sambu (a zrejme aj počítače "
-"klientov) na použitie nešifrovaných hesiel."
+"Ak tento súbor nevytvoríte, budete musieť nastaviť Sambu (a zrejme aj "
+"počítače klientov) na použitie nešifrovaných hesiel."
 
 #. Type: boolean
 #. Description
@@ -177,8 +177,8 @@ msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
 msgstr ""
-"Podrobnosti nájdete v súbore /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html "
-"z balíka samba-doc."
+"Podrobnosti nájdete v súbore /usr/share/doc/samba-doc/htmldocs/ENCRYPTION."
+"html z balíka samba-doc."
 
 #. Type: select
 #. Choices
@@ -205,8 +205,8 @@ msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
 msgstr ""
-"Samba server smbd sa môže spúšťať ako obyčajný daemon (odporúča sa), alebo sa môže "
-"spúšťať z inetd."
+"Samba server smbd sa môže spúšťať ako obyčajný daemon (odporúča sa), alebo "
+"sa môže spúšťať z inetd."
 
 #. Type: boolean
 #. Description
@@ -221,8 +221,8 @@ msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
 msgstr ""
-"Samba 3.0 zaviedla nové, kompletnejšie rozhranie k SAM databáze, ktoré nahradzuje "
-"pôvodný súbor /etc/samba/smbpasswd."
+"Samba 3.0 zaviedla nové, kompletnejšie rozhranie k SAM databáze, ktoré "
+"nahradzuje pôvodný súbor /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -232,6 +232,6 @@ msgid ""
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
 msgstr ""
-"Rozhodnite sa, či chcete automaticky previesť aktuálny súbor smbpasswd "
-"do /var/lib/samba/passwd.tdb. Ak chcete použiť inú pdb databázu (napr. "
-"LDAP), zamietnite túto voľbu."
+"Rozhodnite sa, či chcete automaticky previesť aktuálny súbor smbpasswd do /"
+"var/lib/samba/passwd.tdb. Ak chcete použiť inú pdb databázu (napr. LDAP), "
+"zamietnite túto voľbu."

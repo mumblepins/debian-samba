@@ -1,5 +1,4 @@
 # samba translation to spanish
-
 # Copyright (C) 2003-2006 Steve Langasek <vorlon@debian.org>
 # Copyright (C) 2006 Software in the Public Interest, SPI Inc.
 # This file is distributed under the same license as the samba package.

@@ -23,7 +23,8 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: KBabel 1.11.4\n"
-"Plural-Forms: nplurals=3;plural=(n==1?0:(((n%100>19)||((n%100==0)&&(n!=0)))?2:1))\n"
+"Plural-Forms: nplurals=3;plural=(n==1?0:(((n%100>19)||((n%100==0)&&(n!=0)))?"
+"2:1))\n"
 
 #. Type: boolean
 #. Description
@@ -51,7 +52,8 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
 "Pachetul dhcp3-client trebuie să fie instalat pentru a beneficia de această "
 "facilitate."
@@ -138,7 +140,8 @@ msgid ""
 "user using the smbpasswd command."
 msgstr ""
 "Activarea acestei opţiuni este recomandată în mod deosebit. Dacă o activaţi, "
-"asiguraţi-vă că fişierul /etc/samba/smbpasswd este valid şi că aveţi configurată o parolă pentru fiecare utilizator (folosind comanda smbpasswd)."
+"asiguraţi-vă că fişierul /etc/samba/smbpasswd este valid şi că aveţi "
+"configurată o parolă pentru fiecare utilizator (folosind comanda smbpasswd)."
 
 #. Type: boolean
 #. Description
@@ -240,4 +243,3 @@ msgstr ""
 
 #~ msgid "daemons, inetd"
 #~ msgstr "demoni, inetd"
-

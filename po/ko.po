@@ -29,19 +29,18 @@ msgid ""
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
 msgstr ""
-"컴퓨터가 네트워크 상에 있는 DHCP 서버에서 IP 주소 정보를 받아올 경우, DHCP "
-"서버에서 네트워크 상에 있는 WINS 서버(\"NetBIOS 네임 서버\")에 관한 정보를 "
-"받아올 수 있는 경우도 있습니다. 이를 위해서는 smb.conf 파일을 수정하여 DHCP에"
-"서 제공된 WINS 설정을 /etc/samba/dhcp.conf에서 자동으로 읽어들일 수 있도록 "
-"해야 합니다."
+"컴퓨터가 네트워크 상에 있는 DHCP 서버에서 IP 주소 정보를 받아올 경우, DHCP 서"
+"버에서 네트워크 상에 있는 WINS 서버(\"NetBIOS 네임 서버\")에 관한 정보를 받아"
+"올 수 있는 경우도 있습니다. 이를 위해서는 smb.conf 파일을 수정하여 DHCP에서 "
+"제공된 WINS 설정을 /etc/samba/dhcp.conf에서 자동으로 읽어들일 수 있도록 해야 "
+"합니다."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
 msgid ""
 "The dhcp3-client package must be installed to take advantage of this feature."
-msgstr ""
-"이 기능을 사용하기 위해서는 dhcp3-client 꾸러미를 설치해야 합니다."
+msgstr "이 기능을 사용하기 위해서는 dhcp3-client 꾸러미를 설치해야 합니다."
 
 #. Type: boolean
 #. Description
@@ -60,11 +59,11 @@ msgid ""
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
 msgstr ""
-"앞으로 남은 Samba 설정은 Samba 프로그램들(nmbd와 smbd)을 설정할 때 사용하는 "
-"/etc/samba/smb.conf에 있는 각종 인자들을 변경하는 질문들로 구성되어있습니다."
-"현재의 smb.conf은 'include'를 사용하거나 여러 줄에 걸친 옵션을 사용하고 있습"
-"니다. 이는 자동 설정 과정에 혼돈을 줄 수 있으며 나중에 손으로 smb.conf을 수정"
-"하셔야 제대로 동작합니다."
+"앞으로 남은 Samba 설정은 Samba 프로그램들(nmbd와 smbd)을 설정할 때 사용하는 /"
+"etc/samba/smb.conf에 있는 각종 인자들을 변경하는 질문들로 구성되어있습니다.현"
+"재의 smb.conf은 'include'를 사용하거나 여러 줄에 걸친 옵션을 사용하고 있습니"
+"다. 이는 자동 설정 과정에 혼돈을 줄 수 있으며 나중에 손으로 smb.conf을 수정하"
+"셔야 제대로 동작합니다."
 
 #. Type: boolean
 #. Description
@@ -74,8 +73,8 @@ msgid ""
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
 msgstr ""
-"이 옵션을 선택하지 않을 경우 설정 변경사항을 직접 다루셔야 하며 주기적 "
-"설정 변경 업그레이드 기능을 사용하지 못할 것입니다."
+"이 옵션을 선택하지 않을 경우 설정 변경사항을 직접 다루셔야 하며 주기적 설정 "
+"변경 업그레이드 기능을 사용하지 못할 것입니다."
 
 #. Type: string
 #. Description
@@ -92,8 +91,8 @@ msgid ""
 "used with the security=domain setting."
 msgstr ""
 "클라이언트에서 질의가 들어올 때 이 서버가 소속된 작업그룹을 지정해주십시오. "
-"참고로 security=domain 방식의 설정을 사용할 경우 사용하는 도메인 "
-"이름도 이 인자를 통해 설정합니다."
+"참고로 security=domain 방식의 설정을 사용할 경우 사용하는 도메인 이름도 이 인"
+"자를 통해 설정합니다."
 
 #. Type: boolean
 #. Description
@@ -121,9 +120,9 @@ msgid ""
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
 msgstr ""
-"이 기능을 활성화할 것을 강력히 권장합니다. 활성화할 경우, /etc/samba/smbpasswd"
-" 파일이 제대로이고 smbpasswd 명령을 사용하여 각 사용자들의 비밀번호를 전부 "
-"담고 있는지 확인하십시오."
+"이 기능을 활성화할 것을 강력히 권장합니다. 활성화할 경우, /etc/samba/"
+"smbpasswd 파일이 제대로이고 smbpasswd 명령을 사용하여 각 사용자들의 비밀번호"
+"를 전부 담고 있는지 확인하십시오."
 
 #. Type: boolean
 #. Description
@@ -143,8 +142,9 @@ msgid ""
 msgstr ""
 "대부분의 윈도우 버전들과의 호환성을 위해 Samba는 암호화된 비밀번호를 사용하도"
 "록 해야 합니다. 이를 위해서는 사용자들의 비밀번호를 /etc/passwd와 다른 곳에 "
-"저장해야 합니다. 이 파일은 자동으로 생성할 수는 있지만, 비밀번호들은 smbpasswd "
-"명령을 통해 직접 입력하셔야 하며 꾸준히 최신 상태로 유지하셔야 합니다."
+"저장해야 합니다. 이 파일은 자동으로 생성할 수는 있지만, 비밀번호들은 "
+"smbpasswd 명령을 통해 직접 입력하셔야 하며 꾸준히 최신 상태로 유지하셔야 합니"
+"다."
 
 #. Type: boolean
 #. Description
@@ -153,8 +153,8 @@ msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
 msgstr ""
-"생성하지 않을 경우, Samba(와 대부분의 클라이언트 머신)을 다시 설정하여 "
-"플레인텍스트 비밀번호를 사용하도록 해야 합니다."
+"생성하지 않을 경우, Samba(와 대부분의 클라이언트 머신)을 다시 설정하여 플레인"
+"텍스트 비밀번호를 사용하도록 해야 합니다."
 
 #. Type: boolean
 #. Description
@@ -163,8 +163,8 @@ msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
 msgstr ""
-"자세한 사항은 samba-doc 꾸러미에서 제공하는 /usr/share/doc/samba-doc/htmldocs/"
-"ENCRYPTION.html를 참조하십시오."
+"자세한 사항은 samba-doc 꾸러미에서 제공하는 /usr/share/doc/samba-doc/"
+"htmldocs/ENCRYPTION.html를 참조하십시오."
 
 #. Type: select
 #. Choices
@@ -207,8 +207,8 @@ msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
 msgstr ""
-"Samba 3.0부터는 /etc/samba/smbpasswd 파일을 대체하며 이전보다 완전한 SAM "
-"데이터베이스 인터페이스를 제공합니다."
+"Samba 3.0부터는 /etc/samba/smbpasswd 파일을 대체하며 이전보다 완전한 SAM 데이"
+"터베이스 인터페이스를 제공합니다."
 
 #. Type: boolean
 #. Description
@@ -218,6 +218,6 @@ msgid ""
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
 msgstr ""
-"기존의 smbpasswd 파일을 자동으로 /var/lib/samba/passdb.tdb로 옮길 여부를 "
-"결정하여 주십시오. LDAP 등 다른 pdb 백엔드를 사용하고자 할 경우 이 옵션을 "
-"선택하지 마십시오."
+"기존의 smbpasswd 파일을 자동으로 /var/lib/samba/passdb.tdb로 옮길 여부를 결정"
+"하여 주십시오. LDAP 등 다른 pdb 백엔드를 사용하고자 할 경우 이 옵션을 선택하"
+"지 마십시오."

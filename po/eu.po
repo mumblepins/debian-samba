@@ -51,7 +51,8 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
 msgstr ""
 "Ezaugarri honetaz baliatzeko dhcp3-client bezeroa instalaturik izan behar "
 "duzu."
@@ -105,8 +106,8 @@ msgid ""
 "used with the security=domain setting."
 msgstr ""
 "Mesede ezarri zure zerbitzariari sareko bezeroek galdetzean bistaraziko duen "
-"lan taldea. Kontutan izan parametro honek security=domain ezarpeneko "
-"domeinu izena ere ezartzen duela."
+"lan taldea. Kontutan izan parametro honek security=domain ezarpeneko domeinu "
+"izena ere ezartzen duela."
 
 #. Type: boolean
 #. Description
@@ -236,4 +237,3 @@ msgstr ""
 "Mesedez berretsi smbpasswd fitxategi arrunta /var/lib/samba/passdb.tdb-ra "
 "migratzea nahi duzula. Beste pasahitz datubase bat erabiltzea pentsatzen "
 "baduzu (adib LDAP) hemen 'ez' erantzun beharko zenuke."
-

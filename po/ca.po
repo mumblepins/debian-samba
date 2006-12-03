@@ -116,8 +116,8 @@ msgid ""
 "parameter in your Windows registry."
 msgstr ""
 "Tots els clients de Windows recents es comuniquen amb els servidors de Samba "
-"utilitzant contrasenyes xifrades. Si voleu utilitzar contrasenyes amb "
-"text pla, haureu de modificar el vostre registre de Windows."
+"utilitzant contrasenyes xifrades. Si voleu utilitzar contrasenyes amb text "
+"pla, haureu de modificar el vostre registre de Windows."
 
 #. Type: boolean
 #. Description

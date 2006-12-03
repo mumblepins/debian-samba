@@ -159,8 +159,8 @@ msgstr ""
 "Samba deve ser configurado para utilizar senhas encriptadas. Isto requer que "
 "as senhas dos usuários sejam armazenadas em um arquivo diferente do arquivo /"
 "etc/passwd. Esse arquivo pode ser criado automaticamente, mas as senhas "
-"devem ser definidas manualmente através da execução do utilitário "
-"smbpasswd e devem ser mantidas atualizadas no futuro."
+"devem ser definidas manualmente através da execução do utilitário smbpasswd "
+"e devem ser mantidas atualizadas no futuro."
 
 #. Type: boolean
 #. Description

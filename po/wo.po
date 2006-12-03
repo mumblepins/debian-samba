@@ -39,12 +39,18 @@ msgid ""
 "(\"NetBIOS name servers\") present on the network.  This requires a change "
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
-msgstr "Bu fekkee sa kompiyutar mi ngi ame adrees IP ci ab serwóor DHCP bu ne ci resóo bi, kon serwóor DHCP bi man na yitam di joxe ay xamle yu aju ci serwóor WINS yi (\"NetBIOS name servers\") yi nekk ci resóo bi. Loolu nak dana laaj ak coppat ci sa fiise smb.conf, ngir ba komfiguraasioŋ yi DHCP bi di joxe ñukoy jaŋgale sune boppu ci fiise /etc/samba/dhcp.conf"
+msgstr ""
+"Bu fekkee sa kompiyutar mi ngi ame adrees IP ci ab serwóor DHCP bu ne ci "
+"resóo bi, kon serwóor DHCP bi man na yitam di joxe ay xamle yu aju ci "
+"serwóor WINS yi (\"NetBIOS name servers\") yi nekk ci resóo bi. Loolu nak "
+"dana laaj ak coppat ci sa fiise smb.conf, ngir ba komfiguraasioŋ yi DHCP bi "
+"di joxe ñukoy jaŋgale sune boppu ci fiise /etc/samba/dhcp.conf"
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
 msgstr "Paket bu dhcp3-client nak wareesna koo istale ngir jariñoo defiin wii."
 
 #. Type: boolean
@@ -63,7 +69,13 @@ msgid ""
 "line or an option that spans multiple lines, which could confuse the "
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
-msgstr "Li des ci komfiguraasioŋ bu samba ay laaj la yu aju ci parameetar yu /etc/samba/smb.conf, nga xam ne mooy fiise biñuy jëfandikoo ngir komfigure prograam yu samba (nmbd ak smbd). Sa fiise smb.conf bii nga yore fii mune, amna aw bind wu 'include' walla ab tann bu tallalu ci ay bind yu bare, ta loolu man naa jaxase komfiguraasioŋ otomatik bi, ba taxna danga koy wara soppi ak sa loxo, ngir léppu awaat yoon."
+msgstr ""
+"Li des ci komfiguraasioŋ bu samba ay laaj la yu aju ci parameetar yu /etc/"
+"samba/smb.conf, nga xam ne mooy fiise biñuy jëfandikoo ngir komfigure "
+"prograam yu samba (nmbd ak smbd). Sa fiise smb.conf bii nga yore fii mune, "
+"amna aw bind wu 'include' walla ab tann bu tallalu ci ay bind yu bare, ta "
+"loolu man naa jaxase komfiguraasioŋ otomatik bi, ba taxna danga koy wara "
+"soppi ak sa loxo, ngir léppu awaat yoon."
 
 #. Type: boolean
 #. Description
@@ -72,7 +84,10 @@ msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
-msgstr "Bu fekkee tannoo lii, kon bépp coppat booy def ci komfiguraasioŋ bi danga koy defal sa boppu, ta kon doo mana jariñu ci rafetal ak jekkal yiñuy farala def ci komfiguraasioŋ bi."
+msgstr ""
+"Bu fekkee tannoo lii, kon bépp coppat booy def ci komfiguraasioŋ bi danga "
+"koy defal sa boppu, ta kon doo mana jariñu ci rafetal ak jekkal yiñuy farala "
+"def ci komfiguraasioŋ bi."
 
 #. Type: string
 #. Description
@@ -87,7 +102,10 @@ msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
-msgstr "Joxeel grup bu liggéey binga bëgg serwóor bii di mel ne ci bokk buko ay kiliyaŋ di laaj. Nga bayyi xel ne parameetar bii mooy konturle yitam turu domen biñuy jëfandikoo ci komfiguraasioŋ bu security=domain."
+msgstr ""
+"Joxeel grup bu liggéey binga bëgg serwóor bii di mel ne ci bokk buko ay "
+"kiliyaŋ di laaj. Nga bayyi xel ne parameetar bii mooy konturle yitam turu "
+"domen biñuy jëfandikoo ci komfiguraasioŋ bu security=domain."
 
 #. Type: boolean
 #. Description
@@ -102,7 +120,10 @@ msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
-msgstr "Mbooleem kiliyaŋ yu Windows yu yees yi buñuy jokkoo ak SMB dañuy jëfandikoo baatijall yuñu kiripte. Boo bëggée jëfandikoo baatijall yu tekst yu leer, kon dangay wara soppi ab parameetar ci register bu Windows."
+msgstr ""
+"Mbooleem kiliyaŋ yu Windows yu yees yi buñuy jokkoo ak SMB dañuy jëfandikoo "
+"baatijall yuñu kiripte. Boo bëggée jëfandikoo baatijall yu tekst yu leer, "
+"kon dangay wara soppi ab parameetar ci register bu Windows."
 
 #. Type: boolean
 #. Description
@@ -111,13 +132,17 @@ msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
-msgstr "Ñoongi deŋkaane bubaax nga tann lii. Boo ko defee, na nga wóorlu ne amnga ab fiise /etc/samba/smbpasswd bu baax, ta nga def foofa baatujall bu jëfandikukat yéppu. Dangay jëfandikoo komaand bu smbpasswd."
+msgstr ""
+"Ñoongi deŋkaane bubaax nga tann lii. Boo ko defee, na nga wóorlu ne amnga ab "
+"fiise /etc/samba/smbpasswd bu baax, ta nga def foofa baatujall bu "
+"jëfandikukat yéppu. Dangay jëfandikoo komaand bu smbpasswd."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:1001
 msgid "Create samba password database, /var/lib/samba/passdb.tdb?"
-msgstr "Ndax ñu sos baasu done bu baatujall yu samba, /var/lib/samba/passdb.tdb?"
+msgstr ""
+"Ndax ñu sos baasu done bu baatujall yu samba, /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
@@ -128,7 +153,13 @@ msgid ""
 "be stored in a file separate from /etc/passwd.  This file can be created "
 "automatically, but the passwords must be added manually by running smbpasswd "
 "and be kept up-to-date in the future."
-msgstr "Ngir mana dëppóo ak defóo bu li ëppu ci wersioŋ yu Windows yi, samba deeskoo wara komfigure muy jëfandikoo baatijall yuñu kiripte. Loolu dafay laaj ñu deñc baatijall yi ci ab fiise bu bokkul ak /etc/passwd.  Fiise boobu manessna koo sos sosuk otomatik, waaye kon baatijall yi deesleen ciy wara dugël ak loxo, doxal smbpasswd, ta buko defee ñu leen di yeesal saa yuñu ko soxlawaatee."
+msgstr ""
+"Ngir mana dëppóo ak defóo bu li ëppu ci wersioŋ yu Windows yi, samba deeskoo "
+"wara komfigure muy jëfandikoo baatijall yuñu kiripte. Loolu dafay laaj ñu "
+"deñc baatijall yi ci ab fiise bu bokkul ak /etc/passwd.  Fiise boobu "
+"manessna koo sos sosuk otomatik, waaye kon baatijall yi deesleen ciy wara "
+"dugël ak loxo, doxal smbpasswd, ta buko defee ñu leen di yeesal saa yuñu ko "
+"soxlawaatee."
 
 #. Type: boolean
 #. Description
@@ -136,7 +167,9 @@ msgstr "Ngir mana dëppóo ak defóo bu li ëppu ci wersioŋ yu Windows yi, samb
 msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
-msgstr "Boo ko sosul, kon fawwu nga komfigure Samba (amaana yit sa masin yu kiliyaŋ yi) def leen ñuy jëfandikoo baatijall yu text normaal (plain text)."
+msgstr ""
+"Boo ko sosul, kon fawwu nga komfigure Samba (amaana yit sa masin yu kiliyaŋ "
+"yi) def leen ñuy jëfandikoo baatijall yu text normaal (plain text)."
 
 #. Type: boolean
 #. Description
@@ -144,7 +177,9 @@ msgstr "Boo ko sosul, kon fawwu nga komfigure Samba (amaana yit sa masin yu kili
 msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
-msgstr "Xoolal /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html bi nekk ci paket bu samba-doc, ngir am yaneen leeral."
+msgstr ""
+"Xoolal /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html bi nekk ci paket bu "
+"samba-doc, ngir am yaneen leeral."
 
 #. Type: select
 #. Choices
@@ -170,13 +205,16 @@ msgstr "Nan nga bëgga doxale samba?"
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
-msgstr "Daemon bu Samba smbd maneesna koo doxal ne ab deamon normaal, maneesna koo doxale yit ak inetd. Liñuy deŋkaane nak mooy doxalko muy ab daemon."
+msgstr ""
+"Daemon bu Samba smbd maneesna koo doxal ne ab deamon normaal, maneesna koo "
+"doxale yit ak inetd. Liñuy deŋkaane nak mooy doxalko muy ab daemon."
 
 #. Type: boolean
 #. Description
 #: ../samba.templates:3001
 msgid "Move /etc/samba/smbpasswd to /var/lib/samba/passdb.tdb?"
-msgstr "Ndax nu toxal /etc/samba/smbpasswd yobbuko ci /var/lib/samba/passdb.tdb?"
+msgstr ""
+"Ndax nu toxal /etc/samba/smbpasswd yobbuko ci /var/lib/samba/passdb.tdb?"
 
 #. Type: boolean
 #. Description
@@ -184,7 +222,9 @@ msgstr "Ndax nu toxal /etc/samba/smbpasswd yobbuko ci /var/lib/samba/passdb.tdb?
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
-msgstr "Samba 3.0 dafa indaale ab interfaas bu baasu done SAM bu gëna mat, buy wuutu fiise bu /etc/samba/smbpasswd"
+msgstr ""
+"Samba 3.0 dafa indaale ab interfaas bu baasu done SAM bu gëna mat, buy wuutu "
+"fiise bu /etc/samba/smbpasswd"
 
 #. Type: boolean
 #. Description
@@ -193,5 +233,7 @@ msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
-msgstr "Feddlin baxam bëggnga fiise smbpasswd bifi nekk ñu toxalalko suñu boppy yobbuko ca /var/lib/samba/passdb.tdb. Bul tann lii bu fekkee yaangi jappa jëfandikoo baneen paket bu pdb (ci misaal LDAP)."
-
+msgstr ""
+"Feddlin baxam bëggnga fiise smbpasswd bifi nekk ñu toxalalko suñu boppy "
+"yobbuko ca /var/lib/samba/passdb.tdb. Bul tann lii bu fekkee yaangi jappa "
+"jëfandikoo baneen paket bu pdb (ci misaal LDAP)."

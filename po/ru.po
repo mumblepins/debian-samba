@@ -29,13 +29,20 @@ msgid ""
 "(\"NetBIOS name servers\") present on the network.  This requires a change "
 "to your smb.conf file so that DHCP-provided WINS settings will automatically "
 "be read from /etc/samba/dhcp.conf."
-msgstr "Если компьютер получает информацию о своём IP-адресе от службы DHCP по сети, тогда DHCP-сервер также может предоставлять информацию о серверах WINS (\"серверы имён NetBIOS\"), доступных в сети. Чтобы настройки WINS, предоставленные сервером DHCP, автоматически считывались из /etc/samba/dhcp.conf, нужно изменить файл smb.conf."
+msgstr ""
+"Если компьютер получает информацию о своём IP-адресе от службы DHCP по сети, "
+"тогда DHCP-сервер также может предоставлять информацию о серверах WINS "
+"(\"серверы имён NetBIOS\"), доступных в сети. Чтобы настройки WINS, "
+"предоставленные сервером DHCP, автоматически считывались из /etc/samba/dhcp."
+"conf, нужно изменить файл smb.conf."
 
 #. Type: boolean
 #. Description
 #: ../samba-common.templates:1001
-msgid "The dhcp3-client package must be installed to take advantage of this feature."
-msgstr "Чтобы использовать эту возможность, нужно установить пакет dhcp3-client."
+msgid ""
+"The dhcp3-client package must be installed to take advantage of this feature."
+msgstr ""
+"Чтобы использовать эту возможность, нужно установить пакет dhcp3-client."
 
 #. Type: boolean
 #. Description
@@ -53,7 +60,13 @@ msgid ""
 "line or an option that spans multiple lines, which could confuse the "
 "automated configuration process and require you to edit your smb.conf by "
 "hand to get it working again."
-msgstr "Оставшаяся часть настройки Samba представляет собой вопросы, влияющие на параметры в /etc/samba/smb.conf. Этот файл используется для настройки программ Samba (nmbd и smbd). В текущем файле smb.conf есть строка 'include' или параметр, состоящий из нескольких строк. При этом автоматическая настройка может быть нарушена, и для восстановления работоспособности потребуется отредактировать smb.conf вручную."
+msgstr ""
+"Оставшаяся часть настройки Samba представляет собой вопросы, влияющие на "
+"параметры в /etc/samba/smb.conf. Этот файл используется для настройки "
+"программ Samba (nmbd и smbd). В текущем файле smb.conf есть строка 'include' "
+"или параметр, состоящий из нескольких строк. При этом автоматическая "
+"настройка может быть нарушена, и для восстановления работоспособности "
+"потребуется отредактировать smb.conf вручную."
 
 #. Type: boolean
 #. Description
@@ -62,7 +75,10 @@ msgid ""
 "If you do not choose this option, you will have to handle any configuration "
 "changes yourself, and will not be able to take advantage of periodic "
 "configuration enhancements."
-msgstr "При отказе от этой возможности позаботиться обо всех изменениях конфигурации придётся самостоятельно, а приведёт к невозможности периодического обновления настроек."
+msgstr ""
+"При отказе от этой возможности позаботиться обо всех изменениях конфигурации "
+"придётся самостоятельно, а приведёт к невозможности периодического "
+"обновления настроек."
 
 #. Type: string
 #. Description
@@ -77,7 +93,10 @@ msgid ""
 "Please specify the workgroup you want this server to appear to be in when "
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
-msgstr "Укажите рабочую группу, к которой будет принадлежать сервер при опросе клиентами. Обратите внимание, что этот параметр также определяет имя домена, используемое вместе с параметром security=domain."
+msgstr ""
+"Укажите рабочую группу, к которой будет принадлежать сервер при опросе "
+"клиентами. Обратите внимание, что этот параметр также определяет имя домена, "
+"используемое вместе с параметром security=domain."
 
 #. Type: boolean
 #. Description
@@ -92,7 +111,10 @@ msgid ""
 "All recent Windows clients communicate with SMB servers using encrypted "
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
-msgstr "Все последние Windows-клиенты связываются с серверами SMB с использованием шифрованных паролей. Если нужно использовать нешифрованные пароли, тогда надо будет изменить параметр в реестре Windows."
+msgstr ""
+"Все последние Windows-клиенты связываются с серверами SMB с использованием "
+"шифрованных паролей. Если нужно использовать нешифрованные пароли, тогда "
+"надо будет изменить параметр в реестре Windows."
 
 #. Type: boolean
 #. Description
@@ -101,7 +123,10 @@ msgid ""
 "Enabling this option is highly recommended. If you do, make sure you have a "
 "valid /etc/samba/smbpasswd file and that you set passwords in there for each "
 "user using the smbpasswd command."
-msgstr "Крайне рекомендуется включить этот параметр. В этом случае нужно убедиться в правильности файла /etc/samba/smbpasswd и в том, что для всех пользователей в нём установлены пароли с помощью команды smbpasswd."
+msgstr ""
+"Крайне рекомендуется включить этот параметр. В этом случае нужно убедиться в "
+"правильности файла /etc/samba/smbpasswd и в том, что для всех пользователей "
+"в нём установлены пароли с помощью команды smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -118,7 +143,13 @@ msgid ""
 "be stored in a file separate from /etc/passwd.  This file can be created "
 "automatically, but the passwords must be added manually by running smbpasswd "
 "and be kept up-to-date in the future."
-msgstr "Для совместимости со стандартными значениями большинства версий Windows Samba необходимо настроить на использование шифрованных паролей. При этом пароли пользователей должны храниться в отдельном файле, а не в /etc/passwd. Этот файл будет создан автоматически, однако пароли нужно добавить вручную с помощью команды smbpasswd и не забывать поддерживать их в актуальном состоянии."
+msgstr ""
+"Для совместимости со стандартными значениями большинства версий Windows "
+"Samba необходимо настроить на использование шифрованных паролей. При этом "
+"пароли пользователей должны храниться в отдельном файле, а не в /etc/passwd. "
+"Этот файл будет создан автоматически, однако пароли нужно добавить вручную с "
+"помощью команды smbpasswd и не забывать поддерживать их в актуальном "
+"состоянии."
 
 #. Type: boolean
 #. Description
@@ -126,7 +157,9 @@ msgstr "Для совместимости со стандартными знач
 msgid ""
 "If you do not create it, you will have to reconfigure Samba (and probably "
 "your client machines) to use plaintext passwords."
-msgstr "Если этот файл не создан, тогда нужно перенастроить Samba (и, возможно, клиентские машины) на использование нешифрованных паролей."
+msgstr ""
+"Если этот файл не создан, тогда нужно перенастроить Samba (и, возможно, "
+"клиентские машины) на использование нешифрованных паролей."
 
 #. Type: boolean
 #. Description
@@ -134,7 +167,9 @@ msgstr "Если этот файл не создан, тогда нужно пе
 msgid ""
 "See /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html from the samba-doc "
 "package for more details."
-msgstr "Более подробная информация доступна в файле /usr/share/doc/samba-doc/htmldocs/ENCRYPTION.html из пакета samba-doc."
+msgstr ""
+"Более подробная информация доступна в файле /usr/share/doc/samba-doc/"
+"htmldocs/ENCRYPTION.html из пакета samba-doc."
 
 #. Type: select
 #. Choices
@@ -160,7 +195,9 @@ msgstr "Как нужно запускать Samba?"
 msgid ""
 "The Samba daemon smbd can run as a normal daemon or from inetd. Running as a "
 "daemon is the recommended approach."
-msgstr "Samba-демон smbd может запускаться как обычный демон или из inetd. Рекомендуется использовать запуск в виде демона."
+msgstr ""
+"Samba-демон smbd может запускаться как обычный демон или из inetd. "
+"Рекомендуется использовать запуск в виде демона."
 
 #. Type: boolean
 #. Description
@@ -174,7 +211,9 @@ msgstr "Переместить /etc/samba/smbpasswd в /var/lib/samba/passdb.tdb
 msgid ""
 "Samba 3.0 introduced a more complete SAM database interface which supersedes "
 "the /etc/samba/smbpasswd file."
-msgstr "В Samba 3.0 представлен новый, более полный интерфейс базы данных SAM, замещающий файл /etc/samba/smbpasswd."
+msgstr ""
+"В Samba 3.0 представлен новый, более полный интерфейс базы данных SAM, "
+"замещающий файл /etc/samba/smbpasswd."
 
 #. Type: boolean
 #. Description
@@ -183,8 +222,10 @@ msgid ""
 "Please confirm whether you would like the existing smbpasswd file to be "
 "automatically migrated to /var/lib/samba/passdb.tdb.  Do not choose this "
 "option if you plan to use another pdb backend (e.g., LDAP) instead."
-msgstr "Подтвердите автоматическую миграцию существующего файла smbpasswd в /var/lib/samba/passdb.tdb. Не выбирайте этот вариант, если вместо него будет использоваться другая БД паролей (например, LDAP)."
+msgstr ""
+"Подтвердите автоматическую миграцию существующего файла smbpasswd в /var/lib/"
+"samba/passdb.tdb. Не выбирайте этот вариант, если вместо него будет "
+"использоваться другая БД паролей (например, LDAP)."
 
 #~ msgid "daemons, inetd"
 #~ msgstr "daemons, inetd"
-

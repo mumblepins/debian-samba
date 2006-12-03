@@ -94,8 +94,8 @@ msgid ""
 "queried by clients. Note that this parameter also controls the domain name "
 "used with the security=domain setting."
 msgstr ""
-"من فضلك حدِّد مجموعة العمل التي تريد أن يظهر داخلها هذا الخادم عند استفساره من طرف "
-"الزبائن. لاحظ أن هذا المقياس يتحكم في إسم الحقل المستعمل مع الخيار "
+"من فضلك حدِّد مجموعة العمل التي تريد أن يظهر داخلها هذا الخادم عند استفساره من "
+"طرف الزبائن. لاحظ أن هذا المقياس يتحكم في إسم الحقل المستعمل مع الخيار "
 "security=domain setting."
 
 #. Type: boolean
@@ -112,8 +112,8 @@ msgid ""
 "passwords. If you want to use clear text passwords you will need to change a "
 "parameter in your Windows registry."
 msgstr ""
-"زبائن Windows الجديدة كلّها تتصل مع خُدّام SMB مستعملة كلمات مرور مشفرة. إذا أردت "
-"استعمال كلمات مرور واضخة عليك بتغيير إعداد في قاعدة تسجيلات Windows."
+"زبائن Windows الجديدة كلّها تتصل مع خُدّام SMB مستعملة كلمات مرور مشفرة. إذا "
+"أردت استعمال كلمات مرور واضخة عليك بتغيير إعداد في قاعدة تسجيلات Windows."
 
 #. Type: boolean
 #. Description
