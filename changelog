@@ -2,6 +2,9 @@ samba (3.0.23d-2) unstable; urgency=low
 
   * Build-Conflicts: libfam-dev to avoid problems accessing shares
     when using GAMIN. Closes: #400617
+  * Lintian fixes:
+    - Run debconf-updatepo in the clean target to ensure up-to-date PO
+      and POT files
 
  -- Christian Perrier <bubulle@debian.org>  Sun,  3 Dec 2006 07:32:53 +0100
 

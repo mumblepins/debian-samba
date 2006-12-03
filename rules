@@ -105,6 +105,7 @@ clean-patched:
 
 	sed -e "s/@libacl@/`type-handling any linux-gnu`/g" \
 		< debian/control.in > debian/control
+	debconf-updatepo
 
 	dh_clean
 
