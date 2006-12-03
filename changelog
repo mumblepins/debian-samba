@@ -9,6 +9,7 @@ samba (3.0.23d-2) unstable; urgency=low
       Replace all non-breakable spaces by regular spaces in man pages.
       They are encoded in ISO-8859-1 which is not recommended in man pages.
       This should be submitted upstream.
+    - reformat too long lines in package description
 
  -- Christian Perrier <bubulle@debian.org>  Sun,  3 Dec 2006 09:39:29 +0100
 
