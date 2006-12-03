@@ -5,8 +5,12 @@ samba (3.0.23d-2) unstable; urgency=low
   * Lintian fixes:
     - Run debconf-updatepo in the clean target to ensure up-to-date PO
       and POT files
+    - debian/patches/no_unbreakable_spaces_in_man.patch:
+      Replace all non-breakable spaces by regular spaces in man pages.
+      They are encoded in ISO-8859-1 which is not recommended in man pages.
+      This should be submitted upstream.
 
- -- Christian Perrier <bubulle@debian.org>  Sun,  3 Dec 2006 07:32:53 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sun,  3 Dec 2006 09:39:29 +0100
 
 samba (3.0.23d-1) unstable; urgency=low
 

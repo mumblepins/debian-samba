@@ -19,3 +19,4 @@ VERSION.patch
 adapt_machine_creation_script.patch
 autoconf.patch
 python-examples.patch
+no_unbreakable_spaces_in_man.patch
