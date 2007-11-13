@@ -1,0 +1,10 @@
+--- samba-2.2.3a.orig/source/smbd/vfs.c	2002-02-02 19:46:57.000000000 -0500
++++ samba-2.2.3a/source/smbd/vfs.c	2004-09-28 19:07:10.000000000 -0400
+@@ -835,7 +835,6 @@
+ 
+   if (widelinks)
+   {
+-    unix_clean_name(s);
+     /* can't have a leading .. */
+     if (strncmp(s,"..",2) == 0 && (s[2]==0 || s[2]=='/'))
+     {

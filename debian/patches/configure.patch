@@ -1,0 +1,63 @@
+diff -uNr samba-2.2.3a.orig/source/configure.in samba-2.2.3a/source/configure.in
+--- samba-2.2.3a.orig/source/configure.in	2002-02-06 20:56:47.000000000 -0600
++++ samba-2.2.3a/source/configure.in	2002-07-27 18:03:48.000000000 -0500
+@@ -145,7 +145,7 @@
+ AC_SUBST(SHLIBEXT)
+ AC_SUBST(BLDSHARED)
+ AC_SUBST(LIBSMBCLIENT_SHARED)
+-AC_SUBST(LIBSMBCLIENT)
++AC_SUBST(LIBSMBCLIENT_STATIC)
+ 
+ # compile with optimization and without debugging by default
+ CFLAGS="-O ${CFLAGS}"
+@@ -340,6 +340,28 @@
+ #endif
+ }
+ ], [LINUX_LFS_SUPPORT=yes], [LINUX_LFS_SUPPORT=no], [LINUX_LFS_SUPPORT=cross])
++	if test x$LINUX_LFS_SUPPORT = xyes ; then
++          AC_TRY_RUN([
++#include <unistd.h>
++#include <sys/types.h>
++#include <fcntl.h>
++main() {
++   unsigned int *padding;
++   struct flock foo_lock = {F_WRLCK, SEEK_SET, 0, 1, 0};
++   int fd = open("/dev/null", O_RDWR);
++
++   /* Yes, we're depending on the internals of the Linux flock structure
++      here -- but this test is explicitly Linux-specific to begin with. */
++   padding = (unsigned int *)&foo_lock;
++   padding[1] = 0xffffffff;
++   foo_lock.l_start = 0;
++   if (fcntl(fd, F_SETLK, &foo_lock) < 0)
++      exit(1);
++
++   exit(0);
++}
++], [LINUX_LFS_SUPPORT=yes], [LINUX_LFS_SUPPORT=no], [LINUX_LFS_SUPPORT=cross])
++	fi
+         CPPFLAGS="$old_CPPFLAGS"
+         if test x$LINUX_LFS_SUPPORT = xyes ; then
+           CPPFLAGS="-D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE $CPPFLAGS"
+@@ -2233,7 +2255,7 @@
+ # should we build libsmbclient?
+ 
+ LIBSMBCLIENT_SHARED=
+-LIBSMBCLIENT=
++LIBSMBCLIENT_STATIC=
+ AC_MSG_CHECKING(whether to build the libsmbclient shared library)
+ AC_ARG_WITH(libsmbclient,
+ [  --with-libsmbclient     Build the libsmbclient shared library (default=no)],
+@@ -2241,10 +2263,10 @@
+   yes)
+      if test $BLDSHARED = true; then
+         LIBSMBCLIENT_SHARED=bin/libsmbclient.$SHLIBEXT
+-	LIBSMBCLIENT=libsmbclient
++        LIBSMBCLIENT_STATIC=bin/libsmbclient.a
+         AC_MSG_RESULT(yes)
+      else
+-        AC_MSG_RESULT(no shared library support)
++        AC_MSG_RESULT(no static or shared libsmbclient support)
+      fi
+      ;;
+   *)

@@ -1,0 +1,14 @@
+diff -ur samba-2.2.3a.orig/source/smbd/nttrans.c samba-2.2.3a/source/smbd/nttrans.c
+--- samba-2.2.3a.orig/source/smbd/nttrans.c	2002-02-02 18:46:56.000000000 -0600
++++ samba-2.2.3a/source/smbd/nttrans.c	2002-10-12 14:20:45.000000000 -0500
+@@ -909,8 +909,8 @@
+ 	if(oplock_request && EXCLUSIVE_OPLOCK_TYPE(fsp->oplock_type))
+ 		smb_action |= EXTENDED_OPLOCK_GRANTED;
+ 
+-#if 1 /* JRATEST */
+-	/* W2K sends back 42 words here ! */
++#if 0
++       /* W2K sends back 42 words here ! If we do the same it breaks offline sync. Go figure... ? JRA. */
+ 	set_message(outbuf,42,0,True);
+ #else
+ 	set_message(outbuf,34,0,True);
