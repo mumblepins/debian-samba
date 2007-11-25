@@ -148,12 +148,8 @@ install: build
 	install -m 0644 source/nsswitch/libnss_winbind.so $(DESTDIR)/lib/libnss_winbind.so.2
 	install -m 0644 source/nsswitch/libnss_wins.so $(DESTDIR)/lib/libnss_wins.so.2
 
-ifeq ($(smbfs),yes)
-	# smbfs is deprecated; provide a wrapper that translates any
-	# smbfs mount calls into cifs mount calls
-	ln -s /sbin/umount.cifs $(DESTDIR)/usr/bin/smbumount
-	ln -s umount.cifs.8 $(DESTDIR)/usr/share/man/man8/smbumount.8
-	ln -s mount.cifs.8 $(DESTDIR)/usr/share/man/man8/mount.smbfs.8
+ifeq ($(mount_cifs),yes)
+	install -m 0755 debian/mount.smbfs debian/smbfs/sbin/mount.smbfs
 endif
 
 	# For CUPS to support printing to samba printers, it's necessary
