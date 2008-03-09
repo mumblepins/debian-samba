@@ -1,3 +1,10 @@
+samba (3.0.28-4) unstable; urgency=low
+
+  * Brown paper bag: fix samba-common.files to list all of the smb.conf
+    templates, not just the current one.  Closes: #470138.
+
+ -- Steve Langasek <vorlon@debian.org>  Sun, 09 Mar 2008 04:09:26 -0700
+
 samba (3.0.28-3) unstable; urgency=low
 
   * Drop the arm optimization workaround, as the compiler is now reported
