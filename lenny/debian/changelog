@@ -1,5 +1,7 @@
-samba (2:3.2.5-2) UNRELEASED; urgency=low
+samba (2:3.2.6-1~bpo50+1) lenny-backports; urgency=low
 
+  * New upstream release, backported to lenny
+  * Merge changes from upcoming 2:3.2.5-2 official release for lenny
   * Fix typo in bug number in a comment for the default smb.conf file
     Closes: #507620
   * Document the need to set appropriate permissions on the printer
@@ -11,7 +13,7 @@ samba (2:3.2.5-2) UNRELEASED; urgency=low
     Thans to Martin Dag Nilsson for reporting and Jelmer Jaarsma for
     the patch. Closes: #506109
 
- -- Christian Perrier <bubulle@debian.org>  Wed, 03 Dec 2008 07:31:56 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sat, 13 Dec 2008 10:02:42 +0100
 
 samba (2:3.2.5-1) unstable; urgency=high
 
