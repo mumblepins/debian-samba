@@ -1,3 +1,16 @@
+samba (2:3.2.7-1~bpo50+1) lenny-backports; urgency=low
+
+  * New upstream release
+    Fix Potential access to "/" in setups with registry shares enabled
+    This fixes CVE-2009-0022.
+  * Resync with changes from 2:3.2.5-3 in lenny
+  * Fix links in HTML documentation index file.
+    Closes: #508388
+  * Drop spurious docs-xml/smbdotconf/parameters.global.xml.new
+    file in the diff. Thanks to the release managers for spotting it
+
+ -- Christian Perrier <bubulle@debian.org>  Sun, 21 Dec 2008 08:09:31 +0100
+
 samba (2:3.2.6-1~bpo50+1) lenny-backports; urgency=low
 
   * New upstream release, backported to lenny
