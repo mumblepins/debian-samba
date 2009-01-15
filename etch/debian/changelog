@@ -1,3 +1,10 @@
+samba (2:3.2.5-4~bpo41+1) etch-backports; urgency=low
+
+  * Backport to etch
+  * Drop libtalloc-dev from build dependencies
+
+ -- Christian Perrier <bubulle@debian.org>  Wed, 14 Jan 2009 22:34:56 +0100
+
 samba (2:3.2.5-4) unstable; urgency=low
 
   * Fix segfault whan accessign some NAS devices running old versions of Samba
