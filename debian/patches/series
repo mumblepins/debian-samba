@@ -18,5 +18,4 @@ swat-de.patch
 smbtar-bashism.patch
 no-unnecessary-cups.patch
 shrink-dead-code.patch
-documentation-links.patch
 documentation-links-debian.patch

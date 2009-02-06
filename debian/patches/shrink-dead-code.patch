@@ -1,8 +1,8 @@
-Index: samba.deb/source/Makefile.in
+Index: samba-3.2.8/source/Makefile.in
 ===================================================================
---- samba.deb.orig/source/Makefile.in
-+++ samba.deb/source/Makefile.in
-@@ -1261,37 +1261,47 @@
+--- samba-3.2.8.orig/source/Makefile.in
++++ samba-3.2.8/source/Makefile.in
+@@ -1265,37 +1265,47 @@
  
  bin/smbd@EXEEXT@: $(BINARY_PREREQS) $(SMBD_OBJ) @LIBTALLOC_TARGET@ @LIBTDB_TARGET@ @LIBWBCLIENT_SHARED@ @BUILD_POPT@
  	@echo Linking $@
@@ -55,7 +55,7 @@ Index: samba.deb/source/Makefile.in
  
  bin/net@EXEEXT@: $(BINARY_PREREQS) $(NET_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@ @LIBWBCLIENT_SHARED@ @LIBNETAPI_SHARED@
  	@echo Linking $@
-@@ -1302,220 +1312,295 @@
+@@ -1306,220 +1316,297 @@
  
  bin/profiles@EXEEXT@: $(BINARY_PREREQS) $(PROFILES_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@
  	@echo Linking $@
@@ -99,7 +99,7 @@ Index: samba.deb/source/Makefile.in
  
  bin/testparm@EXEEXT@: $(BINARY_PREREQS) $(TESTPARM_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@
  	@echo Linking $@
--	@$(CC) $(FLAGS) -o $@ $(TESTPARM_OBJ) $(LDFLAGS) $(DYNEXP) $(LIBS) \
+ 	@$(CC) $(FLAGS) -o $@ $(TESTPARM_OBJ) $(LDFLAGS) $(DYNEXP) $(LIBS) \
 +	@$(AR) -rc $@.a $(TESTPARM_OBJ)
 +	@$(CC) $(FLAGS) -o $@ $@.a $(LDFLAGS) $(DYNEXP) $(LIBS) \
  		$(LDAP_LIBS) $(POPT_LIBS) $(LIBTALLOC_LIBS) $(LIBTDB_LIBS)
@@ -116,9 +116,9 @@ Index: samba.deb/source/Makefile.in
  bin/smbcontrol@EXEEXT@: $(BINARY_PREREQS) $(SMBCONTROL_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@
  	@echo Linking $@
 -	@$(CC) -DUSING_SMBCONTROL $(FLAGS) -o $@ \
--		$(SMBCONTROL_OBJ) $(DYNEXP) $(LDFLAGS) \
 +	@$(AR) -rc $@.a $(SMBCONTROL_OBJ)
 +	@$(CC) -DUSING_SMBCONTROL $(FLAGS) -o $@ $@.a $(DYNEXP) $(LDFLAGS) \
+ 		$(SMBCONTROL_OBJ) $(DYNEXP) $(LDFLAGS) \
  		$(LIBS) $(LDAP_LIBS) @LIBUNWIND_PTRACE@ $(POPT_LIBS) \
  		$(LIBTALLOC_LIBS) $(LIBTDB_LIBS)
 +	@rm -f $@.a
@@ -286,7 +286,7 @@ Index: samba.deb/source/Makefile.in
 -	@$(CC) $(FLAGS) -o $@ $(VFSTEST_OBJ) $(LDFLAGS) $(TERMLDFLAGS) \
 +	@$(AR) -rc $@.a $(VFSTEST_OBJ)
 +	@$(CC) $(FLAGS) -o $@ $@.a $(LDFLAGS) $(TERMLDFLAGS) \
- 		$(TERMLIBS) $(DYNEXP) $(PRINT_LIBS) $(AUTH_LIBS) \
+ 		$(TERMLIBS) $(DYNEXP) $(PRINT_LIBS) $(AUTH_LIBS) $(DNSSD_LIBS) \
  		$(ACL_LIBS) $(LIBS) $(POPT_LIBS) $(KRB5LIBS) $(LDAP_LIBS) \
  		@SMBD_LIBS@ $(NSCD_LIBS) $(LIBTALLOC_LIBS) $(LIBTDB_LIBS) \
  		$(WINBIND_LIBS)
@@ -390,7 +390,7 @@ Index: samba.deb/source/Makefile.in
  
  
  #####################################################################
-@@ -2096,16 +2181,20 @@
+@@ -2100,16 +2187,20 @@
  
  bin/winbindd@EXEEXT@: $(BINARY_PREREQS) $(WINBINDD_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@ @LIBWBCLIENT_SHARED@
  	@echo "Linking $@"
@@ -413,7 +413,7 @@ Index: samba.deb/source/Makefile.in
  
  @WINBIND_NSS@: $(BINARY_PREREQS) $(WINBIND_NSS_OBJ)
  	@echo "Linking $@"
-@@ -2352,9 +2441,11 @@
+@@ -2359,9 +2450,11 @@
  
  bin/wbinfo@EXEEXT@: $(BINARY_PREREQS) $(WBINFO_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@ @LIBWBCLIENT_SHARED@
  	@echo Linking $@
@@ -426,7 +426,7 @@ Index: samba.deb/source/Makefile.in
  
  bin/ntlm_auth@EXEEXT@: $(BINARY_PREREQS) $(NTLM_AUTH_OBJ) $(PARAM_OBJ) \
  	$(LIB_NONSMBD_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@ @LIBWBCLIENT_SHARED@
-@@ -2372,23 +2463,31 @@
+@@ -2379,23 +2472,31 @@
  
  bin/tdbbackup@EXEEXT@: $(BINARY_PREREQS) $(TDBBACKUP_OBJ) @LIBTALLOC_TARGET@ @LIBTDB_TARGET@
  	@echo Linking $@
