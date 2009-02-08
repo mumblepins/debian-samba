@@ -1,4 +1,17 @@
+samba (2:3.2.8-1~unoff40+1) etch-backports; urgency=low
+
+  * Backport the lenny backport to etch
+  * Drop libtalloc-dev from build dependencies
+
+ -- Christian Perrier <bubulle@debian.org>  Sun, 08 Feb 2009 15:16:24 +0100
+
 samba (2:3.2.8-1~unoff50+1) lenny-backports; urgency=low
+
+  * New upstream release
+
+ -- Christian Perrier <bubulle@debian.org>  Fri, 06 Feb 2009 23:12:21 +0100
+
+samba (2:3.2.5-4) unstable; urgency=low
 
   * New upstream release
 
