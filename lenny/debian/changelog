@@ -1,3 +1,9 @@
+samba (2:3.3.2-2~bpo50+1) lenny-backports; urgency=low
+
+  * Backport to lenny
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 21 Apr 2009 10:33:46 +0200
+
 samba (2:3.3.2-2) unstable; urgency=low
 
   [ Steve Langasek ]
