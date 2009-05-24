@@ -66,11 +66,7 @@ typedef struct {
 
 /* container for registry subkey names */
 
-typedef struct {
-	uint32          num_subkeys;
-	char            **subkeys;
-	int seqnum;
-} REGSUBKEY_CTR;
+struct regsubkey_ctr;
 
 /*
  *
@@ -105,9 +101,16 @@ typedef struct {
 #define KEY_CURRENT_VERSION	"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"
 #define KEY_PERFLIB		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Perflib"
 #define KEY_PERFLIB_009		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Perflib\\009"
+#define KEY_GROUP_POLICY	"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Group Policy"
+#define KEY_WINLOGON		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"
 #define KEY_SMBCONF		"HKLM\\SOFTWARE\\Samba\\smbconf"
+#define KEY_SAMBA_GROUP_POLICY	"HKLM\\SOFTWARE\\Samba\\Group Policy"
 #define KEY_TREE_ROOT		""
 
+#define KEY_GP_MACHINE_POLICY		"HKLM\\Software\\Policies"
+#define KEY_GP_MACHINE_WIN_POLICY	"HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies"
+#define KEY_GP_USER_POLICY		"HKCU\\Software\\Policies"
+#define KEY_GP_USER_WIN_POLICY		"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies"
 /*
  * Registry key types
  *	Most keys are going to be GENERIC -- may need a better name?
@@ -125,9 +128,11 @@ typedef struct {
  
 typedef struct {
 	/* functions for enumerating subkeys and values */	
-	int 	(*fetch_subkeys)( const char *key, REGSUBKEY_CTR *subkeys);
+	int 	(*fetch_subkeys)( const char *key, struct regsubkey_ctr *subkeys);
 	int 	(*fetch_values) ( const char *key, REGVAL_CTR *val );
-	bool 	(*store_subkeys)( const char *key, REGSUBKEY_CTR *subkeys );
+	bool 	(*store_subkeys)( const char *key, struct regsubkey_ctr *subkeys );
+	WERROR	(*create_subkey)(const char *key, const char *subkey);
+	WERROR	(*delete_subkey)(const char *key, const char *subkey);
 	bool 	(*store_values)( const char *key, REGVAL_CTR *val );
 	bool	(*reg_access_check)( const char *keyname, uint32 requested,
 				     uint32 *granted,
@@ -136,7 +141,7 @@ typedef struct {
 			      struct security_descriptor **psecdesc);
 	WERROR (*set_secdesc)(const char *key,
 			      struct security_descriptor *sec_desc);
-	bool	(*subkeys_need_update)(REGSUBKEY_CTR *subkeys);
+	bool	(*subkeys_need_update)(struct regsubkey_ctr *subkeys);
 	bool	(*values_need_update)(REGVAL_CTR *values);
 } REGISTRY_OPS;
 
@@ -157,7 +162,7 @@ typedef struct _RegistryKey {
 
 struct registry_key {
 	REGISTRY_KEY *key;
-	REGSUBKEY_CTR *subkeys;
+	struct regsubkey_ctr *subkeys;
 	REGVAL_CTR *values;
 	struct nt_user_token *token;
 };

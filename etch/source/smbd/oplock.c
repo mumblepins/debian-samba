@@ -104,7 +104,10 @@ void process_kernel_oplocks(struct messaging_context *msg_ctx, fd_set *pfds)
 
 bool set_file_oplock(files_struct *fsp, int oplock_type)
 {
-	if (koplocks && !koplocks->set_oplock(fsp, oplock_type)) {
+	if ((fsp->oplock_type != NO_OPLOCK) &&
+	    (fsp->oplock_type != FAKE_LEVEL_II_OPLOCK) &&
+	    koplocks &&
+	    !koplocks->set_oplock(fsp, oplock_type)) {
 		return False;
 	}
 
@@ -112,7 +115,7 @@ bool set_file_oplock(files_struct *fsp, int oplock_type)
 	fsp->sent_oplock_break = NO_BREAK_SENT;
 	if (oplock_type == LEVEL_II_OPLOCK) {
 		level_II_oplocks_open++;
-	} else {
+	} else if (EXCLUSIVE_OPLOCK_TYPE(fsp->oplock_type)) {
 		exclusive_oplocks_open++;
 	}
 
@@ -145,10 +148,15 @@ void release_file_oplock(files_struct *fsp)
 
 	SMB_ASSERT(exclusive_oplocks_open>=0);
 	SMB_ASSERT(level_II_oplocks_open>=0);
-	
-	fsp->oplock_type = NO_OPLOCK;
+
+	if (EXCLUSIVE_OPLOCK_TYPE(fsp->oplock_type)) {
+		/* This doesn't matter for close. */
+		fsp->oplock_type = FAKE_LEVEL_II_OPLOCK;
+	} else {
+		fsp->oplock_type = NO_OPLOCK;
+	}
 	fsp->sent_oplock_break = NO_BREAK_SENT;
-	
+
 	flush_write_cache(fsp, OPLOCK_RELEASE_FLUSH);
 
 	TALLOC_FREE(fsp->oplock_timeout);
@@ -338,7 +346,7 @@ static files_struct *initial_break_processing(struct file_id id, unsigned long f
 
 static void oplock_timeout_handler(struct event_context *ctx,
 				   struct timed_event *te,
-				   const struct timeval *now,
+				   struct timeval now,
 				   void *private_data)
 {
 	files_struct *fsp = (files_struct *)private_data;
@@ -365,7 +373,6 @@ static void add_oplock_timeout_handler(files_struct *fsp)
 	fsp->oplock_timeout =
 		event_add_timed(smbd_event_context(), NULL,
 				timeval_current_ofs(OPLOCK_BREAK_TIMEOUT, 0),
-				"oplock_timeout_handler",
 				oplock_timeout_handler, fsp);
 
 	if (fsp->oplock_timeout == NULL) {
@@ -405,8 +412,9 @@ static void process_oplock_async_level2_break_message(struct messaging_context *
 	/* De-linearize incoming message. */
 	message_to_share_mode_entry(&msg, (char *)data->data);
 
-	DEBUG(10, ("Got oplock async level 2 break message from pid %d: %s/%lu\n",
-		   (int)procid_to_pid(&src), file_id_string_tos(&msg.id), msg.share_file_id));
+	DEBUG(10, ("Got oplock async level 2 break message from pid %s: "
+		   "%s/%lu\n", procid_str(debug_ctx(), &src),
+		   file_id_string_tos(&msg.id), msg.share_file_id));
 
 	fsp = initial_break_processing(msg.id, msg.share_file_id);
 
@@ -435,6 +443,11 @@ static void process_oplock_async_level2_break_message(struct messaging_context *
 	/* Ensure we're really at level2 state. */
 	SMB_ASSERT(fsp->oplock_type == LEVEL_II_OPLOCK);
 
+	DEBUG(10,("process_oplock_async_level2_break_message: sending break to "
+		"none message for fid %d, file %s\n",
+		fsp->fnum,
+		fsp->fsp_name));
+
 	/* Now send a break to none message to our client. */
 
 	break_msg = new_break_smb_message(NULL, fsp, OPLOCKLEVEL_NONE);
@@ -443,7 +456,7 @@ static void process_oplock_async_level2_break_message(struct messaging_context *
 	}
 
 	/* Need to wait before sending a break message if we sent ourselves this message. */
-	if (procid_to_pid(&src) == sys_getpid()) {
+	if (procid_is_me(&src)) {
 		wait_before_sending_break();
 	}
 
@@ -495,8 +508,9 @@ static void process_oplock_break_message(struct messaging_context *msg_ctx,
 	/* De-linearize incoming message. */
 	message_to_share_mode_entry(&msg, (char *)data->data);
 
-	DEBUG(10, ("Got oplock break message from pid %d: %s/%lu\n",
-		   (int)procid_to_pid(&src), file_id_string_tos(&msg.id), msg.share_file_id));
+	DEBUG(10, ("Got oplock break message from pid %s: %s/%lu\n",
+		   procid_str(debug_ctx(), &src), file_id_string_tos(&msg.id),
+		   msg.share_file_id));
 
 	fsp = initial_break_processing(msg.id, msg.share_file_id);
 
@@ -550,7 +564,7 @@ static void process_oplock_break_message(struct messaging_context *msg_ctx,
 	}
 
 	/* Need to wait before sending a break message if we sent ourselves this message. */
-	if (procid_to_pid(&src) == sys_getpid()) {
+	if (procid_is_me(&src)) {
 		wait_before_sending_break();
 	}
 
@@ -609,8 +623,8 @@ static void process_kernel_oplock_break(struct messaging_context *msg_ctx,
 	pull_file_id_16((char *)data->data, &id);
 	file_id = (unsigned long)IVAL(data->data, 16);
 
-	DEBUG(10, ("Got kernel oplock break message from pid %d: %s/%u\n",
-		   (int)procid_to_pid(&src), file_id_string_tos(&id),
+	DEBUG(10, ("Got kernel oplock break message from pid %s: %s/%u\n",
+		   procid_str(debug_ctx(), &src), file_id_string_tos(&id),
 		   (unsigned int)file_id));
 
 	fsp = initial_break_processing(id, file_id);
@@ -701,9 +715,9 @@ static void process_oplock_break_response(struct messaging_context *msg_ctx,
 	/* De-linearize incoming message. */
 	message_to_share_mode_entry(&msg, (char *)data->data);
 
-	DEBUG(10, ("Got oplock break response from pid %d: %s/%lu mid %u\n",
-		   (int)procid_to_pid(&src), file_id_string_tos(&msg.id), msg.share_file_id,
-		   (unsigned int)msg.op_mid));
+	DEBUG(10, ("Got oplock break response from pid %s: %s/%lu mid %u\n",
+		   procid_str(debug_ctx(), &src), file_id_string_tos(&msg.id),
+		   msg.share_file_id, (unsigned int)msg.op_mid));
 
 	/* Here's the hack from open.c, store the mid in the 'port' field */
 	schedule_deferred_open_smb_message(msg.op_mid);
@@ -730,8 +744,8 @@ static void process_open_retry_message(struct messaging_context *msg_ctx,
 	/* De-linearize incoming message. */
 	message_to_share_mode_entry(&msg, (char *)data->data);
 
-	DEBUG(10, ("Got open retry msg from pid %d: %s mid %u\n",
-		   (int)procid_to_pid(&src), file_id_string_tos(&msg.id),
+	DEBUG(10, ("Got open retry msg from pid %s: %s mid %u\n",
+		   procid_str(debug_ctx(), &src), file_id_string_tos(&msg.id),
 		   (unsigned int)msg.op_mid));
 
 	schedule_deferred_open_smb_message(msg.op_mid);
@@ -808,10 +822,33 @@ void release_level_2_oplocks_on_change(files_struct *fsp)
 
 		share_mode_entry_to_message(msg, share_entry);
 
-		messaging_send_buf(smbd_messaging_context(), share_entry->pid,
-				   MSG_SMB_ASYNC_LEVEL2_BREAK,
-				   (uint8 *)msg,
-				   MSG_SMB_SHARE_MODE_ENTRY_SIZE);
+		/*
+		 * Deal with a race condition when breaking level2
+ 		 * oplocks. Don't send all the messages and release
+ 		 * the lock, this allows someone else to come in and
+ 		 * get a level2 lock before any of the messages are
+ 		 * processed, and thus miss getting a break message.
+ 		 * Ensure at least one entry (the one we're breaking)
+ 		 * is processed immediately under the lock and becomes
+ 		 * set as NO_OPLOCK to stop any waiter getting a level2.
+ 		 * Bugid #5979.
+ 		 */
+
+		if (procid_is_me(&share_entry->pid)) {
+			DATA_BLOB blob = data_blob_const(msg,
+					MSG_SMB_SHARE_MODE_ENTRY_SIZE);
+			process_oplock_async_level2_break_message(smbd_messaging_context(),
+						NULL,
+						MSG_SMB_ASYNC_LEVEL2_BREAK,
+						share_entry->pid,
+						&blob);
+		} else {
+			messaging_send_buf(smbd_messaging_context(),
+					share_entry->pid,
+					MSG_SMB_ASYNC_LEVEL2_BREAK,
+					(uint8 *)msg,
+					MSG_SMB_SHARE_MODE_ENTRY_SIZE);
+		}
 	}
 
 	/* We let the message receivers handle removing the oplock state

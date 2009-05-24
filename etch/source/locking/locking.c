@@ -854,7 +854,8 @@ struct share_mode_lock *fetch_share_mode_unlocked(TALLOC_CTX *mem_ctx,
 	}
 
 	if (!fill_share_mode_lock(lck, id, servicepath, fname, data, NULL)) {
-		DEBUG(3, ("fill_share_mode_lock failed\n"));
+		DEBUG(10, ("fetch_share_mode_unlocked: no share_mode record "
+			   "around (file not open)\n"));
 		TALLOC_FREE(lck);
 		return NULL;
 	}
@@ -1067,13 +1068,10 @@ static void add_share_mode_entry(struct share_mode_lock *lck,
 }
 
 void set_share_mode(struct share_mode_lock *lck, files_struct *fsp,
-			uid_t uid, uint16 mid, uint16 op_type, bool initial_delete_on_close_allowed)
+		    uid_t uid, uint16 mid, uint16 op_type)
 {
 	struct share_mode_entry entry;
 	fill_share_mode_entry(&entry, fsp, uid, mid, op_type);
-	if (initial_delete_on_close_allowed) {
-		entry.flags |= SHARE_MODE_ALLOW_INITIAL_DELETE_ON_CLOSE;
-	}
 	add_share_mode_entry(lck, &entry);
 }
 
@@ -1189,7 +1187,16 @@ bool remove_share_oplock(struct share_mode_lock *lck, files_struct *fsp)
 	}
 
 	e->op_mid = 0;
-	e->op_type = NO_OPLOCK;
+	if (EXCLUSIVE_OPLOCK_TYPE(fsp->oplock_type)) {
+		/*
+		 * Going from exclusive or batch,
+ 		 * we always go through FAKE_LEVEL_II
+ 		 * first.
+ 		 */
+		e->op_type = FAKE_LEVEL_II_OPLOCK;
+	} else {
+		e->op_type = NO_OPLOCK;
+	}
 	lck->modified = True;
 	return True;
 }
@@ -1271,28 +1278,12 @@ NTSTATUS can_set_delete_on_close(files_struct *fsp, bool delete_on_close,
 	return NT_STATUS_OK;
 }
 
-/****************************************************************************
- Do we have an open file handle that created this entry ?
-****************************************************************************/
-
-bool can_set_initial_delete_on_close(const struct share_mode_lock *lck)
-{
-	int i;
-
-	for (i=0; i<lck->num_share_modes; i++) {
-		if (lck->share_modes[i].flags & SHARE_MODE_ALLOW_INITIAL_DELETE_ON_CLOSE) {
-			return True;
-		}
-	}
-	return False;
-}
-
 /*************************************************************************
  Return a talloced copy of a UNIX_USER_TOKEN. NULL on fail.
  (Should this be in locking.c.... ?).
 *************************************************************************/
 
-static UNIX_USER_TOKEN *copy_unix_token(TALLOC_CTX *ctx, UNIX_USER_TOKEN *tok)
+static UNIX_USER_TOKEN *copy_unix_token(TALLOC_CTX *ctx, const UNIX_USER_TOKEN *tok)
 {
 	UNIX_USER_TOKEN *cpy;
 
@@ -1323,7 +1314,7 @@ static UNIX_USER_TOKEN *copy_unix_token(TALLOC_CTX *ctx, UNIX_USER_TOKEN *tok)
  Replace the delete on close token.
 ****************************************************************************/
 
-void set_delete_on_close_token(struct share_mode_lock *lck, UNIX_USER_TOKEN *tok)
+void set_delete_on_close_token(struct share_mode_lock *lck, const UNIX_USER_TOKEN *tok)
 {
 	TALLOC_FREE(lck->delete_token); /* Also deletes groups... */
 
@@ -1343,7 +1334,7 @@ void set_delete_on_close_token(struct share_mode_lock *lck, UNIX_USER_TOKEN *tok
  lck entry. This function is used when the lock is already granted.
 ****************************************************************************/
 
-void set_delete_on_close_lck(struct share_mode_lock *lck, bool delete_on_close, UNIX_USER_TOKEN *tok)
+void set_delete_on_close_lck(struct share_mode_lock *lck, bool delete_on_close, const UNIX_USER_TOKEN *tok)
 {
 	if (lck->delete_on_close != delete_on_close) {
 		set_delete_on_close_token(lck, tok);
@@ -1355,8 +1346,9 @@ void set_delete_on_close_lck(struct share_mode_lock *lck, bool delete_on_close, 
 	}
 }
 
-bool set_delete_on_close(files_struct *fsp, bool delete_on_close, UNIX_USER_TOKEN *tok)
+bool set_delete_on_close(files_struct *fsp, bool delete_on_close, const UNIX_USER_TOKEN *tok)
 {
+	UNIX_USER_TOKEN *tok_copy = NULL;
 	struct share_mode_lock *lck;
 	
 	DEBUG(10,("set_delete_on_close: %s delete on close flag for "
@@ -1364,14 +1356,20 @@ bool set_delete_on_close(files_struct *fsp, bool delete_on_close, UNIX_USER_TOKE
 		  delete_on_close ? "Adding" : "Removing", fsp->fnum,
 		  fsp->fsp_name ));
 
-	if (fsp->is_stat) {
-		return True;
-	}
-
 	lck = get_share_mode_lock(talloc_tos(), fsp->file_id, NULL, NULL,
 				  NULL);
 	if (lck == NULL) {
 		return False;
+	}
+
+	if (fsp->conn->admin_user) {
+		tok_copy = copy_unix_token(lck, tok);
+		tok_copy->uid = (uid_t)0;
+		if (tok_copy == NULL) {
+			TALLOC_FREE(lck);
+			return false;
+		}
+		tok = tok_copy;
 	}
 
 	set_delete_on_close_lck(lck, delete_on_close, tok);
@@ -1381,31 +1379,6 @@ bool set_delete_on_close(files_struct *fsp, bool delete_on_close, UNIX_USER_TOKE
 	}
 
 	TALLOC_FREE(lck);
-	return True;
-}
-
-/****************************************************************************
- Sets the allow initial delete on close flag for this share mode.
-****************************************************************************/
-
-bool set_allow_initial_delete_on_close(struct share_mode_lock *lck, files_struct *fsp, bool delete_on_close)
-{
-	struct share_mode_entry entry, *e;
-
-	/* Don't care about the pid owner being correct here - just a search. */
-	fill_share_mode_entry(&entry, fsp, (uid_t)-1, 0, NO_OPLOCK);
-
-	e = find_share_mode_entry(lck, &entry);
-	if (e == NULL) {
-		return False;
-	}
-
-	if (delete_on_close) {
-		e->flags |= SHARE_MODE_ALLOW_INITIAL_DELETE_ON_CLOSE;
-	} else {
-		e->flags &= ~SHARE_MODE_ALLOW_INITIAL_DELETE_ON_CLOSE;
-	}
-	lck->modified = True;
 	return True;
 }
 

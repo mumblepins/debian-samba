@@ -158,7 +158,7 @@ static struct cli_state *open_nbt_connection(void)
 	make_nmb_name(&calling, myname, 0x0);
 	make_nmb_name(&called , host, 0x20);
 
-        zero_addr(&ss);
+        zero_sockaddr(&ss);
 
 	if (!(c = cli_initialise())) {
 		printf("Failed initialize cli_struct to connect with %s\n", host);
@@ -1221,7 +1221,9 @@ static bool run_tcon2_test(int dummy)
 
 	printf("starting tcon2 test\n");
 
-	asprintf(&service, "\\\\%s\\%s", host, share);
+	if (asprintf(&service, "\\\\%s\\%s", host, share) == -1) {
+		return false;
+	}
 
 	status = cli_raw_tcon(cli, service, password, "?????", &max_xmit, &cnum);
 
@@ -3685,7 +3687,8 @@ static bool run_rename(int dummy)
 	}
 
 	if (!cli_rename(cli1, fname, fname1)) {
-		printf("Fifth rename failed (SHARE_READ | SHARE_WRITE | SHARE_DELETE) - this should have succeeded - %s\n", cli_errstr(cli1));
+		printf("Fifth rename failed (SHARE_READ | SHARE_WRITE | SHARE_DELETE) - this should have succeeded - %s ! \n",
+			cli_errstr(cli1));
 		correct = False;
 	} else {
 		printf("Fifth rename succeeded (SHARE_READ | SHARE_WRITE | SHARE_DELETE) (this is correct) - %s\n", cli_errstr(cli1));
@@ -4151,6 +4154,119 @@ static bool run_opentest(int dummy)
 	
 	return correct;
 }
+
+/*
+  Test POSIX open /mkdir calls.
+ */
+static bool run_simple_posix_open_test(int dummy)
+{
+	static struct cli_state *cli1;
+	const char *fname = "\\posix.file";
+	const char *dname = "\\posix.dir";
+	uint16 major, minor;
+	uint32 caplow, caphigh;
+	int fnum1 = -1;
+	bool correct = false;
+
+	printf("Starting simple POSIX open test\n");
+
+	if (!torture_open_connection(&cli1, 0)) {
+		return false;
+	}
+
+	cli_sockopt(cli1, sockops);
+
+	if (!SERVER_HAS_UNIX_CIFS(cli1)) {
+		printf("Server doesn't support UNIX CIFS extensions.\n");
+		return false;
+	}
+
+	if (!cli_unix_extensions_version(cli1, &major,
+			&minor, &caplow, &caphigh)) {
+		printf("Server didn't return UNIX CIFS extensions.\n");
+		return false;
+	}
+
+	if (!cli_set_unix_extensions_capabilities(cli1,
+			major, minor, caplow, caphigh)) {
+		printf("Server doesn't support setting UNIX CIFS extensions.\n");
+		return false;
+        }
+
+	cli_setatr(cli1, fname, 0, 0);
+	cli_posix_unlink(cli1, fname);
+	cli_setatr(cli1, dname, 0, 0);
+	cli_posix_rmdir(cli1, dname);
+
+	/* Create a directory. */
+	if (cli_posix_mkdir(cli1, dname, 0777) == -1) {
+		printf("Server doesn't support setting UNIX CIFS extensions.\n");
+		goto out;
+	}
+
+	fnum1 = cli_posix_open(cli1, fname, O_RDWR|O_CREAT|O_EXCL, 0600);
+	if (fnum1 == -1) {
+		printf("POSIX create of %s failed (%s)\n", fname, cli_errstr(cli1));
+		goto out;
+	}
+
+	if (!cli_close(cli1, fnum1)) {
+		printf("close failed (%s)\n", cli_errstr(cli1));
+		goto out;
+	}
+
+	/* Now open the file again for read only. */
+	fnum1 = cli_posix_open(cli1, fname, O_RDONLY, 0);
+	if (fnum1 == -1) {
+		printf("POSIX open of %s failed (%s)\n", fname, cli_errstr(cli1));
+		goto out;
+	}
+
+	/* Now unlink while open. */
+	if (!cli_posix_unlink(cli1, fname)) {
+		printf("POSIX unlink of %s failed (%s)\n", fname, cli_errstr(cli1));
+		goto out;
+	}
+
+	if (!cli_close(cli1, fnum1)) {
+		printf("close(2) failed (%s)\n", cli_errstr(cli1));
+		goto out;
+	}
+
+	/* Ensure the file has gone. */
+	fnum1 = cli_posix_open(cli1, fname, O_RDONLY, 0);
+	if (fnum1 != -1) {
+		printf("POSIX open of %s succeeded, should have been deleted.\n", fname);
+		goto out;
+	}
+
+	if (!cli_posix_rmdir(cli1, dname)) {
+		printf("POSIX rmdir failed (%s)\n", cli_errstr(cli1));
+		goto out;
+	}
+
+	printf("Simple POSIX open test passed\n");
+	correct = true;
+
+  out:
+
+	if (fnum1 != -1) {
+		cli_close(cli1, fnum1);
+		fnum1 = -1;
+	}
+
+	cli_setatr(cli1, fname, 0, 0);
+	cli_posix_unlink(cli1, fname);
+	cli_setatr(cli1, dname, 0, 0);
+	cli_posix_rmdir(cli1, dname);
+
+	if (!torture_close_connection(cli1)) {
+		correct = false;
+	}
+
+	return correct;
+}
+
 
 static uint32 open_attrs_table[] = {
 		FILE_ATTRIBUTE_NORMAL,
@@ -4896,6 +5012,50 @@ static bool subst_test(const char *str, const char *user, const char *domain,
 	return result;
 }
 
+static bool run_uid_regression_test(int dummy)
+{
+	static struct cli_state *cli;
+	int16_t old_vuid;
+	bool correct = True;
+
+	printf("starting uid regression test\n");
+
+	if (!torture_open_connection(&cli, 0)) {
+		return False;
+	}
+
+	cli_sockopt(cli, sockops);
+
+	/* Ok - now save then logoff our current user. */
+	old_vuid = cli->vuid;
+
+	if (!cli_ulogoff(cli)) {
+		d_printf("(%s) cli_ulogoff failed: %s\n",
+			__location__, cli_errstr(cli));
+		correct = false;
+		goto out;
+	}
+
+	cli->vuid = old_vuid;
+
+	/* Try an operation. */
+	if (!cli_mkdir(cli, "\\uid_reg_test")) {
+		/* We expect bad uid. */
+		if (!check_error(__LINE__, cli, ERRSRV, ERRbaduid,
+				NT_STATUS_NO_SUCH_USER)) {
+			return False;
+		}
+		goto out;
+	}
+
+	cli_rmdir(cli, "\\uid_reg_test");
+
+  out:
+
+	torture_close_connection(cli);
+	return correct;
+}
+
 static bool run_local_substitute(int dummy)
 {
 	bool ok = true;
@@ -5070,8 +5230,13 @@ static bool run_local_rbtree(int dummy)
 	for (i=0; i<1000; i++) {
 		char *key, *value;
 
-		asprintf(&key, "key%ld", random());
-		asprintf(&value, "value%ld", random());
+		if (asprintf(&key, "key%ld", random()) == -1) {
+			goto done;
+		}
+		if (asprintf(&value, "value%ld", random()) == -1) {
+			SAFE_FREE(key);
+			goto done;
+		}
 
 		if (!rbt_testval(db, key, value)) {
 			SAFE_FREE(key);
@@ -5080,7 +5245,10 @@ static bool run_local_rbtree(int dummy)
 		}
 
 		SAFE_FREE(value);
-		asprintf(&value, "value%ld", random());
+		if (asprintf(&value, "value%ld", random()) == -1) {
+			SAFE_FREE(key);
+			goto done;
+		}
 
 		if (!rbt_testval(db, key, value)) {
 			SAFE_FREE(key);
@@ -5188,6 +5356,11 @@ static bool run_local_memcache(int dummy)
 	DATA_BLOB d1, d2, d3;
 	DATA_BLOB v1, v2, v3;
 
+	TALLOC_CTX *mem_ctx;
+	char *str1, *str2;
+	size_t size1, size2;
+	bool ret = false;
+
 	cache = memcache_init(NULL, 100);
 
 	if (cache == NULL) {
@@ -5239,7 +5412,33 @@ static bool run_local_memcache(int dummy)
 	}
 
 	TALLOC_FREE(cache);
-	return true;
+
+	cache = memcache_init(NULL, 0);
+
+	mem_ctx = talloc_init("foo");
+
+	str1 = talloc_strdup(mem_ctx, "string1");
+	str2 = talloc_strdup(mem_ctx, "string2");
+
+	memcache_add_talloc(cache, SINGLETON_CACHE_TALLOC,
+			    data_blob_string_const("torture"), &str1);
+	size1 = talloc_total_size(cache);
+
+	memcache_add_talloc(cache, SINGLETON_CACHE_TALLOC,
+			    data_blob_string_const("torture"), &str2);
+	size2 = talloc_total_size(cache);
+
+	printf("size1=%d, size2=%d\n", (int)size1, (int)size2);
+
+	if (size2 > size1) {
+		printf("memcache leaks memory!\n");
+		goto fail;
+	}
+
+	ret = true;
+ fail:
+	TALLOC_FREE(cache);
+	return ret;
 }
 
 static double create_procs(bool (*fn)(int), bool *result)
@@ -5372,6 +5571,8 @@ static struct {
 	{"RW2",  run_readwritemulti, FLAG_MULTIPROC},
 	{"RW3",  run_readwritelarge, 0},
 	{"OPEN", run_opentest, 0},
+	{"POSIX", run_simple_posix_open_test, 0},
+	{ "UID-REGRESSION-TEST", run_uid_regression_test, 0},
 #if 1
 	{"OPENATTR", run_openattrtest, 0},
 #endif

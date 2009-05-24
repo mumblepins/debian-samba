@@ -207,7 +207,7 @@ smbc_read(int fd,
 
 ssize_t
 smbc_write(int fd,
-           void *buf,
+           const void *buf,
            size_t bufsize)
 {
 	SMBCFILE * file = find_fd(fd);
@@ -327,6 +327,21 @@ smbc_fstat(int fd,
 {
 	SMBCFILE * file = find_fd(fd);
         return smbc_getFunctionFstat(statcont)(statcont, file, st);
+}
+
+int
+smbc_statvfs(char *path,
+             struct statvfs *st)
+{
+        return smbc_getFunctionStatVFS(statcont)(statcont, path, st);
+}
+
+int
+smbc_fstatvfs(int fd,
+              struct statvfs *st)
+{
+	SMBCFILE * file = find_fd(fd);
+        return smbc_getFunctionFstatVFS(statcont)(statcont, file, st);
 }
 
 int

@@ -67,10 +67,20 @@ static void check_magic(struct files_struct *fsp)
 		return;
 	}
 
-	chmod(fsp->fsp_name,0755);
-	ret = smbrun(fsp->fsp_name,&tmp_fd);
+	/* Ensure we don't depend on user's PATH. */
+	p = talloc_asprintf(ctx, "./%s", fsp->fsp_name);
+	if (!p) {
+		TALLOC_FREE(ctx);
+		return;
+	}
+
+	if (chmod(fsp->fsp_name,0755) == -1) {
+		TALLOC_FREE(ctx);
+		return;
+	}
+	ret = smbrun(p,&tmp_fd);
 	DEBUG(3,("Invoking magic command %s gave %d\n",
-		fsp->fsp_name,ret));
+		p,ret));
 
 	unlink(fsp->fsp_name);
 	if (ret != 0 || tmp_fd == -1) {
@@ -106,8 +116,7 @@ static void check_magic(struct files_struct *fsp)
 static NTSTATUS close_filestruct(files_struct *fsp)
 {
 	NTSTATUS status = NT_STATUS_OK;
-	connection_struct *conn = fsp->conn;
-    
+
 	if (fsp->fh->fd != -1) {
 		if(flush_write_cache(fsp, CLOSE_FLUSH) == -1) {
 			status = map_nt_error_from_unix(errno);
@@ -115,9 +124,8 @@ static NTSTATUS close_filestruct(files_struct *fsp)
 		delete_write_cache(fsp);
 	}
 
-	conn->num_files_open--;
 	return status;
-}    
+}
 
 /****************************************************************************
  If any deferred opens are waiting on this close, notify them.
@@ -159,7 +167,7 @@ static void notify_deferred_opens(struct share_mode_lock *lck)
  Delete all streams
 ****************************************************************************/
 
-static NTSTATUS delete_all_streams(connection_struct *conn, const char *fname)
+NTSTATUS delete_all_streams(connection_struct *conn, const char *fname)
 {
 	struct stream_struct *stream_info;
 	int i;
@@ -459,6 +467,7 @@ static NTSTATUS update_write_time_on_close(struct files_struct *fsp)
 	SMB_STRUCT_STAT sbuf;
 	struct timespec ts[2];
 	NTSTATUS status;
+	int ret = -1;
 
 	ZERO_STRUCT(sbuf);
 	ZERO_STRUCT(ts);
@@ -473,13 +482,17 @@ static NTSTATUS update_write_time_on_close(struct files_struct *fsp)
 
 	/* Ensure we have a valid stat struct for the source. */
 	if (fsp->fh->fd != -1) {
-		if (SMB_VFS_FSTAT(fsp, &sbuf) == -1) {
-			return map_nt_error_from_unix(errno);
-		}
+		ret = SMB_VFS_FSTAT(fsp, &sbuf);
 	} else {
-		if (SMB_VFS_STAT(fsp->conn,fsp->fsp_name,&sbuf) == -1) {
-			return map_nt_error_from_unix(errno);
+		if (fsp->posix_open) {
+			ret = SMB_VFS_LSTAT(fsp->conn,fsp->fsp_name,&sbuf);
+		} else {
+			ret = SMB_VFS_STAT(fsp->conn,fsp->fsp_name,&sbuf);
 		}
+	}
+
+	if (ret == -1) {
+		return map_nt_error_from_unix(errno);
 	}
 
 	if (!VALID_STAT(sbuf)) {
@@ -567,6 +580,13 @@ static NTSTATUS close_normal_file(files_struct *fsp, enum file_close_type close_
 	 */
 
 	saved_status4 = update_write_time_on_close(fsp);
+	if (NT_STATUS_EQUAL(saved_status4, NT_STATUS_OBJECT_NAME_NOT_FOUND)) {
+		/* Someone renamed the file or a parent directory containing
+		 * this file. We can't do anything about this, we don't have
+		 * an "update timestamp by fd" call in POSIX. Eat the error. */
+
+		saved_status4 = NT_STATUS_OK;
+	}
 
 	if (NT_STATUS_IS_OK(status)) {
 		if (!NT_STATUS_IS_OK(saved_status1)) {
@@ -581,8 +601,8 @@ static NTSTATUS close_normal_file(files_struct *fsp, enum file_close_type close_
 	}
 
 	DEBUG(2,("%s closed file %s (numopen=%d) %s\n",
-		conn->user,fsp->fsp_name,
-		conn->num_files_open,
+		conn->server_info->unix_name,fsp->fsp_name,
+		conn->num_files_open - 1,
 		nt_errstr(status) ));
 
 	file_free(fsp);
@@ -703,20 +723,6 @@ static NTSTATUS close_directory(files_struct *fsp, enum file_close_type close_ty
 }
 
 /****************************************************************************
- Close a 'stat file' opened internally.
-****************************************************************************/
-  
-static NTSTATUS close_stat(files_struct *fsp)
-{
-	/*
-	 * Do the code common to files and directories.
-	 */
-	close_filestruct(fsp);
-	file_free(fsp);
-	return NT_STATUS_OK;
-}
-
-/****************************************************************************
  Close a files_struct.
 ****************************************************************************/
   
@@ -727,8 +733,6 @@ NTSTATUS close_file(files_struct *fsp, enum file_close_type close_type)
 
 	if(fsp->is_directory) {
 		status = close_directory(fsp, close_type);
-	} else if (fsp->is_stat) {
-		status = close_stat(fsp);
 	} else if (fsp->fake_file_handle != NULL) {
 		status = close_fake_file(fsp);
 	} else {

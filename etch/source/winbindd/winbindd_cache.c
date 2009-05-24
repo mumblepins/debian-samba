@@ -33,7 +33,6 @@
 #define WINBINDD_CACHE_VERSION_KEYSTR "WINBINDD_CACHE_VERSION"
 
 extern struct winbindd_methods reconnect_methods;
-extern bool opt_nocache;
 #ifdef HAVE_ADS
 extern struct winbindd_methods ads_methods;
 #endif
@@ -486,7 +485,9 @@ static void refresh_sequence_number(struct winbindd_domain *domain, bool force)
 	time_diff = t - domain->last_seq_check;
 
 	/* see if we have to refetch the domain sequence number */
-	if (!force && (time_diff < cache_time)) {
+	if (!force && (time_diff < cache_time) &&
+			(domain->sequence_number != DOM_SEQUENCE_NONE) &&
+			NT_STATUS_IS_OK(domain->last_status)) {
 		DEBUG(10, ("refresh_sequence_number: %s time ok\n", domain->name));
 		goto done;
 	}
@@ -495,21 +496,18 @@ static void refresh_sequence_number(struct winbindd_domain *domain, bool force)
 	/* this will update the timestamp as well */
 	
 	status = fetch_cache_seqnum( domain, t );
-	if ( NT_STATUS_IS_OK(status) )
-		goto done;	
+	if (NT_STATUS_IS_OK(status) &&
+			(domain->sequence_number != DOM_SEQUENCE_NONE) &&
+			NT_STATUS_IS_OK(domain->last_status)) {
+		goto done;
+	}
 
 	/* important! make sure that we know if this is a native 
 	   mode domain or not.  And that we can contact it. */
 
 	if ( winbindd_can_contact_domain( domain ) ) {		
-		struct winbindd_methods *orig_backend = domain->backend;
 		status = domain->backend->sequence_number(domain, 
 							  &domain->sequence_number);
-		if (domain->backend != orig_backend) {
-			/* Try again. */
-			status = domain->backend->sequence_number(domain,
-                                                          &domain->sequence_number);
-		}
 	} else {
 		/* just use the current time */
 		status = NT_STATUS_OK;
@@ -632,7 +630,7 @@ static struct cache_entry *wcache_fetch(struct winbind_cache *cache,
 	char *kstr;
 	struct cache_entry *centry;
 
-	if (opt_nocache) {
+	if (!winbindd_use_cache()) {
 		return NULL;
 	}
 
@@ -834,7 +832,7 @@ static void centry_end(struct cache_entry *centry, const char *format, ...)
 	char *kstr;
 	TDB_DATA key, data;
 
-	if (opt_nocache) {
+	if (!winbindd_use_cache()) {
 		return;
 	}
 
@@ -940,6 +938,8 @@ static void wcache_save_lockout_policy(struct winbindd_domain *domain,
 	centry_free(centry);
 }
 
+
+
 static void wcache_save_password_policy(struct winbindd_domain *domain,
 					NTSTATUS status,
 					struct samr_DomInfo1 *policy)
@@ -961,6 +961,209 @@ static void wcache_save_password_policy(struct winbindd_domain *domain,
 	DEBUG(10,("wcache_save_password_policy: %s\n", domain->name));
 
 	centry_free(centry);
+}
+
+/***************************************************************************
+ ***************************************************************************/
+
+static void wcache_save_username_alias(struct winbindd_domain *domain,
+				       NTSTATUS status,
+				       const char *name, const char *alias)
+{
+	struct cache_entry *centry;
+	fstring uname;
+
+	if ( (centry = centry_start(domain, status)) == NULL )
+		return;
+
+	centry_put_string( centry, alias );
+
+	fstrcpy(uname, name);
+	strupper_m(uname);
+	centry_end(centry, "NSS/NA/%s", uname);
+
+	DEBUG(10,("wcache_save_username_alias: %s -> %s\n", name, alias ));
+
+	centry_free(centry);
+}
+
+static void wcache_save_alias_username(struct winbindd_domain *domain,
+				       NTSTATUS status,
+				       const char *alias, const char *name)
+{
+	struct cache_entry *centry;
+	fstring uname;
+
+	if ( (centry = centry_start(domain, status)) == NULL )
+		return;
+
+	centry_put_string( centry, name );
+
+	fstrcpy(uname, alias);
+	strupper_m(uname);
+	centry_end(centry, "NSS/AN/%s", uname);
+
+	DEBUG(10,("wcache_save_alias_username: %s -> %s\n", alias, name ));
+
+	centry_free(centry);
+}
+
+/***************************************************************************
+ ***************************************************************************/
+
+NTSTATUS resolve_username_to_alias( TALLOC_CTX *mem_ctx,
+				    struct winbindd_domain *domain,
+				    const char *name, char **alias )
+{
+	struct winbind_cache *cache = get_cache(domain);
+	struct cache_entry *centry = NULL;
+	NTSTATUS status;
+	char *upper_name;
+
+	if ( domain->internal )
+		return NT_STATUS_NOT_SUPPORTED;
+
+	if (!cache->tdb)
+		goto do_query;
+
+	if ( (upper_name = SMB_STRDUP(name)) == NULL )
+		return NT_STATUS_NO_MEMORY;
+	strupper_m(upper_name);
+
+	centry = wcache_fetch(cache, domain, "NSS/NA/%s", upper_name);
+
+	SAFE_FREE( upper_name );
+
+	if (!centry)
+		goto do_query;
+
+	status = centry->status;
+
+	if (!NT_STATUS_IS_OK(status)) {
+		centry_free(centry);
+		return status;
+	}
+
+	*alias = centry_string( centry, mem_ctx );
+
+	centry_free(centry);
+
+	DEBUG(10,("resolve_username_to_alias: [Cached] - mapped %s to %s\n",
+		  name, *alias ? *alias : "(none)"));
+
+	return (*alias) ? NT_STATUS_OK : NT_STATUS_OBJECT_NAME_NOT_FOUND;
+
+do_query:
+
+	/* If its not in cache and we are offline, then fail */
+
+	if ( get_global_winbindd_state_offline() || !domain->online ) {
+		DEBUG(8,("resolve_username_to_alias: rejecting query "
+			 "in offline mode\n"));
+		return NT_STATUS_NOT_FOUND;
+	}
+
+	status = nss_map_to_alias( mem_ctx, domain->name, name, alias );
+
+	if ( NT_STATUS_IS_OK( status ) ) {
+		wcache_save_username_alias(domain, status, name, *alias);
+	}
+
+	if ( NT_STATUS_EQUAL( status, NT_STATUS_NONE_MAPPED ) ) {
+		wcache_save_username_alias(domain, status, name, "(NULL)");
+	}
+
+	DEBUG(5,("resolve_username_to_alias: backend query returned %s\n",
+		 nt_errstr(status)));
+
+	if ( NT_STATUS_EQUAL(status, NT_STATUS_DOMAIN_CONTROLLER_NOT_FOUND) ) {
+		set_domain_offline( domain );
+	}
+
+	return status;
+}
+
+/***************************************************************************
+ ***************************************************************************/
+
+NTSTATUS resolve_alias_to_username( TALLOC_CTX *mem_ctx,
+				    struct winbindd_domain *domain,
+				    const char *alias, char **name )
+{
+	struct winbind_cache *cache = get_cache(domain);
+	struct cache_entry *centry = NULL;
+	NTSTATUS status;
+	char *upper_name;
+
+	if ( domain->internal )
+		return  NT_STATUS_NOT_SUPPORTED;
+
+	if (!cache->tdb)
+		goto do_query;
+
+	if ( (upper_name = SMB_STRDUP(alias)) == NULL )
+		return NT_STATUS_NO_MEMORY;
+	strupper_m(upper_name);
+
+	centry = wcache_fetch(cache, domain, "NSS/AN/%s", upper_name);
+
+	SAFE_FREE( upper_name );
+
+	if (!centry)
+		goto do_query;
+
+	status = centry->status;
+
+	if (!NT_STATUS_IS_OK(status)) {
+		centry_free(centry);
+		return status;
+	}
+
+	*name = centry_string( centry, mem_ctx );
+
+	centry_free(centry);
+
+	DEBUG(10,("resolve_alias_to_username: [Cached] - mapped %s to %s\n",
+		  alias, *name ? *name : "(none)"));
+
+	return (*name) ? NT_STATUS_OK : NT_STATUS_OBJECT_NAME_NOT_FOUND;
+
+do_query:
+
+	/* If its not in cache and we are offline, then fail */
+
+	if ( get_global_winbindd_state_offline() || !domain->online ) {
+		DEBUG(8,("resolve_alias_to_username: rejecting query "
+			 "in offline mode\n"));
+		return NT_STATUS_NOT_FOUND;
+	}
+
+	/* an alias cannot contain a domain prefix or '@' */
+
+	if (strchr(alias, '\\') || strchr(alias, '@')) {
+		DEBUG(10,("resolve_alias_to_username: skipping fully "
+			  "qualified name %s\n", alias));
+		return NT_STATUS_OBJECT_NAME_INVALID;
+	}
+
+	status = nss_map_from_alias( mem_ctx, domain->name, alias, name );
+
+	if ( NT_STATUS_IS_OK( status ) ) {
+		wcache_save_alias_username( domain, status, alias, *name );
+	}
+
+	if (NT_STATUS_EQUAL(status, NT_STATUS_NONE_MAPPED)) {
+		wcache_save_alias_username(domain, status, alias, "(NULL)");
+	}
+
+	DEBUG(5,("resolve_alias_to_username: backend query returned %s\n",
+		 nt_errstr(status)));
+
+	if ( NT_STATUS_EQUAL(status, NT_STATUS_DOMAIN_CONTROLLER_NOT_FOUND) ) {
+		set_domain_offline( domain );
+	}
+
+	return status;
 }
 
 NTSTATUS wcache_cached_creds_exist(struct winbindd_domain *domain, const DOM_SID *sid)
@@ -2420,9 +2623,9 @@ void cache_store_response(pid_t pid, struct winbindd_response *response)
 		return;
 
 	DEBUG(10, ("Storing response for pid %d, len %d\n",
-		   pid, response->length));
+		   (int)pid, response->length));
 
-	fstr_sprintf(key_str, "DR/%d", pid);
+	fstr_sprintf(key_str, "DR/%d", (int)pid);
 	if (tdb_store(wcache->tdb, string_tdb_data(key_str), 
 		      make_tdb_data((uint8 *)response, sizeof(*response)),
 		      TDB_REPLACE) == -1)
@@ -2436,7 +2639,7 @@ void cache_store_response(pid_t pid, struct winbindd_response *response)
 	DEBUG(10, ("Storing extra data: len=%d\n",
 		   (int)(response->length - sizeof(*response))));
 
-	fstr_sprintf(key_str, "DE/%d", pid);
+	fstr_sprintf(key_str, "DE/%d", (int)pid);
 	if (tdb_store(wcache->tdb, string_tdb_data(key_str),
 		      make_tdb_data((uint8 *)response->extra_data.data,
 				    response->length - sizeof(*response)),
@@ -2446,7 +2649,7 @@ void cache_store_response(pid_t pid, struct winbindd_response *response)
 	/* We could not store the extra data, make sure the tdb does not
 	 * contain a main record with wrong dangling extra data */
 
-	fstr_sprintf(key_str, "DR/%d", pid);
+	fstr_sprintf(key_str, "DR/%d", (int)pid);
 	tdb_delete(wcache->tdb, string_tdb_data(key_str));
 
 	return;
@@ -2460,9 +2663,9 @@ bool cache_retrieve_response(pid_t pid, struct winbindd_response * response)
 	if (!init_wcache())
 		return false;
 
-	DEBUG(10, ("Retrieving response for pid %d\n", pid));
+	DEBUG(10, ("Retrieving response for pid %d\n", (int)pid));
 
-	fstr_sprintf(key_str, "DR/%d", pid);
+	fstr_sprintf(key_str, "DR/%d", (int)pid);
 	data = tdb_fetch(wcache->tdb, string_tdb_data(key_str));
 
 	if (data.dptr == NULL)
@@ -2484,7 +2687,7 @@ bool cache_retrieve_response(pid_t pid, struct winbindd_response * response)
 	DEBUG(10, ("Retrieving extra data length=%d\n",
 		   (int)(response->length - sizeof(*response))));
 
-	fstr_sprintf(key_str, "DE/%d", pid);
+	fstr_sprintf(key_str, "DE/%d", (int)pid);
 	data = tdb_fetch(wcache->tdb, string_tdb_data(key_str));
 
 	if (data.dptr == NULL) {
@@ -2511,10 +2714,10 @@ void cache_cleanup_response(pid_t pid)
 	if (!init_wcache())
 		return;
 
-	fstr_sprintf(key_str, "DR/%d", pid);
+	fstr_sprintf(key_str, "DR/%d", (int)pid);
 	tdb_delete(wcache->tdb, string_tdb_data(key_str));
 
-	fstr_sprintf(key_str, "DE/%d", pid);
+	fstr_sprintf(key_str, "DE/%d", (int)pid);
 	tdb_delete(wcache->tdb, string_tdb_data(key_str));
 
 	return;
@@ -2656,8 +2859,9 @@ void wcache_flush_cache(void)
 		tdb_close(wcache->tdb);
 		wcache->tdb = NULL;
 	}
-	if (opt_nocache)
+	if (!winbindd_use_cache()) {
 		return;
+	}
 
 	/* when working offline we must not clear the cache on restart */
 	wcache->tdb = tdb_open_log(lock_path("winbindd_cache.tdb"),
@@ -3263,6 +3467,48 @@ static int validate_pwinfo(TALLOC_CTX *mem_ctx, const char *keystr,
 	return 0;
 }
 
+static int validate_nss_an(TALLOC_CTX *mem_ctx, const char *keystr,
+			   TDB_DATA dbuf,
+			   struct tdb_validation_status *state)
+{
+	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
+
+	if (!centry) {
+		return 1;
+	}
+
+	(void)centry_string( centry, mem_ctx );
+
+	centry_free(centry);
+
+	if (!(state->success)) {
+		return 1;
+	}
+	DEBUG(10,("validate_pwinfo: %s ok\n", keystr));
+	return 0;
+}
+
+static int validate_nss_na(TALLOC_CTX *mem_ctx, const char *keystr,
+			   TDB_DATA dbuf,
+			   struct tdb_validation_status *state)
+{
+	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
+
+	if (!centry) {
+		return 1;
+	}
+
+	(void)centry_string( centry, mem_ctx );
+
+	centry_free(centry);
+
+	if (!(state->success)) {
+		return 1;
+	}
+	DEBUG(10,("validate_pwinfo: %s ok\n", keystr));
+	return 0;
+}
+
 static int validate_trustdoms(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf,
 			      struct tdb_validation_status *state)
 {
@@ -3364,6 +3610,8 @@ struct key_val_struct {
 	{"NSS/PWINFO/", validate_pwinfo},
 	{"TRUSTDOMS/", validate_trustdoms},
 	{"TRUSTDOMCACHE/", validate_trustdomcache},
+	{"NSS/NA/", validate_nss_na},
+	{"NSS/AN/", validate_nss_an},
 	{"WINBINDD_OFFLINE", validate_offline},
 	{WINBINDD_CACHE_VERSION_KEYSTR, validate_cache_version},
 	{NULL, NULL}
@@ -3609,7 +3857,9 @@ static TDB_DATA make_tdc_key( const char *domain_name )
 	}
 	       
 		
-	asprintf( &keystr, "TRUSTDOMCACHE/%s", domain_name );
+	if (asprintf( &keystr, "TRUSTDOMCACHE/%s", domain_name ) == -1) {
+		return key;
+	}
 	key = string_term_tdb_data(keystr);
 	
 	return key;	
@@ -3979,7 +4229,14 @@ do_query:
 	nt_status = nss_get_info( domain->name, user_sid, ctx, ads, msg, 
 				  homedir, shell, gecos, p_gid );
 
+	DEBUG(10, ("nss_get_info returned %s\n", nt_errstr(nt_status)));
+
 	if ( NT_STATUS_IS_OK(nt_status) ) {
+		DEBUG(10, ("result:\n\thomedir = '%s'\n", *homedir));
+                DEBUGADD(10, ("\tshell = '%s'\n", *shell));
+                DEBUGADD(10, ("\tgecos = '%s'\n", *gecos));
+                DEBUGADD(10, ("\tgid = '%u'\n", *p_gid));
+
 		wcache_save_user_pwinfo( domain, nt_status, user_sid,
 					 *homedir, *shell, *gecos, *p_gid );
 	}	

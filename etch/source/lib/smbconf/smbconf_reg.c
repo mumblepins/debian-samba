@@ -18,12 +18,12 @@
  */
 
 #include "includes.h"
-#include "smbconf_private.h"
+#include "lib/smbconf/smbconf_private.h"
 
 #define INCLUDES_VALNAME "includes"
 
 struct reg_private_data {
-	NT_USER_TOKEN *token;
+	struct registry_key *base_key;
 	bool open;		/* did _we_ open the registry? */
 };
 
@@ -52,6 +52,7 @@ static bool smbconf_reg_valname_forbidden(const char *valname)
 		"lock dir",
 		"config backend",
 		"include",
+		"includes", /* this has a special meaning internally */
 		NULL
 	};
 	const char **forbidden = NULL;
@@ -66,56 +67,8 @@ static bool smbconf_reg_valname_forbidden(const char *valname)
 
 static bool smbconf_reg_valname_valid(const char *valname)
 {
-	return (lp_parameter_is_valid(valname) &&
-		!smbconf_reg_valname_forbidden(valname));
-}
-
-/**
- * Open a registry key specified by "path"
- */
-static WERROR smbconf_reg_open_path(TALLOC_CTX *mem_ctx,
-				    struct smbconf_ctx *ctx,
-				    const char *path,
-				    uint32 desired_access,
-				    struct registry_key **key)
-{
-	WERROR werr = WERR_OK;
-
-	if (ctx == NULL) {
-		DEBUG(1, ("Error: configuration is not open!\n"));
-		werr = WERR_INVALID_PARAM;
-		goto done;
-	}
-
-	if (rpd(ctx)->token == NULL) {
-		DEBUG(1, ("Error: token missing from smbconf_ctx. "
-			  "was smbconf_init() called?\n"));
-		werr = WERR_INVALID_PARAM;
-		goto done;
-	}
-
-	werr = ctx->ops->open_conf(ctx);
-	if (!W_ERROR_IS_OK(werr)) {
-		DEBUG(1, ("Error opening the registry.\n"));
-		goto done;
-	}
-
-	if (path == NULL) {
-		DEBUG(1, ("Error: NULL path string given\n"));
-		werr = WERR_INVALID_PARAM;
-		goto done;
-	}
-
-	werr = reg_open_path(mem_ctx, path, desired_access, rpd(ctx)->token,
-			     key);
-
-	if (!W_ERROR_IS_OK(werr)) {
-		DEBUG(5, ("Error opening registry path '%s': %s\n",
-			  path, dos_errstr(werr)));
-	}
-
-done:
-	return werr;
+	return (!smbconf_reg_valname_forbidden(valname) &&
+		lp_parameter_is_valid(valname));
 }
 
 /**
@@ -127,37 +80,20 @@ static WERROR smbconf_reg_open_service_key(TALLOC_CTX *mem_ctx,
 					   uint32 desired_access,
 					   struct registry_key **key)
 {
-	WERROR werr = WERR_OK;
-	char *path = NULL;
+	WERROR werr;
 
 	if (servicename == NULL) {
-		path = talloc_strdup(mem_ctx, ctx->path);
-	} else {
-		path = talloc_asprintf(mem_ctx, "%s\\%s", ctx->path,
-				       servicename);
+		*key = rpd(ctx)->base_key;
+		return WERR_OK;
 	}
-	if (path == NULL) {
-		werr = WERR_NOMEM;
-		goto done;
+	werr = reg_openkey(mem_ctx, rpd(ctx)->base_key, servicename,
+			   desired_access, key);
+
+	if (W_ERROR_EQUAL(werr, WERR_BADFILE)) {
+		werr = WERR_NO_SUCH_SERVICE;
 	}
 
-	werr = smbconf_reg_open_path(mem_ctx, ctx, path, desired_access, key);
-
-done:
-	TALLOC_FREE(path);
 	return werr;
-}
-
-/**
- * open the base key
- */
-static WERROR smbconf_reg_open_base_key(TALLOC_CTX *mem_ctx,
-					struct smbconf_ctx *ctx,
-					uint32 desired_access,
-					struct registry_key **key)
-{
-	return smbconf_reg_open_path(mem_ctx, ctx, ctx->path, desired_access,
-				     key);
 }
 
 /**
@@ -175,7 +111,7 @@ static bool smbconf_value_exists(struct registry_key *key, const char *param)
 		ret = true;
 	}
 
-	TALLOC_FREE(ctx);
+	talloc_free(ctx);
 	return ret;
 }
 
@@ -188,7 +124,6 @@ static WERROR smbconf_reg_create_service_key(TALLOC_CTX *mem_ctx,
 					     struct registry_key **newkey)
 {
 	WERROR werr = WERR_OK;
-	struct registry_key *create_parent = NULL;
 	TALLOC_CTX *create_ctx;
 	enum winreg_CreateAction action = REG_ACTION_NONE;
 
@@ -197,13 +132,7 @@ static WERROR smbconf_reg_create_service_key(TALLOC_CTX *mem_ctx,
 	 * and will be destroyed when leaving this function... */
 	create_ctx = talloc_stackframe();
 
-	werr = smbconf_reg_open_base_key(create_ctx, ctx, REG_KEY_WRITE,
-					 &create_parent);
-	if (!W_ERROR_IS_OK(werr)) {
-		goto done;
-	}
-
-	werr = reg_createkey(mem_ctx, create_parent, subkeyname,
+	werr = reg_createkey(mem_ctx, rpd(ctx)->base_key, subkeyname,
 			     REG_KEY_WRITE, newkey, &action);
 	if (W_ERROR_IS_OK(werr) && (action != REG_CREATED_NEW_KEY)) {
 		DEBUG(10, ("Key '%s' already exists.\n", subkeyname));
@@ -214,8 +143,7 @@ static WERROR smbconf_reg_create_service_key(TALLOC_CTX *mem_ctx,
 			 subkeyname, dos_errstr(werr)));
 	}
 
-done:
-	TALLOC_FREE(create_ctx);
+	talloc_free(create_ctx);
 	return werr;
 }
 
@@ -265,7 +193,7 @@ static WERROR smbconf_reg_set_value(struct registry_key *key,
 	if (!strequal(subkeyname, GLOBAL_NAME) &&
 	    lp_parameter_is_global(valname))
 	{
-		DEBUG(5, ("Global paramter '%s' not allowed in "
+		DEBUG(5, ("Global parameter '%s' not allowed in "
 			  "service definition ('%s').\n", canon_valname,
 			  subkeyname));
 		werr = WERR_INVALID_PARAM;
@@ -330,7 +258,7 @@ static WERROR smbconf_reg_set_multi_sz_value(struct registry_key *key,
 	}
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -435,7 +363,7 @@ static WERROR smbconf_reg_get_includes_internal(TALLOC_CTX *mem_ctx,
 	}
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -532,7 +460,7 @@ static WERROR smbconf_reg_get_values(TALLOC_CTX *mem_ctx,
 	}
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -591,7 +519,7 @@ static WERROR smbconf_reg_delete_values(struct registry_key *key)
 	werr = WERR_OK;
 
 done:
-	TALLOC_FREE(mem_ctx);
+	talloc_free(mem_ctx);
 	return werr;
 }
 
@@ -607,6 +535,7 @@ done:
 static WERROR smbconf_reg_init(struct smbconf_ctx *ctx, const char *path)
 {
 	WERROR werr = WERR_OK;
+	struct nt_user_token *token;
 
 	if (path == NULL) {
 		path = KEY_SMBCONF;
@@ -619,8 +548,7 @@ static WERROR smbconf_reg_init(struct smbconf_ctx *ctx, const char *path)
 
 	ctx->data = TALLOC_ZERO_P(ctx, struct reg_private_data);
 
-	werr = ntstatus_to_werror(registry_create_admin_token(ctx,
-							&(rpd(ctx)->token)));
+	werr = ntstatus_to_werror(registry_create_admin_token(ctx, &token));
 	if (!W_ERROR_IS_OK(werr)) {
 		DEBUG(1, ("Error creating admin token\n"));
 		goto done;
@@ -632,6 +560,19 @@ static WERROR smbconf_reg_init(struct smbconf_ctx *ctx, const char *path)
 		goto done;
 	}
 
+	werr = ctx->ops->open_conf(ctx);
+	if (!W_ERROR_IS_OK(werr)) {
+		DEBUG(1, ("Error opening the registry.\n"));
+		goto done;
+	}
+
+	werr = reg_open_path(ctx, ctx->path,
+			     SEC_RIGHTS_ENUM_SUBKEYS | REG_KEY_WRITE,
+			     token, &rpd(ctx)->base_key);
+	if (!W_ERROR_IS_OK(werr)) {
+		goto done;
+	}
+
 done:
 	return werr;
 }
@@ -639,6 +580,27 @@ done:
 static int smbconf_reg_shutdown(struct smbconf_ctx *ctx)
 {
 	return ctx->ops->close_conf(ctx);
+}
+
+static bool smbconf_reg_requires_messaging(struct smbconf_ctx *ctx)
+{
+#ifdef CLUSTER_SUPPORT
+	if (lp_clustering() && lp_parm_bool(-1, "ctdb", "registry.tdb", true)) {
+		return true;
+	}
+#endif
+	return false;
+}
+
+static bool smbconf_reg_is_writeable(struct smbconf_ctx *ctx)
+{
+	/*
+	 * The backend has write support.
+	 *
+	 *  TODO: add access checks whether the concrete
+	 *  config source is really writeable by the calling user.
+	 */
+	return true;
 }
 
 static WERROR smbconf_reg_open(struct smbconf_ctx *ctx)
@@ -701,6 +663,13 @@ static WERROR smbconf_reg_drop(struct smbconf_ctx *ctx)
 	struct registry_key *new_key = NULL;
 	TALLOC_CTX* mem_ctx = talloc_stackframe();
 	enum winreg_CreateAction action;
+	struct nt_user_token *token;
+
+	werr = ntstatus_to_werror(registry_create_admin_token(ctx, &token));
+	if (!W_ERROR_IS_OK(werr)) {
+		DEBUG(1, ("Error creating admin token\n"));
+		goto done;
+	}
 
 	path = talloc_strdup(mem_ctx, ctx->path);
 	if (path == NULL) {
@@ -709,8 +678,8 @@ static WERROR smbconf_reg_drop(struct smbconf_ctx *ctx)
 	}
 	p = strrchr(path, '\\');
 	*p = '\0';
-	werr = smbconf_reg_open_path(mem_ctx, ctx, path, REG_KEY_WRITE,
-				     &parent_key);
+	werr = reg_open_path(mem_ctx, path, REG_KEY_WRITE, token,
+			     &parent_key);
 
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -726,7 +695,7 @@ static WERROR smbconf_reg_drop(struct smbconf_ctx *ctx)
 			     &new_key, &action);
 
 done:
-	TALLOC_FREE(mem_ctx);
+	talloc_free(mem_ctx);
 	return werr;
 }
 
@@ -743,7 +712,6 @@ static WERROR smbconf_reg_get_share_names(struct smbconf_ctx *ctx,
 	uint32_t added_count = 0;
 	TALLOC_CTX *tmp_ctx = NULL;
 	WERROR werr = WERR_OK;
-	struct registry_key *key = NULL;
 	char *subkey_name = NULL;
 	char **tmp_share_names = NULL;
 
@@ -755,13 +723,8 @@ static WERROR smbconf_reg_get_share_names(struct smbconf_ctx *ctx,
 	tmp_ctx = talloc_stackframe();
 
 	/* if there are values in the base key, return NULL as share name */
-	werr = smbconf_reg_open_base_key(tmp_ctx, ctx,
-					 SEC_RIGHTS_ENUM_SUBKEYS, &key);
-	if (!W_ERROR_IS_OK(werr)) {
-		goto done;
-	}
 
-	if (smbconf_reg_key_has_values(key)) {
+	if (smbconf_reg_key_has_values(rpd(ctx)->base_key)) {
 		werr = smbconf_add_string_to_array(tmp_ctx, &tmp_share_names,
 						   0, NULL);
 		if (!W_ERROR_IS_OK(werr)) {
@@ -781,7 +744,8 @@ static WERROR smbconf_reg_get_share_names(struct smbconf_ctx *ctx,
 	}
 
 	for (count = 0;
-	     werr = reg_enumkey(tmp_ctx, key, count, &subkey_name, NULL),
+	     werr = reg_enumkey(tmp_ctx, rpd(ctx)->base_key, count,
+				&subkey_name, NULL),
 	     W_ERROR_IS_OK(werr);
 	     count++)
 	{
@@ -811,7 +775,7 @@ static WERROR smbconf_reg_get_share_names(struct smbconf_ctx *ctx,
 	}
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -832,7 +796,7 @@ static bool smbconf_reg_share_exists(struct smbconf_ctx *ctx,
 		ret = true;
 	}
 
-	TALLOC_FREE(mem_ctx);
+	talloc_free(mem_ctx);
 	return ret;
 }
 
@@ -843,18 +807,16 @@ static WERROR smbconf_reg_create_share(struct smbconf_ctx *ctx,
 				       const char *servicename)
 {
 	WERROR werr;
-	TALLOC_CTX *mem_ctx = talloc_stackframe();
 	struct registry_key *key = NULL;
 
 	if (servicename == NULL) {
-		werr = smbconf_reg_open_base_key(mem_ctx, ctx, REG_KEY_WRITE,
-						 &key);
-	} else {
-		werr = smbconf_reg_create_service_key(mem_ctx, ctx,
-						      servicename, &key);
+		return WERR_OK;
 	}
 
-	TALLOC_FREE(mem_ctx);
+	werr = smbconf_reg_create_service_key(talloc_tos(), ctx,
+					      servicename, &key);
+
+	talloc_free(key);
 	return werr;
 }
 
@@ -901,7 +863,7 @@ static WERROR smbconf_reg_get_share(struct smbconf_ctx *ctx,
 	}
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -912,22 +874,16 @@ static WERROR smbconf_reg_delete_share(struct smbconf_ctx *ctx,
 				       const char *servicename)
 {
 	WERROR werr = WERR_OK;
-	struct registry_key *key = NULL;
 	TALLOC_CTX *mem_ctx = talloc_stackframe();
 
-	werr = smbconf_reg_open_base_key(mem_ctx, ctx, REG_KEY_WRITE, &key);
-	if (!W_ERROR_IS_OK(werr)) {
-		goto done;
-	}
-
 	if (servicename != NULL) {
-		werr = reg_deletekey_recursive(key, key, servicename);
+		werr = reg_deletekey_recursive(mem_ctx, rpd(ctx)->base_key,
+					       servicename);
 	} else {
-		werr = smbconf_reg_delete_values(key);
+		werr = smbconf_reg_delete_values(rpd(ctx)->base_key);
 	}
 
-done:
-	TALLOC_FREE(mem_ctx);
+	talloc_free(mem_ctx);
 	return werr;
 }
 
@@ -952,7 +908,7 @@ static WERROR smbconf_reg_set_parameter(struct smbconf_ctx *ctx,
 	werr = smbconf_reg_set_value(key, param, valstr);
 
 done:
-	TALLOC_FREE(mem_ctx);
+	talloc_free(mem_ctx);
 	return werr;
 }
 
@@ -997,8 +953,8 @@ static WERROR smbconf_reg_get_parameter(struct smbconf_ctx *ctx,
 	}
 
 done:
-	TALLOC_FREE(key);
-	TALLOC_FREE(value);
+	talloc_free(key);
+	talloc_free(value);
 	return werr;
 }
 
@@ -1032,7 +988,7 @@ static WERROR smbconf_reg_delete_parameter(struct smbconf_ctx *ctx,
 	werr = reg_deletevalue(key, param);
 
 done:
-	TALLOC_FREE(mem_ctx);
+	talloc_free(mem_ctx);
 	return werr;
 }
 
@@ -1056,7 +1012,7 @@ static WERROR smbconf_reg_get_includes(struct smbconf_ctx *ctx,
 						 includes);
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -1086,7 +1042,7 @@ static WERROR smbconf_reg_set_includes(struct smbconf_ctx *ctx,
 	}
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
 }
 
@@ -1111,13 +1067,30 @@ static WERROR smbconf_reg_delete_includes(struct smbconf_ctx *ctx,
 
 
 done:
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 	return werr;
+}
+
+static WERROR smbconf_reg_transaction_start(struct smbconf_ctx *ctx)
+{
+	return regdb_transaction_start();
+}
+
+static WERROR smbconf_reg_transaction_commit(struct smbconf_ctx *ctx)
+{
+	return regdb_transaction_commit();
+}
+
+static WERROR smbconf_reg_transaction_cancel(struct smbconf_ctx *ctx)
+{
+	return regdb_transaction_cancel();
 }
 
 struct smbconf_ops smbconf_ops_reg = {
 	.init			= smbconf_reg_init,
 	.shutdown		= smbconf_reg_shutdown,
+	.requires_messaging	= smbconf_reg_requires_messaging,
+	.is_writeable		= smbconf_reg_is_writeable,
 	.open_conf		= smbconf_reg_open,
 	.close_conf		= smbconf_reg_close,
 	.get_csn		= smbconf_reg_get_csn,
@@ -1133,6 +1106,9 @@ struct smbconf_ops smbconf_ops_reg = {
 	.get_includes		= smbconf_reg_get_includes,
 	.set_includes		= smbconf_reg_set_includes,
 	.delete_includes	= smbconf_reg_delete_includes,
+	.transaction_start	= smbconf_reg_transaction_start,
+	.transaction_commit	= smbconf_reg_transaction_commit,
+	.transaction_cancel	= smbconf_reg_transaction_cancel,
 };
 
 

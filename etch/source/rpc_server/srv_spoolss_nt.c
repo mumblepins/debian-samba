@@ -176,7 +176,7 @@ static void srv_spoolss_replycloseprinter(int snum, POLICY_HND *handle)
 	/* if it's the last connection, deconnect the IPC$ share */
 	if (smb_connections==1) {
 
-		cli_shutdown( notify_cli_pipe->cli );
+		cli_shutdown( rpc_pipe_np_smb_conn(notify_cli_pipe) );
 		notify_cli_pipe = NULL; /* The above call shuts downn the pipe also. */
 
 		messaging_deregister(smbd_messaging_context(),
@@ -1660,7 +1660,8 @@ WERROR _spoolss_open_printer_ex( pipes_struct *p, SPOOL_Q_OPEN_PRINTER_EX *q_u, 
 			    !user_has_privileges(p->pipe_user.nt_user_token,
 						 &se_printop ) &&
 			    !token_contains_name_in_list(
-				    uidtoname(p->pipe_user.ut.uid), NULL,
+				    uidtoname(p->pipe_user.ut.uid),
+				    NULL, NULL,
 				    p->pipe_user.nt_user_token,
 				    lp_printer_admin(snum))) {
 				close_printer_handle(p, handle);
@@ -1714,9 +1715,9 @@ WERROR _spoolss_open_printer_ex( pipes_struct *p, SPOOL_Q_OPEN_PRINTER_EX *q_u, 
 			return WERR_ACCESS_DENIED;
 		}
 
-		if (!user_ok_token(uidtoname(p->pipe_user.ut.uid),
+		if (!user_ok_token(uidtoname(p->pipe_user.ut.uid), NULL,
 				   p->pipe_user.nt_user_token, snum) ||
-		    !print_access_check(&p->pipe_user, snum,
+		    !print_access_check(p->server_info, snum,
 					printer_default->access_required)) {
 			DEBUG(3, ("access DENIED for printer open\n"));
 			close_printer_handle(p, handle);
@@ -2019,8 +2020,10 @@ WERROR _spoolss_deleteprinterdriver(pipes_struct *p, SPOOL_Q_DELETEPRINTERDRIVER
 
 	if ( (p->pipe_user.ut.uid != 0)
 		&& !user_has_privileges(p->pipe_user.nt_user_token, &se_printop )
-		&& !token_contains_name_in_list( uidtoname(p->pipe_user.ut.uid),
-		    NULL, p->pipe_user.nt_user_token, lp_printer_admin(-1)) )
+		&& !token_contains_name_in_list(
+			uidtoname(p->pipe_user.ut.uid), NULL,
+			NULL, p->pipe_user.nt_user_token,
+			lp_printer_admin(-1)) )
 	{
 		return WERR_ACCESS_DENIED;
 	}
@@ -2114,8 +2117,9 @@ WERROR _spoolss_deleteprinterdriverex(pipes_struct *p, SPOOL_Q_DELETEPRINTERDRIV
 
 	if ( (p->pipe_user.ut.uid != 0)
 		&& !user_has_privileges(p->pipe_user.nt_user_token, &se_printop )
-		&& !token_contains_name_in_list( uidtoname(p->pipe_user.ut.uid),
-		    NULL, p->pipe_user.nt_user_token, lp_printer_admin(-1)) )
+		&& !token_contains_name_in_list(
+			uidtoname(p->pipe_user.ut.uid), NULL, NULL,
+			p->pipe_user.nt_user_token, lp_printer_admin(-1)) )
 	{
 		return WERR_ACCESS_DENIED;
 	}
@@ -2613,16 +2617,13 @@ static bool spoolss_connect_to_client(struct rpc_pipe_client **pp_pipe,
 	 * Now start the NT Domain stuff :-).
 	 */
 
-	if ( !(*pp_pipe = cli_rpc_pipe_open_noauth(the_cli, PI_SPOOLSS, &ret)) ) {
+	ret = cli_rpc_pipe_open_noauth(the_cli, &syntax_spoolss, pp_pipe);
+	if (!NT_STATUS_IS_OK(ret)) {
 		DEBUG(2,("spoolss_connect_to_client: unable to open the spoolss pipe on machine %s. Error was : %s.\n",
 			remote_machine, nt_errstr(ret)));
 		cli_shutdown(the_cli);
 		return False;
 	}
-
-	/* make sure to save the cli_state pointer.  Keep its own talloc_ctx */
-
-	(*pp_pipe)->cli = the_cli;
 
 	return True;
 }
@@ -2732,9 +2733,8 @@ WERROR _spoolss_rffpcnex(pipes_struct *p, SPOOL_Q_RFFPCNEX *q_u, SPOOL_R_RFFPCNE
 			!get_printer_snum(p, handle, &snum, NULL) )
 		return WERR_BADFID;
 
-	if (!interpret_string_addr(&client_ss,
-				p->conn->client_address,
-				AI_NUMERICHOST)) {
+	if (!interpret_string_addr(&client_ss, p->client_address,
+				   AI_NUMERICHOST)) {
 		return WERR_SERVER_UNAVAILABLE;
 	}
 
@@ -4729,6 +4729,10 @@ WERROR _spoolss_enumprinters( pipes_struct *p, SPOOL_Q_ENUMPRINTERS *q_u, SPOOL_
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -5083,6 +5087,10 @@ WERROR _spoolss_getprinter(pipes_struct *p, SPOOL_Q_GETPRINTER *q_u, SPOOL_R_GET
 	/* that's an [in out] buffer */
 
 	if (!q_u->buffer && (offered!=0)) {
+		return WERR_INVALID_PARAM;
+	}
+
+	if (offered > MAX_RPC_DATA_SIZE) {
 		return WERR_INVALID_PARAM;
 	}
 
@@ -5747,6 +5755,10 @@ WERROR _spoolss_getprinterdriver2(pipes_struct *p, SPOOL_Q_GETPRINTERDRIVER2 *q_
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -5875,7 +5887,8 @@ WERROR _spoolss_startdocprinter(pipes_struct *p, SPOOL_Q_STARTDOCPRINTER *q_u, S
 
 	jobname = unistr2_to_ascii_talloc(ctx, &info_1->docname);
 
-	Printer->jobid = print_job_start(&p->pipe_user, snum, jobname, Printer->nt_devmode);
+	Printer->jobid = print_job_start(p->server_info, snum, jobname,
+					 Printer->nt_devmode);
 
 	/* An error occured in print_job_start() so return an appropriate
 	   NT error code. */
@@ -5962,18 +5975,18 @@ static WERROR control_printer(POLICY_HND *handle, uint32 command,
 
 	switch (command) {
 	case PRINTER_CONTROL_PAUSE:
-		if (print_queue_pause(&p->pipe_user, snum, &errcode)) {
+		if (print_queue_pause(p->server_info, snum, &errcode)) {
 			errcode = WERR_OK;
 		}
 		break;
 	case PRINTER_CONTROL_RESUME:
 	case PRINTER_CONTROL_UNPAUSE:
-		if (print_queue_resume(&p->pipe_user, snum, &errcode)) {
+		if (print_queue_resume(p->server_info, snum, &errcode)) {
 			errcode = WERR_OK;
 		}
 		break;
 	case PRINTER_CONTROL_PURGE:
-		if (print_queue_purge(&p->pipe_user, snum, &errcode)) {
+		if (print_queue_purge(p->server_info, snum, &errcode)) {
 			errcode = WERR_OK;
 		}
 		break;
@@ -6005,7 +6018,7 @@ WERROR _spoolss_abortprinter(pipes_struct *p, SPOOL_Q_ABORTPRINTER *q_u, SPOOL_R
 	if (!get_printer_snum(p, handle, &snum, NULL))
 		return WERR_BADFID;
 
-	print_job_delete( &p->pipe_user, snum, Printer->jobid, &errcode );
+	print_job_delete(p->server_info, snum, Printer->jobid, &errcode );
 
 	return errcode;
 }
@@ -6820,6 +6833,10 @@ WERROR _spoolss_enumjobs( pipes_struct *p, SPOOL_Q_ENUMJOBS *q_u, SPOOL_R_ENUMJO
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -6895,18 +6912,18 @@ WERROR _spoolss_setjob(pipes_struct *p, SPOOL_Q_SETJOB *q_u, SPOOL_R_SETJOB *r_u
 	switch (command) {
 	case JOB_CONTROL_CANCEL:
 	case JOB_CONTROL_DELETE:
-		if (print_job_delete(&p->pipe_user, snum, jobid, &errcode)) {
+		if (print_job_delete(p->server_info, snum, jobid, &errcode)) {
 			errcode = WERR_OK;
 		}
 		break;
 	case JOB_CONTROL_PAUSE:
-		if (print_job_pause(&p->pipe_user, snum, jobid, &errcode)) {
+		if (print_job_pause(p->server_info, snum, jobid, &errcode)) {
 			errcode = WERR_OK;
 		}
 		break;
 	case JOB_CONTROL_RESTART:
 	case JOB_CONTROL_RESUME:
-		if (print_job_resume(&p->pipe_user, snum, jobid, &errcode)) {
+		if (print_job_resume(p->server_info, snum, jobid, &errcode)) {
 			errcode = WERR_OK;
 		}
 		break;
@@ -7196,6 +7213,10 @@ WERROR _spoolss_enumprinterdrivers( pipes_struct *p, SPOOL_Q_ENUMPRINTERDRIVERS 
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -7260,6 +7281,10 @@ WERROR _spoolss_enumforms(pipes_struct *p, SPOOL_Q_ENUMFORMS *q_u, SPOOL_R_ENUMF
 	/* that's an [in out] buffer */
 
 	if (!q_u->buffer && (offered!=0) ) {
+		return WERR_INVALID_PARAM;
+	}
+
+	if (offered > MAX_RPC_DATA_SIZE) {
 		return WERR_INVALID_PARAM;
 	}
 
@@ -7671,6 +7696,10 @@ WERROR _spoolss_enumports( pipes_struct *p, SPOOL_Q_ENUMPORTS *q_u, SPOOL_R_ENUM
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -8077,6 +8106,10 @@ WERROR _spoolss_getprinterdriverdirectory(pipes_struct *p, SPOOL_Q_GETPRINTERDRI
 	/* that's an [in out] buffer */
 
 	if (!q_u->buffer && (offered!=0)) {
+		return WERR_INVALID_PARAM;
+	}
+
+	if (offered > MAX_RPC_DATA_SIZE) {
 		return WERR_INVALID_PARAM;
 	}
 
@@ -8707,6 +8740,10 @@ WERROR _spoolss_enumprintprocessors(pipes_struct *p, SPOOL_Q_ENUMPRINTPROCESSORS
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -8783,6 +8820,10 @@ WERROR _spoolss_enumprintprocdatatypes(pipes_struct *p, SPOOL_Q_ENUMPRINTPROCDAT
 	/* that's an [in out] buffer */
 
 	if (!q_u->buffer && (offered!=0)) {
+		return WERR_INVALID_PARAM;
+	}
+
+	if (offered > MAX_RPC_DATA_SIZE) {
 		return WERR_INVALID_PARAM;
 	}
 
@@ -8911,6 +8952,10 @@ WERROR _spoolss_enumprintmonitors(pipes_struct *p, SPOOL_Q_ENUMPRINTMONITORS *q_
 	/* that's an [in out] buffer */
 
 	if (!q_u->buffer && (offered!=0)) {
+		return WERR_INVALID_PARAM;
+	}
+
+	if (offered > MAX_RPC_DATA_SIZE) {
 		return WERR_INVALID_PARAM;
 	}
 
@@ -9087,6 +9132,10 @@ WERROR _spoolss_getjob( pipes_struct *p, SPOOL_Q_GETJOB *q_u, SPOOL_R_GETJOB *r_
 	/* that's an [in out] buffer */
 
 	if (!q_u->buffer && (offered!=0)) {
+		return WERR_INVALID_PARAM;
+	}
+
+	if (offered > MAX_RPC_DATA_SIZE) {
 		return WERR_INVALID_PARAM;
 	}
 
@@ -9731,6 +9780,10 @@ WERROR _spoolss_getprintprocessordirectory(pipes_struct *p, SPOOL_Q_GETPRINTPROC
 		return WERR_INVALID_PARAM;
 	}
 
+	if (offered > MAX_RPC_DATA_SIZE) {
+		return WERR_INVALID_PARAM;
+	}
+
 	rpcbuf_move(q_u->buffer, &r_u->buffer);
 	buffer = r_u->buffer;
 
@@ -9930,7 +9983,8 @@ WERROR _spoolss_xcvdataport(pipes_struct *p, SPOOL_Q_XCVDATAPORT *q_u, SPOOL_R_X
 
 	/* Allocate the outgoing buffer */
 
-	rpcbuf_init( &r_u->outdata, q_u->offered, p->mem_ctx );
+	if (!rpcbuf_init( &r_u->outdata, q_u->offered, p->mem_ctx ))
+		return WERR_NOMEM;
 
 	switch ( Printer->printer_type ) {
 	case SPLHND_PORTMON_TCP:

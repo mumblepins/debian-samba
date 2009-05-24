@@ -29,9 +29,9 @@
  Initialise idmap database. 
 *****************************/
 
-static NTSTATUS idmap_nss_int_init(struct idmap_domain *dom)
+static NTSTATUS idmap_nss_int_init(struct idmap_domain *dom,
+				   const char *params)
 {	
-	dom->initialized = True;
 	return NT_STATUS_OK;
 }
 
@@ -44,10 +44,11 @@ static NTSTATUS idmap_nss_unixids_to_sids(struct idmap_domain *dom, struct id_ma
 	TALLOC_CTX *ctx;
 	int i;
 
-	if (! dom->initialized) {
-		return NT_STATUS_UNSUCCESSFUL;
+	/* initialize the status to avoid suprise */
+	for (i = 0; ids[i]; i++) {
+		ids[i]->status = ID_UNKNOWN;
 	}
-
+	
 	ctx = talloc_new(dom);
 	if ( ! ctx) {
 		DEBUG(0, ("Out of memory!\n"));
@@ -134,10 +135,11 @@ static NTSTATUS idmap_nss_sids_to_unixids(struct idmap_domain *dom, struct id_ma
 	TALLOC_CTX *ctx;
 	int i;
 
-	if (! dom->initialized) {
-		return NT_STATUS_UNSUCCESSFUL;
+	/* initialize the status to avoid suprise */
+	for (i = 0; ids[i]; i++) {
+		ids[i]->status = ID_UNKNOWN;
 	}
-
+	
 	ctx = talloc_new(dom);
 	if ( ! ctx) {
 		DEBUG(0, ("Out of memory!\n"));

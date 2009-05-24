@@ -1,5 +1,8 @@
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Define if building universal (internal helper macro) */
+#undef AC_APPLE_UNIVERSAL_BUILD
+
 /* Whether the host os is aix */
 #undef AIX
 
@@ -198,6 +201,15 @@
 /* Define to 1 if you have the <attr/xattr.h> header file. */
 #undef HAVE_ATTR_XATTR_H
 
+/* Define to 1 if you have the <avahi-client/client.h> header file. */
+#undef HAVE_AVAHI_CLIENT_CLIENT_H
+
+/* Define to 1 if you have the `avahi_client_new' function. */
+#undef HAVE_AVAHI_CLIENT_NEW
+
+/* Define to 1 if you have the <avahi-common/watch.h> header file. */
+#undef HAVE_AVAHI_COMMON_WATCH_H
+
 /* Define to 1 if you have the `backtrace_symbols' function. */
 #undef HAVE_BACKTRACE_SYMBOLS
 
@@ -301,11 +313,26 @@
 /* Define to 1 if you have the `crypt16' function. */
 #undef HAVE_CRYPT16
 
+/* Whether CTDB_CONTROL_TRANS2_COMMIT_RETRY() is available */
+#undef HAVE_CTDB_CONTROL_TRANS2_COMMIT_RETRY_DECL
+
+/* Define to 1 if you have the <ctdb.h> header file. */
+#undef HAVE_CTDB_H
+
+/* Define to 1 if you have the <ctdb_private.h> header file. */
+#undef HAVE_CTDB_PRIVATE_H
+
 /* Define to 1 if you have the <ctype.h> header file. */
 #undef HAVE_CTYPE_H
 
 /* Whether we have CUPS */
 #undef HAVE_CUPS
+
+/* Define to 1 if you have the <cups/cups.h> header file. */
+#undef HAVE_CUPS_CUPS_H
+
+/* Define to 1 if you have the <cups/language.h> header file. */
+#undef HAVE_CUPS_LANGUAGE_H
 
 /* Whether to use the Darwin-specific initgroups system call */
 #undef HAVE_DARWIN_INITGROUPS
@@ -350,6 +377,9 @@
 
 /* Define to 1 if you have the <devnm.h> header file. */
 #undef HAVE_DEVNM_H
+
+/* Define to 1 if you have the `dgettext' function. */
+#undef HAVE_DGETTEXT
 
 /* Define to 1 if you have the <direct.h> header file. */
 #undef HAVE_DIRECT_H
@@ -532,6 +562,9 @@
 /* Define to 1 if you have the `fremovexattr' function. */
 #undef HAVE_FREMOVEXATTR
 
+/* Whether statvfs.f_frsize exists */
+#undef HAVE_FRSIZE
+
 /* Define to 1 if you have the `fseek64' function. */
 #undef HAVE_FSEEK64
 
@@ -669,6 +702,9 @@
 
 /* Whether getspnam is available */
 #undef HAVE_GETSPNAM
+
+/* Define to 1 if you have the `gettext' function. */
+#undef HAVE_GETTEXT
 
 /* Whether gettimeofday takes a tz argument */
 #undef HAVE_GETTIMEOFDAY_TZ
@@ -1056,6 +1092,9 @@
 /* Define to 1 if you have the `asn1' library (-lasn1). */
 #undef HAVE_LIBASN1
 
+/* Define to 1 if you have the `avahi-client' library (-lavahi-client). */
+#undef HAVE_LIBAVAHI_CLIENT
+
 /* Define to 1 if you have the `com_err' library (-lcom_err). */
 #undef HAVE_LIBCOM_ERR
 
@@ -1082,6 +1121,9 @@
 
 /* Define to 1 if you have the `inet' library (-linet). */
 #undef HAVE_LIBINET
+
+/* Define to 1 if you have the <libintl.h> header file. */
+#undef HAVE_LIBINTL_H
 
 /* Define to 1 if you have the `ipv6' library (-lipv6). */
 #undef HAVE_LIBIPV6
@@ -1689,7 +1731,13 @@
 /* Whether stat64() is available */
 #undef HAVE_STAT64
 
-/* whether struct stat has sub-second timestamps without struct timespec */
+/* Whether statvfs.f_flag exists */
+#undef HAVE_STATVFS_F_FLAG
+
+/* Whether statvfs.f_flags exists */
+#undef HAVE_STATVFS_F_FLAGS
+
+/* whether struct stat has sub-second timestamps in st_uXtime */
 #undef HAVE_STAT_HIRES_TIMESTAMPS
 
 /* whether struct stat contains st_atim */
@@ -1697,6 +1745,12 @@
 
 /* whether struct stat contains st_atimensec */
 #undef HAVE_STAT_ST_ATIMENSEC
+
+/* whether struct stat contains st_atimespec */
+#undef HAVE_STAT_ST_ATIMESPEC
+
+/* whether struct stat contains st_atime_n */
+#undef HAVE_STAT_ST_ATIME_N
 
 /* whether struct stat contains st_birthtime */
 #undef HAVE_STAT_ST_BIRTHTIME
@@ -1719,6 +1773,12 @@
 /* whether struct stat contains st_ctimensec */
 #undef HAVE_STAT_ST_CTIMENSEC
 
+/* whether struct stat contains st_ctimespec */
+#undef HAVE_STAT_ST_CTIMESPEC
+
+/* whether struct stat contains st_ctime_n */
+#undef HAVE_STAT_ST_CTIME_N
+
 /* Whether the stat struct has a st_flags member */
 #undef HAVE_STAT_ST_FLAGS
 
@@ -1727,6 +1787,21 @@
 
 /* whether struct stat contains st_mtimensec */
 #undef HAVE_STAT_ST_MTIMENSEC
+
+/* whether struct stat contains st_mtimepec */
+#undef HAVE_STAT_ST_MTIMESPEC
+
+/* whether struct stat contains st_mtime_n */
+#undef HAVE_STAT_ST_MTIME_N
+
+/* whether struct stat contains st_uatime */
+#undef HAVE_STAT_ST_UATIME
+
+/* whether struct stat contains st_uctime */
+#undef HAVE_STAT_ST_UCTIME
+
+/* whether struct stat contains st_umtime */
+#undef HAVE_STAT_ST_UMTIME
 
 /* Define to 1 if you have the <stdarg.h> header file. */
 #undef HAVE_STDARG_H
@@ -1811,6 +1886,12 @@
 
 /* Define to 1 if the system has the type `struct addrinfo'. */
 #undef HAVE_STRUCT_ADDRINFO
+
+/* ctdb ipv4 support */
+#undef HAVE_STRUCT_CTDB_CONTROL_TCP
+
+/* ctdb ipv6 support */
+#undef HAVE_STRUCT_CTDB_CONTROL_TCP_ADDR
 
 /* Whether the 'DIR64' abstract data type is available */
 #undef HAVE_STRUCT_DIR64
@@ -1924,6 +2005,9 @@
 
 /* Define to 1 if you have the <sys/id.h> header file. */
 #undef HAVE_SYS_ID_H
+
+/* Define to 1 if you have the <sys/inotify.h> header file. */
+#undef HAVE_SYS_INOTIFY_H
 
 /* Define to 1 if you have the <sys/ioctl.h> header file. */
 #undef HAVE_SYS_IOCTL_H
@@ -2650,6 +2734,9 @@
 /* Whether sysconf(_SC_PAGESIZE) is available */
 #undef SYSCONF_SC_PAGESIZE
 
+/* syslog facility to log to */
+#undef SYSLOG_FACILITY
+
 /* Whether this is a system V system */
 #undef SYSV
 
@@ -2680,6 +2767,28 @@
 /* Whether setuidx() is available */
 #undef USE_SETUIDX
 
+/* Enable extensions on AIX 3, Interix.  */
+#ifndef _ALL_SOURCE
+# undef _ALL_SOURCE
+#endif
+/* Enable GNU extensions on systems that have them.  */
+#ifndef _GNU_SOURCE
+# undef _GNU_SOURCE
+#endif
+/* Enable threading extensions on Solaris.  */
+#ifndef _POSIX_PTHREAD_SEMANTICS
+# undef _POSIX_PTHREAD_SEMANTICS
+#endif
+/* Enable extensions on HP NonStop.  */
+#ifndef _TANDEM_SOURCE
+# undef _TANDEM_SOURCE
+#endif
+/* Enable general extensions on Solaris.  */
+#ifndef __EXTENSIONS__
+# undef __EXTENSIONS__
+#endif
+
+
 /* Whether to include Active Directory support */
 #undef WITH_ADS
 
@@ -2691,6 +2800,9 @@
 
 /* Whether to include automount support */
 #undef WITH_AUTOMOUNT
+
+/* Whether to enable avahi support */
+#undef WITH_AVAHI_SUPPORT
 
 /* Whether to build mount.cifs and umount.cifs */
 #undef WITH_CIFSMOUNT
@@ -2737,19 +2849,20 @@
 /* Whether to build winbind */
 #undef WITH_WINBIND
 
-/* Define to 1 if your processor stores words with the most significant byte
-   first (like Motorola and SPARC, unlike Intel and VAX). */
-#undef WORDS_BIGENDIAN
+/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
+   significant byte first (like Motorola and SPARC, unlike Intel). */
+#if defined AC_APPLE_UNIVERSAL_BUILD
+# if defined __BIG_ENDIAN__
+#  define WORDS_BIGENDIAN 1
+# endif
+#else
+# ifndef WORDS_BIGENDIAN
+#  undef WORDS_BIGENDIAN
+# endif
+#endif
 
 /* xattr functions have additional options */
 #undef XATTR_ADD_OPT
-
-/* Define to 1 if on AIX 3.
-   System headers sometimes define this.
-   We just want to avoid a redefinition error message.  */
-#ifndef _ALL_SOURCE
-# undef _ALL_SOURCE
-#endif
 
 /* File offset bits */
 #undef _FILE_OFFSET_BITS
@@ -2802,17 +2915,6 @@
 # undef __CHAR_UNSIGNED__
 #endif
 
-/* Enable extensions on Solaris.  */
-#ifndef __EXTENSIONS__
-# undef __EXTENSIONS__
-#endif
-#ifndef _POSIX_PTHREAD_SEMANTICS
-# undef _POSIX_PTHREAD_SEMANTICS
-#endif
-#ifndef _TANDEM_SOURCE
-# undef _TANDEM_SOURCE
-#endif
-
 /* Whether to build auth_builtin as shared module */
 #undef auth_builtin_init
 
@@ -2849,11 +2951,29 @@
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
 
+/* ctdb ipv4 support */
+#undef ctdb_control_tcp
+
 /* Define to `int' if <sys/types.h> doesn't define. */
 #undef gid_t
 
+/* Whether to build gpext_registry as shared module */
+#undef gpext_registry_init
+
+/* Whether to build gpext_scripts as shared module */
+#undef gpext_scripts_init
+
+/* Whether to build gpext_security as shared module */
+#undef gpext_security_init
+
 /* Whether to build idmap_ad as shared module */
 #undef idmap_ad_init
+
+/* Whether to build idmap_adex as shared module */
+#undef idmap_adex_init
+
+/* Whether to build idmap_hash as shared module */
+#undef idmap_hash_init
 
 /* Whether to build idmap_ldap as shared module */
 #undef idmap_ldap_init
@@ -2982,6 +3102,9 @@
 #undef static_decl_charset
 
 /* Decl of Static init functions */
+#undef static_decl_gpext
+
+/* Decl of Static init functions */
 #undef static_decl_idmap
 
 /* Decl of Static init functions */
@@ -3001,6 +3124,9 @@
 
 /* Static init functions */
 #undef static_init_charset
+
+/* Static init functions */
+#undef static_init_gpext
 
 /* Static init functions */
 #undef static_init_idmap
@@ -3038,6 +3164,12 @@
 /* Define to `unsigned long long' if <sys/types.h> does not define. */
 #undef uintptr_t
 
+/* Whether to build vfs_acl_tdb as shared module */
+#undef vfs_acl_tdb_init
+
+/* Whether to build vfs_acl_xattr as shared module */
+#undef vfs_acl_xattr_init
+
 /* Whether to build vfs_afsacl as shared module */
 #undef vfs_afsacl_init
 
@@ -3070,6 +3202,9 @@
 
 /* Whether to build vfs_default_quota as shared module */
 #undef vfs_default_quota_init
+
+/* Whether to build vfs_dirsort as shared module */
+#undef vfs_dirsort_init
 
 /* Whether to build vfs_expand_msdfs as shared module */
 #undef vfs_expand_msdfs_init
@@ -3107,6 +3242,9 @@
 /* Whether to build vfs_prealloc as shared module */
 #undef vfs_prealloc_init
 
+/* Whether to build vfs_preopen as shared module */
+#undef vfs_preopen_init
+
 /* Whether to build vfs_readahead as shared module */
 #undef vfs_readahead_init
 
@@ -3121,6 +3259,9 @@
 
 /* Whether to build vfs_shadow_copy as shared module */
 #undef vfs_shadow_copy_init
+
+/* Whether to build vfs_smb_traffic_analyzer as shared module */
+#undef vfs_smb_traffic_analyzer_init
 
 /* Whether to build vfs_solarisacl as shared module */
 #undef vfs_solarisacl_init

@@ -118,6 +118,7 @@ SMBC_open_ctx(SMBCCTX *context,
 		if (!cli_resolve_path(frame, "", srv->cli, path,
                                       &targetcli, &targetpath)) {
 			d_printf("Could not resolve %s\n", path);
+                        errno = ENOENT;
 			SAFE_FREE(file);
 			TALLOC_FREE(frame);
 			return NULL;
@@ -298,6 +299,7 @@ SMBC_read_ctx(SMBCCTX *context,
 	if (!cli_resolve_path(frame, "", file->srv->cli, path,
                               &targetcli, &targetpath)) {
 		d_printf("Could not resolve %s\n", path);
+                errno = ENOENT;
 		TALLOC_FREE(frame);
 		return -1;
 	}
@@ -329,7 +331,7 @@ SMBC_read_ctx(SMBCCTX *context,
 ssize_t
 SMBC_write_ctx(SMBCCTX *context,
                SMBCFILE *file,
-               void *buf,
+               const void *buf,
                size_t count)
 {
 	int ret;
@@ -382,11 +384,12 @@ SMBC_write_ctx(SMBCCTX *context,
 		TALLOC_FREE(frame);
                 return -1;
         }
-        
+
 	/*d_printf(">>>write: resolving %s\n", path);*/
 	if (!cli_resolve_path(frame, "", file->srv->cli, path,
                               &targetcli, &targetpath)) {
 		d_printf("Could not resolve %s\n", path);
+                errno = ENOENT;
 		TALLOC_FREE(frame);
 		return -1;
 	}
@@ -462,6 +465,7 @@ SMBC_close_ctx(SMBCCTX *context,
 	if (!cli_resolve_path(frame, "", file->srv->cli, path,
                               &targetcli, &targetpath)) {
 		d_printf("Could not resolve %s\n", path);
+                errno = ENOENT;
 		TALLOC_FREE(frame);
 		return -1;
 	}
@@ -518,7 +522,7 @@ SMBC_getatr(SMBCCTX * context,
                 
 		errno = EINVAL;
 		TALLOC_FREE(frame);
- 		return -1;
+ 		return false;
  	}
         
 	/* path fixup for . and .. */
@@ -527,14 +531,14 @@ SMBC_getatr(SMBCCTX * context,
 		if (!fixedpath) {
 			errno = ENOMEM;
 			TALLOC_FREE(frame);
-			return -1;
+			return false;
 		}
 	} else {
 		fixedpath = talloc_strdup(frame, path);
 		if (!fixedpath) {
 			errno = ENOMEM;
 			TALLOC_FREE(frame);
-			return -1;
+			return false;
 		}
 		trim_string(fixedpath, NULL, "\\..");
 		trim_string(fixedpath, NULL, "\\.");
@@ -544,6 +548,7 @@ SMBC_getatr(SMBCCTX * context,
 	if (!cli_resolve_path(frame, "", srv->cli, fixedpath,
                               &targetcli, &targetpath)) {
 		d_printf("Couldn't resolve %s\n", path);
+                errno = ENOENT;
 		TALLOC_FREE(frame);
 		return False;
 	}
@@ -756,6 +761,7 @@ SMBC_lseek_ctx(SMBCCTX *context,
 		if (!cli_resolve_path(frame, "", file->srv->cli, path,
                                       &targetcli, &targetpath)) {
 			d_printf("Could not resolve %s\n", path);
+                        errno = ENOENT;
 			TALLOC_FREE(frame);
 			return -1;
 		}
@@ -847,6 +853,7 @@ SMBC_ftruncate_ctx(SMBCCTX *context,
 	if (!cli_resolve_path(frame, "", file->srv->cli, path,
                               &targetcli, &targetpath)) {
 		d_printf("Could not resolve %s\n", path);
+                errno = ENOENT;
 		TALLOC_FREE(frame);
 		return -1;
 	}

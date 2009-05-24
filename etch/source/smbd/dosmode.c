@@ -198,13 +198,16 @@ static bool get_ea_dos_attribute(connection_struct *conn, const char *path,SMB_S
 
 	sizeret = SMB_VFS_GETXATTR(conn, path, SAMBA_XATTR_DOS_ATTRIB, attrstr, sizeof(attrstr));
 	if (sizeret == -1) {
-#if defined(ENOTSUP) && defined(ENOATTR)
-		if ((errno != ENOTSUP) && (errno != ENOATTR) && (errno != EACCES) && (errno != EPERM)) {
+		if (errno == ENOSYS
+#if defined(ENOTSUP)
+			|| errno == ENOTSUP) {
+#else
+				) {
+#endif
 			DEBUG(1,("get_ea_dos_attributes: Cannot get attribute from EA on file %s: Error = %s\n",
 				path, strerror(errno) ));
 			set_store_dos_attributes(SNUM(conn), False);
 		}
-#endif
 		return False;
 	}
 	/* Null terminate string. */
@@ -258,6 +261,8 @@ static bool set_ea_dos_attribute(connection_struct *conn, const char *path, SMB_
 #else
 				) {
 #endif
+				DEBUG(1,("set_ea_dos_attributes: Cannot set attribute EA on file %s: Error = %s\n",
+					path, strerror(errno) ));
 				set_store_dos_attributes(SNUM(conn), False);
 			}
 			return False;
@@ -314,8 +319,10 @@ uint32 dos_mode_msdfs(connection_struct *conn, const char *path,SMB_STRUCT_STAT 
 		} else {
 			p = path;
 		}
-		
-		if (p[0] == '.' && p[1] != '.' && p[1] != 0) {
+
+		/* Only . and .. are not hidden. */
+		if (p[0] == '.' && !((p[1] == '\0') ||
+				(p[1] == '.' && p[2] == '\0'))) {
 			result |= aHIDDEN;
 		}
 	}
@@ -366,8 +373,10 @@ uint32 dos_mode(connection_struct *conn, const char *path,SMB_STRUCT_STAT *sbuf)
 		} else {
 			p = path;
 		}
-		
-		if (p[0] == '.' && p[1] != '.' && p[1] != 0) {
+
+		/* Only . and .. are not hidden. */
+		if (p[0] == '.' && !((p[1] == '\0') ||
+				(p[1] == '.' && p[2] == '\0'))) {
 			result |= aHIDDEN;
 		}
 	}

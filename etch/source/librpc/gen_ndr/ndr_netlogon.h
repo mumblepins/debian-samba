@@ -6,6 +6,7 @@
 #ifndef _HEADER_NDR_netlogon
 #define _HEADER_NDR_netlogon
 
+#include "librpc/ndr/ndr_netlogon.h"
 #define NDR_NETLOGON_UUID "12345678-1234-abcd-ef00-01234567cffb"
 #define NDR_NETLOGON_VERSION 1.0
 #define NDR_NETLOGON_NAME "netlogon"
@@ -53,7 +54,7 @@ extern const struct ndr_interface_table ndr_table_netlogon;
 
 #define NDR_NETR_DSRGETDCNAME (0x14)
 
-#define NDR_NETR_NETRLOGONDUMMYROUTINE1 (0x15)
+#define NDR_NETR_LOGONGETCAPABILITIES (0x15)
 
 #define NDR_NETR_NETRLOGONSETSERVICEBITS (0x16)
 
@@ -188,6 +189,12 @@ void ndr_print_netr_CONTROL_QUERY_INFORMATION(struct ndr_print *ndr, const char 
 void ndr_print_netr_LogonControlCode(struct ndr_print *ndr, const char *name, enum netr_LogonControlCode r);
 void ndr_print_netr_CONTROL_DATA_INFORMATION(struct ndr_print *ndr, const char *name, const union netr_CONTROL_DATA_INFORMATION *r);
 void ndr_print_netr_NegotiateFlags(struct ndr_print *ndr, const char *name, uint32_t r);
+void ndr_print_netr_ChangeLogFlags(struct ndr_print *ndr, const char *name, uint16_t r);
+void ndr_print_netr_ChangeLogObject(struct ndr_print *ndr, const char *name, const union netr_ChangeLogObject *r);
+enum ndr_err_code ndr_push_netr_ChangeLogEntry(struct ndr_push *ndr, int ndr_flags, const struct netr_ChangeLogEntry *r);
+enum ndr_err_code ndr_pull_netr_ChangeLogEntry(struct ndr_pull *ndr, int ndr_flags, struct netr_ChangeLogEntry *r);
+void ndr_print_netr_ChangeLogEntry(struct ndr_print *ndr, const char *name, const struct netr_ChangeLogEntry *r);
+size_t ndr_size_netr_ChangeLogEntry(const struct netr_ChangeLogEntry *r, int flags);
 void ndr_print_netr_Blob(struct ndr_print *ndr, const char *name, const struct netr_Blob *r);
 void ndr_print_netr_DsRGetDCName_flags(struct ndr_print *ndr, const char *name, uint32_t r);
 void ndr_print_netr_DsRGetDCNameInfo_AddressType(struct ndr_print *ndr, const char *name, enum netr_DsRGetDCNameInfo_AddressType r);
@@ -195,6 +202,7 @@ void ndr_print_netr_DsR_DcFlags(struct ndr_print *ndr, const char *name, uint32_
 enum ndr_err_code ndr_push_netr_DsRGetDCNameInfo(struct ndr_push *ndr, int ndr_flags, const struct netr_DsRGetDCNameInfo *r);
 enum ndr_err_code ndr_pull_netr_DsRGetDCNameInfo(struct ndr_pull *ndr, int ndr_flags, struct netr_DsRGetDCNameInfo *r);
 void ndr_print_netr_DsRGetDCNameInfo(struct ndr_print *ndr, const char *name, const struct netr_DsRGetDCNameInfo *r);
+void ndr_print_netr_Capabilities(struct ndr_print *ndr, const char *name, const union netr_Capabilities *r);
 void ndr_print_netr_BinaryString(struct ndr_print *ndr, const char *name, const struct netr_BinaryString *r);
 void ndr_print_netr_DomainQuery1(struct ndr_print *ndr, const char *name, const struct netr_DomainQuery1 *r);
 void ndr_print_netr_DomainQuery(struct ndr_print *ndr, const char *name, const union netr_DomainQuery *r);
@@ -232,7 +240,7 @@ void ndr_print_netr_DatabaseRedo(struct ndr_print *ndr, const char *name, int fl
 void ndr_print_netr_LogonControl2Ex(struct ndr_print *ndr, const char *name, int flags, const struct netr_LogonControl2Ex *r);
 void ndr_print_netr_NetrEnumerateTrustedDomains(struct ndr_print *ndr, const char *name, int flags, const struct netr_NetrEnumerateTrustedDomains *r);
 void ndr_print_netr_DsRGetDCName(struct ndr_print *ndr, const char *name, int flags, const struct netr_DsRGetDCName *r);
-void ndr_print_netr_NETRLOGONDUMMYROUTINE1(struct ndr_print *ndr, const char *name, int flags, const struct netr_NETRLOGONDUMMYROUTINE1 *r);
+void ndr_print_netr_LogonGetCapabilities(struct ndr_print *ndr, const char *name, int flags, const struct netr_LogonGetCapabilities *r);
 void ndr_print_netr_NETRLOGONSETSERVICEBITS(struct ndr_print *ndr, const char *name, int flags, const struct netr_NETRLOGONSETSERVICEBITS *r);
 void ndr_print_netr_LogonGetTrustRid(struct ndr_print *ndr, const char *name, int flags, const struct netr_LogonGetTrustRid *r);
 void ndr_print_netr_NETRLOGONCOMPUTESERVERDIGEST(struct ndr_print *ndr, const char *name, int flags, const struct netr_NETRLOGONCOMPUTESERVERDIGEST *r);

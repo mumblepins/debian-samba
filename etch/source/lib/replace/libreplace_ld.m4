@@ -271,7 +271,7 @@ AC_DEFUN([AC_LIBREPLACE_LD_SHLIB_ALLOW_UNDEF_FLAG],
 			LD_SHLIB_ALLOW_UNDEF_FLAG="-undefined dynamic_lookup"
 			;;
 		*aix*)
-			LD_SHLIB_ALLOW_UNDEF_FLAG="--Wl,-bnoentry"
+			LD_SHLIB_ALLOW_UNDEF_FLAG="-Wl,-bnoentry"
 			;;
 	esac
 
@@ -292,7 +292,7 @@ AC_DEFUN([AC_LIBREPLACE_RUNTIME_LIB_PATH_VAR],
 		*linux*)
 			LIB_PATH_VAR=LD_LIBRARY_PATH
 		;;
-		*netbsd*)
+		*bsd*)
 			LIB_PATH_VAR=LD_LIBRARY_PATH
 		;;
 		*solaris*)

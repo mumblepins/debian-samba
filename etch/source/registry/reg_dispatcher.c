@@ -37,40 +37,36 @@ static const struct generic_mapping reg_generic_map =
 static WERROR construct_registry_sd(TALLOC_CTX *ctx, SEC_DESC **psd)
 {
 	SEC_ACE ace[3];
-	SEC_ACCESS mask;
 	size_t i = 0;
 	SEC_DESC *sd;
-	SEC_ACL *acl;
+	SEC_ACL *theacl;
 	size_t sd_size;
 
 	/* basic access for Everyone */
 
-	init_sec_access(&mask, REG_KEY_READ);
 	init_sec_ace(&ace[i++], &global_sid_World, SEC_ACE_TYPE_ACCESS_ALLOWED,
-		     mask, 0);
+		     REG_KEY_READ, 0);
 
 	/* Full Access 'BUILTIN\Administrators' */
 
-	init_sec_access(&mask, REG_KEY_ALL);
 	init_sec_ace(&ace[i++], &global_sid_Builtin_Administrators,
-		     SEC_ACE_TYPE_ACCESS_ALLOWED, mask, 0);
+		     SEC_ACE_TYPE_ACCESS_ALLOWED, REG_KEY_ALL, 0);
 
 	/* Full Access 'NT Authority\System' */
 
-	init_sec_access(&mask, REG_KEY_ALL );
 	init_sec_ace(&ace[i++], &global_sid_System, SEC_ACE_TYPE_ACCESS_ALLOWED,
-		     mask, 0);
+		     REG_KEY_ALL, 0);
 
 	/* create the security descriptor */
 
-	acl = make_sec_acl(ctx, NT4_ACL_REVISION, i, ace);
-	if (acl == NULL) {
+	theacl = make_sec_acl(ctx, NT4_ACL_REVISION, i, ace);
+	if (theacl == NULL) {
 		return WERR_NOMEM;
 	}
 
 	sd = make_sec_desc(ctx, SEC_DESC_REVISION, SEC_DESC_SELF_RELATIVE,
 			   &global_sid_Builtin_Administrators,
-			   &global_sid_System, NULL, acl,
+			   &global_sid_System, NULL, theacl,
 			   &sd_size);
 	if (sd == NULL) {
 		return WERR_NOMEM;
@@ -84,7 +80,7 @@ static WERROR construct_registry_sd(TALLOC_CTX *ctx, SEC_DESC **psd)
  High level wrapper function for storing registry subkeys
  ***********************************************************************/
 
-bool store_reg_keys( REGISTRY_KEY *key, REGSUBKEY_CTR *subkeys )
+bool store_reg_keys( REGISTRY_KEY *key, struct regsubkey_ctr *subkeys )
 {
 	if (key->ops && key->ops->store_subkeys)
 		return key->ops->store_subkeys(key->name, subkeys);
@@ -104,12 +100,30 @@ bool store_reg_values( REGISTRY_KEY *key, REGVAL_CTR *val )
 	return false;
 }
 
+WERROR create_reg_subkey(REGISTRY_KEY *key, const char *subkey)
+{
+	if (key->ops && key->ops->create_subkey) {
+		return key->ops->create_subkey(key->name, subkey);
+	}
+
+	return WERR_NOT_SUPPORTED;
+}
+
+WERROR delete_reg_subkey(REGISTRY_KEY *key, const char *subkey)
+{
+	if (key->ops && key->ops->delete_subkey) {
+		return key->ops->delete_subkey(key->name, subkey);
+	}
+
+	return WERR_NOT_SUPPORTED;
+}
+
 /***********************************************************************
  High level wrapper function for enumerating registry subkeys
  Initialize the TALLOC_CTX if necessary
  ***********************************************************************/
 
-int fetch_reg_keys( REGISTRY_KEY *key, REGSUBKEY_CTR *subkey_ctr )
+int fetch_reg_keys( REGISTRY_KEY *key, struct regsubkey_ctr *subkey_ctr )
 {
 	int result = -1;
 
@@ -174,7 +188,8 @@ bool regkey_access_check( REGISTRY_KEY *key, uint32 requested, uint32 *granted,
 
 	se_map_generic( &requested, &reg_generic_map );
 
-	if (!se_access_check(sec_desc, token, requested, granted, &status)) {
+	status =se_access_check(sec_desc, token, requested, granted);
+	if (!NT_STATUS_IS_OK(status)) {
 		TALLOC_FREE(mem_ctx);
 		return false;
 	}
@@ -219,7 +234,7 @@ WERROR regkey_set_secdesc(REGISTRY_KEY *key,
  * Check whether the in-memory version of the subkyes of a
  * registry key needs update from disk.
  */
-bool reg_subkeys_need_update(REGISTRY_KEY *key, REGSUBKEY_CTR *subkeys)
+bool reg_subkeys_need_update(REGISTRY_KEY *key, struct regsubkey_ctr *subkeys)
 {
 	if (key->ops && key->ops->subkeys_need_update)
 	{

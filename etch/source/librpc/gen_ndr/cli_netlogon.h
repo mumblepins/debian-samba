@@ -156,11 +156,11 @@ NTSTATUS rpccli_netr_DatabaseRedo(struct rpc_pipe_client *cli,
 				  TALLOC_CTX *mem_ctx,
 				  const char *logon_server /* [in] [charset(UTF16)] */,
 				  const char *computername /* [in] [charset(UTF16)] */,
-				  struct netr_Authenticator credential /* [in]  */,
+				  struct netr_Authenticator *credential /* [in] [ref] */,
 				  struct netr_Authenticator *return_authenticator /* [in,out] [ref] */,
-				  uint8_t *change_log_entry /* [in] [unique,size_is(change_log_entry_size)] */,
-				  uint32_t change_log_entry_size /* [in]  */,
-				  struct netr_DELTA_ENUM_ARRAY *delta_enum_array /* [out] [ref] */);
+				  struct netr_ChangeLogEntry change_log_entry /* [in] [subcontext_size(change_log_entry_size),subcontext(4)] */,
+				  uint32_t change_log_entry_size /* [in] [value(ndr_size_netr_ChangeLogEntry(&change_log_entry,ndr->flags))] */,
+				  struct netr_DELTA_ENUM_ARRAY **delta_enum_array /* [out] [ref] */);
 NTSTATUS rpccli_netr_LogonControl2Ex(struct rpc_pipe_client *cli,
 				     TALLOC_CTX *mem_ctx,
 				     const char *logon_server /* [in] [unique,charset(UTF16)] */,
@@ -183,9 +183,14 @@ NTSTATUS rpccli_netr_DsRGetDCName(struct rpc_pipe_client *cli,
 				  uint32_t flags /* [in]  */,
 				  struct netr_DsRGetDCNameInfo **info /* [out] [ref] */,
 				  WERROR *werror);
-NTSTATUS rpccli_netr_NETRLOGONDUMMYROUTINE1(struct rpc_pipe_client *cli,
-					    TALLOC_CTX *mem_ctx,
-					    WERROR *werror);
+NTSTATUS rpccli_netr_LogonGetCapabilities(struct rpc_pipe_client *cli,
+					  TALLOC_CTX *mem_ctx,
+					  const char *server_name /* [in] [charset(UTF16)] */,
+					  const char *computer_name /* [in] [unique,charset(UTF16)] */,
+					  struct netr_Authenticator *credential /* [in] [ref] */,
+					  struct netr_Authenticator *return_authenticator /* [in,out] [ref] */,
+					  uint32_t query_level /* [in]  */,
+					  union netr_Capabilities *capabilities /* [out] [ref,switch_is(query_level)] */);
 NTSTATUS rpccli_netr_NETRLOGONSETSERVICEBITS(struct rpc_pipe_client *cli,
 					     TALLOC_CTX *mem_ctx,
 					     WERROR *werror);

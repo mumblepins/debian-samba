@@ -329,13 +329,13 @@ static int dotarbuf(int f, char *b, int n)
 
 		diff=tbufsiz-tp;
 		memcpy(tarbuf + tp, b, diff);
-		fail=fail && (1+write(f, tarbuf, tbufsiz));
+		fail=fail && (1+sys_write(f, tarbuf, tbufsiz));
 		n-=diff;
 		b+=diff;
 		tp=0;
 
 		while (n >= tbufsiz) {
-			fail=fail && (1 + write(f, b, tbufsiz));
+			fail=fail && (1 + sys_write(f, b, tbufsiz));
 			n-=tbufsiz;
 			b+=tbufsiz;
 		}
@@ -364,7 +364,10 @@ static void dozerobuf(int f, int n)
 
 	if (n+tp >= tbufsiz) {
 		memset(tarbuf+tp, 0, tbufsiz-tp);
-		write(f, tarbuf, tbufsiz);
+		if (sys_write(f, tarbuf, tbufsiz) != tbufsiz) {
+			DEBUG(0, ("dozerobuf: sys_write fail\n"));
+			return;
+		}
 		memset(tarbuf, 0, (tp+=n-tbufsiz));
 	} else {
 		memset(tarbuf+tp, 0, n);
@@ -408,8 +411,12 @@ static void dotareof(int f)
 
 	/* Could be a pipe, in which case S_ISREG should fail,
 		* and we should write out at full size */
-	if (tp > 0)
-		write(f, tarbuf, S_ISREG(stbuf.st_mode) ? tp : tbufsiz);
+	if (tp > 0) {
+		size_t towrite = S_ISREG(stbuf.st_mode) ? tp : tbufsiz;
+		if (sys_write(f, tarbuf, towrite) != towrite) {
+			DEBUG(0,("dotareof: sys_write fail\n"));
+		}
+	}
 }
 
 /****************************************************************************
@@ -1506,6 +1513,7 @@ int process_tar(void)
 
 					if (strrchr_m(cliplist[i], '\\')) {
 						char *p;
+						char saved_char;
 						char *saved_dir = talloc_strdup(ctx,
 									client_get_cur_dir());
 						if (!saved_dir) {
@@ -1524,12 +1532,27 @@ int process_tar(void)
 						if (!tarmac) {
 							return 1;
 						}
+						/*
+						 * Strip off the last \\xxx
+						 * xxx element of tarmac to set
+						 * it as current directory.
+						 */
 						p = strrchr_m(tarmac, '\\');
 						if (!p) {
 							return 1;
 						}
+						saved_char = p[1];
 						p[1] = '\0';
+
 						client_set_cur_dir(tarmac);
+
+						/*
+						 * Restore the character we
+						 * just replaced to
+						 * put the pathname
+						 * back as it was.
+						 */
+						p[1] = saved_char;
 
 						DEBUG(5, ("process_tar, do_list with tarmac: %s\n", tarmac));
 						do_list(tarmac,attribute,do_tar, False, True);

@@ -453,7 +453,7 @@ ADS_STATUS ads_delete_gpo_link(ADS_STRUCT *ads,
 }
 
 /****************************************************************
- get a GROUP_POLICY_OBJECT structure based on different input paramters
+ get a GROUP_POLICY_OBJECT structure based on different input parameters
 ****************************************************************/
 
 ADS_STATUS ads_get_gpo(ADS_STRUCT *ads,
@@ -725,7 +725,7 @@ ADS_STATUS ads_get_gpo_list(ADS_STRUCT *ads,
 
 	/* (L)ocal */
 	status = add_local_policy_to_gpo_list(mem_ctx, gpo_list,
-					      GP_LINK_UNKOWN);
+					      GP_LINK_LOCAL);
 	if (!ADS_ERR_OK(status)) {
 		return status;
 	}

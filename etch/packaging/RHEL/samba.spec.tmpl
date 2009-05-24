@@ -136,7 +136,8 @@ CC="$CC" CFLAGS="$RPM_OPT_FLAGS $EXTRA -D_GNU_SOURCE" ./configure \
 	--prefix=%{_prefix} \
 	--localstatedir=/var \
         --with-configdir=%{_sysconfdir}/samba \
-        --with-libdir=%{_libarchdir}/samba \
+        --libdir=%{_libarchdir} \
+	--with-modulesdir=%{_libarchdir}/samba \
 	--with-pammodulesdir=%{_libarch}/security \
         --with-lockdir=/var/lib/samba \
         --with-logfilebase=/var/log/samba \
@@ -156,14 +157,12 @@ CC="$CC" CFLAGS="$RPM_OPT_FLAGS $EXTRA -D_GNU_SOURCE" ./configure \
         --without-smbwrapper \
 	--with-pam \
 	--with-quotas \
-	--with-shared-modules=idmap_rid,idmap_ad \
+	--with-shared-modules=idmap_rid,idmap_ad,idmap_hash,idmap_adex \
 	--with-syslog \
 	--with-utmp \
 	--with-dnsupdate
 
 make showlayout
-
-make CFLAGS="$RPM_OPT_FLAGS -D_GNU_SOURCE"  proto 
 
 ## check for gcc 3.4 or later
 CC_VERSION=`${CC} --version | head -1 | awk '{print $3}'`
@@ -178,12 +177,6 @@ fi
 
 make CFLAGS="$RPM_OPT_FLAGS -D_GNU_SOURCE" %{?_smp_mflags} \
 	all modules pam_smbpass
-
-## build the cifs fs mount helper
-cd client
-gcc  -o mount.cifs $RPM_OPT_FLAGS  -D_GNU_SOURCE -Wall -D_GNU_SOURCE -D_LARGEFILE64_SOURCE mount.cifs.c
-gcc  -o umount.cifs $RPM_OPT_FLAGS  -D_GNU_SOURCE -Wall -D_GNU_SOURCE -D_LARGEFILE64_SOURCE umount.cifs.c
-cd ..
 
 # Remove some permission bits to avoid to many dependencies
 cd ..
@@ -224,18 +217,6 @@ install -m 755 source/nsswitch/libnss_wins.so $RPM_BUILD_ROOT/%{_libarch}/libnss
   ln -sf libnss_winbind.so.2  libnss_winbind.so;
   ln -sf libnss_wins.so.2  libnss_wins.so )
 
-# Put the shared (and possibly static) libraries into /usr/lib{,64}/ .
-# Samba 3.2.2 installs them into /usr/lib{,64}/samba/ .
-# This step will become unnecessary in 3.3.0.
-#
-for library in libsmbclient libsmbsharemodes libwbclient libtalloc libtdb
-libnetapi
-do
-	mv -f ${RPM_BUILD_ROOT}%{_libarchdir}/samba/${library}.* \
-		${RPM_BUILD_ROOT}%{_libarchdir}/
-done
-
-
 ## cleanup
 /bin/rm -rf $RPM_BUILD_ROOT/usr/lib*/samba/security
 
@@ -251,8 +232,8 @@ install -m644 setup/samba.pamd $RPM_BUILD_ROOT%{_sysconfdir}/pam.d/samba
 install -m755 setup/smbprint $RPM_BUILD_ROOT%{_bindir}
 install -m644 setup/smbusers $RPM_BUILD_ROOT%{_sysconfdir}/samba/smbusers
 install -m644 setup/smb.conf $RPM_BUILD_ROOT%{_sysconfdir}/samba/smb.conf
-install -m755 source/client/mount.cifs $RPM_BUILD_ROOT/sbin/mount.cifs
-install -m755 source/client/umount.cifs $RPM_BUILD_ROOT/sbin/umount.cifs
+install -m755 source/bin/mount.cifs $RPM_BUILD_ROOT/sbin/mount.cifs
+install -m755 source/bin/umount.cifs $RPM_BUILD_ROOT/sbin/umount.cifs
 install -m755 source/script/mksmbpasswd.sh $RPM_BUILD_ROOT%{_bindir}
 
 /bin/rm $RPM_BUILD_ROOT%{_sbindir}/*mount.cifs
@@ -367,6 +348,7 @@ fi
 %{_mandir}/man1/vfstest.1*
 %{_mandir}/man5/smbpasswd.5*
 %{_mandir}/man7/samba.7*
+%{_mandir}/man7/winbind_krb5_locator.7*
 %{_mandir}/man8/nmbd.8*
 %{_mandir}/man8/pdbedit.8*
 %{_mandir}/man8/smbd.8*
@@ -411,9 +393,11 @@ fi
 %defattr(-,root,root)
 /sbin/mount.cifs
 /sbin/umount.cifs
+%{_sbindir}/cifs.upcall
 
 %{_bindir}/rpcclient
 %{_bindir}/smbcacls
+%{_bindir}/sharesec
 %{_bindir}/findsmb
 %{_bindir}/smbcquotas
 %{_bindir}/nmblookup
@@ -427,6 +411,7 @@ fi
 
 %{_mandir}/man8/mount.cifs.8.*
 %{_mandir}/man8/umount.cifs.8.*
+%{_mandir}/man8/cifs.upcall.8.*
 %{_mandir}/man8/smbspool.8*
 %{_mandir}/man1/smbget.1*
 %{_mandir}/man5/smbgetrc.5*
@@ -434,6 +419,7 @@ fi
 %{_mandir}/man1/nmblookup.1*
 %{_mandir}/man1/rpcclient.1*
 %{_mandir}/man1/smbcacls.1*
+%{_mandir}/man1/sharesec.1*
 %{_mandir}/man1/smbclient.1*
 %{_mandir}/man1/smbtar.1*
 %{_mandir}/man1/smbtree.1*
@@ -454,6 +440,7 @@ fi
 %attr(755,root,root) /%{_libarch}/libnss_winbind.so*
 %attr(755,root,root) /%{_libarch}/security/pam_winbind.so
 %attr(755,root,root) /%{_libarch}/security/pam_smbpass.so
+/usr/share/locale/de/LC_MESSAGES/pam_winbind.mo
 
 %{_includedir}/libsmbclient.h
 %{_libarchdir}/libsmbclient.*
@@ -481,6 +468,7 @@ fi
 %{_bindir}/ldbdel
 %{_bindir}/ldbedit
 %{_bindir}/ldbmodify
+%{_bindir}/ldbrename
 %{_bindir}/ldbsearch
 
 %{_mandir}/man1/profiles.1*
@@ -495,6 +483,7 @@ fi
 %{_mandir}/man1/ldbdel.1*
 %{_mandir}/man1/ldbedit.1*
 %{_mandir}/man1/ldbmodify.1*
+%{_mandir}/man1/ldbrename.1*
 %{_mandir}/man1/ldbsearch.1*
 
 %changelog

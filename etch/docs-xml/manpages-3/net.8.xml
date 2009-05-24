@@ -7,7 +7,7 @@
 	<manvolnum>8</manvolnum>
 	<refmiscinfo class="source">Samba</refmiscinfo>
 	<refmiscinfo class="manual">System Administration tools</refmiscinfo>
-	<refmiscinfo class="version">3.2</refmiscinfo>
+	<refmiscinfo class="version">3.3</refmiscinfo>
 </refmeta>
 
 
@@ -35,6 +35,7 @@
 		<arg choice="opt">-P</arg>
 		<arg choice="opt">-d debuglevel</arg>
 		<arg choice="opt">-V</arg>
+		<arg choice="opt">--request-timeout seconds</arg>
 	</cmdsynopsis>
 </refsynopsisdiv>
 
@@ -122,6 +123,14 @@
 		<term>-P</term>
 		<listitem><para>
 		Make queries to the external server using the machine account of the local server.
+		</para></listitem>
+		</varlistentry>
+
+		<varlistentry>
+		<term>--request-timeout 30</term>
+		<listitem><para>
+		Let client requests timeout after 30 seconds the default is 10
+		seconds.
 		</para></listitem>
 		</varlistentry>
 
@@ -395,7 +404,7 @@ current network.</para>
 <title>RAP PRINTQ</title>
 
 <refsect3>
-<title>RAP PRINTQ LIST <replaceable>QUEUE_NAME</replaceable></title>
+<title>RAP PRINTQ INFO <replaceable>QUEUE_NAME</replaceable></title>
 
 <para>Lists the specified print queue and print jobs on the server.
 If the <replaceable>QUEUE_NAME</replaceable> is omitted, all 
@@ -850,7 +859,20 @@ to run this against the PDC, from a Samba machine joined as a BDC. </para>
 <para>Export users, aliases and groups from remote server to 
 local server.  You need to run this against the PDC, from a Samba machine joined as a BDC. 
 </para>
+</refsect2>
 
+<refsect2>
+<title>RPC VAMPIRE KEYTAB</title>
+
+<para>Dump remote SAM database to local Kerberos keytab file.
+</para>
+</refsect2>
+
+<refsect2>
+<title>RPC VAMPIRE LDIF</title>
+
+<para>Dump remote SAM database to local LDIF file or standard output.
+</para>
 </refsect2>
 
 <refsect2>

@@ -26,8 +26,6 @@
 
 #include "includes.h"
 
-static bool scan_directory(connection_struct *conn, const char *path,
-			   char *name, char **found_name);
 static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,
 				  connection_struct *conn,
 				  const char *orig_path,
@@ -35,6 +33,9 @@ static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,
 				  const char *streamname,
 				  SMB_STRUCT_STAT *pst,
 				  char **path);
+static int get_real_filename_mangled(connection_struct *conn, const char *path,
+				     const char *name, TALLOC_CTX *mem_ctx,
+				     char **found_name);
 
 /****************************************************************************
  Mangle the 2nd name and check if it is then equal to the first name.
@@ -101,8 +102,7 @@ get any fatal errors that should immediately terminate the calling
 SMB processing whilst resolving.
 
 If the saved_last_component != 0, then the unmodified last component
-of the pathname is returned there. This is used in an exceptional
-case in reply_mv (so far). If saved_last_component == 0 then nothing
+of the pathname is returned there. If saved_last_component == 0 then nothing
 is returned there.
 
 If last_component_wcard is true then a MS wildcard was detected and
@@ -129,7 +129,9 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 	char *stream = NULL;
 	bool component_was_mangled = False;
 	bool name_has_wildcard = False;
+	bool posix_pathnames = false;
 	NTSTATUS result;
+	int ret = -1;
 
 	SET_STAT_INVALID(*pst);
 	*pp_conv_path = NULL;
@@ -195,37 +197,9 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 		return result;
 	}
 
-	/*
-	 * Ensure saved_last_component is valid even if file exists.
-	 */
-
-	if(pp_saved_last_component) {
-		end = strrchr_m(orig_path, '/');
-		if (end) {
-			*pp_saved_last_component = talloc_strdup(ctx, end + 1);
-		} else {
-			*pp_saved_last_component = talloc_strdup(ctx,
-							orig_path);
-		}
-	}
-
 	if (!(name = talloc_strdup(ctx, orig_path))) {
 		DEBUG(0, ("talloc_strdup failed\n"));
 		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (!lp_posix_pathnames()) {
-		stream = strchr_m(name, ':');
-
-		if (stream != NULL) {
-			char *tmp = talloc_strdup(ctx, stream);
-			if (tmp == NULL) {
-				TALLOC_FREE(name);
-				return NT_STATUS_NO_MEMORY;
-			}
-			*stream = '\0';
-			stream = tmp;
-		}
 	}
 
 	/*
@@ -240,6 +214,36 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 	if (conn->case_sensitive && !conn->case_preserve &&
 			!conn->short_case_preserve) {
 		strnorm(name, lp_defaultcase(SNUM(conn)));
+	}
+
+	/*
+	 * Ensure saved_last_component is valid even if file exists.
+	 */
+
+	if(pp_saved_last_component) {
+		end = strrchr_m(name, '/');
+		if (end) {
+			*pp_saved_last_component = talloc_strdup(ctx, end + 1);
+		} else {
+			*pp_saved_last_component = talloc_strdup(ctx,
+							name);
+		}
+	}
+
+	posix_pathnames = lp_posix_pathnames();
+
+	if (!posix_pathnames) {
+		stream = strchr_m(name, ':');
+
+		if (stream != NULL) {
+			char *tmp = talloc_strdup(ctx, stream);
+			if (tmp == NULL) {
+				TALLOC_FREE(name);
+				return NT_STATUS_NO_MEMORY;
+			}
+			*stream = '\0';
+			stream = tmp;
+		}
 	}
 
 	start = name;
@@ -271,7 +275,13 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 	 * stat the name - if it exists then we are all done!
 	 */
 
-	if (SMB_VFS_STAT(conn,name,&st) == 0) {
+	if (posix_pathnames) {
+		ret = SMB_VFS_LSTAT(conn,name,&st);
+	} else {
+		ret = SMB_VFS_STAT(conn,name,&st);
+	}
+
+	if (ret == 0) {
 		/* Ensure we catch all names with in "/."
 		   this is disallowed under Windows. */
 		const char *p = strstr(name, "/."); /* mb safe. */
@@ -383,7 +393,13 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 		 * Check if the name exists up to this point.
 		 */
 
-		if (SMB_VFS_STAT(conn,name, &st) == 0) {
+		if (posix_pathnames) {
+			ret = SMB_VFS_LSTAT(conn,name, &st);
+		} else {
+			ret = SMB_VFS_STAT(conn,name, &st);
+		}
+
+		if (ret == 0) {
 			/*
 			 * It exists. it must either be a directory or this must
 			 * be the last part of the path for it to be OK.
@@ -434,8 +450,9 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 			 */
 
 			if (name_has_wildcard ||
-			    !scan_directory(conn, dirpath,
-				    start, &found_name)) {
+			    (get_real_filename_mangled(
+				     conn, dirpath, start,
+				     talloc_tos(), &found_name) == -1)) {
 				char *unmangled;
 
 				if (end) {
@@ -600,7 +617,13 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 				 * if it exists. JRA.
 				 */
 
-				if (SMB_VFS_STAT(conn,name, &st) == 0) {
+				if (posix_pathnames) {
+					ret = SMB_VFS_LSTAT(conn,name, &st);
+				} else {
+					ret = SMB_VFS_STAT(conn,name, &st);
+				}
+
+				if (ret == 0) {
 					*pst = st;
 				} else {
 					SET_STAT_INVALID(st);
@@ -769,15 +792,12 @@ static bool fname_equal(const char *name1, const char *name2,
  If the name looks like a mangled name then try via the mangling functions
 ****************************************************************************/
 
-static bool scan_directory(connection_struct *conn, const char *path,
-			   char *name, char **found_name)
+static int get_real_filename_mangled(connection_struct *conn, const char *path,
+				     const char *name, TALLOC_CTX *mem_ctx,
+				     char **found_name)
 {
-	struct smb_Dir *cur_dir;
-	const char *dname;
 	bool mangled;
 	char *unmangled_name = NULL;
-	long curpos;
-	TALLOC_CTX *ctx = talloc_tos();
 
 	mangled = mangle_is_mangled(name, conn->params);
 
@@ -792,7 +812,7 @@ static bool scan_directory(connection_struct *conn, const char *path,
 	 */
 	if (!mangled && !(conn->fs_capabilities & FILE_CASE_SENSITIVE_SEARCH)) {
 		errno = ENOENT;
-		return False;
+		return -1;
 	}
 
 	/*
@@ -811,21 +831,36 @@ static bool scan_directory(connection_struct *conn, const char *path,
 	 */
 
 	if (mangled && !conn->case_sensitive) {
-		mangled = !mangle_lookup_name_from_8_3(ctx,
-						name,
-						&unmangled_name,
-						conn->params);
+		mangled = !mangle_lookup_name_from_8_3(talloc_tos(), name,
+						       &unmangled_name,
+						       conn->params);
 		if (!mangled) {
 			/* Name is now unmangled. */
 			name = unmangled_name;
 		}
+		return get_real_filename(conn, path, name, mem_ctx,
+					 found_name);
 	}
+
+	return SMB_VFS_GET_REAL_FILENAME(conn, path, name, mem_ctx,
+					 found_name);
+}
+
+int get_real_filename(connection_struct *conn, const char *path,
+		      const char *name, TALLOC_CTX *mem_ctx,
+		      char **found_name)
+{
+	struct smb_Dir *cur_dir;
+	const char *dname;
+	bool mangled;
+	char *unmangled_name = NULL;
+	long curpos;
 
 	/* open the directory */
 	if (!(cur_dir = OpenDir(talloc_tos(), conn, path, NULL, 0))) {
 		DEBUG(3,("scan dir didn't open dir [%s]\n",path));
 		TALLOC_FREE(unmangled_name);
-		return(False);
+		return -1;
 	}
 
 	/* now scan for matching names */
@@ -851,21 +886,21 @@ static bool scan_directory(connection_struct *conn, const char *path,
 		if ((mangled && mangled_equal(name,dname,conn->params)) ||
 			fname_equal(name, dname, conn->case_sensitive)) {
 			/* we've found the file, change it's name and return */
-			*found_name = talloc_strdup(ctx,dname);
+			*found_name = talloc_strdup(mem_ctx, dname);
 			TALLOC_FREE(unmangled_name);
 			TALLOC_FREE(cur_dir);
 			if (!*found_name) {
 				errno = ENOMEM;
-				return False;
+				return -1;
 			}
-			return(True);
+			return 0;
 		}
 	}
 
 	TALLOC_FREE(unmangled_name);
 	TALLOC_FREE(cur_dir);
 	errno = ENOENT;
-	return False;
+	return -1;
 }
 
 static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,

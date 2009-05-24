@@ -100,6 +100,7 @@ AC_SUBST(IDMAP_LIBS)
 AC_SUBST(KRB5_LIBS)
 AC_SUBST(UUID_LIBS)
 AC_SUBST(LDAP_LIBS)
+AC_SUBST(GPEXT_LIBS)
 AC_SUBST(PAM_MODULES)
 AC_SUBST(INSTALL_PAM_MODULES)
 AC_SUBST(UNINSTALL_PAM_MODULES)
@@ -127,7 +128,7 @@ fi
 if test "x$debug" = "xyes" ; then
 	CFLAGS="${CFLAGS} -g"
 else
-	CFLAGS="-O"
+	CFLAGS="${CFLAGS} -O"
 fi
 
 CFLAGS="${CFLAGS} -D_SAMBA_BUILD_=3"
@@ -181,6 +182,10 @@ if test x"$ac_cv_prog_gcc" = x"yes" ; then
 	# -Wstrict-prototypes.
        if test x"$krb5_developer" != x"$yes" ; then
 	    DEVELOPER_CFLAGS="$DEVELOPER_CFLAGS -Wstrict-prototypes"
+       fi
+
+       if test x"$picky_developer" = x"yes"; then
+	    DEVELOPER_CFLAGS="$DEVELOPER_CFLAGS -Werror"
        fi
 fi
 
@@ -245,7 +250,7 @@ if test "$ac_cv_prog_gnu_ld" = "yes"; then
         else
            AC_MSG_CHECKING(GNU ld release version)
            changequote(,)dnl
-           ac_cv_gnu_ld_vernr=`echo $ac_cv_gnu_ld_version | sed -n 's,^.*\([1-9][0-9]*\.[0-9][0-9]*\).*$,\1,p'`
+           ac_cv_gnu_ld_vernr=`echo $ac_cv_gnu_ld_version | sed -n 's,^[^0-9]*\([1-9][0-9]*\.[0-9][0-9]*\).*$,\1,p'`
            ac_cv_gnu_ld_vernr_major=`echo $ac_cv_gnu_ld_vernr | cut -d '.' -f 1`
            ac_cv_gnu_ld_vernr_minor=`echo $ac_cv_gnu_ld_vernr | cut -d '.' -f 2`
            changequote([,])dnl
@@ -257,7 +262,7 @@ if test "$ac_cv_prog_gnu_ld" = "yes"; then
            if test "$ac_cv_gnu_ld_vernr_major" -lt 2 || test "$ac_cv_gnu_ld_vernr_minor" -lt 14; then
              ac_cv_gnu_ld_no_default_allow_shlib_undefined=yes
            fi
-           if test "$ac_cv_gnu_ld_vernr_major" -gt 2 || test "$ac_cv_gnu_ld_vernr_major"=2 && test "$ac_cv_gnu_ld_vernr_minor" -ge 12; then
+           if test "$ac_cv_gnu_ld_vernr_major" -gt 2 || test "$ac_cv_gnu_ld_vernr_major" = 2 && test "$ac_cv_gnu_ld_vernr_minor" -ge 12; then
              ac_cv_gnu_ld_version_script=yes
            fi
         fi
@@ -404,7 +409,7 @@ dnl These have to be built static:
 default_static_modules="pdb_smbpasswd pdb_tdbsam rpc_lsarpc rpc_samr rpc_winreg rpc_initshutdown rpc_dssetup rpc_wkssvc rpc_svcctl2 rpc_ntsvcs2 rpc_netlogon rpc_netdfs rpc_srvsvc rpc_spoolss rpc_eventlog2 auth_sam auth_unix auth_winbind auth_server auth_domain auth_builtin vfs_default nss_info_template"
 
 dnl These are preferably build shared, and static if dlopen() is not available
-default_shared_modules="vfs_recycle vfs_audit vfs_extd_audit vfs_full_audit vfs_netatalk vfs_fake_perms vfs_default_quota vfs_readonly vfs_cap vfs_expand_msdfs vfs_shadow_copy vfs_shadow_copy2 charset_CP850 charset_CP437 auth_script vfs_readahead vfs_xattr_tdb vfs_streams_xattr"
+default_shared_modules="vfs_recycle vfs_audit vfs_extd_audit vfs_full_audit vfs_netatalk vfs_fake_perms vfs_default_quota vfs_readonly vfs_cap vfs_expand_msdfs vfs_shadow_copy vfs_shadow_copy2 charset_CP850 charset_CP437 auth_script vfs_readahead vfs_xattr_tdb vfs_streams_xattr vfs_streams_depot vfs_acl_xattr vfs_acl_tdb vfs_smb_traffic_analyzer vfs_preopen"
 
 if test "x$developer" = xyes; then
    default_static_modules="$default_static_modules rpc_rpcecho"
@@ -657,7 +662,7 @@ LIBS="${LIBS} ${LIBDL} ${LIBREPLACE_NETWORK_LIBS}"
 
 AC_CHECK_HEADERS(aio.h sys/fcntl.h sys/select.h fcntl.h sys/time.h sys/unistd.h rpc/nettype.h)
 AC_CHECK_HEADERS(unistd.h utime.h grp.h sys/id.h memory.h alloca.h)
-AC_CHECK_HEADERS(limits.h float.h pthread.h)
+AC_CHECK_HEADERS(limits.h float.h pthread.h libintl.h)
 AC_CHECK_HEADERS(rpc/rpc.h rpcsvc/nis.h rpcsvc/ypclnt.h)
 AC_CHECK_HEADERS(sys/param.h ctype.h sys/wait.h sys/resource.h sys/ioctl.h sys/ipc.h sys/prctl.h)
 AC_CHECK_HEADERS(sys/mman.h sys/filio.h sys/priv.h sys/shm.h string.h strings.h stdlib.h)
@@ -756,10 +761,25 @@ if test x$enable_cups != xno; then
 	AC_PATH_PROG(CUPS_CONFIG, cups-config)
 
         if test "x$CUPS_CONFIG" != x; then
-                AC_DEFINE(HAVE_CUPS,1,[Whether we have CUPS])
+
+		ac_save_CFLAGS=$CFLAGS
+		ac_save_LDFLAGS=$LDFLAGS
+		ac_save_PRINT_LIBS=$PRINT_LIBS
 		CFLAGS="$CFLAGS `$CUPS_CONFIG --cflags`"
 		LDFLAGS="$LDFLAGS `$CUPS_CONFIG --ldflags`"
 		PRINT_LIBS="$PRINT_LIBS `$CUPS_CONFIG --libs`"
+		AC_CHECK_HEADERS(cups/cups.h cups/language.h)
+		if test x"$ac_cv_header_cups_cups_h" = xyes -a \
+		        x"$ac_cv_header_cups_language_h" = xyes; then
+			AC_DEFINE(HAVE_CUPS,1,[Whether we have CUPS])
+			samba_cv_HAVE_CUPS=yes
+		else
+			AC_MSG_WARN([cups-config around but cups-devel not installed])
+			CFLAGS=$ac_save_CFLAGS
+			LDFLAGS=$ac_save_LDFLAGS
+			PRINT_LIBS=$ac_save_PRINT_LIBS
+		fi
+
 	elif test x"$enable_cups" = x"yes"; then
 		AC_MSG_ERROR(Cups support required but cups-config not located.  Make sure cups-devel related files are installed.)
         fi
@@ -769,7 +789,7 @@ AC_ARG_ENABLE(iprint,
 [AS_HELP_STRING([--enable-iprint], [Turn on iPrint support (default=yes if cups is yes)])])
 
 if test x$enable_iprint != xno; then
-	if test "x$CUPS_CONFIG" != x; then
+	if test x"$samba_cv_HAVE_CUPS" = xyes; then
                 AC_DEFINE(HAVE_IPRINT,1,[Whether we have iPrint])
 	elif test x"$enable_iprint" = x"yes"; then
 		AC_MSG_ERROR(iPrint support required but cups not enabled.  Make sure cups-devel related files are installed and that cups is enabled.)
@@ -842,7 +862,7 @@ fi
 
 AC_CHECK_FUNCS(dirfd)
 if test x"$ac_cv_func_dirfd" = x"yes"; then
-	default_shared_modules="$default_shared_modules vfs_syncops"
+	default_shared_modules="$default_shared_modules vfs_syncops vfs_dirsort"
 fi
 
 AC_CACHE_CHECK([for sig_atomic_t type],samba_cv_sig_atomic_t, [
@@ -1035,9 +1055,12 @@ AC_CHECK_FUNCS(memalign posix_memalign hstrerror)
 AC_CHECK_HEADERS(sys/mman.h)
 # setbuffer, shmget, shm_open are needed for smbtorture
 AC_CHECK_FUNCS(setbuffer shmget shm_open)
+AC_CHECK_FUNCS(gettext dgettext)
 
 # Find a method of generating a stack trace
 AC_CHECK_HEADERS(execinfo.h libexc.h libunwind.h)
+# libexecinfo provides backtrace_symbols on FreeBSD
+AC_SEARCH_LIBS(backtrace_symbols, [execinfo])
 AC_CHECK_FUNCS(backtrace_symbols)
 AC_CHECK_LIB(exc, trace_back_stack)
 
@@ -1045,6 +1068,20 @@ printf "%s" "checking for GPFS GPL libs... "
 save_LIBS="$LIBS"
 LIBS="$LIBS -lgpfs_gpl"
 AC_TRY_LINK([#include <gpfs_gpl.h>],
+          [gpfs_set_share(0,GPFS_SHARE_READ,GPFS_DENY_NONE)],
+          samba_cv_HAVE_GPFS=yes,
+          samba_cv_HAVE_GPFS=no)
+echo $samba_cv_HAVE_GPFS
+if test x"$samba_cv_HAVE_GPFS" = x"yes"; then
+    AC_DEFINE(HAVE_GPFS,1,[Whether GPFS GPL libs are available])
+    default_shared_modules="$default_shared_modules vfs_gpfs"
+fi
+LIBS="$save_LIBS"
+
+printf "%s" "checking for GPFS libs (with 3.2.1 PTF8 available as GPL)... "
+save_LIBS="$LIBS"
+LIBS="$LIBS -lgpfs"
+AC_TRY_LINK([#include <gpfs.h>],
           [gpfs_set_share(0,GPFS_SHARE_READ,GPFS_DENY_NONE)],
           samba_cv_HAVE_GPFS=yes,
           samba_cv_HAVE_GPFS=no)
@@ -1261,7 +1298,8 @@ fi
 
 #################################################
 # Check whether struct stat has timestamps with sub-second resolution.
-# At least IRIX and Solaris have these.
+# At least IRIX and Solaris have these.  FREEBSD does as well,
+# but with different members
 #
 # We check that
 #	all of st_mtim, st_atim and st_ctim exist
@@ -1270,6 +1308,43 @@ fi
 # There is some conflicting standards weirdness about whether we should use
 # "struct timespec" or "timespec_t". Linux doesn't have timespec_t, so we
 # prefer struct timespec.
+AC_CACHE_CHECK([whether struct stat has timespec timestamps],
+    samba_cv_stat_timespec_hires,
+      [
+      AC_TRY_COMPILE(
+	  [
+#if TIME_WITH_SYS_TIME
+# include <sys/time.h>
+# include <time.h>
+#else
+# if HAVE_SYS_TIME_H
+#  include <sys/time.h>
+# else
+#  include <time.h>
+# endif
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+	  ],
+	  [
+	  struct timespec t;
+	  struct stat s = {0};
+	  t = s.st_mtimespec;
+	  t = s.st_ctimespec;
+	  t = s.st_atimespec;
+	],
+      samba_cv_stat_timespec_hires=yes, samba_cv_stat_timespec_hires=no)
+      ])
+
+if test x"$samba_cv_stat_timespec_hires" = x"yes" ; then
+    AC_DEFINE(HAVE_STAT_ST_MTIMESPEC, 1, [whether struct stat contains st_mtimepec])
+    AC_DEFINE(HAVE_STAT_ST_ATIMESPEC, 1, [whether struct stat contains st_atimespec])
+    AC_DEFINE(HAVE_STAT_ST_CTIMESPEC, 1, [whether struct stat contains st_ctimespec])
+    AC_DEFINE(HAVE_STAT_HIRES_TIMESTAMPS, 1, [whether struct stat has sub-second timestamps])
+fi
+
+
 
 AC_CACHE_CHECK([whether struct stat has sub-second timestamps], samba_cv_stat_hires,
     [
@@ -1310,7 +1385,7 @@ if test x"$samba_cv_stat_hires" = x"yes" ; then
 	    [whether struct stat has sub-second timestamps])
 fi
 
-AC_CACHE_CHECK([whether struct stat has sub-second timestamps without struct timespec], samba_cv_stat_hires_notimespec,
+AC_CACHE_CHECK([whether struct stat has sub-second timestamps without struct timespec suffixed nsec], samba_cv_stat_hires_notimespec,
     [
 	AC_TRY_COMPILE(
 	    [
@@ -1338,7 +1413,7 @@ AC_CACHE_CHECK([whether struct stat has sub-second timestamps without struct tim
 		t.tv_sec = s.st_atime;
 		t.tv_nsec = s.st_atimensec;
 	    ],
-	    samba_cv_stat_hires=yes, samba_cv_stat_hires=no)
+	    samba_cv_stat_hires_notimespec=yes, samba_cv_stat_hires_notimespec=no)
     ])
 
 if test x"$samba_cv_stat_hires_notimespec" = x"yes" ; then
@@ -1346,7 +1421,87 @@ if test x"$samba_cv_stat_hires_notimespec" = x"yes" ; then
     AC_DEFINE(HAVE_STAT_ST_ATIMENSEC, 1, [whether struct stat contains st_atimensec])
     AC_DEFINE(HAVE_STAT_ST_CTIMENSEC, 1, [whether struct stat contains st_ctimensec])
     AC_DEFINE(HAVE_STAT_HIRES_TIMESTAMPS, 1,
-	    [whether struct stat has sub-second timestamps without struct timespec])
+	    [whether struct stat has sub-second timestamps without struct timespec suffixed nsec])
+fi
+
+dnl AIX stype sub-second timestamps:
+AC_CACHE_CHECK([whether struct stat has sub-second timestamps without struct timespec suffixed _n], samba_cv_stat_hires_notimespec_n,
+    [
+	AC_TRY_COMPILE(
+	    [
+#if TIME_WITH_SYS_TIME
+# include <sys/time.h>
+# include <time.h>
+#else
+# if HAVE_SYS_TIME_H
+#  include <sys/time.h>
+# else
+#  include <time.h>
+# endif
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+	    ],
+	    [
+		struct timespec t;
+		struct stat s = {0};
+		t.tv_sec = s.st_mtime;
+		t.tv_nsec = s.st_mtime_n;
+		t.tv_sec = s.st_ctime;
+		t.tv_nsec = s.st_ctime_n;
+		t.tv_sec = s.st_atime;
+		t.tv_nsec = s.st_atime_n;
+	    ],
+	    samba_cv_stat_hires_notimespec_n=yes, samba_cv_stat_hires_notimespec_n=no)
+    ])
+
+if test x"$samba_cv_stat_hires_notimespec_n" = x"yes" ; then
+    AC_DEFINE(HAVE_STAT_ST_MTIME_N, 1, [whether struct stat contains st_mtime_n])
+    AC_DEFINE(HAVE_STAT_ST_ATIME_N, 1, [whether struct stat contains st_atime_n])
+    AC_DEFINE(HAVE_STAT_ST_CTIME_N, 1, [whether struct stat contains st_ctime_n])
+    AC_DEFINE(HAVE_STAT_HIRES_TIMESTAMPS, 1,
+	    [whether struct stat has sub-second timestamps without struct timespec suffixed _n])
+fi
+
+dnl Tru64 has _micro_second_ resolution:
+AC_CACHE_CHECK([whether struct stat has sub-second timestamps in st_uXtime], samba_cv_stat_hires_uxtime,
+    [
+	AC_TRY_COMPILE(
+	    [
+#if TIME_WITH_SYS_TIME
+# include <sys/time.h>
+# include <time.h>
+#else
+# if HAVE_SYS_TIME_H
+#  include <sys/time.h>
+# else
+#  include <time.h>
+# endif
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+	    ],
+	    [
+		struct timespec t;
+		struct stat s = {0};
+		t.tv_sec = s.st_mtime;
+		t.tv_nsec = s.st_umtime * 1000;
+		t.tv_sec = s.st_ctime;
+		t.tv_nsec = s.st_uctime * 1000;
+		t.tv_sec = s.st_atime;
+		t.tv_nsec = s.st_uatime * 1000;
+	    ],
+	    samba_cv_stat_hires_uxtime=yes, samba_cv_stat_hires_uxtime=no)
+    ])
+
+if test x"$samba_cv_stat_hires_uxtime" = x"yes" ; then
+    AC_DEFINE(HAVE_STAT_ST_UMTIME, 1, [whether struct stat contains st_umtime])
+    AC_DEFINE(HAVE_STAT_ST_UATIME, 1, [whether struct stat contains st_uatime])
+    AC_DEFINE(HAVE_STAT_ST_UCTIME, 1, [whether struct stat contains st_uctime])
+    AC_DEFINE(HAVE_STAT_HIRES_TIMESTAMPS, 1,
+	    [whether struct stat has sub-second timestamps in st_uXtime])
 fi
 
 AC_CACHE_CHECK([whether struct stat has st_birthtimespec], samba_cv_stat_st_birthtimespec,
@@ -1372,7 +1527,7 @@ AC_CACHE_CHECK([whether struct stat has st_birthtimespec], samba_cv_stat_st_birt
 		struct stat s = {0};
 		t = s.st_birthtimespec;
 	    ],
-	    samba_cv_stat_st_birthtimespec=yes, samba_cv_stat_birthtimespec=no)
+	    samba_cv_stat_st_birthtimespec=yes, samba_cv_stat_st_birthtimespec=no)
     ])
 
 if test x"$samba_cv_stat_st_birthtimespec" = x"yes" ; then
@@ -1402,7 +1557,7 @@ AC_CACHE_CHECK([whether struct stat has st_birthtimensec], samba_cv_stat_st_birt
 		struct stat s = {0};
 		t.tv_nsec = s.st_birthtimensec;
 	    ],
-	    samba_cv_stat_st_birthtimensec=yes, samba_cv_stat_birthtimensec=no)
+	    samba_cv_stat_st_birthtimensec=yes, samba_cv_stat_st_birthtimensec=no)
     ])
 
 if test x"$samba_cv_stat_st_birthtimensec" = x"yes" ; then
@@ -1432,7 +1587,7 @@ AC_CACHE_CHECK([whether struct stat has st_birthtime], samba_cv_stat_st_birthtim
 		struct stat s = {0};
 		t = s.st_birthtime;
 	    ],
-	    samba_cv_stat_st_birthtime=yes, samba_cv_stat_birthtime=no)
+	    samba_cv_stat_st_birthtime=yes, samba_cv_stat_st_birthtime=no)
     ])
 
 if test x"$samba_cv_stat_st_birthtime" = x"yes" ; then
@@ -2289,9 +2444,13 @@ for i in $ICONV_LOOK_DIRS ; do
     # in both libiconv and in libc. In this case the jm_ICONV test will always
     # succeed when the header is found. To counter this, make sure the
     # library directory is there and check the ABI directory first (which
-    # should be harmless on other systems.
+    # should be harmless on other systems, but causes tons of linker warnings on
+    # 64bit Ubuntu systems).
+    # As the build farm doesn't seem to have any IRIX machines with iconv.h
+    # installed, I've decided to fix the linker warnings.
+    # -- Kai
     # For IA64 HPUX systems, the libs are located in lib/hpux32 instead of lib.
-    for l in "lib32" "lib" "lib/hpux32"; do
+    for l in "lib" "lib32" "lib/hpux32"; do
         if test -d "$i/$l" ; then
                 LDFLAGS="$save_LDFLAGS -L$i/$l"
 		LIBS=
@@ -2473,7 +2632,7 @@ if test x"$samba_cv_HAVE_KERNEL_CHANGE_NOTIFY" = x"yes"; then
 fi
 
 AC_CACHE_CHECK([for inotify support],samba_cv_HAVE_INOTIFY,[
-AC_CHECK_HEADERS(linux/inotify.h asm/unistd.h)
+AC_CHECK_HEADERS(linux/inotify.h asm/unistd.h sys/inotify.h)
 AC_CHECK_FUNCS(inotify_init)
 AC_HAVE_DECL(__NR_inotify_init, [#include <asm/unistd.h>])
 ],
@@ -2966,9 +3125,12 @@ if test x"$samba_cv_WITH_AFS" != x"no" ||
     fi
 fi
 
+FAKE_KASERVER_OBJ=""
 if test x"$samba_cv_WITH_FAKE_KASERVER" != x"no" && test x"$have_afs_headers" = x"yes"; then
     AC_DEFINE(WITH_FAKE_KASERVER,1,[Whether to include AFS fake-kaserver support])
+    FAKE_KASERVER_OBJ="utils/net_afs.o"
 fi
+AC_SUBST(FAKE_KASERVER_OBJ)
 
 #################################################
 # check whether to compile AFS/NT ACL mapping module
@@ -4352,6 +4514,22 @@ AC_ARG_WITH(syslog,
 )
 
 #################################################
+# check for custom syslog facility
+AC_MSG_CHECKING(whether to use a custom syslog facility)
+AC_ARG_WITH(syslog-facility,
+[AS_HELP_STRING([--with-syslog-facility], [Use a custom syslog facility (default=none)])],
+[
+  if test "$withval" = "no" ; then
+    AC_MSG_ERROR([argument to --with-syslog-facility must be a string])
+  else
+     if test "$withval" != "yes" ; then
+        syslog_facility="$withval"
+	AC_DEFINE_UNQUOTED(SYSLOG_FACILITY,$syslog_facility, [syslog facility to log to])
+     fi
+  fi
+])
+
+#################################################
 # check for experimental disk-quotas support
 
 samba_cv_WITH_QUOTAS=auto
@@ -4852,11 +5030,40 @@ fi
 # This is not the case on ancient Linux systems.
 
 AC_CACHE_CHECK([that statvfs.f_fsid is an integer],samba_cv_fsid_int, [
-    AC_TRY_COMPILE([#include <sys/statvfs.h>],[struct statvfs buf; buf.f_fsid = 0],
+    AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/statvfs.h>],[struct statvfs buf; buf.f_fsid = 0],
 	samba_cv_fsid_int=yes,samba_cv_fsid_int=no)])
 if test x"$samba_cv_fsid_int" = x"yes"; then
     AC_DEFINE(HAVE_FSID_INT, 1, [Whether statvfs.f_fsid is an integer])
 fi
+
+# fsusage.c assumes that statvfs has an f_frsize entry. Some weird
+# systems use f_bsize.
+AC_CACHE_CHECK([that statvfs.f_frsize works],samba_cv_frsize, [
+    AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/statvfs.h>],[struct statvfs buf; buf.f_frsize = 0],
+	samba_cv_frsize=yes,samba_cv_frsize=no)])
+if test x"$samba_cv_frsize" = x"yes"; then
+    AC_DEFINE(HAVE_FRSIZE, 1, [Whether statvfs.f_frsize exists])
+fi
+
+# Some systems use f_flag in struct statvfs while others use f_flags
+AC_CACHE_CHECK([that statvfs.statvfs_f_flag works],samba_cv_statvfs_f_flag, [
+    AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/statvfs.h>],[struct statvfs buf; buf.f_flag = 0],
+	samba_cv_statvfs_f_flag=yes,samba_cv_statvfs_f_flag=no)])
+if test x"$samba_cv_statvfs_f_flag" = x"yes"; then
+    AC_DEFINE(HAVE_STATVFS_F_FLAG, 1, [Whether statvfs.f_flag exists])
+fi
+
+AC_CACHE_CHECK([that statvfs.statvfs_f_flags works],samba_cv_statvfs_f_flags, [
+    AC_TRY_COMPILE([#include <sys/types.h>
+#include <sys/statvfs.h>],[struct statvfs buf; buf.f_flags = 0],
+	samba_cv_statvfs_f_flags=yes,samba_cv_statvfs_f_flags=no)])
+if test x"$samba_cv_statvfs_f_flags" = x"yes"; then
+    AC_DEFINE(HAVE_STATVFS_F_FLAGS, 1, [Whether statvfs.f_flags exists])
+fi
+
 
 if test $space = no; then
   # DEC Alpha running OSF/1
@@ -5019,16 +5226,127 @@ AC_MSG_RESULT([$samba_cv_HAVE_EXPLICIT_LARGEFILE_SUPPORT])
 #################################################
 # check for cluster extensions
 
-AC_MSG_CHECKING(whether to include cluster support)
+CTDB_CFLAGS=""
+AC_SUBST(CTDB_CFLAGS)
+AC_ARG_WITH(ctdb,
+[AS_HELP_STRING([--with-ctdb=DIR], [Where to find ctdb sources])],
+[ case "$withval" in
+  yes|no)
+    AC_MSG_WARN([--with-ctdb called without argument])
+    ;;
+  *)
+    CTDB_CPPFLAGS="-I$withval/include"
+    ;;
+  esac])
+
+SAVED_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $CTDB_CPPFLAGS"
+ctdb_broken="missing or broken headers"
+
+AC_CHECK_HEADERS(ctdb.h ctdb_private.h,,,[
+#include "confdefs.h"
+#define NO_CONFIG_H
+#include "replace.h"
+#include "system/wait.h"
+#include "system/network.h"
+#define private #error __USED_RESERVED_WORD_private__
+#include <talloc.h>
+#include <tdb.h>
+#include <ctdb.h>
+])
+
+AC_HAVE_DECL(CTDB_CONTROL_TRANS2_COMMIT_RETRY,[
+#include "confdefs.h"
+#define NO_CONFIG_H
+#include "replace.h"
+#include "system/wait.h"
+#include "system/network.h"
+#include <talloc.h>
+#include <tdb.h>
+#include <ctdb.h>
+#include <ctdb_private.h>
+])
+if test x"$ac_cv_have_CTDB_CONTROL_TRANS2_COMMIT_RETRY_decl" = x"yes"; then
+	ctdb_broken=no
+else
+	ctdb_broken="missing transaction support"
+fi
+
+# in ctdb 1.0.57 ctdb_control_tcp was temparary renamed to ctdb_tcp_client
+AC_CHECK_TYPE(struct ctdb_tcp_client,[
+	AC_DEFINE([ctdb_control_tcp],[ctdb_tcp_client],[ctdb ipv4 support])
+],,[
+#include "confdefs.h"
+#define NO_CONFIG_H
+#include "replace.h"
+#include "system/wait.h"
+#include "system/network.h"
+#include <talloc.h>
+#include <tdb.h>
+#include <ctdb.h>
+#include <ctdb_private.h>
+])
+
+AC_CHECK_TYPE(struct ctdb_control_tcp,[
+	AC_DEFINE([HAVE_STRUCT_CTDB_CONTROL_TCP],[1],[ctdb ipv4 support])
+],[
+	ctdb_broken="missing struct ctdb_control_tcp"
+],[
+#include "confdefs.h"
+#define NO_CONFIG_H
+#include "replace.h"
+#include "system/wait.h"
+#include "system/network.h"
+#include <talloc.h>
+#include <tdb.h>
+#include <ctdb.h>
+#include <ctdb_private.h>
+])
+
+AC_CHECK_TYPE(struct ctdb_control_tcp_addr,[
+	AC_DEFINE([HAVE_STRUCT_CTDB_CONTROL_TCP_ADDR],[1],[ctdb ipv6 support])
+],,[
+#include "confdefs.h"
+#define NO_CONFIG_H
+#include "replace.h"
+#include "system/wait.h"
+#include "system/network.h"
+#include <talloc.h>
+#include <tdb.h>
+#include <ctdb.h>
+#include <ctdb_private.h>
+])
+CPPFLAGS="$SAVED_CPPFLAGS"
+
+AC_MSG_CHECKING(cluster support)
 AC_ARG_WITH(cluster-support,
-[AS_HELP_STRING([--with-cluster-support], [Enable cluster extensions (default=no)])])
-if test "x$with_cluster_support" = "xyes"; then
+[AS_HELP_STRING([--with-cluster-support], [Enable cluster extensions (default=auto)])])
+
+if test x"$with_cluster_support" = x ; then
+	with_cluster_support="auto"
+fi
+
+if test x"$ac_cv_header_ctdb_private_h" != x"yes"; then
+	if test "x$with_cluster_support" = "xyes"; then
+		AC_MSG_ERROR("ctdb_private.h is required for cluster support")
+	fi
+	with_cluster_support=no
+fi
+
+if test x"$ctdb_broken" != x"no"; then
+	if test "x$with_cluster_support" = "xyes"; then
+		AC_MSG_ERROR(["cluster support: $ctdb_broken"])
+	fi
+	with_cluster_support=no
+fi
+
+if test "x$with_cluster_support" != "xno"; then
     AC_DEFINE(CLUSTER_SUPPORT,1,[Whether to enable cluster extensions])
+    SAMBA_CPPFLAGS="${SAMBA_CPPFLAGS} ${CTDB_CPPFLAGS}"
     AC_MSG_RESULT(yes)
 else
     AC_MSG_RESULT(no)
 fi
-
 
 #################################################
 # check for ACL support
@@ -5850,10 +6168,10 @@ AC_SUBST(FLAGS1)
 # Check if user wants DNS service discovery support
 
 AC_ARG_ENABLE(dnssd,
-[AS_HELP_STRING([--enable-dnssd], [Enable DNS service discovery support (default=auto)])])
+[AS_HELP_STRING([--enable-dnssd], [Enable DNS service discovery support (default=no)])])
 
 AC_SUBST(DNSSD_LIBS)
-if test x"$enable_dnssd" != x"no"; then
+if test x"$enable_dnssd" == x"yes"; then
     have_dnssd_support=yes
 
     AC_CHECK_HEADERS(dns_sd.h)
@@ -5866,7 +6184,7 @@ if test x"$enable_dnssd" != x"no"; then
     AC_CHECK_FUNCS(DNSServiceRegister)
     AC_CHECK_LIB_EXT(dns_sd, DNSSD_LIBS, DNSServiceRegister)
     if test x"$ac_cv_func_DNSServiceRegister" != x"yes" -a \
-            x"$ac_cv_lib_ext_DNSServiceRegister" != x"yes"; then
+            x"$ac_cv_lib_ext_dns_sd_DNSServiceRegister" != x"yes"; then
 	have_dnssd_support=no
     fi
 
@@ -5879,6 +6197,42 @@ if test x"$enable_dnssd" != x"no"; then
 	fi
     fi
 
+fi
+
+#################################################
+# Check if user wants avahi support
+
+AC_ARG_ENABLE(avahi,
+[AS_HELP_STRING([--enable-avahi], [Enable Avahi support (default=auto)])])
+
+AC_SUBST(AVAHI_LIBS)
+if test x"$enable_avahi" != x"no"; then
+    have_avahi_support=yes
+
+    AC_CHECK_HEADERS(avahi-common/watch.h)
+    if test x"$ac_cv_header_avahi_common_watch_h" != x"yes"; then
+	have_avahi_support=no
+    fi
+
+    AC_CHECK_HEADERS(avahi-client/client.h)
+    if test x"$ac_cv_header_avahi_common_watch_h" != x"yes"; then
+	have_avahi_support=no
+    fi
+
+    AC_CHECK_LIB_EXT(avahi-client, AVAHI_LIBS, avahi_client_new)
+    if test x"$ac_cv_lib_ext_avahi_client_avahi_client_new" != x"yes"; then
+	have_avahi_support=no
+    fi
+
+    if test x"$have_avahi_support" = x"yes"; then
+	AC_DEFINE(WITH_AVAHI_SUPPORT, 1,
+		[Whether to enable avahi support])
+	AC_SUBST(AVAHI_OBJ, "lib/avahi.o smbd/avahi_register.o")
+    else
+	if test x"$enable_avahi" = x"yes"; then
+	    AC_MSG_ERROR(avahi support not available)
+	fi
+    fi
 fi
 
 #################################################
@@ -6021,6 +6375,8 @@ SMB_MODULE(idmap_passdb, winbindd/idmap_passdb.o, "bin/passdb.$SHLIBEXT", IDMAP)
 SMB_MODULE(idmap_nss, winbindd/idmap_nss.o, "bin/nss.$SHLIBEXT", IDMAP)
 SMB_MODULE(idmap_rid, winbindd/idmap_rid.o, "bin/rid.$SHLIBEXT", IDMAP)
 SMB_MODULE(idmap_ad, winbindd/idmap_ad.o, "bin/ad.$SHLIBEXT", IDMAP)
+SMB_MODULE(idmap_hash, \$(IDMAP_HASH_OBJ), "bin/hash.$SHLIBEXT", IDMAP)
+SMB_MODULE(idmap_adex, \$(IDMAP_ADEX_OBJ), "bin/adex.$SHLIBEXT", IDMAP)
 SMB_SUBSYSTEM(IDMAP, winbindd/idmap.o)
 
 SMB_MODULE(nss_info_template, winbindd/nss_info_template.o, "bin/template.$SHLIBEXT", NSS_INFO)
@@ -6074,12 +6430,22 @@ SMB_MODULE(vfs_readahead, \$(VFS_READAHEAD_OBJ), "bin/readahead.$SHLIBEXT", VFS)
 SMB_MODULE(vfs_tsmsm, \$(VFS_TSMSM_OBJ), "bin/tsmsm.$SHLIBEXT", VFS)
 SMB_MODULE(vfs_fileid, \$(VFS_FILEID_OBJ), "bin/fileid.$SHLIBEXT", VFS)
 SMB_MODULE(vfs_aio_fork, \$(VFS_AIO_FORK_OBJ), "bin/aio_fork.$SHLIBEXT", VFS)
+SMB_MODULE(vfs_preopen, \$(VFS_PREOPEN_OBJ), "bin/preopen.$SHLIBEXT", VFS)
 SMB_MODULE(vfs_syncops, \$(VFS_SYNCOPS_OBJ), "bin/syncops.$SHLIBEXT", VFS)
 SMB_MODULE(vfs_zfsacl, \$(VFS_ZFSACL_OBJ), "bin/zfsacl.$SHLIBEXT", VFS)
 SMB_MODULE(vfs_notify_fam, \$(VFS_NOTIFY_FAM_OBJ), "bin/notify_fam.$SHLIBEXT", VFS)
+SMB_MODULE(vfs_acl_xattr, \$(VFS_ACL_XATTR_OBJ), "bin/acl_xattr.$SHLIBEXT", VFS)
+SMB_MODULE(vfs_acl_tdb, \$(VFS_ACL_TDB_OBJ), "bin/acl_tdb.$SHLIBEXT", VFS)
+SMB_MODULE(vfs_smb_traffic_analyzer, \$(VFS_SMB_TRAFFIC_ANALYZER_OBJ), "bin/smb_traffic_analyzer.$SHLIBEXT", VFS)
+SMB_MODULE(vfs_dirsort, \$(VFS_DIRSORT_OBJ), "bin/dirsort.$SHLIBEXT", VFS)
 
 
 SMB_SUBSYSTEM(VFS,smbd/vfs.o)
+
+SMB_MODULE(gpext_registry, libgpo/gpext/registry.o, "bin/registry.$SHLIBEXT", GPEXT)
+SMB_MODULE(gpext_scripts, libgpo/gpext/scripts.o, "bin/scripts.$SHLIBEXT", GPEXT)
+SMB_MODULE(gpext_security, libgpo/gpext/security.o, "bin/security.$SHLIBEXT", GPEXT)
+SMB_SUBSYSTEM(GPEXT, libgpo/gpext/gpext.o)
 
 AC_DEFINE_UNQUOTED(STRING_STATIC_MODULES, "$string_static_modules", [String list of builtin modules])
 
@@ -6212,7 +6578,7 @@ AC_TRY_RUN([#include "${srcdir-.}/tests/summary.c"],
 
 dnl Merge in developer cflags from now on
 AC_SUBST(DEVELOPER_CFLAGS)
-if test x"$krb5_developer" = x"yes" -o x"$developer" = x"yes"; then
+if test x"$krb5_developer" = x"yes" -o x"$developer" = x"yes" -o x"$picky_developer" = x"yes"; then
     CFLAGS="${CFLAGS} \$(DEVELOPER_CFLAGS)"
 fi
 
@@ -6224,10 +6590,12 @@ AC_SUBST(SMBD_LIBS)
 AC_OUTPUT(Makefile
 	  script/findsmb smbadduser script/gen-8bit-gap.sh script/installbin.sh script/uninstallbin.sh
 	  lib/netapi/examples/Makefile
+	  lib/netapi/tests/Makefile
 	  pkgconfig/smbclient.pc
 	  pkgconfig/wbclient.pc
 	  pkgconfig/netapi.pc
 	  pkgconfig/smbsharemodes.pc
+	  ../examples/libsmbclient/Makefile.internal
 	  )
 
 #################################################

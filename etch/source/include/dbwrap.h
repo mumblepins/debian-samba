@@ -45,19 +45,20 @@ struct db_context {
 	int (*transaction_start)(struct db_context *db);
 	int (*transaction_commit)(struct db_context *db);
 	int (*transaction_cancel)(struct db_context *db);
+	int (*parse_record)(struct db_context *db, TDB_DATA key,
+			    int (*parser)(TDB_DATA key, TDB_DATA data,
+					  void *private_data),
+			    void *private_data);
 	void *private_data;
 	bool persistent;
 };
+
+bool db_is_local(const char *name);
 
 struct db_context *db_open(TALLOC_CTX *mem_ctx,
 			   const char *name,
 			   int hash_size, int tdb_flags,
 			   int open_flags, mode_t mode);
-
-struct db_context *db_open_trans(TALLOC_CTX *mem_ctx,
-				 const char *name,
-				 int hash_size, int tdb_flags,
-				 int open_flags, mode_t mode);
 
 struct db_context *db_open_rbt(TALLOC_CTX *mem_ctx);
 
@@ -72,7 +73,6 @@ struct db_context *db_open_tdb2(TALLOC_CTX *mem_ctx,
 			        int open_flags, mode_t mode);
 
 struct messaging_context;
-void db_tdb2_setup_messaging(struct messaging_context *msg_ctx, bool server);
 
 #ifdef CLUSTER_SUPPORT
 struct db_context *db_open_ctdb(TALLOC_CTX *mem_ctx,
