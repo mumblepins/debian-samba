@@ -1,3 +1,9 @@
+samba (2:3.3.4-1~bpo50+2) lenny-backports; urgency=low
+
+  * Rebuild (really for lenny this time)
+
+ -- Christian Perrier <bubulle@debian.org>  Wed, 27 May 2009 20:19:02 +0200
+
 samba (2:3.3.4-1~bpo50+1) lenny-backports; urgency=low
 
   * Backport to lenny
