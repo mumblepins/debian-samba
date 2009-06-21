@@ -19,3 +19,4 @@ smbtar-bashism.patch
 no-unnecessary-cups.patch
 shrink-dead-code.patch
 fix-manpages-warnings.patch
+security-upstream_6478.patch
