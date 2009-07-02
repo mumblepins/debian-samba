@@ -1,3 +1,45 @@
+samba (2:3.3.6-1) unstable; urgency=high
+
+  * New upstream release. Security release.
+  * CVE 2009-1886: Fix Formatstring vulnerability in smbclient
+  * CVE 2009-1888: Fix uninitialized read of a data value
+
+ -- Christian Perrier <bubulle@debian.org>  Fri, 26 Jun 2009 18:21:51 +0200
+
+samba (2:3.3.5-1) unstable; urgency=low
+
+  [ Steve Langasek ]
+  * debian/patches/undefined-symbols.patch: fix up patch so that it's
+    suitable for submission upstream.
+  * debian/patches/proper-static-lib-linking.patch: apply the rules to
+    vfstest, ldbrename, nss_wins, pam_winbind, pam_smbpass, and
+    rpc_open_tcp.
+
+  [ Debconf translations ]
+  * Italian. Closes: #529350
+
+  [ Christian Perrier ]
+  * New upstream version
+  * Lintian fixes:
+    -  Declare versioned dependency on debhelper to fit what we have in
+       debian/compat
+    - samba.postinst: do not call mksmbpasswd with an absolute path
+  * Upgrade Standard to 3.8.2 (checked, no change)
+  * Upgrade debhelper compatibility level to 6
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 20 Jun 2009 08:01:16 +0200
+
+samba (2:3.3.4-2) unstable; urgency=low
+
+  [ Christian Perrier ]
+  * Do no compile with clustering support on non-Linux platforms
+    Closes: #528382
+
+  [ Debconf translations ]
+  * Basque. Closes: #528757
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 16 May 2009 17:31:09 +0200
+
 samba (2:3.3.4-1~bpo40+1) lenny-backports; urgency=low
 
   * Backport to etch
