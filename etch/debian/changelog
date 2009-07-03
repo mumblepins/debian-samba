@@ -1,3 +1,9 @@
+samba (2:3.3.6-1~bpo40+1) UNRELEASED; urgency=low
+
+  * Etch backport
+
+ -- Christian Perrier <bubulle@debian.org>  Thu, 02 Jul 2009 22:50:23 +0200
+
 samba (2:3.3.6-1) unstable; urgency=high
 
   * New upstream release. Security release.
@@ -193,7 +199,6 @@ samba (2:3.3.0-2) unstable; urgency=low
 
  -- Christian Perrier <bubulle@debian.org>  Sat, 14 Feb 2009 13:38:14 +0100
 
->>>>>>> .fusion-droit.r2788
 samba (2:3.2.5-4) unstable; urgency=low
 
   * Fix segfault whan accessign some NAS devices running old versions of Samba
