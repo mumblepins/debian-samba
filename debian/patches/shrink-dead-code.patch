@@ -1,25 +1,25 @@
-Comment by Michael Adam <obnox@samba.org>:
+Description: Drop dead code from executables
+ Comment by Michael Adam:
+ .
+ While this patch is clever in one respect, it has bad side effects:
+ Functions that not used are removed from the binaries.
+ For functions that are only used in shared objects, this is very bad,
+ since these will refuse to work (load).
+ .
+ Example: librpc/gen_ndr/ndr_xattr.c:ndr_pull_xattr_NTACL() is only
+ used in the acl_tdb and acl_xattr vfs modules.
+ So the symbol is not present in smbd, and thus these modules will
+ not work. The _do_ not work in the 3.3. packages that are out there.
+ .
+ I recommend not using this patch!
+Author: Steve Langasek <vorlon@debian.org>
+Forwarded: no
+Reviewed-By: Michael Adam <obnox@samba.org>
 
-While this patch is clever in one respect, it has bad side effects:
-Functions that not used are removed from the binaries.
-For functions that are only used in shared objects, this is very bad,
-since these will refuse to work (load).
-
-Example: librpc/gen_ndr/ndr_xattr.c:ndr_pull_xattr_NTACL() is only
-used in the acl_tdb and acl_xattr vfs modules.
-So the symbol is not present in smbd, and thus these modules will
-not work. The _do_ not work in the 3.3. packages that are out there.
-
-I recommend not using this patch!
-
-Better reduction is done by fixing the linking dependencies... :-(
-
-Michael
-
-Index: samba-3.3.4/source/Makefile.in
+Index: samba-3.3.4/source3/Makefile.in
 ===================================================================
---- samba-3.3.4.orig/source/Makefile.in	2009-05-02 14:33:23.654935629 +0200
-+++ samba-3.3.4/source/Makefile.in	2009-05-02 14:34:41.393926942 +0200
+--- samba-3.3.4.orig/source3/Makefile.in	2009-05-02 14:33:23.654935629 +0200
++++ samba-3.3.4/source3/Makefile.in	2009-05-02 14:34:41.393926942 +0200
 @@ -1336,182 +1336,243 @@
  
  bin/nmbd@EXEEXT@: $(BINARY_PREREQS) $(NMBD_OBJ) @BUILD_POPT@ @LIBTALLOC_TARGET@ @LIBTDB_TARGET@
