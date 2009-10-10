@@ -3,7 +3,7 @@ samba (2:3.4.2-1~bpo50+1) lenny-backports; urgency=high
   * Backport to lenny
   * Security update for lenny backports
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 30 Jun 2009 08:07:54 +0200
+ -- Christian Perrier <bubulle@debian.org>  Sat, 10 Oct 2009 19:05:24 +0200
 
 samba (2:3.4.2-1) unstable; urgency=high
 
