@@ -1,3 +1,9 @@
+samba (2:3.4.2-1~bpo50+3) lenny-backports; urgency=low
+
+  * Drop dependency on libpam-runtime for libpam-smbpass
+
+ -- Christian Perrier <bubulle@debian.org>  Sun, 25 Oct 2009 22:15:04 +0100
+
 samba (2:3.4.2-1~bpo50+2) lenny-backports; urgency=high
 
   * Revert PAM changes from unstable:
