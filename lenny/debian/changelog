@@ -1,18 +1,61 @@
-samba (2:3.4.3-1~bpo50+2) lenny-backports; urgency=low
+samba (2:3.4.5~dfsg-1) unstable; urgency=low
 
-  * Rebuild with correct linking to libtalloc1 instead of
-    libtalloc2
+  * New upstream release. Bugs fixed by this release:
+    - Memory leak in smbd. Closes: #538819, #558453
+  * Declare a versioned dependency of winbind and samba on libwbclient0
+    Closes: #550481
+  * A few lintian fixes:
+  * Drop /var/run/samba from samba-common. The directory is created
+    by init scripts when needed.
+  * No longer prepend a path to the mksmbpasswd call in samba.postinst.
+    This prevents the local administrator to use a replacement version
+    for some local reason.
 
- -- Christian Perrier <bubulle@debian.org>  Tue, 22 Dec 2009 06:00:59 +0100
+ -- Christian Perrier <bubulle@debian.org>  Sat, 23 Jan 2010 12:16:42 +0100
 
-samba (2:3.4.3-1~bpo50+1) lenny-backports; urgency=low
+samba (2:3.4.4~dfsg-1) unstable; urgency=low
 
-  * Backport new upstream release
+  * New upstream version.
+  * Drop all RFC files from upstream source, therefore using a "~dfsg"
+    suffix to upstream version number.
+  * Bugs fixed upstream:
+    - fixed list of workgroup servers in libsmbclient. 
+      Closes: #555462, #561148
+    - fixed documentation of the credentials file format in
+      mount.cifs(8). Closes: #552250
 
- -- Christian Perrier <bubulle@debian.org>  Sat, 31 Oct 2009 18:11:05 +0100
+ -- Christian Perrier <bubulle@debian.org>  Thu, 14 Jan 2010 20:16:34 +0100
+
+samba (2:3.4.3-2) unstable; urgency=low
+
+  [ Christian Perrier ]
+  * Switch to source format 3.0 (quilt)
+  * Better adapt "add machine script" example to adduser
+    Thanks to Heiko Schlittermann for the suggestion
+    Closes: #555466
+
+  [ Steve Langasek ]
+  * The "I hate non-declarative alternatives" upload:
+    - debian/samba{,-common}.prerm: don't call update-alternatives --remove
+      on upgrade, /do/ call it on other invocations of the prerm script.  If
+      these tools ever go away, the removal needs to be handled on upgrade by
+      the maintainer scripts of the new package version.
+    - debian/samba{,-common-bin}.postinst: call update-alternatives
+      unconditionally, don't second-guess the maintainer script arguments.
+    - debian/samba.postinst: call update-alternatives after the debconf
+      handling, not before; debconf triggers a re-exec of the script so
+      anything done before invoking debconf is wasted because it will be
+      re-done, and if there's already a debconf frontend running when this
+      is called, the not-redirected update-alternatives output will confuse
+      it.  Closes: #558116.
+    - debian/samba-common.prerm: move to samba-common-bin, this is the package
+      that owns these binaries.
+
+ -- Christian Perrier <bubulle@debian.org>  Thu, 17 Dec 2009 16:53:13 +0100
 
 samba (2:3.4.3-1) unstable; urgency=low
 
+>>>>>>> .fusion-droit.r3270
   * New upstream release. This fixes the following bugs:
     - Do not attempt to update /etc/mtab if it is
       a symbolic link. Closes: #408394
