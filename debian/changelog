@@ -1,3 +1,10 @@
+samba (2:3.4.5~dfsg-1~bpo50+1) lenny-backports; urgency=low
+
+  * Lenny backport
+  * Down to 1.0 source format: reintroduce build dependency on quilt
+
+ -- Christian Perrier <bubulle@debian.org>  Wed, 24 Feb 2010 21:40:37 +0100
+
 samba (2:3.4.5~dfsg-1) unstable; urgency=low
 
   * New upstream release. Bugs fixed by this release:
@@ -55,7 +62,6 @@ samba (2:3.4.3-2) unstable; urgency=low
 
 samba (2:3.4.3-1) unstable; urgency=low
 
->>>>>>> .fusion-droit.r3270
   * New upstream release. This fixes the following bugs:
     - Do not attempt to update /etc/mtab if it is
       a symbolic link. Closes: #408394
