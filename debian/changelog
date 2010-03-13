@@ -1,7 +1,45 @@
+samba (2:3.4.7~dfsg-1) unstable; urgency=low
+
+  [ Steve Langasek ]
+  * Add a PAM profile for pam_winbind.  Closes: #566890, LP: #282751.
+  * Add the correct versioned build dependency on libtalloc-dev as
+    we need 2.0.1 to build samba. Closes: #572603
+  * Add avr32 to arches with a build dependency on ctdb. Closes: #572126
+
+  [ Christian Perrier ] 
+  * New upstream release. Security fix: all smbd processes inherited
+    CAP_DAC_OVERRIDE capabilities, allowing all file system access to be
+    allowed even when permissions should have denied access.
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 09 Mar 2010 10:52:24 +0100
+
+samba (2:3.4.6~dfsg-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Christian Perrier <bubulle@debian.org>  Fri, 26 Feb 2010 22:39:50 +0100
+
+samba (2:3.4.5~dfsg-2) unstable; urgency=low
+
+  [ Steve langasek ]
+  * Revert the "bashisms" fix from version 2:3.3.0~rc2-4; "local foo=bar"
+    is explicitly allowed by Policy now, and this change introduced a
+    syntax error.  Closes: #566946.
+
+  [ Christian Perrier ]
+  * No longer maker (u)mount.cifs setuid root. Add a notice
+    about this in the package's NEWS.Debian file
+    Closes: #567554 
+  * Use dh_lintian instead of manual install of lintian overrides
+  * Updated Standards to 3.8.4 (checked, no change)
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 13 Feb 2010 14:36:33 +0100
+
 samba (2:3.4.5~dfsg-1~bpo50+2) lenny-backports; urgency=low
 
   * Add the correct versioned build dependency on libtalloc-dev as
     we need 2.0.1 to build samba
+  * re-add the patch and unatch targets in debian/rules
 
  -- Christian Perrier <bubulle@debian.org>  Wed, 03 Mar 2010 19:53:06 +0100
 
