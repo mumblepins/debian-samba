@@ -1,3 +1,11 @@
+samba (2:3.4.7~dfsg-1~bpo50+1) UNRELEASED; urgency=low
+
+  * Backport to lenny. Do our best to resync all packaging changes
+    with what we have in squeeze
+  * Drop PAM profile for winbind (not supported in lenny)
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 13 Mar 2010 12:02:20 +0100
+
 samba (2:3.4.7~dfsg-1) unstable; urgency=low
 
   [ Steve Langasek ]
