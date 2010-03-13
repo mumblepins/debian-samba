@@ -177,7 +177,6 @@ install: build
 	install -m 0755 source3/bin/replacetort $(DESTDIR)/usr/bin/replacetort
 	install -m 0755 source3/bin/tdbtorture $(DESTDIR)/usr/bin/tdbtorture
 	install -m 0755 source3/bin/smbconftort $(DESTDIR)/usr/bin/smbconftort
-	install -m 0644 debian/winbind.pam-config $(DESTDIR)/usr/share/pam-configs/winbind
 
 ifeq ($(mount_cifs),yes)
 	install -m 0755 debian/mount.smbfs $(DESTDIR)/sbin/mount.smbfs
