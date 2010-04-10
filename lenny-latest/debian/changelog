@@ -3,6 +3,7 @@ samba (2:3.5.2~dfsg~unoff50-1) lenny; urgency=low
   * Backport to lenny. Do our best to resync all packaging changes
     with what we have in squeeze
   * Drop PAM profile for winbind (not supported in lenny)
+  * Reintroduce smbfs package (there is no cifs-utils in lenny)
 
  -- Christian Perrier <bubulle@debian.org>  Sat, 13 Mar 2010 12:02:20 +0100
 
