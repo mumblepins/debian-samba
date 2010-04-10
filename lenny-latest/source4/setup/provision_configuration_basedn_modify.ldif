@@ -1,7 +1,0 @@
-###############################
-# Configuration Naming Context
-###############################
-dn: ${CONFIGDN}
-changetype: modify
-replace: subRefs
-subRefs: ${SCHEMADN}
