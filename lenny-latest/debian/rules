@@ -68,17 +68,12 @@ conf_args = \
 ifeq ($(DEB_HOST_ARCH_OS),linux)
   conf_args += \
 		--with-ctdb=/usr --with-cluster-support=yes \
-		--with-cifsmount \
-		--with-cifsupcall \
-		--with-cifsumount \
 		--with-acl-support \
-		--with-quotas
-  mount_cifs	= yes
-  smbfs		= yes
-else
+		--with-quotas \
+		--without-cifsumount \
+		--without-cifsupcall
+	  else
   conf_args +=	--without-quotas --without-cifsmount
-  mount_cifs	= no
-  smbfs		= no
 endif
 
 ifeq ($(DEB_BUILD_GNU_TYPE), $(DEB_HOST_GNU_TYPE))
@@ -131,10 +126,6 @@ ifeq ($(smbfs),no)
   DH_EXTRAS=-Nsmbfs
 endif
 
-ifeq ($(smbfs),no)
-  DH_EXTRAS=-Nsmbfs
-endif
-
 install: DH_OPTIONS=$(DH_EXTRAS)
 install: build
 	dh_testdir
@@ -182,10 +173,6 @@ install: build
 	install -m 0755 source3/bin/replacetort $(DESTDIR)/usr/bin/replacetort
 	install -m 0755 source3/bin/tdbtorture $(DESTDIR)/usr/bin/tdbtorture
 	install -m 0755 source3/bin/smbconftort $(DESTDIR)/usr/bin/smbconftort
-
-ifeq ($(mount_cifs),yes)
-	install -m 0755 debian/mount.smbfs $(DESTDIR)/sbin/mount.smbfs
-endif
 
 ifeq ($(mount_cifs),yes)
 	install -m 0755 debian/mount.smbfs $(DESTDIR)/sbin/mount.smbfs
