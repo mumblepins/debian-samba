@@ -1,3 +1,9 @@
+samba (2:3.5.3~dfsg-1~unoff50+2) UNRELEASED; urgency=low
+
+  * Drop calls to pam-auth-update in winbind.prerm and winbind.postinst
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 05 Jun 2010 07:12:05 +0200
+
 samba (2:3.5.3~dfsg-1~unoff50+1) lenny-backports-latest; urgency=low
 
   * Backport to lenny.
