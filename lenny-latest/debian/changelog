@@ -1,3 +1,9 @@
+samba (2:3.5.4~dfsg-1~unoff50+2) lenny-backports-latest; urgency=low
+
+  * Rebuild in a desperate attempt to get rid of size mismatch issues
+
+ -- Christian Perrier <bubulle@debian.org>  Mon, 30 Aug 2010 22:10:20 +0200
+
 samba (2:3.5.4~dfsg-1~unoff50+1) lenny-backports-latest; urgency=low
 
   * New upstream release
