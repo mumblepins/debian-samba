@@ -1,12 +1,106 @@
-samba (2:3.4.8~dfsg-2~bpo50+1) lenny-backports; urgency=low
+samba (2:3.5.5~dfsg-1) unstable; urgency=high
 
-  * Backport to lenny.
-  * Use 1.0 source format
-  * Drop PAM profile for winbind (not supported in lenny)
-  * Drop pam-auth-update calls in winbind.postinst and entirely drop
-    winbind.postrm. Also drop useless debian/winbind.pam-config.
+  [ Christian Perrier ]
+  * New upstream release. Security release fixing:
+    - CVE-2019-3069: Buffer overrun vulnerability in sid_parse.
+      Closes: #596891.
+  * Fix comment in swat's postinst. It is not turned off by default
+    Closes: #596040
+  * Drop transition code from (pre-etch) 3.0.20b-3 version in swat postinst
 
- -- Christian Perrier <bubulle@debian.org>  Sun, 25 Jul 2010 19:22:27 +0200
+  [ Steve Langasek ]
+  * debian/control: winbind needs libpam-runtime (>= 1.0.1-6) for
+    pam-auth-update.  Closes: #594325.
+
+  [ Debconf translations ]  
+  * Arabic (Ossama Khayat).  Closes: #596164
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 14 Sep 2010 23:03:35 +0200
+
+samba (2:3.5.4~dfsg-2) unstable; urgency=low
+
+  * Release to unstable
+
+  [ Debconf translations ]  
+  * Danish (Joe Dalton).  Closes: #592789.
+  * Galician (Jorge Barreiro).  Closes: #592809
+
+  [ Steve Langasek ]
+  * debian/patches/fhs-filespaths.patch, debian/samba.postinst,
+    debian/winbind.postinst: move some files from /etc/samba to
+    /var/lib/samba where they belong: MACHINE.SID, schannel_store.tdb,
+    and idmap2.tdb.
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 07 Sep 2010 17:47:32 +0200
+
+samba (2:3.5.4~dfsg-1) experimental; urgency=low
+
+  * New upstream release
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 29 Jun 2010 22:00:53 +0200
+
+samba (2:3.5.3~dfsg-1) experimental; urgency=low
+
+  * New upstream release. Fixes the following bugs:
+    - smbclient segfaults when used against old samba "security = share"
+      Closes: #574886
+  * Drop duplicate build dependency on ctdb
+
+ -- Christian Perrier <bubulle@debian.org>  Wed, 19 May 2010 22:07:49 +0200
+
+samba (2:3.5.2~dfsg-2) experimental; urgency=low
+
+  * Resync changes with changes in trunk between 3:3.4.4~dfsg-1 and
+    2:3.4.7~dfsg-2
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 04 May 2010 17:13:47 +0200
+
+samba (2:3.5.2~dfsg-1) experimental; urgency=low
+
+  * New upstream release
+  * Bugs fixed upstream:
+    - Fix parsing of the gecos field
+      Closes: #460494
+
+ -- Christian Perrier <bubulle@debian.org>  Thu, 08 Apr 2010 19:48:07 +0200
+
+samba (2:3.5.1~dfsg-1) experimental; urgency=low
+
+  * New upstream release. Security fix: all smbd processes inherited
+    CAP_DAC_OVERRIDE capabilities, allowing all file system access to be
+    allowed even when permissions should have denied access.
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 09 Mar 2010 10:54:01 +0100
+
+samba (2:3.5.0dfsg-1) experimental; urgency=low
+
+  * New upstream release. Not using "3.5.0~dfsg" as version number
+    because we used a "higher" version number in previous versions.
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 02 Mar 2010 22:03:15 +0100
+
+samba (2:3.5.0~rc3~dfsg-1) experimental; urgency=low
+
+  * New upstream release candidate
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 20 Feb 2010 08:36:57 +0100
+
+samba (2:3.5.0~rc2~dfsg-1) experimental; urgency=low
+
+  * New upstream pre-release
+  * Use new --with-codepagedir option. Consequently drop
+    codepages-location.patch
+  * Drop "Using Samba" from the samba-doc file list as it was
+    removed upstream.
+
+ -- Christian Perrier <bubulle@debian.org>  Sun, 31 Jan 2010 11:53:48 +0100
+
+samba (2:3.5.0~rc1~dfsg-1) experimental; urgency=low
+
+  [ Christian Perrier ]
+  * New upstream pre-release
+
+ -- Christian Perrier <bubulle@debian.org>  Fri, 15 Jan 2010 23:31:01 +0100
 
 samba (2:3.4.8~dfsg-2) unstable; urgency=low
 
@@ -32,16 +126,6 @@ samba (2:3.4.8~dfsg-2) unstable; urgency=low
     Closes: #586337   
 
  -- Steve Langasek <vorlon@debian.org>  Wed, 14 Jul 2010 11:59:28 -0700
-
-samba (2:3.4.8~dfsg-1~bpo50+1) lenny-backports; urgency=low
-
-  * Backport to lenny.
-  * Use 1.0 source format
-  * Drop PAM profile for winbind (not supported in lenny)
-  * Drop pam-auth-update calls in winbind.postinst and entirely drop
-    winbind.postrm. Also drop useless debian/winbind.pam-config.
-
- -- Christian Perrier <bubulle@debian.org>  Fri, 14 May 2010 08:11:51 +0200
 
 samba (2:3.4.8~dfsg-1) unstable; urgency=low
 
@@ -122,21 +206,6 @@ samba (2:3.4.5~dfsg-2) unstable; urgency=low
 
  -- Christian Perrier <bubulle@debian.org>  Sat, 13 Feb 2010 14:36:33 +0100
 
-samba (2:3.4.5~dfsg-1~bpo50+2) lenny-backports; urgency=low
-
-  * Add the correct versioned build dependency on libtalloc-dev as
-    we need 2.0.1 to build samba
-  * re-add the patch and unatch targets in debian/rules
-
- -- Christian Perrier <bubulle@debian.org>  Wed, 03 Mar 2010 19:53:06 +0100
-
-samba (2:3.4.5~dfsg-1~bpo50+1) lenny-backports; urgency=low
-
-  * Lenny backport
-  * Down to 1.0 source format: reintroduce build dependency on quilt
-
- -- Christian Perrier <bubulle@debian.org>  Wed, 24 Feb 2010 21:40:37 +0100
-
 samba (2:3.4.5~dfsg-1) unstable; urgency=low
 
   * New upstream release. Bugs fixed by this release:
@@ -200,29 +269,6 @@ samba (2:3.4.3-1) unstable; urgency=low
   * Bump Standards-Version to 3.8.3 (checked)
 
  -- Christian Perrier <bubulle@debian.org>  Sat, 31 Oct 2009 14:32:07 +0100
-
-samba (2:3.4.2-1~bpo50+3) lenny-backports; urgency=low
-
-  * Drop dependency on libpam-runtime for libpam-smbpass
-
- -- Christian Perrier <bubulle@debian.org>  Sun, 25 Oct 2009 22:15:04 +0100
-
-samba (2:3.4.2-1~bpo50+2) lenny-backports; urgency=high
-
-  * Revert PAM changes from unstable:
-   - debian/samba.pamd: no longer include common-session-noninteractive
-     instead of common-session
-   * debian/control: samba no longer depends on libpam-runtime
-     (>= 1.0.1-11)  
-
- -- Christian Perrier <bubulle@debian.org>  Sat, 17 Oct 2009 07:45:07 +0200
-
-samba (2:3.4.2-1~bpo50+1) lenny-backports; urgency=high
-
-  * Backport to lenny
-  * Security update for lenny backports
-
- -- Christian Perrier <bubulle@debian.org>  Sat, 10 Oct 2009 19:05:24 +0200
 
 samba (2:3.4.2-1) unstable; urgency=high
 
@@ -392,13 +438,6 @@ samba (2:3.4.0~pre1-1) experimental; urgency=low
 
  -- Christian Perrier <bubulle@debian.org>  Wed, 20 May 2009 18:50:35 +0200
 
-samba (2:3.3.6-1~bpo50+1) lenny-backports; urgency=high
-
-  * Backport to lenny
-  * Security update for lenny backports
-
- -- Christian Perrier <bubulle@debian.org>  Tue, 30 Jun 2009 08:07:54 +0200
-
 samba (2:3.3.6-1) unstable; urgency=high
 
   * New upstream release. Security release.
@@ -440,20 +479,6 @@ samba (2:3.3.4-2) unstable; urgency=low
   * Basque. Closes: #528757
 
  -- Christian Perrier <bubulle@debian.org>  Sat, 16 May 2009 17:31:09 +0200
-
-samba (2:3.3.4-1~bpo50+2) lenny-backports; urgency=low
-
-  * Rebuild (really for lenny this time)
-
- -- Christian Perrier <bubulle@debian.org>  Wed, 27 May 2009 20:19:02 +0200
-
-samba (2:3.3.4-1~bpo50+1) lenny-backports; urgency=low
-
-  * Backport to lenny
-  * Disable use of pam-authupdate to avoid versioned build dependency
-    on libpam-runtime that's not possible in lenny
-
- -- Christian Perrier <bubulle@debian.org>  Tue, 21 Apr 2009 10:33:46 +0200
 
 samba (2:3.3.4-1) unstable; urgency=low
 
