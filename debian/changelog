@@ -1,3 +1,13 @@
+samba (2:3.5.5~dfsg-2) UNRELEASED; urgency=low
+
+  * Backport to lenny.
+  * Use 1.0 source format
+  * Drop PAM profile for winbind (not supported in lenny)
+  * Drop pam-auth-update calls in winbind.postinst and entirely drop
+    winbind.postrm. Also drop useless debian/winbind.pam-config.
+
+ -- Christian Perrier <bubulle@debian.org>  Sun, 26 Sep 2010 12:35:43 +0200
+
 samba (2:3.5.5~dfsg-1) unstable; urgency=high
 
   [ Christian Perrier ]
@@ -101,6 +111,16 @@ samba (2:3.5.0~rc1~dfsg-1) experimental; urgency=low
   * New upstream pre-release
 
  -- Christian Perrier <bubulle@debian.org>  Fri, 15 Jan 2010 23:31:01 +0100
+
+samba (2:3.4.8~dfsg-2~bpo50+1) lenny-backports; urgency=low
+
+  * Backport to lenny.
+  * Use 1.0 source format
+  * Drop PAM profile for winbind (not supported in lenny)
+  * Drop pam-auth-update calls in winbind.postinst and entirely drop
+    winbind.postrm. Also drop useless debian/winbind.pam-config.
+
+ -- Christian Perrier <bubulle@debian.org>  Sun, 25 Jul 2010 19:22:27 +0200
 
 samba (2:3.4.8~dfsg-2) unstable; urgency=low
 
