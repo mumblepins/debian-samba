@@ -19,3 +19,4 @@ smbtar-bashism.patch
 no-unnecessary-cups.patch
 shrink-dead-code.patch
 documentation-links-debian.patch
+security-CVE-2010-3069.patch
