@@ -1,4 +1,13 @@
-samba (2:3.5.5~dfsg-2) UNRELEASED; urgency=low
+samba (2:3.5.5~dfsg-1~bpo50+2) UNRELEASED; urgency=low
+
+  * Correct winbind dependency on libpam-runtime (>= 1.0.1-6) that
+    accidentally leaked from squeeze even though pam-auth-update
+    isn't used in the backport.
+    Thanks to Carlos Ramos Gómez for pointing this.
+
+ -- Christian Perrier <bubulle@debian.org>  Tue, 28 Sep 2010 22:07:12 +0200
+
+samba (2:3.5.5~dfsg-1~bpo50+1) lenny-backports; urgency=low
 
   * Backport to lenny.
   * Use 1.0 source format
@@ -6,7 +15,7 @@ samba (2:3.5.5~dfsg-2) UNRELEASED; urgency=low
   * Drop pam-auth-update calls in winbind.postinst and entirely drop
     winbind.postrm. Also drop useless debian/winbind.pam-config.
 
- -- Christian Perrier <bubulle@debian.org>  Sun, 26 Sep 2010 12:35:43 +0200
+ -- Christian Perrier <bubulle@debian.org>  Sun, 26 Sep 2010 12:41:35 +0200
 
 samba (2:3.5.5~dfsg-1) unstable; urgency=high
 
