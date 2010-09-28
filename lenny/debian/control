@@ -174,7 +174,7 @@ Package: winbind
 Section: net
 Priority: optional
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libwbclient0 (= ${binary:Version}), samba-common (= ${source:Version}), lsb-base (>= 3.0-6), adduser, libpam-runtime (>= 1.0.1-6)
+Depends: ${shlibs:Depends}, ${misc:Depends}, libwbclient0 (= ${binary:Version}), samba-common (= ${source:Version}), lsb-base (>= 3.0-6), adduser, libpam-runtime (>= 0.76-13.1)
 Replaces: samba (<= 2.2.3-2)
 Description: Samba nameservice integration server
  Samba is an implementation of the SMB/CIFS protocol for Unix systems,
