@@ -1,9 +1,9 @@
-samba (2:3.5.6~dfsg-1+bpo50+2) UNRELEASED; urgency=low
+samba (2:3.5.6~dfsg-1+bpo50+2) lenny-backports; urgency=low
 
   * Drop 0-byte postinst and prerm files for libpam-smbpass and winbind.
     Closes: #602281
 
- -- Christian Perrier <bubulle@debian.org>  Thu, 04 Nov 2010 08:31:32 +0100
+ -- Christian Perrier <bubulle@debian.org>  Thu, 04 Nov 2010 08:33:10 +0100
 
 samba (2:3.5.6~dfsg-1+bpo50+1) lenny-backports; urgency=low
 
