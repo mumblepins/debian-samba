@@ -1,3 +1,9 @@
+samba (2:3.5.6~dfsg-3~bpo50+1) lenny-backports; urgency=low
+
+  * Backport to lenny.
+
+ -- Christian Perrier <bubulle@debian.org>  Sat, 18 Dec 2010 18:29:13 +0100
+
 samba (2:3.5.6~dfsg-3) unstable; urgency=low
 
   [ Julien Cristau ]
