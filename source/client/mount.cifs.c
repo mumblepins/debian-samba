@@ -190,6 +190,11 @@ static int open_cred_file(char * file_name)
 	char * temp_val;
 	FILE * fs;
 	int i, length;
+
+	i = access(file_name, R_OK);
+	if (i)
+		return i;
+
 	fs = fopen(file_name,"r");
 	if(fs == NULL)
 		return errno;
@@ -312,6 +317,12 @@ static int get_password_from_file(int file_descript, char * filename)
 	}
 
 	if(filename != NULL) {
+		rc = access(filename, R_OK);
+		if (rc) {
+			fprintf(stderr, "mount.cifs failed: access check of %s failed: %s\n",
+					filename, strerror(errno));
+			exit(2);
+		}
 		file_descript = open(filename, O_RDONLY);
 		if(file_descript < 0) {
 			printf("mount.cifs failed. %s attempting to open password file %s\n",
@@ -370,9 +381,6 @@ static int parse_options(char ** optionsp, int * filesys_flags)
 	if (!optionsp || !*optionsp)
 		return 1;
 	data = *optionsp;
-
-	if(verboseflag)
-		printf("parsing options: %s\n", data);
 
 	/* BB fixme check for separator override BB */
 
@@ -460,17 +468,26 @@ static int parse_options(char ** optionsp, int * filesys_flags)
 		} else if (strncmp(data, "pass", 4) == 0) {
 			if (!value || !*value) {
 				if(got_password) {
-					printf("\npassword specified twice, ignoring second\n");
+					fprintf(stderr, "\npassword specified twice, ignoring second\n");
 				} else
 					got_password = 1;
-			} else if (strnlen(value, 17) < 17) {
-				if(got_password)
-					printf("\nmount.cifs warning - password specified twice\n");
-				got_password = 1;
+			} else if (strnlen(value, MOUNT_PASSWD_SIZE) < MOUNT_PASSWD_SIZE) {
+				if (got_password) {
+					fprintf(stderr, "\nmount.cifs warning - password specified twice\n");
+				} else {
+					mountpassword = strndup(value, MOUNT_PASSWD_SIZE);
+					if (!mountpassword) {
+						fprintf(stderr, "mount.cifs error: %s", strerror(ENOMEM));
+						SAFE_FREE(out);
+						return 1;
+					}
+					got_password = 1;
+				}
 			} else {
-				printf("password too long\n");
+				fprintf(stderr, "password too long\n");
 				return 1;
 			}
+			goto nocopy;
 		} else if (strncmp(data, "sec", 3) == 0) {
 			if (value) {
 				if (!strcmp(value, "none"))
@@ -1000,6 +1017,36 @@ uppercase_string(char *string)
 	return 1;
 }
 
+/*
+ * This function borrowed from fuse-utils...
+ *
+ * glibc's addmntent (at least as of 2.10 or so) doesn't properly encode
+ * newlines embedded within the text fields. To make sure no one corrupts
+ * the mtab, fail the mount if there are embedded newlines.
+ */
+static int check_newline(const char *progname, const char *name)
+{
+    char *s;
+    for (s = "\n"; *s; s++) {
+        if (strchr(name, *s)) {
+            fprintf(stderr, "%s: illegal character 0x%02x in mount entry\n",
+                    progname, *s);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int check_mtab(const char *progname, const char *devname,
+			const char *dir)
+{
+	if (check_newline(progname, devname) == -1 ||
+	    check_newline(progname, dir) == -1)
+		return -1;
+	return 0;
+}
+
+
 int main(int argc, char ** argv)
 {
 	int c;
@@ -1336,15 +1383,6 @@ mount_retry:
 			strlcat(options,domain_name,options_size);
 		}
 	}
-	if(mountpassword) {
-		/* Commas have to be doubled, or else they will
-		look like the parameter separator */
-/*		if(sep is not set)*/
-		if(retry == 0)
-			check_for_comma(&mountpassword);
-		strlcat(options,",pass=",options_size);
-		strlcat(options,mountpassword,options_size);
-	}
 
 	strlcat(options,",ver=",options_size);
 	strlcat(options,MOUNT_CIFS_VERSION_MAJOR,options_size);
@@ -1357,13 +1395,31 @@ mount_retry:
 		strlcat(options,",prefixpath=",options_size);
 		strlcat(options,prefixpath,options_size); /* no need to cat the / */
 	}
-	if(verboseflag)
-		printf("\nmount.cifs kernel mount options %s \n",options);
 
 	/* convert all '\\' to '/' in share portion so that /proc/mounts looks pretty */
 	replace_char(dev_name, '\\', '/', strlen(share_name));
 
-	if(mount(dev_name, mountpoint, "cifs", flags, options)) {
+	if(verboseflag)
+		fprintf(stderr, "\nmount.cifs kernel mount options: %s", options);
+
+	if (mountpassword) {
+		/*
+		 * Commas have to be doubled, or else they will
+		 * look like the parameter separator
+		 */
+		if(retry == 0)
+			check_for_comma(&mountpassword);
+		strlcat(options,",pass=",options_size);
+		strlcat(options,mountpassword,options_size);
+		if (verboseflag)
+			fprintf(stderr, ",pass=********");
+	}
+
+	rc = check_mtab(thisprogram, dev_name, mountpoint);
+	if (rc)
+		goto mount_exit;
+
+	if(mount(dev_name, ".", "cifs", flags, options)) {
 	/* remember to kill daemon on error */
 		switch (errno) {
 		case 0:

@@ -960,6 +960,11 @@ NTSTATUS read_socket_with_timeout(int fd, char *buf,
 	timeout.tv_usec = (long)(1000 * (time_out % 1000));
 
 	for (nread=0; nread < mincnt; ) {
+		if (fd < 0 || fd >= FD_SETSIZE) {
+			errno = EBADF;
+			return map_nt_error_from_unix(EBADF);
+		}
+
 		FD_ZERO(&fds);
 		FD_SET(fd,&fds);
 
@@ -1037,40 +1042,109 @@ NTSTATUS read_data(int fd, char *buffer, size_t N)
 }
 
 /****************************************************************************
+ Write all data from an iov array
+****************************************************************************/
+
+ssize_t write_data_iov(int fd, const struct iovec *orig_iov, int iovcnt)
+{
+	int i;
+	size_t to_send;
+	ssize_t thistime;
+	size_t sent;
+	struct iovec *iov_copy, *iov;
+
+	to_send = 0;
+	for (i=0; i<iovcnt; i++) {
+		to_send += orig_iov[i].iov_len;
+	}
+
+	thistime = sys_writev(fd, orig_iov, iovcnt);
+	if ((thistime <= 0) || (thistime == to_send)) {
+		return thistime;
+	}
+	sent = thistime;
+
+	/*
+	 * We could not send everything in one call. Make a copy of iov that
+	 * we can mess with. We keep a copy of the array start in iov_copy for
+	 * the TALLOC_FREE, because we're going to modify iov later on,
+	 * discarding elements.
+	 */
+
+	iov_copy = (struct iovec *)TALLOC_MEMDUP(
+		talloc_tos(), orig_iov, sizeof(struct iovec) * iovcnt);
+
+	if (iov_copy == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	iov = iov_copy;
+
+	while (sent < to_send) {
+		/*
+		 * We have to discard "thistime" bytes from the beginning
+		 * iov array, "thistime" contains the number of bytes sent
+		 * via writev last.
+		 */
+		while (thistime > 0) {
+			if (thistime < iov[0].iov_len) {
+				char *new_base =
+					(char *)iov[0].iov_base + thistime;
+				iov[0].iov_base = new_base;
+				iov[0].iov_len -= thistime;
+				break;
+			}
+			thistime -= iov[0].iov_len;
+			iov += 1;
+			iovcnt -= 1;
+		}
+
+		thistime = sys_writev(fd, iov, iovcnt);
+		if (thistime <= 0) {
+			break;
+		}
+		sent += thistime;
+	}
+
+	TALLOC_FREE(iov_copy);
+	return sent;
+}
+
+/****************************************************************************
+ Write data to a fd.
+****************************************************************************/
+
+/****************************************************************************
  Write data to a fd.
 ****************************************************************************/
 
 ssize_t write_data(int fd, const char *buffer, size_t N)
 {
-	size_t total=0;
 	ssize_t ret;
-	char addr[INET6_ADDRSTRLEN];
+	struct iovec iov;
 
-	while (total < N) {
-		ret = sys_write(fd,buffer + total,N - total);
+	iov.iov_base = CONST_DISCARD(char *, buffer);
+	iov.iov_len = N;
 
-		if (ret == -1) {
-			if (fd == get_client_fd()) {
-				/* Try and give an error message saying
-				 * what client failed. */
-				DEBUG(0,("write_data: write failure in "
-					"writing to client %s. Error %s\n",
-					get_peer_addr(fd,addr,sizeof(addr)),
-					strerror(errno) ));
-			} else {
-				DEBUG(0,("write_data: write failure. "
-					"Error = %s\n", strerror(errno) ));
-			}
-			return -1;
-		}
-
-		if (ret == 0) {
-			return total;
-		}
-
-		total += ret;
+	ret = write_data_iov(fd, &iov, 1);
+	if (ret >= 0) {
+		return ret;
 	}
-	return (ssize_t)total;
+
+	if (fd == get_client_fd()) {
+		char addr[INET6_ADDRSTRLEN];
+		/*
+		 * Try and give an error message saying what client failed.
+		 */
+		DEBUG(0, ("write_data: write failure in writing to client %s. "
+			  "Error %s\n", get_peer_addr(fd,addr,sizeof(addr)),
+			  strerror(errno)));
+	} else {
+		DEBUG(0,("write_data: write failure. Error = %s\n",
+			 strerror(errno) ));
+	}
+
+	return -1;
 }
 
 /****************************************************************************
@@ -1423,7 +1497,7 @@ bool open_any_socket_out(struct sockaddr_storage *addrs, int num_addrs,
 
 	for (i=0; i<num_addrs; i++) {
 		sockets[i] = socket(addrs[i].ss_family, SOCK_STREAM, 0);
-		if (sockets[i] < 0)
+		if (sockets[i] < 0 || sockets[i] >= FD_SETSIZE)
 			goto done;
 		set_blocking(sockets[i], false);
 	}
@@ -1472,8 +1546,10 @@ bool open_any_socket_out(struct sockaddr_storage *addrs, int num_addrs,
 	FD_ZERO(&r_fds);
 
 	for (i=0; i<num_addrs; i++) {
-		if (sockets[i] == -1)
+		if (sockets[i] < 0 || sockets[i] >= FD_SETSIZE) {
+			/* This cannot happen - ignore if so. */
 			continue;
+		}
 		FD_SET(sockets[i], &wr_fds);
 		FD_SET(sockets[i], &r_fds);
 		if (sockets[i]>maxfd)

@@ -2010,7 +2010,7 @@ static NTSTATUS ldapsam_rename_sam_account(struct pdb_methods *my_methods,
 					newname_lower,
 					true,
 					true);
-	if (rename_script) {
+	if (!rename_script) {
 		return NT_STATUS_NO_MEMORY;
 	}
 	rename_script = realloc_string_sub2(rename_script,
@@ -5758,6 +5758,7 @@ static char *trusteddom_dn(struct ldapsam_privates *ldap_state,
 }
 
 static bool get_trusteddom_pw_int(struct ldapsam_privates *ldap_state,
+				  TALLOC_CTX *mem_ctx,
 				  const char *domain, LDAPMessage **entry)
 {
 	int rc;
@@ -5779,6 +5780,10 @@ static bool get_trusteddom_pw_int(struct ldapsam_privates *ldap_state,
 	}
 	rc = smbldap_search(ldap_state->smbldap_state, trusted_dn, scope,
 			    filter, attrs, attrsonly, &result);
+
+	if (result != NULL) {
+		talloc_autofree_ldapmsg(mem_ctx, result);
+	}
 
 	if (rc == LDAP_NO_SUCH_OBJECT) {
 		*entry = NULL;
@@ -5822,7 +5827,7 @@ static bool ldapsam_get_trusteddom_pw(struct pdb_methods *methods,
 
 	DEBUG(10, ("ldapsam_get_trusteddom_pw called for domain %s\n", domain));
 
-	if (!get_trusteddom_pw_int(ldap_state, domain, &entry) ||
+	if (!get_trusteddom_pw_int(ldap_state, talloc_tos(), domain, &entry) ||
 	    (entry == NULL))
 	{
 		return False;
@@ -5893,7 +5898,7 @@ static bool ldapsam_set_trusteddom_pw(struct pdb_methods *methods,
 	 * get the current entry (if there is one) in order to put the
 	 * current password into the previous password attribute
 	 */
-	if (!get_trusteddom_pw_int(ldap_state, domain, &entry)) {
+	if (!get_trusteddom_pw_int(ldap_state, talloc_tos(), domain, &entry)) {
 		return False;
 	}
 
@@ -5908,6 +5913,9 @@ static bool ldapsam_set_trusteddom_pw(struct pdb_methods *methods,
 			 talloc_asprintf(talloc_tos(), "%li", time(NULL)));
 	smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
 			 "sambaClearTextPassword", pwd);
+
+	talloc_autofree_ldapmod(talloc_tos(), mods);
+
 	if (entry != NULL) {
 		prev_pwd = smbldap_talloc_single_attribute(priv2ld(ldap_state),
 				entry, "sambaClearTextPassword", talloc_tos());
@@ -5945,7 +5953,7 @@ static bool ldapsam_del_trusteddom_pw(struct pdb_methods *methods,
 	LDAPMessage *entry = NULL;
 	const char *trusted_dn;
 
-	if (!get_trusteddom_pw_int(ldap_state, domain, &entry)) {
+	if (!get_trusteddom_pw_int(ldap_state, talloc_tos(), domain, &entry)) {
 		return False;
 	}
 
@@ -5995,6 +6003,10 @@ static NTSTATUS ldapsam_enum_trusteddoms(struct pdb_methods *methods,
 			    attrs,
 			    attrsonly,
 			    &result);
+
+	if (result != NULL) {
+		talloc_autofree_ldapmsg(mem_ctx, result);
+	}
 
 	if (rc != LDAP_SUCCESS) {
 		return NT_STATUS_UNSUCCESSFUL;
