@@ -118,10 +118,6 @@ static int ldap_search_with_timeout(LDAP *ld,
 	if (gotalarm != 0)
 		return LDAP_TIMELIMIT_EXCEEDED;
 
-	if (*res == NULL) {
-		return LDAP_TIMELIMIT_EXCEEDED;
-	}
-
 	return result;
 }
 
@@ -1899,9 +1895,7 @@ static void dump_sid(ADS_STRUCT *ads, const char *field, struct berval **values)
 	for (i=0; values[i]; i++) {
 		DOM_SID sid;
 		fstring tmp;
-		if (!sid_parse(values[i]->bv_val, values[i]->bv_len, &sid)) {
-			continue;
-		}
+		sid_parse(values[i]->bv_val, values[i]->bv_len, &sid);
 		printf("%s: %s\n", field, sid_to_fstring(tmp, &sid));
 	}
 }

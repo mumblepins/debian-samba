@@ -284,11 +284,6 @@ struct kernel_oplocks *irix_init_kernel_oplocks(void)
 		return False;
 	}
 
-	if (pfd[0] < 0 || pfd[0] >= FD_SETSIZE) {
-		DEBUG(0,("setup_kernel_oplock_pipe: fd out of range.\n"));
-		return False;
-	}
-
 	oplock_pipe_read = pfd[0];
 	oplock_pipe_write = pfd[1];
 

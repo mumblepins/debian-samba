@@ -1116,9 +1116,11 @@ static void chg_passwd(void)
 	if(cgi_variable(CHG_S_PASSWD_FLAG)) {
 		printf("<p>");
 		if (rslt == True) {
-			printf("%s\n", _(" The passwd has been changed."));
+			printf(_(" The passwd for '%s' has been changed."), cgi_variable_nonull(SWAT_USER));
+			printf("\n");
 		} else {
-			printf("%s\n", _(" The passwd has NOT been changed."));
+			printf(_(" The passwd for '%s' has NOT been changed."), cgi_variable_nonull(SWAT_USER));
+			printf("\n");
 		}
 	}
 	
@@ -1131,6 +1133,14 @@ static void chg_passwd(void)
 static void passwd_page(void)
 {
 	const char *new_name = cgi_user_name();
+
+	/* 
+	 * After the first time through here be nice. If the user
+	 * changed the User box text to another users name, remember it.
+	 */
+	if (cgi_variable(SWAT_USER)) {
+		new_name = cgi_variable_nonull(SWAT_USER);
+	} 
 
 	if (!new_name) new_name = "";
 

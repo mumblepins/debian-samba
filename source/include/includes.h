@@ -1294,8 +1294,4 @@ void in6_addr_to_sockaddr_storage(struct sockaddr_storage *ss,
 				  struct in6_addr ip);
 #endif
 
-#ifndef MAXSUBAUTHS
-#define MAXSUBAUTHS 15 /* max sub authorities in a SID */
-#endif
-
 #endif /* _INCLUDES_H */
