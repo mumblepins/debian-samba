@@ -46,4 +46,5 @@ bug_538819_upstream_7021.patch
 security-CVE-2010-2063.patch
 security-CVE-2010-3069.patch
 security-CVE-2011-0719.patch
+security-CVE-2011-2522.patch
 security-CVE-2011-2694.patch
