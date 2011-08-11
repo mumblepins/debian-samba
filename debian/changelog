@@ -1,4 +1,4 @@
-samba (2:3.6.0-1) UNRELEASED; urgency=low
+samba (2:3.6.0-1) experimental; urgency=low
 
   * New upstream release
   * Resync with packaging changes in 3.5 branch between 3.5.8~dfsg1
@@ -7,7 +7,7 @@ samba (2:3.6.0-1) UNRELEASED; urgency=low
     commit c0a7c9f99188ebb3cd27094b9364449bcc2f80d8, " its only user is
     smbtorture3"
 
- -- Christian Perrier <bubulle@debian.org>  Wed, 10 Aug 2011 08:40:26 +0200
+ -- Christian Perrier <bubulle@debian.org>  Thu, 11 Aug 2011 09:14:53 +0200
 
 samba (2:3.6.0~rc3-1) experimental; urgency=low
 
