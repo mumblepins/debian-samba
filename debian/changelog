@@ -1,6 +1,11 @@
 samba (2:3.6.0-1) UNRELEASED; urgency=low
 
   * New upstream release
+  * Resync with packaging changes in 3.5 branch between 3.5.8~dfsg1
+    and 3.5.11~dfsg-1
+  * Drop wbc_async.h from libwbclient-dev as, according to upstream's
+    commit c0a7c9f99188ebb3cd27094b9364449bcc2f80d8, " its only user is
+    smbtorture3"
 
  -- Christian Perrier <bubulle@debian.org>  Wed, 10 Aug 2011 08:40:26 +0200
 
