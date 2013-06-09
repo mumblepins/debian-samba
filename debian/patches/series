@@ -25,3 +25,4 @@ only_export_public_symbols.patch
 security-CVE-2013-0213.patch
 security-CVE-2013-0214.patch
 bug_709613_upstream_8769_s3fs-printing-Fix-RAW-printing-for-normal-users.patch
+bug_711011_upstream_8966_net-rpc-share-allowedusers-with-2008r2.patch

@@ -3,6 +3,8 @@ samba (2:3.6.6-6+deb7u1) UNRELEASED; urgency=low
   * Stable update for fix important bugs.
   * Fix RAW printing for unprivileged users (regression from squeeze)
     Closes: #709613
+  * Fix net rpc share allowedusers to work with 2008r2
+    Closes: #711011
 
  -- Christian Perrier <bubulle@debian.org>  Sun, 09 Jun 2013 15:01:42 +0200
 
