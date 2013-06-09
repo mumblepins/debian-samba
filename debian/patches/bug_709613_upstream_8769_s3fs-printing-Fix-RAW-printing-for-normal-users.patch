@@ -1,0 +1,25 @@
+From 511044bb55ea761812a8c78ad97f18de471b5b40 Mon Sep 17 00:00:00 2001
+From: Andreas Schneider <asn@samba.org>
+Date: Mon, 8 Oct 2012 12:32:49 +0200
+Subject: [PATCH] s3fs-printing: Fix RAW printing for normal users.
+
+This fixes bug #8769.
+
+Signed-off-by: Andreas Schneider <asn@samba.org>
+---
+ source3/printing/printspoolss.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: git/source3/printing/printspoolss.c
+===================================================================
+--- git.orig/source3/printing/printspoolss.c
++++ git/source3/printing/printspoolss.c
+@@ -139,7 +139,7 @@
+ 
+ 	status = dcerpc_spoolss_OpenPrinter(b, pf, pf->svcname,
+ 					    "RAW", devmode_ctr,
+-					    SEC_FLAG_MAXIMUM_ALLOWED,
++					    PRINTER_ACCESS_USE,
+ 					    &pf->handle, &werr);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		goto done;
