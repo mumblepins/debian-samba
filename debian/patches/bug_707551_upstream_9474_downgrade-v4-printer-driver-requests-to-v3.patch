@@ -1,0 +1,65 @@
+From 8eea764bdd240eb2948b257c2e554f88966eeb28 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?G=C3=BCnther=20Deschner?= <gd@samba.org>
+Date: Mon, 7 Jan 2013 15:14:30 +0100
+Subject: [PATCH 1/2] spoolss: add SPOOLSS_DRIVER_VERSION_2012 (4) define to
+ IDL.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Guenther
+
+Signed-off-by: Günther Deschner <gd@samba.org>
+Reviewed-by: Andreas Schneider <asn@samba.org>
+(cherry picked from commit 638ed90620e3c6a35ef56a11c612c13d6b7d6ff5)
+---
+ librpc/idl/spoolss.idl | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+Index: samba/librpc/idl/spoolss.idl
+===================================================================
+--- samba.orig/librpc/idl/spoolss.idl
++++ samba/librpc/idl/spoolss.idl
+@@ -1303,7 +1303,8 @@
+ 		SPOOLSS_DRIVER_VERSION_9X	= 0,
+ 		SPOOLSS_DRIVER_VERSION_NT35	= 1,
+ 		SPOOLSS_DRIVER_VERSION_NT4	= 2,
+-		SPOOLSS_DRIVER_VERSION_200X	= 3
++		SPOOLSS_DRIVER_VERSION_200X	= 3,
++		SPOOLSS_DRIVER_VERSION_2012	= 4
+ 	} spoolss_DriverOSVersion;
+ 
+ 	typedef struct {
+Index: samba/source3/rpc_server/spoolss/srv_spoolss_nt.c
+===================================================================
+--- samba.orig/source3/rpc_server/spoolss/srv_spoolss_nt.c
++++ samba/source3/rpc_server/spoolss/srv_spoolss_nt.c
+@@ -5591,6 +5591,7 @@
+ {
+ 	struct printer_handle *printer;
+ 	WERROR result;
++	uint32_t version = r->in.client_major_version;
+ 
+ 	int snum;
+ 
+@@ -5615,13 +5616,19 @@
+ 		return WERR_BADFID;
+ 	}
+ 
++	if (r->in.client_major_version == SPOOLSS_DRIVER_VERSION_2012) {
++		DEBUG(3,("_spoolss_GetPrinterDriver2: v4 driver requested, "
++			"downgrading to v3\n"));
++		version = SPOOLSS_DRIVER_VERSION_200X;
++	}
++
+ 	result = construct_printer_driver_info_level(p->mem_ctx,
+ 						     get_session_info_system(),
+ 						     p->msg_ctx,
+ 						     r->in.level, r->out.info,
+ 						     snum, printer->servername,
+ 						     r->in.architecture,
+-						     r->in.client_major_version);
++						     version);
+ 	if (!W_ERROR_IS_OK(result)) {
+ 		TALLOC_FREE(r->out.info);
+ 		return result;
