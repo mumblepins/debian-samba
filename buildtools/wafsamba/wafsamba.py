@@ -342,6 +342,13 @@ def SAMBA_BINARY(bld, binname, source,
     else:
         subsystem_group = group
 
+    # only specify PIE flags for binaries
+    pie_cflags = cflags
+    pie_ldflags = TO_LIST(ldflags)
+    if bld.env['ENABLE_PIE'] == True:
+        pie_cflags += ' -fPIE'
+        pie_ldflags.extend(TO_LIST('-pie'))
+
     # first create a target for building the object files for this binary
     # by separating in this way, we avoid recompiling the C files
     # separately for the install binary and the build binary
@@ -349,7 +356,7 @@ def SAMBA_BINARY(bld, binname, source,
                         source         = source,
                         deps           = deps,
                         includes       = includes,
-                        cflags         = cflags,
+                        cflags         = pie_cflags,
                         group          = subsystem_group,
                         autoproto      = autoproto,
                         subsystem_name = subsystem_name,
@@ -379,7 +386,7 @@ def SAMBA_BINARY(bld, binname, source,
         install_path   = None,
         samba_inst_path= install_path,
         samba_install  = install,
-        samba_ldflags  = TO_LIST(ldflags)
+        samba_ldflags  = pie_ldflags
         )
 
     if manpages is not None and 'XSLTPROC_MANPAGES' in bld.env and bld.env['XSLTPROC_MANPAGES']:
@@ -696,14 +703,25 @@ def copy_and_fix_python_path(task):
         replacement="""sys.path.insert(0, "%s")
 sys.path.insert(1, "%s")""" % (task.env["PYTHONARCHDIR"], task.env["PYTHONDIR"])
 
+    shebang = None
+
+    if task.env["PYTHON"][0] == "/":
+        replacement_shebang = "#!%s\n" % task.env["PYTHON"]
+    else:
+        replacement_shebang = "#!/usr/bin/env %s\n" % task.env["PYTHON"]
+
     installed_location=task.outputs[0].bldpath(task.env)
     source_file = open(task.inputs[0].srcpath(task.env))
     installed_file = open(installed_location, 'w')
+    lineno = 0
     for line in source_file:
         newline = line
-        if pattern in line:
+        if lineno == 0 and task.env["PYTHON_SPECIFIED"] == True and line[:2] == "#!":
+            newline = replacement_shebang
+        elif pattern in line:
             newline = line.replace(pattern, replacement)
         installed_file.write(newline)
+        lineno = lineno + 1
     installed_file.close()
     os.chmod(installed_location, 0755)
     return 0
@@ -727,6 +745,8 @@ def install_file(bld, destdir, file, chmod=MODE_644, flat=False,
                             target=inst_file)
         bld.add_manual_dependency(bld.path.find_or_declare(inst_file), bld.env["PYTHONARCHDIR"])
         bld.add_manual_dependency(bld.path.find_or_declare(inst_file), bld.env["PYTHONDIR"])
+        bld.add_manual_dependency(bld.path.find_or_declare(inst_file), str(bld.env["PYTHON_SPECIFIED"]))
+        bld.add_manual_dependency(bld.path.find_or_declare(inst_file), bld.env["PYTHON"])
         file = inst_file
     if base_name:
         file = os.path.join(base_name, file)
