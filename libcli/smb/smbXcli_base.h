@@ -28,7 +28,7 @@ struct smb_trans_enc_state;
 struct GUID;
 struct iovec;
 struct smb2_create_blobs;
-struct smb2_create_returns;
+struct smb_create_returns;
 
 struct smbXcli_conn *smbXcli_conn_create(TALLOC_CTX *mem_ctx,
 					 int fd,
@@ -42,6 +42,8 @@ bool smbXcli_conn_is_connected(struct smbXcli_conn *conn);
 void smbXcli_conn_disconnect(struct smbXcli_conn *conn, NTSTATUS status);
 
 bool smbXcli_conn_has_async_calls(struct smbXcli_conn *conn);
+
+bool smbXcli_conn_dfs_supported(struct smbXcli_conn *conn);
 
 enum protocol_types smbXcli_conn_protocol(struct smbXcli_conn *conn);
 bool smbXcli_conn_use_unicode(struct smbXcli_conn *conn);
@@ -297,6 +299,10 @@ NTSTATUS smb2cli_session_set_channel_key(struct smbXcli_session *session,
 NTSTATUS smb2cli_session_encryption_on(struct smbXcli_session *session);
 
 struct smbXcli_tcon *smbXcli_tcon_create(TALLOC_CTX *mem_ctx);
+void smbXcli_tcon_set_fs_attributes(struct smbXcli_tcon *tcon,
+				    uint32_t fs_attributes);
+uint32_t smbXcli_tcon_get_fs_attributes(struct smbXcli_tcon *tcon);
+bool smbXcli_tcon_is_dfs_share(struct smbXcli_tcon *tcon);
 uint16_t smb1cli_tcon_current_id(struct smbXcli_tcon *tcon);
 void smb1cli_tcon_set_id(struct smbXcli_tcon *tcon, uint16_t tcon_id);
 bool smb1cli_tcon_set_values(struct smbXcli_tcon *tcon,
@@ -360,7 +366,7 @@ struct tevent_req *smb2cli_create_send(
 NTSTATUS smb2cli_create_recv(struct tevent_req *req,
 			     uint64_t *fid_persistent,
 			     uint64_t *fid_volatile,
-			     struct smb2_create_returns *cr);
+			     struct smb_create_returns *cr);
 NTSTATUS smb2cli_create(struct smbXcli_conn *conn,
 			uint32_t timeout_msec,
 			struct smbXcli_session *session,
@@ -376,7 +382,7 @@ NTSTATUS smb2cli_create(struct smbXcli_conn *conn,
 			struct smb2_create_blobs *blobs,
 			uint64_t *fid_persistent,
 			uint64_t *fid_volatile,
-			struct smb2_create_returns *cr);
+			struct smb_create_returns *cr);
 
 struct tevent_req *smb2cli_close_send(TALLOC_CTX *mem_ctx,
 				      struct tevent_context *ev,

@@ -1035,6 +1035,7 @@ void set_namearray(name_compare_entry **ppname_array, const char *namelist_in)
 {
 	char *name_end;
 	char *namelist;
+	char *namelist_end;
 	char *nameptr;
 	int num_entries = 0;
 	int i;
@@ -1051,12 +1052,14 @@ void set_namearray(name_compare_entry **ppname_array, const char *namelist_in)
 	}
 	nameptr = namelist;
 
+	namelist_end = &namelist[strlen(namelist)];
+
 	/* We need to make two passes over the string. The
 		first to count the number of elements, the second
 		to split it.
 	*/
 
-	while(*nameptr) {
+	while(nameptr <= namelist_end) {
 		if ( *nameptr == '/' ) {
 			/* cope with multiple (useless) /s) */
 			nameptr++;
@@ -1068,11 +1071,13 @@ void set_namearray(name_compare_entry **ppname_array, const char *namelist_in)
 
 		/* find the next '/' or consume remaining */
 		name_end = strchr_m(nameptr, '/');
-		if (name_end == NULL)
-			name_end = (char *)nameptr + strlen(nameptr);
-
-		/* next segment please */
-		nameptr = name_end + 1;
+		if (name_end == NULL) {
+			/* Point nameptr at the terminating '\0' */
+			nameptr += strlen(nameptr);
+		} else {
+			/* next segment please */
+			nameptr = name_end + 1;
+		}
 		num_entries++;
 	}
 
@@ -1090,7 +1095,7 @@ void set_namearray(name_compare_entry **ppname_array, const char *namelist_in)
 	/* Now copy out the names */
 	nameptr = namelist;
 	i = 0;
-	while(*nameptr) {
+	while(nameptr <= namelist_end) {
 		if ( *nameptr == '/' ) {
 			/* cope with multiple (useless) /s) */
 			nameptr++;
@@ -1102,10 +1107,9 @@ void set_namearray(name_compare_entry **ppname_array, const char *namelist_in)
 
 		/* find the next '/' or consume remaining */
 		name_end = strchr_m(nameptr, '/');
-		if (name_end)
+		if (name_end != NULL) {
 			*name_end = '\0';
-		else
-			name_end = nameptr + strlen(nameptr);
+		}
 
 		(*ppname_array)[i].is_wild = ms_has_wild(nameptr);
 		if(((*ppname_array)[i].name = SMB_STRDUP(nameptr)) == NULL) {
@@ -1114,8 +1118,13 @@ void set_namearray(name_compare_entry **ppname_array, const char *namelist_in)
 			return;
 		}
 
-		/* next segment please */
-		nameptr = name_end + 1;
+		if (name_end == NULL) {
+			/* Point nameptr at the terminating '\0' */
+			nameptr += strlen(nameptr);
+		} else {
+			/* next segment please */
+			nameptr = name_end + 1;
+		}
 		i++;
 	}
 
@@ -2392,4 +2401,46 @@ struct security_unix_token *copy_unix_token(TALLOC_CTX *ctx, const struct securi
 		cpy->groups = NULL;
 	}
 	return cpy;
+}
+
+/****************************************************************************
+ Check that a file matches a particular file type.
+****************************************************************************/
+
+bool dir_check_ftype(uint32_t mode, uint32_t dirtype)
+{
+	uint32_t mask;
+
+	/* Check the "may have" search bits. */
+	if (((mode & ~dirtype) &
+			(FILE_ATTRIBUTE_HIDDEN |
+			 FILE_ATTRIBUTE_SYSTEM |
+			 FILE_ATTRIBUTE_DIRECTORY)) != 0) {
+		return false;
+	}
+
+	/* Check the "must have" bits,
+	   which are the may have bits shifted eight */
+	/* If must have bit is set, the file/dir can
+	   not be returned in search unless the matching
+	   file attribute is set */
+	mask = ((dirtype >> 8) & (FILE_ATTRIBUTE_DIRECTORY|
+				    FILE_ATTRIBUTE_ARCHIVE|
+				   FILE_ATTRIBUTE_READONLY|
+				     FILE_ATTRIBUTE_HIDDEN|
+				     FILE_ATTRIBUTE_SYSTEM)); /* & 0x37 */
+	if(mask) {
+		if((mask & (mode & (FILE_ATTRIBUTE_DIRECTORY|
+				      FILE_ATTRIBUTE_ARCHIVE|
+				     FILE_ATTRIBUTE_READONLY|
+				       FILE_ATTRIBUTE_HIDDEN|
+					FILE_ATTRIBUTE_SYSTEM))) == mask) {
+			/* check if matching attribute present */
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	return true;
 }

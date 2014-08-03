@@ -688,6 +688,11 @@ NTSTATUS schedule_smb2_aio_read(connection_struct *conn,
 		return NT_STATUS_RETRY;
 	}
 
+	if (fsp->op == NULL) {
+		/* No AIO on internal opens. */
+		return NT_STATUS_RETRY;
+	}
+
 	if ((!min_aio_read_size || (smb_maxcnt < min_aio_read_size))
 	    && !SMB_VFS_AIO_FORCE(fsp)) {
 		/* Too small a read for aio request. */
@@ -720,7 +725,7 @@ NTSTATUS schedule_smb2_aio_read(connection_struct *conn,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	init_strict_lock_struct(fsp, (uint64_t)smbreq->smbpid,
+	init_strict_lock_struct(fsp, fsp->op->global->open_persistent_id,
 		(uint64_t)startpos, (uint64_t)smb_maxcnt, READ_LOCK,
 		&aio_ex->lock);
 
@@ -839,6 +844,11 @@ NTSTATUS schedule_aio_smb2_write(connection_struct *conn,
 		return NT_STATUS_RETRY;
 	}
 
+	if (fsp->op == NULL) {
+		/* No AIO on internal opens. */
+		return NT_STATUS_RETRY;
+	}
+
 	if ((!min_aio_write_size || (in_data.length < min_aio_write_size))
 	    && !SMB_VFS_AIO_FORCE(fsp)) {
 		/* Too small a write for aio request. */
@@ -872,7 +882,7 @@ NTSTATUS schedule_aio_smb2_write(connection_struct *conn,
 
 	aio_ex->write_through = write_through;
 
-	init_strict_lock_struct(fsp, (uint64_t)smbreq->smbpid,
+	init_strict_lock_struct(fsp, fsp->op->global->open_persistent_id,
 		in_offset, (uint64_t)in_data.length, WRITE_LOCK,
 		&aio_ex->lock);
 

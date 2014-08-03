@@ -962,18 +962,24 @@ static void ldapsrv_task_init(struct task_server *task)
 			if (!NT_STATUS_IS_OK(status)) goto failed;
 		}
 	} else {
-		const char **wcard;
+		char **wcard;
 		int i;
-		wcard = iface_list_wildcard(task, task->lp_ctx);
+		int num_binds = 0;
+		wcard = iface_list_wildcard(task);
 		if (wcard == NULL) {
 			DEBUG(0,("No wildcard addresses available\n"));
 			goto failed;
 		}
 		for (i=0; wcard[i]; i++) {
 			status = add_socket(task, task->lp_ctx, model_ops, wcard[i], ldap_service);
-			if (!NT_STATUS_IS_OK(status)) goto failed;
+			if (NT_STATUS_IS_OK(status)) {
+				num_binds++;
+			}
 		}
 		talloc_free(wcard);
+		if (num_binds == 0) {
+			goto failed;
+		}
 	}
 
 	ldapi_path = lpcfg_private_path(ldap_service, task->lp_ctx, "ldapi");

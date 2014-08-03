@@ -1739,15 +1739,21 @@ static NTSTATUS dcesrv_add_ep_tcp(struct dcesrv_context *dce_ctx,
 			NT_STATUS_NOT_OK_RETURN(status);
 		}
 	} else {
-		const char **wcard;
+		char **wcard;
 		int i;
-		wcard = iface_list_wildcard(dce_ctx, lp_ctx);
+		int num_binds = 0;
+		wcard = iface_list_wildcard(dce_ctx);
 		NT_STATUS_HAVE_NO_MEMORY(wcard);
 		for (i=0; wcard[i]; i++) {
 			status = add_socket_rpc_tcp_iface(dce_ctx, e, event_ctx, model_ops, wcard[i]);
-			NT_STATUS_NOT_OK_RETURN(status);
+			if (NT_STATUS_IS_OK(status)) {
+				num_binds++;
+			}
 		}
 		talloc_free(wcard);
+		if (num_binds == 0) {
+			return NT_STATUS_INVALID_PARAMETER_MIX;
+		}
 	}
 
 	return NT_STATUS_OK;

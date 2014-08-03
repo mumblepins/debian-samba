@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: smb.conf
 .\"    Author: [see the "AUTHOR" section]
-.\" Generator: DocBook XSL Stylesheets v1.76.1 <http://docbook.sf.net/>
-.\"      Date: 11/21/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 07/31/2014
 .\"    Manual: File Formats and Conventions
 .\"    Source: Samba 4.0
 .\"  Language: English
 .\"
-.TH "SMB\&.CONF" "5" "11/21/2013" "Samba 4\&.0" "File Formats and Conventions"
+.TH "SMB\&.CONF" "5" "07/31/2014" "Samba 4\&.0" "File Formats and Conventions"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -706,7 +706,7 @@ This boolean parameter controls the behaviour of
 \fBsmbd\fR(8)
 when receiving a protocol request of "open for execution" from a Windows client\&. With Samba 3\&.6 and older, the execution right in the ACL was not checked, so a client could execute a file even if it did not have execute rights on the file\&. In Samba 4\&.0, this has been fixed, so that by default, i\&.e\&. when this parameter is set to "False", "open for execution" is now denied when execution permissions are not present\&.
 .sp
-If this parameter is set to "True", Samba does not check execute permissions on "open for execution", thus re\-establishing the behaviour of Samba 3\&.6\&. This can be useful to smoothen upgrades from older Samba versions to 4\&.0 and newer\&. This setting is not not meant to be used as a permanent setting, but as a temporary relief: It is recommended to fix the permissions in the ACLs and reset this parameter to the default after a certain transition period\&.
+If this parameter is set to "True", Samba does not check execute permissions on "open for execution", thus re\-establishing the behaviour of Samba 3\&.6\&. This can be useful to smoothen upgrades from older Samba versions to 4\&.0 and newer\&. This setting is not meant to be used as a permanent setting, but as a temporary relief: It is recommended to fix the permissions in the ACLs and reset this parameter to the default after a certain transition period\&.
 .sp
 Default:
 \fI\fIacl allow execute always\fR\fR\fI = \fR\fIFalse\fR\fI \fR
@@ -741,7 +741,7 @@ This parameter allows Samba to also permit delegation of the control over a poin
 .sp
 This parameter is best used with the
 \m[blue]\fBinherit owner\fR\m[]
-option and also on on a share containing directories with the UNIX
+option and also on a share containing directories with the UNIX
 \fIsetgid bit\fR
 set on them, which causes new files and directories created within it to inherit the group ownership from the containing directory\&.
 .sp
@@ -1093,8 +1093,7 @@ add user to group script (G)
 .PP
 .RS 4
 Full path to the script that will be called when a user is added to a group using the Windows NT domain administration tools\&. It will be run by
-\fBsmbd\fR(8)
-\fIAS ROOT\fR\&. Any
+\fBsmbd\fR(8)\fIAS ROOT\fR\&. Any
 \fI%g\fR
 will be replaced with the group name and any
 \fI%u\fR
@@ -1453,8 +1452,7 @@ smbpasswd
 will fail to connect in it\*(Aqs default mode\&.
 smbpasswd
 can be forced to use the primary IP interface of the local host by using its
-\fBsmbpasswd\fR(8)
-\fI\-r \fR\fI\fIremote machine\fR\fR
+\fBsmbpasswd\fR(8)\fI\-r \fR\fI\fIremote machine\fR\fR
 parameter, with
 \fIremote machine\fR
 set to the IP name of the primary interface of the local host\&.
@@ -1750,8 +1748,7 @@ and
 \fIseal\fR
 are only available if Samba has been compiled against a modern OpenLDAP version (2\&.3\&.x or higher)\&.
 .sp
-This option is needed in the case of Domain Controllers enforcing the usage of signed LDAP connections (e\&.g\&. Windows 2000 SP3 or higher)\&. LDAP sign and seal can be controlled with the registry key "HKLM\eSystem\eCurrentControlSet\eServices\e
-NTDS\eParameters\eLDAPServerIntegrity" on the Windows server side\&.
+This option is needed in the case of Domain Controllers enforcing the usage of signed LDAP connections (e\&.g\&. Windows 2000 SP3 or higher)\&. LDAP sign and seal can be controlled with the registry key "HKLM\eSystem\eCurrentControlSet\eServices\eNTDS\eParameters\eLDAPServerIntegrity" on the Windows server side\&.
 .sp
 Depending on the used KRB5 library (MIT and older Heimdal versions) it is possible that the message "integrity only" is not supported\&. In this case,
 \fIsign\fR
@@ -2582,8 +2579,7 @@ delete group script (G)
 .PP
 .RS 4
 This is the full pathname to a script that will be run
-\fIAS ROOT\fR
-\fBsmbd\fR(8)
+\fIAS ROOT\fR\fBsmbd\fR(8)
 when a group is requested to be deleted\&. It will expand any
 \fI%g\fR
 to the group name passed\&. This script is only useful for installations using the Windows NT domain administration tools\&.
@@ -2702,8 +2698,7 @@ delete user from group script (G)
 .PP
 .RS 4
 Full path to the script that will be called when a user is removed from a group using the Windows NT domain administration tools\&. It will be run by
-\fBsmbd\fR(8)
-\fIAS ROOT\fR\&. Any
+\fBsmbd\fR(8)\fIAS ROOT\fR\&. Any
 \fI%g\fR
 will be replaced with the group name and any
 \fI%u\fR
@@ -2882,7 +2877,7 @@ directory name cache size (S)
 .\" directory name cache size
 .PP
 .RS 4
-This parameter specifies the the size of the directory name cache\&. It will be needed to turn this off for *BSD systems\&.
+This parameter specifies the size of the directory name cache\&. It will be needed to turn this off for *BSD systems\&.
 .sp
 Default:
 \fI\fIdirectory name cache size\fR\fR\fI = \fR\fI100\fR\fI \fR
@@ -3282,7 +3277,7 @@ NTFS and Windows VFAT file systems keep a create time for all files and director
 .sp
 This option is mainly used as a compatibility option for Visual C++ when used against Samba shares\&. Visual C++ generated makefiles have the object directory as a dependency for each object file, and a make rule to create the directory\&. Also, when NMAKE compares timestamps it uses the creation time when examining a directory\&. Thus the object directory will be created if it does not exist, but once it does exist it will always have an earlier timestamp than the object files it contains\&.
 .sp
-However, Unix time semantics mean that the create time reported by Samba will be updated whenever a file is created or or deleted in the directory\&. NMAKE finds all object files in the object directory\&. The timestamp of the last one built is then compared to the timestamp of the object directory\&. If the directory\*(Aqs timestamp if newer, then all object files will be rebuilt\&. Enabling this option ensures directories always predate their contents and an NMAKE build will proceed as expected\&.
+However, Unix time semantics mean that the create time reported by Samba will be updated whenever a file is created or deleted in the directory\&. NMAKE finds all object files in the object directory\&. The timestamp of the last one built is then compared to the timestamp of the object directory\&. If the directory\*(Aqs timestamp if newer, then all object files will be rebuilt\&. Enabling this option ensures directories always predate their contents and an NMAKE build will proceed as expected\&.
 .sp
 Default:
 \fI\fIfake directory create times\fR\fR\fI = \fR\fIno\fR\fI \fR
@@ -4070,7 +4065,7 @@ prefix\&. An idmap option consists of the
 \m[blue]\fBidmap config\fR\m[]
 prefix, followed by a domain name or the asterisk character (*), a colon, and the name of an idmap setting for the chosen domain\&.
 .sp
-The idmap configuration is hence divided into groups, one group for each domain to be configured, and one group with the the asterisk instead of a proper domain name, which specifies the default configuration that is used to catch all domains that do not have an explicit idmap configuration of their own\&.
+The idmap configuration is hence divided into groups, one group for each domain to be configured, and one group with the asterisk instead of a proper domain name, which specifies the default configuration that is used to catch all domains that do not have an explicit idmap configuration of their own\&.
 .sp
 There are three general options available:
 .PP
@@ -5002,8 +4997,7 @@ script\&.
 LDAP connections should be secured where possible\&. This may be done setting
 \fIeither\fR
 this parameter to
-\fIStart_tls\fR
-\fIor\fR
+\fIStart_tls\fR\fIor\fR
 by specifying
 \fIldaps://\fR
 in the URL argument of
@@ -5042,9 +5036,7 @@ Please note that this parameter does only affect
 \fIrpc\fR
 methods\&. To enable the LDAPv3 StartTLS extended operation (RFC2830) for
 \fIads\fR, set
-\m[blue]\fBldap ssl = yes\fR\m[]
-\fIand\fR
-\m[blue]\fBldap ssl ads = yes\fR\m[]\&. See
+\m[blue]\fBldap ssl = yes\fR\m[]\fIand\fR\m[blue]\fBldap ssl ads = yes\fR\m[]\&. See
 smb\&.conf(5)
 for more information on
 \m[blue]\fBldap ssl ads\fR\m[]\&.
@@ -5207,8 +5199,7 @@ in elections for local master browser\&.
 Setting this value to
 \fBno\fR
 will cause
-nmbd
-\fInever\fR
+nmbd\fInever\fR
 to become a local master browser\&.
 .sp
 Default:
@@ -5571,7 +5562,6 @@ logon home (G)
 .RS 4
 This parameter specifies the home directory location when a Win95/98 or NT Workstation logs into a Samba PDC\&. It allows you to do
 .sp
-
 C:\e>\fBNET USE H: /HOME\fR
 .sp
 from a command prompt, for example\&.
@@ -5580,7 +5570,6 @@ This option takes the standard substitutions, allowing you to have separate logo
 .sp
 This parameter can be used with Win9X workstations to ensure that roaming profiles are stored in a subdirectory of the user\*(Aqs home directory\&. This is done in the following way:
 .sp
-
 logon home = \e\e%N\e%U\eprofile
 .sp
 This tells Samba to return the above string, with substitutions made when a client requests the info, generally in a NetUserGetInfo request\&. Win9X clients truncate the info to \e\eserver\eshare when a user does
@@ -6080,7 +6069,7 @@ mangling method (G)
 .\" mangling method
 .PP
 .RS 4
-controls the algorithm used for the generating the mangled names\&. Can take two different values, "hash" and "hash2"\&. "hash" is the algorithm that was used used in Samba for many years and was the default in Samba 2\&.2\&.x "hash2" is now the default and is newer and considered a better algorithm (generates less collisions) in the names\&. Many Win32 applications store the mangled names and so changing to algorithms must not be done lightly as these applications may break unless reinstalled\&.
+controls the algorithm used for the generating the mangled names\&. Can take two different values, "hash" and "hash2"\&. "hash" is the algorithm that was used in Samba for many years and was the default in Samba 2\&.2\&.x "hash2" is now the default and is newer and considered a better algorithm (generates less collisions) in the names\&. Many Win32 applications store the mangled names and so changing to algorithms must not be done lightly as these applications may break unless reinstalled\&.
 .sp
 Default:
 \fI\fImangling method\fR\fR\fI = \fR\fIhash2\fR\fI \fR
@@ -6168,7 +6157,6 @@ The three settings are :
 .sp -1
 .IP \(bu 2.3
 .\}
-
 \fBYes\fR
 \- The read only DOS attribute is mapped to the inverse of the user or owner write bit in the unix permission mode set\&. If the owner write bit is not set, the read only attribute is reported as being set on the file\&. If the read only DOS attribute is set, Samba sets the owner, group and others write bits to zero\&. Write bits set in an ACL are ignored by Samba\&. If the read only DOS attribute is unset, Samba simply sets the write bit of the owner to one\&.
 .RE
@@ -6181,7 +6169,6 @@ The three settings are :
 .sp -1
 .IP \(bu 2.3
 .\}
-
 \fBPermissions\fR
 \- The read only DOS attribute is mapped to the effective permissions of the connecting user, as evaluated by
 \fBsmbd\fR(8)
@@ -6196,7 +6183,6 @@ by reading the unix permissions and POSIX ACL (if present)\&. If the connecting 
 .sp -1
 .IP \(bu 2.3
 .\}
-
 \fBNo\fR
 \- The read only DOS attribute is unaffected by permissions, and can only be set by the
 \m[blue]\fBstore dos attributes\fR\m[]
@@ -6725,7 +6711,6 @@ The options are: "lmhosts", "host", "wins" and "bcast"\&. They cause names to be
 .sp -1
 .IP \(bu 2.3
 .\}
-
 \fBlmhosts\fR
 : Lookup an IP address in the Samba lmhosts file\&. If the line in lmhosts has no name type attached to the NetBIOS name (see the manpage for lmhosts for details) then any name type matches for lookup\&.
 .RE
@@ -6738,7 +6723,6 @@ The options are: "lmhosts", "host", "wins" and "bcast"\&. They cause names to be
 .sp -1
 .IP \(bu 2.3
 .\}
-
 \fBhost\fR
 : Do a standard host name to IP address resolution, using the system
 /etc/hosts, NIS, or DNS lookups\&. This method of name resolution is operating system depended for instance on IRIX or Solaris this may be controlled by the
@@ -6937,7 +6921,7 @@ nt acl support (S)
 .RS 4
 This boolean parameter controls whether
 \fBsmbd\fR(8)
-will attempt to map UNIX permissions into Windows NT access control lists\&. The UNIX permissions considered are the the traditional UNIX owner and group permissions, as well as POSIX ACLs set on any files or directories\&. This parameter was formally a global parameter in releases prior to 2\&.2\&.2\&.
+will attempt to map UNIX permissions into Windows NT access control lists\&. The UNIX permissions considered are the traditional UNIX owner and group permissions, as well as POSIX ACLs set on any files or directories\&. This parameter was formally a global parameter in releases prior to 2\&.2\&.2\&.
 .sp
 Default:
 \fI\fInt acl support\fR\fR\fI = \fR\fIyes\fR\fI \fR
@@ -7639,7 +7623,6 @@ This option specifies a command to be run whenever the service is connected to\&
 .sp
 An interesting example is to send the users a welcome message every time they log in\&. Maybe a message of the day? Here is an example:
 .sp
-
 preexec = csh \-c \*(Aqecho \e"Welcome to %S!\e" | /usr/local/samba/bin/smbclient \-M %m \-I %I\*(Aq &
 .sp
 Of course, this could get annoying after a while :\-)
@@ -8734,9 +8717,7 @@ initshutdown \- Init Shutdown Service
 .sp
 .RE
 Three possible values currently supported are:
-embedded
-external
-disabled
+embeddedexternaldisabled
 .sp
 The classic method is to run every pipe as an internal function
 \fIembedded\fR
@@ -8748,7 +8729,7 @@ option allows to run a separate daemon or even a completely independent (3rd par
 .sp
 Currently in Samba3 we support three daemons, spoolssd, epmd and lsasd\&. These daemons can be enabled using the
 \fIrpc_daemon\fR
-option\&. For spoolssd you have to to enable the daemon and proxy the named pipe with:
+option\&. For spoolssd you have to enable the daemon and proxy the named pipe with:
 .sp
 Examples:
 .sp
@@ -9698,7 +9679,7 @@ This controls whether the remote client is allowed or required to use SMB encryp
 and
 \fIdisabled\fR\&. This may be set on a per\-share basis, but clients may chose to encrypt the entire session, not just traffic to a specific share\&. If this is set to mandatory then all traffic to a share
 \fImust\fR
-must be encrypted once the connection has been made to the share\&. The server would return "access denied" to all non\-encrypted requests on such a share\&. Selecting encrypted traffic reduces throughput as smaller packet sizes must be used (no huge UNIX style read/writes allowed) as well as the overhead of encrypting and signing all the data\&.
+be encrypted once the connection has been made to the share\&. The server would return "access denied" to all non\-encrypted requests on such a share\&. Selecting encrypted traffic reduces throughput as smaller packet sizes must be used (no huge UNIX style read/writes allowed) as well as the overhead of encrypting and signing all the data\&.
 .sp
 If SMB encryption is selected, Windows style SMB signing (see the
 \m[blue]\fBserver signing\fR\m[]
@@ -9930,6 +9911,19 @@ Default:
 .sp
 Example:
 \fI\fIspn update command\fR\fR\fI = \fR\fI/usr/local/sbin/spnupdate\fR\fI \fR
+.RE
+
+spoolss: architecture (G)
+.\" spoolss: architecture
+.PP
+.RS 4
+Windows spoolss print clients only allow association of server\-side drivers with printers when the driver architecture matches the advertised print server architecture\&. Samba\*(Aqs spoolss print server architecture can be changed using this parameter\&.
+.sp
+Default:
+\fI\fIspoolss: architecture\fR\fR\fI = \fR\fIWindows NT x86\fR\fI \fR
+.sp
+Example:
+\fI\fIspoolss: architecture\fR\fR\fI = \fR\fIWindows x64\fR\fI \fR
 .RE
 
 stat cache (G)
@@ -10367,7 +10361,7 @@ username map script (G)
 .RS 4
 This script is a mutually exclusive alternative to the
 \m[blue]\fBusername map\fR\m[]
-parameter\&. This parameter specifies and external program or script that must accept a single command line option (the username transmitted in the authentication request) and return a line line on standard output (the name to which the account should mapped)\&. In this way, it is possible to store username map tables in an LDAP or NIS directory services\&.
+parameter\&. This parameter specifies and external program or script that must accept a single command line option (the username transmitted in the authentication request) and return a line on standard output (the name to which the account should mapped)\&. In this way, it is possible to store username map tables in an LDAP or NIS directory services\&.
 .sp
 Default:
 \fI\fIusername map script\fR\fR\fI = \fR\fI\fR\fI \fR
@@ -10574,8 +10568,6 @@ usershare path (G)
 This parameter specifies the absolute path of the directory on the filesystem used to store the user defined share definition files\&. This directory must be owned by root, and have no access for other, and be writable only by the group owner\&. In addition the "sticky" bit must also be set, restricting rename and delete to owners of a file (in the same way the /tmp directory is usually configured)\&. Members of the group owner of this directory are the users allowed to create usershares\&.
 .sp
 For example, a valid usershare directory might be /usr/local/samba/lib/usershares, set up as follows\&.
-.sp
-
 .sp
 .if n \{\
 .RS 4
@@ -11475,7 +11467,6 @@ special sections make life for an administrator easy, but the various combinatio
 This man page is correct for version 4 of the Samba suite\&.
 .SH "SEE ALSO"
 .PP
-
 \fBsamba\fR(7),
 \fBsmbpasswd\fR(8),
 \fBsmbd\fR(8),

@@ -166,6 +166,7 @@ struct smbd_smb2_read_state {
 	uint32_t in_length;
 	uint64_t in_offset;
 	uint32_t in_minimum;
+	DATA_BLOB out_headers;
 	DATA_BLOB out_data;
 	uint32_t out_remaining;
 };
@@ -177,23 +178,33 @@ static int smb2_sendfile_send_data(struct smbd_smb2_read_state *state)
 	uint32_t in_length = state->in_length;
 	uint64_t in_offset = state->in_offset;
 	files_struct *fsp = state->fsp;
+	const DATA_BLOB *hdr = state->smb2req->queue_entry.sendfile_header;
 	ssize_t nread;
+	ssize_t ret;
 
 	nread = SMB_VFS_SENDFILE(fsp->conn->sconn->sock,
-					fsp,
-					NULL,
-					in_offset,
-					in_length);
+				 fsp,
+				 hdr,
+				 in_offset,
+				 in_length);
 	DEBUG(10,("smb2_sendfile_send_data: SMB_VFS_SENDFILE returned %d on file %s\n",
 		(int)nread,
 		fsp_str_dbg(fsp) ));
 
 	if (nread == -1) {
-		if (errno == ENOSYS || errno == EINTR) {
+		/*
+		 * Returning ENOSYS means no data at all was sent.
+		   Do this as a normal read. */
+		if (errno == ENOSYS) {
+			goto normal_read;
+		}
+
+		if (errno == EINTR) {
 			/*
-			 * Special hack for broken systems with no working
-			 * sendfile. Fake this up by doing read/write calls.
-			*/
+			 * Special hack for broken Linux with no working sendfile. If we
+			 * return EINTR we sent the header but not the rest of the data.
+			 * Fake this up by doing read/write calls.
+			 */
 			set_use_sendfile(SNUM(fsp->conn), false);
 			nread = fake_sendfile(fsp, in_offset, in_length);
 			if (nread == -1) {
@@ -224,23 +235,50 @@ static int smb2_sendfile_send_data(struct smbd_smb2_read_state *state)
 		DEBUG(3, ("send_file_readX: sendfile sent zero bytes "
 			"falling back to the normal read: %s\n",
 			fsp_str_dbg(fsp)));
+		goto normal_read;
+	}
 
-		nread = fake_sendfile(fsp, in_offset, in_length);
-		if (nread == -1) {
-			DEBUG(0,("smb2_sendfile_send_data: "
-				"fake_sendfile failed for file "
-				"%s (%s). Terminating\n",
-				fsp_str_dbg(fsp),
-				strerror(errno)));
-			exit_server_cleanly("smb2_sendfile_send_data: "
-				"fake_sendfile failed");
-		}
+	/*
+	 * We got a short read
+	 */
+	goto out;
+
+normal_read:
+	/* Send out the header. */
+	ret = write_data(fsp->conn->sconn->sock,
+			 (const char *)hdr->data, hdr->length);
+	if (ret != hdr->length) {
+		char addr[INET6_ADDRSTRLEN];
+		/*
+		 * Try and give an error message saying what
+		 * client failed.
+		 */
+		DEBUG(0, ("smb2_sendfile_send_data: write_data failed "
+			  "for client %s. Error %s\n",
+			  get_peer_addr(fsp->conn->sconn->sock, addr,
+					sizeof(addr)),
+			  strerror(errno)));
+
+		DEBUG(0,("smb2_sendfile_send_data: write_data failed for file "
+			 "%s (%s). Terminating\n", fsp_str_dbg(fsp),
+			 strerror(errno)));
+		exit_server_cleanly("smb2_sendfile_send_data: write_data failed");
+	}
+	nread = fake_sendfile(fsp, in_offset, in_length);
+	if (nread == -1) {
+		DEBUG(0,("smb2_sendfile_send_data: "
+			"fake_sendfile failed for file "
+			"%s (%s). Terminating\n",
+			fsp_str_dbg(fsp),
+			strerror(errno)));
+		exit_server_cleanly("smb2_sendfile_send_data: "
+			"fake_sendfile failed");
 	}
 
   out:
 
 	if (nread < in_length) {
-		sendfile_short_send(fsp, nread, 0, in_length);
+		sendfile_short_send(fsp, nread, hdr->length, in_length);
 	}
 
 	init_strict_lock_struct(fsp,
@@ -301,6 +339,7 @@ static NTSTATUS schedule_smb2_sendfile_read(struct smbd_smb2_request *smb2req,
 	}
 	*state_copy = *state;
 	talloc_set_destructor(state_copy, smb2_sendfile_send_data);
+	state->smb2req->queue_entry.sendfile_header = &state_copy->out_headers;
 	return NT_STATUS_OK;
 }
 
@@ -462,7 +501,7 @@ static struct tevent_req *smbd_smb2_read_send(TALLOC_CTX *mem_ctx,
 
 	if (!NT_STATUS_EQUAL(status, NT_STATUS_RETRY)) {
 		/* Real error in setting up aio. Fail. */
-		tevent_req_nterror(req, NT_STATUS_FILE_CLOSED);
+		tevent_req_nterror(req, status);
 		return tevent_req_post(req, ev);
 	}
 

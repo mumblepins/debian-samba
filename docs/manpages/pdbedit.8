@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: pdbedit
 .\"    Author: [see the "AUTHOR" section]
-.\" Generator: DocBook XSL Stylesheets v1.76.1 <http://docbook.sf.net/>
-.\"      Date: 11/21/2013
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 07/31/2014
 .\"    Manual: System Administration tools
 .\"    Source: Samba 4.0
 .\"  Language: English
 .\"
-.TH "PDBEDIT" "8" "11/21/2013" "Samba 4\&.0" "System Administration tools"
+.TH "PDBEDIT" "8" "07/31/2014" "Samba 4\&.0" "System Administration tools"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -204,8 +204,6 @@ Example:
 .RS 4
 This option can be used while adding or modifying a user account\&. It will specify the users\*(Aq account control property\&. Possible flags are listed below\&.
 .sp
-
-.sp
 .RS 4
 .ie n \{\
 \h'-04'\(bu\h'+03'\c
@@ -371,7 +369,7 @@ retype new password
 \fBNote\fR
 .ps -1
 .br
-pdbedit does not call the unix password syncronisation script if
+pdbedit does not call the unix password synchronization script if
 \m[blue]\fBunix password sync\fR\m[]
 has been set\&. It only updates the data in the Samba user database\&.
 .sp
@@ -558,6 +556,11 @@ This option is currently not being used\&.
 \-?|\-\-help
 .RS 4
 Print a summary of command line options\&.
+.RE
+.PP
+\-\-usage
+.RS 4
+Display brief usage message\&.
 .RE
 .PP
 \-d|\-\-debuglevel=level

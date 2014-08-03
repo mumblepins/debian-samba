@@ -80,18 +80,6 @@ static void cldapd_request_handler(struct cldap_socket *cldap,
 		return;
 	}
 
-	if (search->num_attributes == 1 &&
-	    strcasecmp(search->attributes[0], "netlogon") == 0) {
-		cldapd_netlogon_request(cldap,
-					cldapd,
-					in,
-					in->ldap_msg->messageid,
-					search->tree,
-					in->src);
-		talloc_free(in);
-		return;
-	}
-
 	cldapd_rootdse_request(cldap, cldapd, in,
 			       in->ldap_msg->messageid,
 			       search, in->src);
@@ -158,13 +146,19 @@ static NTSTATUS cldapd_startup_interfaces(struct cldapd_server *cldapd, struct l
 	/* if we are allowing incoming packets from any address, then
 	   we need to bind to the wildcard address */
 	if (!lpcfg_bind_interfaces_only(lp_ctx)) {
-		const char **wcard = iface_list_wildcard(cldapd, lp_ctx);
+		int num_binds = 0;
+		char **wcard = iface_list_wildcard(cldapd);
 		NT_STATUS_HAVE_NO_MEMORY(wcard);
 		for (i=0; wcard[i]; i++) {
 			status = cldapd_add_socket(cldapd, lp_ctx, wcard[i]);
-			NT_STATUS_NOT_OK_RETURN(status);
+			if (NT_STATUS_IS_OK(status)) {
+				num_binds++;
+			}
 		}
 		talloc_free(wcard);
+		if (num_binds == 0) {
+			return NT_STATUS_INVALID_PARAMETER_MIX;
+		}
 	}
 
 	/* now we have to also listen on the specific interfaces,

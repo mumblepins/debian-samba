@@ -839,8 +839,11 @@ static NTSTATUS open_file(files_struct *fsp,
 			}
 		}
 
-		/* Actually do the open */
-		status = fd_open_atomic(conn, fsp, local_flags,
+		/*
+		 * Actually do the open - if O_TRUNC is needed handle it
+		 * below under the share mode lock.
+		 */
+		status = fd_open_atomic(conn, fsp, local_flags & ~O_TRUNC,
 				unx_mode, p_file_created);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(3,("Error opening file %s (%s) (local_flags=%d) "
@@ -1076,6 +1079,11 @@ static void validate_my_share_entries(struct smbd_server_connection *sconn,
 	files_struct *fsp;
 
 	if (!serverid_equal(&self, &share_entry->pid)) {
+		return;
+	}
+
+	if (share_entry->share_file_id == 0) {
+		/* INTERNAL_OPEN_ONLY */
 		return;
 	}
 
@@ -2088,9 +2096,12 @@ static NTSTATUS open_file_ntcreate(connection_struct *conn,
 		   create_options, (unsigned int)unx_mode, oplock_request,
 		   (unsigned int)private_flags));
 
-	if ((req == NULL) && ((oplock_request & INTERNAL_OPEN_ONLY) == 0)) {
-		DEBUG(0, ("No smb request but not an internal only open!\n"));
-		return NT_STATUS_INTERNAL_ERROR;
+	if (req == NULL) {
+		/* Ensure req == NULL means INTERNAL_OPEN_ONLY */
+		SMB_ASSERT(((oplock_request & INTERNAL_OPEN_ONLY) != 0));
+	} else {
+		/* And req != NULL means no INTERNAL_OPEN_ONLY */
+		SMB_ASSERT(((oplock_request & INTERNAL_OPEN_ONLY) == 0));
 	}
 
 	/*
@@ -2638,6 +2649,21 @@ static NTSTATUS open_file_ntcreate(connection_struct *conn,
 		return status;
 	}
 
+	/* Should we atomically (to the client at least) truncate ? */
+	if ((!new_file_created) &&
+	    (flags2 & O_TRUNC) &&
+	    (!S_ISFIFO(fsp->fsp_name->st.st_ex_mode))) {
+		int ret;
+
+		ret = vfs_set_filelen(fsp, 0);
+		if (ret != 0) {
+			status = map_nt_error_from_unix(errno);
+			TALLOC_FREE(lck);
+			fd_close(fsp);
+			return status;
+		}
+	}
+
 	grant_fsp_oplock_type(fsp,
 			      oplock_request,
 			      got_level2_oplock,
@@ -2828,39 +2854,6 @@ static NTSTATUS open_file_ntcreate(connection_struct *conn,
 	TALLOC_FREE(lck);
 
 	return NT_STATUS_OK;
-}
-
-
-/****************************************************************************
- Open a file for for write to ensure that we can fchmod it.
-****************************************************************************/
-
-NTSTATUS open_file_fchmod(connection_struct *conn,
-			  struct smb_filename *smb_fname,
-			  files_struct **result)
-{
-	if (!VALID_STAT(smb_fname->st)) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-        return SMB_VFS_CREATE_FILE(
-		conn,					/* conn */
-		NULL,					/* req */
-		0,					/* root_dir_fid */
-		smb_fname,				/* fname */
-		FILE_WRITE_DATA,			/* access_mask */
-		(FILE_SHARE_READ | FILE_SHARE_WRITE |	/* share_access */
-		    FILE_SHARE_DELETE),
-		FILE_OPEN,				/* create_disposition*/
-		0,					/* create_options */
-		0,					/* file_attributes */
-		INTERNAL_OPEN_ONLY,			/* oplock_request */
-		0,					/* allocation_size */
-		0,					/* private_flags */
-		NULL,					/* sd */
-		NULL,					/* ea_list */
-		result,					/* result */
-		NULL);					/* pinfo */
 }
 
 static NTSTATUS mkdir_internal(connection_struct *conn,
@@ -3171,7 +3164,14 @@ static NTSTATUS open_directory(connection_struct *conn,
 		return status;
 	}
 
-	mtimespec = smb_dname->st.st_ex_mtime;
+	/* Don't store old timestamps for directory
+	   handles in the internal database. We don't
+	   update them in there if new objects
+	   are creaded in the directory. Currently
+	   we only update timestamps on file writes.
+	   See bug #9870.
+	*/
+	ZERO_STRUCT(mtimespec);
 
 #ifdef O_DIRECTORY
 	status = fd_open(conn, fsp, O_RDONLY|O_DIRECTORY, 0);

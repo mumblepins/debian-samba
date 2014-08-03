@@ -449,10 +449,25 @@ static ADS_STATUS libnet_join_set_machine_upn(TALLOC_CTX *mem_ctx,
 	}
 
 	if (!r->in.upn) {
+		const char *realm = r->out.dns_domain_name;
+
+		/* in case we are about to generate a keytab during the join
+		 * make sure the default upn we create is usable with kinit -k.
+		 * gd */
+
+		if (USE_KERBEROS_KEYTAB) {
+			realm = talloc_strdup_upper(mem_ctx,
+						    r->out.dns_domain_name);
+		}
+
+		if (!realm) {
+			return ADS_ERROR(LDAP_NO_MEMORY);
+		}
+
 		r->in.upn = talloc_asprintf(mem_ctx,
 					    "host/%s@%s",
 					    r->in.machine_name,
-					    r->out.dns_domain_name);
+					    realm);
 		if (!r->in.upn) {
 			return ADS_ERROR(LDAP_NO_MEMORY);
 		}
@@ -1023,6 +1038,14 @@ static NTSTATUS libnet_join_joindomain_rpc(TALLOC_CTX *mem_ctx,
 		status = result;
 		goto done;
 	}
+	if (user_rids.count != 1) {
+		status = NT_STATUS_INVALID_NETWORK_RESPONSE;
+		goto done;
+	}
+	if (name_types.count != 1) {
+		status = NT_STATUS_INVALID_NETWORK_RESPONSE;
+		goto done;
+	}
 
 	if (name_types.ids[0] != SID_NAME_USER) {
 		DEBUG(0,("%s is not a user account (type=%d)\n",
@@ -1414,6 +1437,14 @@ static NTSTATUS libnet_join_unjoindomain_rpc(TALLOC_CTX *mem_ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		status = result;
+		goto done;
+	}
+	if (user_rids.count != 1) {
+		status = NT_STATUS_INVALID_NETWORK_RESPONSE;
+		goto done;
+	}
+	if (name_types.count != 1) {
+		status = NT_STATUS_INVALID_NETWORK_RESPONSE;
 		goto done;
 	}
 

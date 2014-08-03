@@ -303,7 +303,7 @@ parse_ace(struct cli_state *ipc_cli,
 	p++;
 	/* Try to parse numeric form */
 
-	if (sscanf(p, "%i/%i/%i", &atype, &aflags, &amask) == 3 &&
+	if (sscanf(p, "%u/%u/%u", &atype, &aflags, &amask) == 3 &&
 	    convert_string_to_sid(ipc_cli, pol, numeric, &sid, str)) {
 		goto done;
 	}
@@ -333,7 +333,7 @@ parse_ace(struct cli_state *ipc_cli,
 	/* Only numeric form accepted for flags at present */
 
 	if (!(next_token_talloc(frame, &cp, &tok, "/") &&
-	      sscanf(tok, "%i", &aflags))) {
+	      sscanf(tok, "%u", &aflags))) {
 		TALLOC_FREE(frame);
 		return false;
 	}
@@ -344,7 +344,7 @@ parse_ace(struct cli_state *ipc_cli,
 	}
 
 	if (strncmp(tok, "0x", 2) == 0) {
-		if (sscanf(tok, "%i", &amask) != 1) {
+		if (sscanf(tok, "%u", &amask) != 1) {
 			TALLOC_FREE(frame);
 			return false;
 		}
@@ -904,7 +904,7 @@ cacl_get(SMBCCTX *context,
 		status = cli_ntcreate(targetcli, targetpath, 0,
 				      CREATE_ACCESS_READ, 0,
 				      FILE_SHARE_READ|FILE_SHARE_WRITE,
-				      FILE_OPEN, 0x0, 0x0, &fnum);
+				      FILE_OPEN, 0x0, 0x0, &fnum, NULL);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(5, ("cacl_get failed to open %s: %s\n",
 				  targetpath, nt_errstr(status)));
@@ -1563,7 +1563,7 @@ cacl_set(SMBCCTX *context,
 
 	status = cli_ntcreate(targetcli, targetpath, 0, CREATE_ACCESS_READ, 0,
 			      FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_OPEN,
-			      0x0, 0x0, &fnum);
+			      0x0, 0x0, &fnum, NULL);
 	if (!NT_STATUS_IS_OK(status)) {
                 DEBUG(5, ("cacl_set failed to open %s: %s\n",
                           targetpath, nt_errstr(status)));
@@ -1671,7 +1671,7 @@ cacl_set(SMBCCTX *context,
 	status = cli_ntcreate(targetcli, targetpath, 0,
 			      WRITE_DAC_ACCESS | WRITE_OWNER_ACCESS, 0,
 			      FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_OPEN,
-			      0x0, 0x0, &fnum);
+			      0x0, 0x0, &fnum, NULL);
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(5, ("cacl_set failed to open %s: %s\n",
                           targetpath, nt_errstr(status)));

@@ -232,7 +232,7 @@ static int readfile(uint8_t *b, int n, XFILE *f)
 		return x_fread(b,1,n,f);
 
 	i = 0;
-	while (i < (n - 1) && (i < BUFFER_SIZE)) {
+	while (i < (n - 1)) {
 		if ((c = x_getc(f)) == EOF) {
 			break;
 		}
@@ -579,7 +579,7 @@ static NTSTATUS display_finfo(struct cli_state *cli_state, struct file_info *fin
 		status = cli_ntcreate(cli_state, afname, 0,
 				      CREATE_ACCESS_READ, 0,
 				      FILE_SHARE_READ|FILE_SHARE_WRITE,
-				      FILE_OPEN, 0x0, 0x0, &fnum);
+				      FILE_OPEN, 0x0, 0x0, &fnum, NULL);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG( 0, ("display_finfo() Failed to open %s: %s\n",
 				   afname, nt_errstr(status)));
@@ -1695,7 +1695,6 @@ static int do_allinfo(const char *name)
 	struct timespec b_time, a_time, m_time, c_time;
 	off_t size;
 	uint16_t mode;
-	SMB_INO_T ino;
 	NTTIME tmp;
 	uint16_t fnum;
 	unsigned int num_streams;
@@ -1722,8 +1721,8 @@ static int do_allinfo(const char *name)
 	}
 	d_printf("altname: %s\n", altname);
 
-	status = cli_qpathinfo2(cli, name, &b_time, &a_time, &m_time, &c_time,
-				&size, &mode, &ino);
+	status = cli_qpathinfo3(cli, name, &b_time, &a_time, &m_time, &c_time,
+				&size, &mode, NULL);
 	if (!NT_STATUS_IS_OK(status)) {
 		d_printf("%s getting pathinfo for %s\n", nt_errstr(status),
 			 name);
@@ -1779,7 +1778,7 @@ static int do_allinfo(const char *name)
 			      SEC_STD_SYNCHRONIZE, 0,
 			      FILE_SHARE_READ|FILE_SHARE_WRITE
 			      |FILE_SHARE_DELETE,
-			      FILE_OPEN, 0x0, 0x0, &fnum);
+			      FILE_OPEN, 0x0, 0x0, &fnum, NULL);
 	if (!NT_STATUS_IS_OK(status)) {
 		/*
 		 * Ignore failure, it does not hurt if we can't list
@@ -1800,7 +1799,7 @@ static int do_allinfo(const char *name)
 		d_printf("%s\n", snapshots[i]);
 		snap_name = talloc_asprintf(talloc_tos(), "%s%s",
 					    snapshots[i], name);
-		status = cli_qpathinfo2(cli, snap_name, &b_time, &a_time,
+		status = cli_qpathinfo3(cli, snap_name, &b_time, &a_time,
 					&m_time, &c_time, &size,
 					NULL, NULL);
 		if (!NT_STATUS_IS_OK(status)) {
@@ -2503,12 +2502,12 @@ static int cmd_open(void)
 	status = cli_ntcreate(targetcli, targetname, 0,
 			FILE_READ_DATA|FILE_WRITE_DATA, 0,
 			FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_OPEN,
-			0x0, 0x0, &fnum);
+			0x0, 0x0, &fnum, NULL);
 	if (!NT_STATUS_IS_OK(status)) {
 		status = cli_ntcreate(targetcli, targetname, 0,
 				FILE_READ_DATA, 0,
 				FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_OPEN,
-				0x0, 0x0, &fnum);
+				0x0, 0x0, &fnum, NULL);
 		if (NT_STATUS_IS_OK(status)) {
 			d_printf("open file %s: for read/write fnum %d\n", targetname, fnum);
 		} else {
@@ -3950,7 +3949,7 @@ static int cmd_notify(void)
 	status = cli_ntcreate(
 		cli, name, 0, FILE_READ_DATA, 0,
 		FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,
-		FILE_OPEN, 0, 0, &fnum);
+		FILE_OPEN, 0, 0, &fnum, NULL);
 	if (!NT_STATUS_IS_OK(status)) {
 		d_printf("Could not open file: %s\n", nt_errstr(status));
 		goto fail;
