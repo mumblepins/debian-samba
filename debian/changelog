@@ -1,4 +1,4 @@
-samba (2:4.1.22+dfsg-1) UNRELEASED; urgency=high
+samba (2:4.1.22+dfsg-1) unstable; urgency=high
 
   * New upstream release. Fixes:
   - CVE-2015-7540 (Remote DoS in Samba (AD) LDAP server)
