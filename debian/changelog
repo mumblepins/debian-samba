@@ -12,6 +12,7 @@ samba (2:4.1.22+dfsg-1) UNRELEASED; urgency=high
   - CVE-2015-8467 (Denial of service attack against Windows
     Active Directory server)
   - CVE-2015-5330 (Remote memory read in Samba LDAP server)
+  * debian/control: Depend on newer system ldb (2:1.1.24).
 
  -- Jelmer Vernooij <jelmer@debian.org>  Wed, 16 Dec 2015 00:57:50 +0000
 
