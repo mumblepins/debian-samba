@@ -1,3 +1,20 @@
+samba (2:4.1.22+dfsg-1) UNRELEASED; urgency=high
+
+  * New upstream release. Fixes:
+  - CVE-2015-7540 (Remote DoS in Samba (AD) LDAP server)
+  - CVE-2015-3223 (Denial of service in Samba Active Directory
+    server)
+  - CVE-2015-5252 (Insufficient symlink verification in smbd)
+  - CVE-2015-5299 (Missing access control check in shadow copy
+    code)
+  - CVE-2015-5296 (Samba client requesting encryption vulnerable
+    to downgrade attack)
+  - CVE-2015-8467 (Denial of service attack against Windows
+    Active Directory server)
+  - CVE-2015-5330 (Remote memory read in Samba LDAP server)
+
+ -- Jelmer Vernooij <jelmer@debian.org>  Wed, 16 Dec 2015 00:57:50 +0000
+
 samba (2:4.1.21+dfsg-1) unstable; urgency=medium
 
   * New upstream release.
