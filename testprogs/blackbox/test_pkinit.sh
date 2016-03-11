@@ -5,7 +5,7 @@
 
 if [ $# -lt 5 ]; then
 cat <<EOF
-Usage: test_kinit.sh SERVER USERNAME PASSWORD REALM DOMAIN PREFIX ENCTYPE SMBCLINET
+Usage: test_kinit.sh SERVER USERNAME PASSWORD REALM DOMAIN PREFIX
 EOF
 exit 1;
 fi
@@ -17,35 +17,20 @@ REALM=$4
 DOMAIN=$5
 PREFIX=$6
 ENCTYPE=$7
-smbclient=$8
-shift 8
+shift 7
 failed=0
 
-samba4bindir="$BINDIR"
+samba4bindir="$BUILDDIR/bin"
 samba4srcdir="$SRCDIR/source4"
-samba4kinit=kinit
-if test -x $BINDIR/samba4kinit; then
-	samba4kinit=$BINDIR/samba4kinit
-fi
-
-samba_tool="$samba4bindir/samba-tool"
-samba4kpasswd=kpasswd
-if test -x $BINDIR/samba4kpasswd; then
-	samba4passwd=$BINDIR/samba4kpasswd
-fi
-
-enableaccount="$samba_tool user enable"
+smbclient="$samba4bindir/smbclient$EXEEXT"
+samba4kinit="$samba4bindir/samba4kinit$EXEEXT"
+samba_tool="$samba4bindir/samba-tool$EXEEXT"
+ldbmodify="$samba4bindir/ldbmodify$EXEEXT"
+ldbsearch="$samba4bindir/ldbsearch$EXEEXT"
+rkpty="$samba4bindir/rkpty$EXEEXT"
+samba4kpasswd="$samba4bindir/samba4kpasswd$EXEEXT"
+enableaccount="$samba_tool enableaccount"
 machineaccountccache="$samba4srcdir/scripting/bin/machineaccountccache"
-
-ldbmodify="ldbmodify"
-if [ -x "$samba4bindir/ldbmodify" ]; then
-	ldbmodify="$samba4bindir/ldbmodify"
-fi
-
-ldbsearch="ldbsearch"
-if [ -x "$samba4bindir/ldbsearch" ]; then
-	ldbsearch="$samba4bindir/ldbsearch"
-fi
 
 . `dirname $0`/subunit.sh
 
@@ -55,7 +40,7 @@ test_smbclient() {
 	shift
 	shift
 	echo "test: $name"
-	$VALGRIND $smbclient $CONFIGURATION //$SERVER/tmp -c "$cmd" $@
+	$VALGRIND $smbclient $CONFIGURATION //$SERVER/tmp -c "$cmd" -W "$DOMAIN" $@
 	status=$?
 	if [ x$status = x0 ]; then
 		echo "success: $name"
@@ -70,9 +55,9 @@ enctype="-e $ENCTYPE"
 KRB5CCNAME="$PREFIX/tmpccache"
 export KRB5CCNAME
 
-testit "kinit with pkinit (name specified)" $samba4kinit $enctype --request-pac --renewable --pk-user=FILE:$PREFIX/private/tls/admincert.pem,$PREFIX/private/tls/adminkey.pem $USERNAME@$REALM || failed=`expr $failed + 1`
-testit "kinit with pkinit (enterprise name specified)" $samba4kinit $enctype --request-pac --renewable --pk-user=FILE:$PREFIX/private/tls/admincert.pem,$PREFIX/private/tls/adminkey.pem --enterprise $USERNAME@$REALM || failed=`expr $failed + 1`
-testit "kinit with pkinit (enterprise name in cert)" $samba4kinit $enctype --request-pac --renewable --pk-user=FILE:$PREFIX/private/tls/admincertupn.pem,$PREFIX/private/tls/adminkey.pem --pk-enterprise || failed=`expr $failed + 1`
+testit "kinit with pkinit (name specified)" $samba4kinit $enctype --request-pac --renewable --pk-user=FILE:$PREFIX/dc/private/tls/admincert.pem,$PREFIX/dc/private/tls/adminkey.pem $USERNAME@$REALM || failed=`expr $failed + 1`
+testit "kinit with pkinit (enterprise name specified)" $samba4kinit $enctype --request-pac --renewable --pk-user=FILE:$PREFIX/dc/private/tls/admincert.pem,$PREFIX/dc/private/tls/adminkey.pem --enterprise $USERNAME@$REALM || failed=`expr $failed + 1`
+testit "kinit with pkinit (enterprise name in cert)" $samba4kinit $enctype --request-pac --renewable --pk-user=FILE:$PREFIX/dc/private/tls/admincertupn.pem,$PREFIX/dc/private/tls/adminkey.pem --pk-enterprise || failed=`expr $failed + 1`
 testit "kinit renew ticket" $samba4kinit --request-pac -R
 
 test_smbclient "Test login with kerberos ccache" 'ls' -k yes || failed=`expr $failed + 1`

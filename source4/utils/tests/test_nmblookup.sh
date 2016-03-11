@@ -5,8 +5,7 @@ NETBIOSNAME=$1
 NETBIOSALIAS=$2
 SERVER=$3
 SERVER_IP=$4
-nmblookup=$5
-shift 5
+shift 4
 TORTURE_OPTIONS=$*
 
 failed=0
@@ -26,6 +25,9 @@ testit() {
 	fi
 	return $status
 }
+
+samba4bindir="$BUILDDIR/bin"
+nmblookup="$samba4bindir/nmblookup$EXEEXT"
 
 testit "nmblookup -U \$SERVER_IP \$SERVER" $nmblookup $TORTURE_OPTIONS -U $SERVER_IP $SERVER
 testit "nmblookup -U \$SERVER_IP \$NETBIOSNAME" $nmblookup $TORTURE_OPTIONS -U $SERVER_IP $NETBIOSNAME

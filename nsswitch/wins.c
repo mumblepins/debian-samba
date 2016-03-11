@@ -48,22 +48,19 @@ NSS_STATUS _nss_wins_gethostbyname2_r(const char *name, int af, struct hostent *
 static void nss_wins_init(void)
 {
 	initialised = 1;
+	load_case_tables_library();
 	lp_set_cmdline("log level", "0");
 
 	TimeInit();
 	setup_logging("nss_wins",False);
-	lp_load_global_no_reinit(get_dyn_CONFIGFILE());
+	lp_load(get_dyn_CONFIGFILE(),True,False,False,True);
 	load_interfaces();
 }
 
 static struct in_addr *lookup_byname_backend(const char *name, int *count)
 {
-	TALLOC_CTX *frame;
-	struct sockaddr_storage *address = NULL;
+	struct ip_service *address = NULL;
 	struct in_addr *ret = NULL;
-	NTSTATUS status;
-	const char *p;
-	size_t nbt_len;
 	int j;
 
 	if (!initialised) {
@@ -72,32 +69,20 @@ static struct in_addr *lookup_byname_backend(const char *name, int *count)
 
 	*count = 0;
 
-	nbt_len = strlen(name);
-	if (nbt_len > MAX_NETBIOSNAME_LEN - 1) {
-		return NULL;
-	}
-	p = strchr(name, '.');
-	if (p != NULL) {
-		return NULL;
-	}
-
-	frame = talloc_stackframe();
 	/* always try with wins first */
-	status = resolve_wins(name, 0x00, talloc_tos(),
-			      &address, count);
-	if (NT_STATUS_IS_OK(status)) {
+	if (NT_STATUS_IS_OK(resolve_wins(name,0x00,&address,count))) {
 		if ( (ret = SMB_MALLOC_P(struct in_addr)) == NULL ) {
-			TALLOC_FREE(frame);
+			free( address );
 			return NULL;
 		}
-		if (address[0].ss_family != AF_INET) {
+		if (address[0].ss.ss_family != AF_INET) {
+			free(address);
 			free(ret);
-			TALLOC_FREE(frame);
 			return NULL;
 		}
-		*ret = ((struct sockaddr_in *)(void *)address)
+		*ret = ((struct sockaddr_in *)(void *)&address[0].ss)
 			->sin_addr;
-		TALLOC_FREE(frame);
+		free( address );
 		return ret;
 	}
 
@@ -106,23 +91,24 @@ static struct in_addr *lookup_byname_backend(const char *name, int *count)
 		const struct in_addr *bcast = iface_n_bcast_v4(j);
 		struct sockaddr_storage ss;
 		struct sockaddr_storage *pss;
+		NTSTATUS status;
 
 		if (!bcast) {
 			continue;
 		}
 		in_addr_to_sockaddr_storage(&ss, *bcast);
 		status = name_query(name, 0x00, True, True, &ss,
-				    talloc_tos(), &pss, count, NULL);
+				    NULL, &pss, count, NULL);
 		if (NT_STATUS_IS_OK(status) && (*count > 0)) {
 			if ((ret = SMB_MALLOC_P(struct in_addr)) == NULL) {
-				TALLOC_FREE(frame);
 				return NULL;
 			}
 			*ret = ((struct sockaddr_in *)pss)->sin_addr;
+			TALLOC_FREE(pss);
 			break;
 		}
 	}
-	TALLOC_FREE(frame);
+
 	return ret;
 }
 
@@ -194,7 +180,7 @@ int lookup(nsd_file_t *rq)
 	 * response needs to be a string of the following format
 	 * ip_address[ ip_address]*\tname[ alias]*
 	 */
-	if (strcasecmp_m(map,"hosts.byaddr") == 0) {
+	if (StrCaseCmp(map,"hosts.byaddr") == 0) {
 		if ( status = lookup_byaddr_backend(key, &count)) {
 		    size = strlen(key) + 1;
 		    if (size > len) {
@@ -222,7 +208,7 @@ int lookup(nsd_file_t *rq)
 		    response[strlen(response)-1] = '\n';
 		    talloc_free(status);
 		}
-	} else if (strcasecmp_m(map,"hosts.byname") == 0) {
+	} else if (StrCaseCmp(map,"hosts.byname") == 0) {
 	    if (ip_list = lookup_byname_backend(key, &count)) {
 		for (i = count; i ; i--) {
 		    addr = inet_ntoa(ip_list[i-1]);

@@ -42,51 +42,44 @@ static bool test_one(struct cli_state *cli, const char *name)
 
 	total++;
 
-	status = cli_openx(cli, name, O_RDWR|O_CREAT|O_EXCL, DENY_NONE, &fnum);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("open of %s failed (%s)\n", name, nt_errstr(status));
+	if (!NT_STATUS_IS_OK(cli_open(cli, name, O_RDWR|O_CREAT|O_EXCL, DENY_NONE, &fnum))) {
+		printf("open of %s failed (%s)\n", name, cli_errstr(cli));
 		return False;
 	}
 
-	status = cli_close(cli, fnum);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("close of %s failed (%s)\n", name, nt_errstr(status));
+	if (!NT_STATUS_IS_OK(cli_close(cli, fnum))) {
+		printf("close of %s failed (%s)\n", name, cli_errstr(cli));
 		return False;
 	}
 
 	/* get the short name */
 	status = cli_qpathinfo_alt_name(cli, name, shortname);
 	if (!NT_STATUS_IS_OK(status)) {
-		printf("query altname of %s failed (%s)\n", name, nt_errstr(status));
+		printf("query altname of %s failed (%s)\n", name, cli_errstr(cli));
 		return False;
 	}
 
 	fstr_sprintf(name2, "\\mangle_test\\%s", shortname);
-	status = cli_unlink(cli, name2, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(cli_unlink(cli, name2, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN))) {
 		printf("unlink of %s  (%s) failed (%s)\n", 
-		       name2, name, nt_errstr(status));
+		       name2, name, cli_errstr(cli));
 		return False;
 	}
 
 	/* recreate by short name */
-	status = cli_openx(cli, name2, O_RDWR|O_CREAT|O_EXCL, DENY_NONE, &fnum);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("open2 of %s failed (%s)\n", name2, nt_errstr(status));
+	if (!NT_STATUS_IS_OK(cli_open(cli, name2, O_RDWR|O_CREAT|O_EXCL, DENY_NONE, &fnum))) {
+		printf("open2 of %s failed (%s)\n", name2, cli_errstr(cli));
 		return False;
 	}
-
-	status = cli_close(cli, fnum);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("close of %s failed (%s)\n", name, nt_errstr(status));
+	if (!NT_STATUS_IS_OK(cli_close(cli, fnum))) {
+		printf("close of %s failed (%s)\n", name, cli_errstr(cli));
 		return False;
 	}
 
 	/* and unlink by long name */
-	status = cli_unlink(cli, name, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(cli_unlink(cli, name, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN))) {
 		printf("unlink2 of %s  (%s) failed (%s)\n", 
-		       name, name2, nt_errstr(status));
+		       name, name2, cli_errstr(cli));
 		failures++;
 		cli_unlink(cli, name2, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
 		return True;
@@ -107,7 +100,7 @@ static bool test_one(struct cli_state *cli, const char *name)
 	} else {
 		TDB_DATA namedata;
 		/* store it for later */
-		namedata.dptr = discard_const_p(uint8_t, name);
+		namedata.dptr = CONST_DISCARD(uint8 *, name);
 		namedata.dsize = strlen(name)+1;
 		tdb_store_bystring(tdb, shortname, namedata, TDB_REPLACE);
 	}

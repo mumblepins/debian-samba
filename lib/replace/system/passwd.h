@@ -27,9 +27,8 @@
 
 */
 
-#ifdef HAVE_UNISTD_H
+/* this needs to be included before nss_wrapper.h on some systems */
 #include <unistd.h>
-#endif
 
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -68,6 +67,17 @@
 #include <compat.h>
 #endif
 
+#if !defined(getpass)
+#ifdef REPLACE_GETPASS
+#if defined(REPLACE_GETPASS_BY_GETPASSPHRASE)
+#define getpass(prompt) getpassphrase(prompt)
+#else
+#define getpass(prompt) rep_getpass(prompt)
+char *rep_getpass(const char *prompt);
+#endif
+#endif
+#endif
+
 #ifndef NGROUPS_MAX
 #define NGROUPS_MAX 32 /* Guess... */
 #endif
@@ -78,6 +88,9 @@
 #define PASSWORD_LENGTH 8
 #endif
 
+#if defined(HAVE_PUTPRPWNAM) && defined(AUTH_CLEARTEXT_SEG_CHARS)
+#define OSF1_ENH_SEC 1
+#endif
 
 #ifndef ALLOW_CHANGE_PASSWORD
 #if (defined(HAVE_TERMIOS_H) && defined(HAVE_DUP2) && defined(HAVE_SETSID))
@@ -88,5 +101,14 @@
 #if defined(HAVE_CRYPT16) && defined(HAVE_GETAUTHUID)
 #define ULTRIX_AUTH 1
 #endif
+
+#ifdef NSS_WRAPPER
+#ifndef NSS_WRAPPER_DISABLE
+#ifndef NSS_WRAPPER_NOT_REPLACE
+#define NSS_WRAPPER_REPLACE
+#endif /* NSS_WRAPPER_NOT_REPLACE */
+#include "../nss_wrapper/nss_wrapper.h"
+#endif /* NSS_WRAPPER_DISABLE */
+#endif /* NSS_WRAPPER */
 
 #endif

@@ -17,7 +17,6 @@
 
 #include "includes.h"
 #include "smbd/smbd.h"
-#include "lib/sys_rw.h"
 
 /* Cache priming module.
  *
@@ -50,13 +49,13 @@ static void * g_readbuf = NULL;
 static bool prime_cache(
             struct vfs_handle_struct *  handle,
 			files_struct *		        fsp,
-			off_t		            offset,
+			SMB_OFF_T		            offset,
 			size_t			            count)
 {
-        off_t * last;
+        SMB_OFF_T * last;
         ssize_t nread;
 
-        last = (off_t *)VFS_ADD_FSP_EXTENSION(handle, fsp, off_t, NULL);
+        last = (SMB_OFF_T *)VFS_ADD_FSP_EXTENSION(handle, fsp, SMB_OFF_T, NULL);
         if (!last) {
                 return False;
         }
@@ -135,7 +134,7 @@ static ssize_t cprime_sendfile(
                 int                         tofd,
                 files_struct *              fromfsp,
                 const DATA_BLOB *           header,
-                off_t                   offset,
+                SMB_OFF_T                   offset,
                 size_t                      count)
 {
         if (g_readbuf && offset == 0) {
@@ -152,7 +151,7 @@ static ssize_t cprime_read(
                 void *              data,
                 size_t              count)
 {
-        off_t offset;
+        SMB_OFF_T offset;
 
         offset = SMB_VFS_LSEEK(fsp, 0, SEEK_CUR);
         if (offset >= 0 && g_readbuf)  {
@@ -168,7 +167,7 @@ static ssize_t cprime_pread(
                 files_struct *      fsp,
                 void *              data,
 		        size_t              count,
-                off_t           offset)
+                SMB_OFF_T           offset)
 {
         if (g_readbuf) {
                 prime_cache(handle, fsp, offset, count);
@@ -178,10 +177,10 @@ static ssize_t cprime_pread(
 }
 
 static struct vfs_fn_pointers vfs_cacheprime_fns = {
-    .sendfile_fn = cprime_sendfile,
-    .pread_fn = cprime_pread,
-    .read_fn = cprime_read,
-    .connect_fn = cprime_connect,
+        .sendfile = cprime_sendfile,
+        .pread = cprime_pread,
+        .vfs_read = cprime_read,
+        .connect_fn = cprime_connect,
 };
 
 /* -------------------------------------------------------------------------

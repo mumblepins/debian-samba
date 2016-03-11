@@ -411,8 +411,8 @@ static void wins_register_wack(struct nbt_name_socket *nbtsock,
 	s->rec			= talloc_steal(s, rec);
 	s->reg_address		= packet->additional[0].rdata.netbios.addresses[0].ipaddr;
 	s->new_type		= new_type;
-	s->src		        = socket_address_copy(s, src);
-	if (s->src == NULL) goto failed;
+	s->src		        = src;
+	if (talloc_reference(s, src) == NULL) goto failed;
 
 	s->io.in.nbtd_server	= iface->nbtsrv;
 	s->io.in.nbt_port       = lpcfg_nbt_port(iface->nbtsrv->task->lp_ctx);
@@ -679,7 +679,7 @@ static void nbtd_wins_randomize1Clist(struct loadparm_context *lp_ctx,
 
 	/* 
 	 * choose a random address to be the first in the response to the client,
-	 * prefer the addresses inside the nbtd:wins_randomize1Clist_mask netmask
+	 * preferr the addresses inside the nbtd:wins_randomize1Clist_mask netmask
 	 */
 	r = random();
 	idx = sidx = r % num_addrs;
@@ -688,7 +688,7 @@ static void nbtd_wins_randomize1Clist(struct loadparm_context *lp_ctx,
 		bool same;
 
 		/* if the current one is in the same subnet, use it */
-		same = iface_list_same_net(addresses[idx], src->addr, mask);
+		same = iface_same_net(addresses[idx], src->addr, mask);
 		if (same) {
 			sidx = idx;
 			break;
@@ -1038,7 +1038,7 @@ NTSTATUS nbtd_winsserver_init(struct nbtd_server *nbtsrv)
 	uint32_t tmp;
 	const char *owner;
 
-	if (!lpcfg_we_are_a_wins_server(nbtsrv->task->lp_ctx)) {
+	if (!lpcfg_wins_support(nbtsrv->task->lp_ctx)) {
 		nbtsrv->winssrv = NULL;
 		return NT_STATUS_OK;
 	}
@@ -1057,8 +1057,8 @@ NTSTATUS nbtd_winsserver_init(struct nbtd_server *nbtsrv)
 
 	if (owner == NULL) {
 		struct interface *ifaces;
-		load_interface_list(nbtsrv->task, nbtsrv->task->lp_ctx, &ifaces);
-		owner = iface_list_first_v4(ifaces);
+		load_interfaces(nbtsrv->task, lpcfg_interfaces(nbtsrv->task->lp_ctx), &ifaces);
+		owner = iface_n_ip(ifaces, 0);
 	}
 
 	nbtsrv->winssrv->wins_db     = winsdb_connect(nbtsrv->winssrv, nbtsrv->task->event_ctx, 

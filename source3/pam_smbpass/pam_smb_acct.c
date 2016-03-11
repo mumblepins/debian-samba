@@ -55,9 +55,10 @@ int pam_sm_acct_mgmt( pam_handle_t *pamh, int flags,
 	const char *name;
 	struct samu *sampass = NULL;
 	void (*oldsig_handler)(int);
-	TALLOC_CTX *frame = talloc_stackframe();
 
 	/* Samba initialization. */
+	load_case_tables_library();
+        lp_set_in_client(True);
 
 	ctrl = set_ctrl(pamh, flags, argc, argv );
 
@@ -68,7 +69,6 @@ int pam_sm_acct_mgmt( pam_handle_t *pamh, int flags,
 		if (on( SMB_DEBUG, ctrl )) {
 			_log_err(pamh, LOG_DEBUG, "acct: could not identify user" );
 		}
-		TALLOC_FREE(frame);
 		return retval;
 	}
 	if (on( SMB_DEBUG, ctrl )) {
@@ -77,7 +77,6 @@ int pam_sm_acct_mgmt( pam_handle_t *pamh, int flags,
 
 	if (geteuid() != 0) {
 		_log_err(pamh, LOG_DEBUG, "Cannot access samba password database, not running as root.");
-		TALLOC_FREE(frame);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
@@ -87,7 +86,6 @@ int pam_sm_acct_mgmt( pam_handle_t *pamh, int flags,
 	if (!initialize_password_db(True, NULL)) {
 	  _log_err(pamh, LOG_ALERT, "Cannot access samba password database" );
 		CatchSignal(SIGPIPE, oldsig_handler);
-		TALLOC_FREE(frame);
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 
@@ -96,21 +94,18 @@ int pam_sm_acct_mgmt( pam_handle_t *pamh, int flags,
 	if (!(sampass = samu_new( NULL ))) {
 		CatchSignal(SIGPIPE, oldsig_handler);
 		/* malloc fail. */
-		TALLOC_FREE(frame);
 		return nt_status_to_pam(NT_STATUS_NO_MEMORY);
 	}
 
 	if (!pdb_getsampwnam(sampass, name )) {
 		_log_err(pamh, LOG_DEBUG, "acct: could not identify user");
 		CatchSignal(SIGPIPE, oldsig_handler);
-		TALLOC_FREE(frame);
         	return PAM_USER_UNKNOWN;
 	}
 
 	/* check for lookup failure */
 	if (!strlen(pdb_get_username(sampass)) ) {
 		CatchSignal(SIGPIPE, oldsig_handler);
-		TALLOC_FREE(frame);
 		return PAM_USER_UNKNOWN;
 	}
 
@@ -124,14 +119,12 @@ int pam_sm_acct_mgmt( pam_handle_t *pamh, int flags,
 			"please see your system administrator." );
 
 		CatchSignal(SIGPIPE, oldsig_handler);
-		TALLOC_FREE(frame);
 		return PAM_ACCT_EXPIRED;
 	}
 
 	/* TODO: support for expired passwords. */
 
 	CatchSignal(SIGPIPE, oldsig_handler);
-	TALLOC_FREE(frame);
 	return PAM_SUCCESS;
 }
 

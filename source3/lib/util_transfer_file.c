@@ -22,7 +22,6 @@
 
 #include <includes.h>
 #include "transfer_file.h"
-#include "lib/sys_rw.h"
 
 /****************************************************************************
  Transfer some data between two fd's.
@@ -36,8 +35,8 @@
 ssize_t transfer_file_internal(void *in_file,
 			       void *out_file,
 			       size_t n,
-			       ssize_t (*pread_fn)(void *, void *, size_t, off_t),
-			       ssize_t (*pwrite_fn)(void *, const void *, size_t, off_t))
+			       ssize_t (*read_fn)(void *, void *, size_t),
+			       ssize_t (*write_fn)(void *, const void *, size_t))
 {
 	char *buf;
 	size_t total = 0;
@@ -45,20 +44,15 @@ ssize_t transfer_file_internal(void *in_file,
 	ssize_t write_ret;
 	size_t num_to_read_thistime;
 	size_t num_written = 0;
-	off_t offset = 0;
-
-	if (n == 0) {
-		return 0;
-	}
 
 	if ((buf = SMB_MALLOC_ARRAY(char, TRANSFER_BUF_SIZE)) == NULL) {
 		return -1;
 	}
 
-	do {
+	while (total < n) {
 		num_to_read_thistime = MIN((n - total), TRANSFER_BUF_SIZE);
 
-		read_ret = (*pread_fn)(in_file, buf, num_to_read_thistime, offset);
+		read_ret = (*read_fn)(in_file, buf, num_to_read_thistime);
 		if (read_ret == -1) {
 			DEBUG(0,("transfer_file_internal: read failure. "
 				 "Error = %s\n", strerror(errno) ));
@@ -72,9 +66,8 @@ ssize_t transfer_file_internal(void *in_file,
 		num_written = 0;
 
 		while (num_written < read_ret) {
-			write_ret = (*pwrite_fn)(out_file, buf + num_written,
-					        read_ret - num_written,
-						offset + num_written);
+			write_ret = (*write_fn)(out_file, buf + num_written,
+					        read_ret - num_written);
 
 			if (write_ret == -1) {
 				DEBUG(0,("transfer_file_internal: "
@@ -91,29 +84,28 @@ ssize_t transfer_file_internal(void *in_file,
 		}
 
 		total += (size_t)read_ret;
-		offset += (off_t)read_ret;
-	} while (total < n);
+	}
 
 	SAFE_FREE(buf);
 	return (ssize_t)total;
 }
 
-static ssize_t sys_pread_fn(void *file, void *buf, size_t len, off_t offset)
+static ssize_t sys_read_fn(void *file, void *buf, size_t len)
 {
 	int *fd = (int *)file;
 
-	return sys_pread(*fd, buf, len, offset);
+	return sys_read(*fd, buf, len);
 }
 
-static ssize_t sys_pwrite_fn(void *file, const void *buf, size_t len, off_t offset)
+static ssize_t sys_write_fn(void *file, const void *buf, size_t len)
 {
 	int *fd = (int *)file;
 
-	return sys_pwrite(*fd, buf, len, offset);
+	return sys_write(*fd, buf, len);
 }
 
-off_t transfer_file(int infd, int outfd, off_t n)
+SMB_OFF_T transfer_file(int infd, int outfd, SMB_OFF_T n)
 {
-	return (off_t)transfer_file_internal(&infd, &outfd, (size_t)n,
-						 sys_pread_fn, sys_pwrite_fn);
+	return (SMB_OFF_T)transfer_file_internal(&infd, &outfd, (size_t)n,
+						 sys_read_fn, sys_write_fn);
 }

@@ -505,7 +505,7 @@ NTTIME samdb_result_force_password_change(struct ldb_context *sam_ldb,
 
 	maxPwdAge = samdb_search_int64(sam_ldb, mem_ctx, 0, domain_dn,
 				       "maxPwdAge", NULL);
-	if (maxPwdAge == 0 || maxPwdAge == -0x8000000000000000ULL) {
+	if (maxPwdAge == 0) {
 		return 0x7FFFFFFFFFFFFFFFULL;
 	} else {
 		attr_time -= maxPwdAge;
@@ -558,51 +558,10 @@ unsigned int samdb_result_hashes(TALLOC_CTX *mem_ctx, const struct ldb_message *
 	return count;
 }
 
-NTSTATUS samdb_result_passwords_from_history(TALLOC_CTX *mem_ctx,
-					     struct loadparm_context *lp_ctx,
-					     struct ldb_message *msg,
-					     unsigned int idx,
-					     struct samr_Password **lm_pwd,
-					     struct samr_Password **nt_pwd)
+NTSTATUS samdb_result_passwords(TALLOC_CTX *mem_ctx, struct loadparm_context *lp_ctx, struct ldb_message *msg,
+				struct samr_Password **lm_pwd, struct samr_Password **nt_pwd) 
 {
 	struct samr_Password *lmPwdHash, *ntPwdHash;
-
-	if (nt_pwd) {
-		unsigned int num_nt;
-		num_nt = samdb_result_hashes(mem_ctx, msg, "ntPwdHistory", &ntPwdHash);
-		if (num_nt <= idx) {
-			*nt_pwd = NULL;
-		} else {
-			*nt_pwd = &ntPwdHash[idx];
-		}
-	}
-	if (lm_pwd) {
-		/* Ensure that if we have turned off LM
-		 * authentication, that we never use the LM hash, even
-		 * if we store it */
-		if (lpcfg_lanman_auth(lp_ctx)) {
-			unsigned int num_lm;
-			num_lm = samdb_result_hashes(mem_ctx, msg, "lmPwdHistory", &lmPwdHash);
-			if (num_lm <= idx) {
-				*lm_pwd = NULL;
-			} else {
-				*lm_pwd = &lmPwdHash[idx];
-			}
-		} else {
-			*lm_pwd = NULL;
-		}
-	}
-	return NT_STATUS_OK;
-}
-
-NTSTATUS samdb_result_passwords_no_lockout(TALLOC_CTX *mem_ctx,
-					   struct loadparm_context *lp_ctx,
-					   struct ldb_message *msg,
-					   struct samr_Password **lm_pwd,
-					   struct samr_Password **nt_pwd)
-{
-	struct samr_Password *lmPwdHash, *ntPwdHash;
-
 	if (nt_pwd) {
 		unsigned int num_nt;
 		num_nt = samdb_result_hashes(mem_ctx, msg, "unicodePwd", &ntPwdHash);
@@ -633,27 +592,6 @@ NTSTATUS samdb_result_passwords_no_lockout(TALLOC_CTX *mem_ctx,
 		}
 	}
 	return NT_STATUS_OK;
-}
-
-NTSTATUS samdb_result_passwords(TALLOC_CTX *mem_ctx,
-				struct loadparm_context *lp_ctx,
-				struct ldb_message *msg,
-				struct samr_Password **lm_pwd,
-				struct samr_Password **nt_pwd)
-{
-	uint16_t acct_flags;
-
-	acct_flags = samdb_result_acct_flags(msg,
-					     "msDS-User-Account-Control-Computed");
-	/* Quit if the account was locked out. */
-	if (acct_flags & ACB_AUTOLOCK) {
-		DEBUG(3,("samdb_result_passwords: Account for user %s was locked out.\n",
-			 ldb_dn_get_linearized(msg->dn)));
-		return NT_STATUS_ACCOUNT_LOCKED_OUT;
-	}
-
-	return samdb_result_passwords_no_lockout(mem_ctx, lp_ctx, msg,
-						 lm_pwd, nt_pwd);
 }
 
 /*
@@ -687,63 +625,52 @@ struct samr_LogonHours samdb_result_logon_hours(TALLOC_CTX *mem_ctx, struct ldb_
 /*
   pull a set of account_flags from a result set. 
 
-  Naturally, this requires that userAccountControl and
-  (if not null) the attributes 'attr' be already
-  included in msg
+  This requires that the attributes: 
+   pwdLastSet
+   userAccountControl
+  be included in 'msg'
 */
-uint32_t samdb_result_acct_flags(struct ldb_message *msg, const char *attr)
+uint32_t samdb_result_acct_flags(struct ldb_context *sam_ctx, TALLOC_CTX *mem_ctx, 
+				 struct ldb_message *msg, struct ldb_dn *domain_dn)
 {
 	uint32_t userAccountControl = ldb_msg_find_attr_as_uint(msg, "userAccountControl", 0);
-	uint32_t attr_flags = 0;
 	uint32_t acct_flags = ds_uf2acb(userAccountControl);
-	if (attr) {
-		attr_flags = ldb_msg_find_attr_as_uint(msg, attr, UF_ACCOUNTDISABLE);
-		if (attr_flags == UF_ACCOUNTDISABLE) {
-			DEBUG(0, ("Attribute %s not found, disabling account %s!\n", attr,
-				  ldb_dn_get_linearized(msg->dn)));
-		}
-		acct_flags |= ds_uf2acb(attr_flags);
-	}
+	NTTIME must_change_time;
+	NTTIME now;
 
+	must_change_time = samdb_result_force_password_change(sam_ctx, mem_ctx, 
+							      domain_dn, msg);
+
+	/* Test account expire time */
+	unix_to_nt_time(&now, time(NULL));
+	/* check for expired password */
+	if (must_change_time < now) {
+		acct_flags |= ACB_PW_EXPIRED;
+	}
 	return acct_flags;
 }
 
-NTSTATUS samdb_result_parameters(TALLOC_CTX *mem_ctx,
-				 struct ldb_message *msg,
-				 const char *attr,
-				 struct lsa_BinaryString *s)
+struct lsa_BinaryString samdb_result_parameters(TALLOC_CTX *mem_ctx,
+						struct ldb_message *msg,
+						const char *attr)
 {
-	int i;
+	struct lsa_BinaryString s;
 	const struct ldb_val *val = ldb_msg_find_ldb_val(msg, attr);
 
-	ZERO_STRUCTP(s);
+	ZERO_STRUCT(s);
 
 	if (!val) {
-		return NT_STATUS_OK;
+		return s;
 	}
 
-	if ((val->length % 2) != 0) {
-		/*
-		 * If the on-disk data is not even in length, we know
-		 * it is corrupt, and can not be safely pushed.  We
-		 * would either truncate, send either a un-initilaised
-		 * byte or send a forced zero byte
-		 */
-		return NT_STATUS_INTERNAL_DB_CORRUPTION;
+	s.array = talloc_array(mem_ctx, uint16_t, val->length/2);
+	if (!s.array) {
+		return s;
 	}
+	s.length = s.size = val->length;
+	memcpy(s.array, val->data, val->length);
 
-	s->array = talloc_array(mem_ctx, uint16_t, val->length/2);
-	if (!s->array) {
-		return NT_STATUS_NO_MEMORY;
-	}
-	s->length = s->size = val->length;
-
-	/* The on-disk format is the 'network' format, being UTF16LE (sort of) */
-	for (i = 0; i < s->length / 2; i++) {
-		s->array[i] = SVAL(val->data, i * 2);
-	}
-
-	return NT_STATUS_OK;
+	return s;
 }
 
 /* Find an attribute, with a particular value */
@@ -774,7 +701,6 @@ struct ldb_message_element *samdb_find_attribute(struct ldb_context *ldb,
 
 int samdb_find_or_add_attribute(struct ldb_context *ldb, struct ldb_message *msg, const char *name, const char *set_value)
 {
-	int ret;
 	struct ldb_message_element *el;
 
        	el = ldb_msg_find_element(msg, name);
@@ -782,19 +708,14 @@ int samdb_find_or_add_attribute(struct ldb_context *ldb, struct ldb_message *msg
 		return LDB_SUCCESS;
 	}
 
-	ret = ldb_msg_add_string(msg, name, set_value);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
-	msg->elements[msg->num_elements - 1].flags = LDB_FLAG_MOD_ADD;
-	return LDB_SUCCESS;
+	return ldb_msg_add_string(msg, name, set_value);
 }
 
 /*
   add a dom_sid element to a message
 */
 int samdb_msg_add_dom_sid(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx, struct ldb_message *msg,
-			  const char *attr_name, const struct dom_sid *sid)
+			 const char *attr_name, struct dom_sid *sid)
 {
 	struct ldb_val v;
 	enum ndr_err_code ndr_err;
@@ -1057,26 +978,55 @@ int samdb_msg_add_logon_hours(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx, 
 int samdb_msg_add_parameters(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx, struct ldb_message *msg,
 			     const char *attr_name, struct lsa_BinaryString *parameters)
 {
-	int i;
 	struct ldb_val val;
-	if ((parameters->length % 2) != 0) {
-		return LDB_ERR_INVALID_ATTRIBUTE_SYNTAX;
-	}
-
-	val.data = talloc_array(mem_ctx, uint8_t, parameters->length);
-	if (val.data == NULL) {
-		return LDB_ERR_OPERATIONS_ERROR;
-	}
 	val.length = parameters->length;
-	for (i = 0; i < parameters->length / 2; i++) {
-		/*
-		 * The on-disk format needs to be in the 'network'
-		 * format, parmeters->array is a uint16_t array of
-		 * length parameters->length / 2
-		 */
-		SSVAL(val.data, i * 2, parameters->array[i]);
+	val.data = (uint8_t *)parameters->array;
+	return ldb_msg_add_value(msg, attr_name, &val, NULL);
+}
+
+/*
+  sets a general value element to a message
+*/
+int samdb_msg_set_value(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx, struct ldb_message *msg,
+			const char *attr_name, const struct ldb_val *val)
+{
+	struct ldb_message_element *el;
+
+	el = ldb_msg_find_element(msg, attr_name);
+	if (el) {
+		el->num_values = 0;
 	}
-	return ldb_msg_add_steal_value(msg, attr_name, &val);
+	return ldb_msg_add_value(msg, attr_name, val, NULL);
+}
+
+/*
+  set a string element in a message
+*/
+int samdb_msg_set_string(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx, struct ldb_message *msg,
+			 const char *attr_name, const char *str)
+{
+	struct ldb_message_element *el;
+
+	el = ldb_msg_find_element(msg, attr_name);
+	if (el) {
+		el->num_values = 0;
+	}
+	return ldb_msg_add_string(msg, attr_name, str);
+}
+
+/*
+ * sets a signed integer in a message
+ */
+int samdb_msg_set_int(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx,
+		      struct ldb_message *msg, const char *attr_name, int v)
+{
+	struct ldb_message_element *el;
+
+	el = ldb_msg_find_element(msg, attr_name);
+	if (el) {
+		el->num_values = 0;
+	}
+	return samdb_msg_add_int(sam_ldb, mem_ctx, msg, attr_name, v);
 }
 
 /*
@@ -1107,8 +1057,8 @@ int samdb_msg_set_uint(struct ldb_context *sam_ldb, TALLOC_CTX *mem_ctx,
 /*
  * Handle ldb_request in transaction
  */
-int dsdb_autotransaction_request(struct ldb_context *sam_ldb,
-				 struct ldb_request *req)
+static int dsdb_autotransaction_request(struct ldb_context *sam_ldb,
+					struct ldb_request *req)
 {
 	int ret;
 
@@ -1302,9 +1252,9 @@ bool samdb_set_ntds_settings_dn(struct ldb_context *ldb, struct ldb_dn *ntds_set
 	struct ldb_dn *ntds_settings_dn_new;
 	struct ldb_dn *ntds_settings_dn_old;
 
-	/* see if we have a forced copy from provision */
+	/* see if we have a cached copy */
 	ntds_settings_dn_old = talloc_get_type(ldb_get_opaque(ldb, 
-							      "forced.ntds_settings_dn"), struct ldb_dn);
+							      "cache.ntds_settings_dn"), struct ldb_dn);
 
 	tmp_ctx = talloc_new(ldb);
 	if (tmp_ctx == NULL) {
@@ -1316,8 +1266,8 @@ bool samdb_set_ntds_settings_dn(struct ldb_context *ldb, struct ldb_dn *ntds_set
 		goto failed;
 	}
 
-	/* set the DN in the ldb to avoid lookups during provision */
-	if (ldb_set_opaque(ldb, "forced.ntds_settings_dn", ntds_settings_dn_new) != LDB_SUCCESS) {
+	/* cache the domain_sid in the ldb */
+	if (ldb_set_opaque(ldb, "cache.ntds_settings_dn", ntds_settings_dn_new) != LDB_SUCCESS) {
 		goto failed;
 	}
 
@@ -1336,7 +1286,7 @@ failed:
 /*
   work out the ntds settings dn for the current open ldb
 */
-struct ldb_dn *samdb_ntds_settings_dn(struct ldb_context *ldb, TALLOC_CTX *mem_ctx)
+struct ldb_dn *samdb_ntds_settings_dn(struct ldb_context *ldb)
 {
 	TALLOC_CTX *tmp_ctx;
 	const char *root_attrs[] = { "dsServiceName", NULL };
@@ -1345,18 +1295,18 @@ struct ldb_dn *samdb_ntds_settings_dn(struct ldb_context *ldb, TALLOC_CTX *mem_c
 	struct ldb_dn *settings_dn;
 
 	/* see if we have a cached copy */
-	settings_dn = (struct ldb_dn *)ldb_get_opaque(ldb, "forced.ntds_settings_dn");
+	settings_dn = (struct ldb_dn *)ldb_get_opaque(ldb, "cache.ntds_settings_dn");
 	if (settings_dn) {
-		return ldb_dn_copy(mem_ctx, settings_dn);
+		return settings_dn;
 	}
 
-	tmp_ctx = talloc_new(mem_ctx);
+	tmp_ctx = talloc_new(ldb);
 	if (tmp_ctx == NULL) {
 		goto failed;
 	}
 
 	ret = ldb_search(ldb, tmp_ctx, &root_res, ldb_dn_new(tmp_ctx, ldb, ""), LDB_SCOPE_BASE, root_attrs, NULL);
-	if (ret != LDB_SUCCESS) {
+	if (ret) {
 		DEBUG(1,("Searching for dsServiceName in rootDSE failed: %s\n", 
 			 ldb_errstring(ldb)));
 		goto failed;
@@ -1368,11 +1318,12 @@ struct ldb_dn *samdb_ntds_settings_dn(struct ldb_context *ldb, TALLOC_CTX *mem_c
 
 	settings_dn = ldb_msg_find_attr_as_dn(ldb, tmp_ctx, root_res->msgs[0], "dsServiceName");
 
-	/* note that we do not cache the DN here, as that would mean
-	 * we could not handle server renames at runtime. Only
-	 * provision sets up forced.ntds_settings_dn */
+	/* cache the domain_sid in the ldb */
+	if (ldb_set_opaque(ldb, "cache.ntds_settings_dn", settings_dn) != LDB_SUCCESS) {
+		goto failed;
+	}
 
-	talloc_steal(mem_ctx, settings_dn);
+	talloc_steal(ldb, settings_dn);
 	talloc_free(tmp_ctx);
 
 	return settings_dn;
@@ -1397,7 +1348,6 @@ const struct GUID *samdb_ntds_invocation_id(struct ldb_context *ldb)
 	/* see if we have a cached copy */
 	invocation_id = (struct GUID *)ldb_get_opaque(ldb, "cache.invocation_id");
 	if (invocation_id) {
-		SMB_ASSERT(!GUID_all_zero(invocation_id));
 		return invocation_id;
 	}
 
@@ -1406,7 +1356,7 @@ const struct GUID *samdb_ntds_invocation_id(struct ldb_context *ldb)
 		goto failed;
 	}
 
-	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb, tmp_ctx), LDB_SCOPE_BASE, attrs, NULL);
+	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb), LDB_SCOPE_BASE, attrs, NULL);
 	if (ret) {
 		goto failed;
 	}
@@ -1421,14 +1371,6 @@ const struct GUID *samdb_ntds_invocation_id(struct ldb_context *ldb)
 	}
 
 	*invocation_id = samdb_result_guid(res->msgs[0], "invocationId");
-	if (GUID_all_zero(invocation_id)) {
-		if (ldb_msg_find_ldb_val(res->msgs[0], "invocationId")) {
-			DEBUG(0, ("Failed to find our own NTDS Settings invocationId in the ldb!\n"));	
-		} else {
-			DEBUG(0, ("Failed to find parse own NTDS Settings invocationId from the ldb!\n"));
-		}
-		goto failed;
-	}
 
 	/* cache the domain_sid in the ldb */
 	if (ldb_set_opaque(ldb, "cache.invocation_id", invocation_id) != LDB_SUCCESS) {
@@ -1466,7 +1408,6 @@ bool samdb_set_ntds_invocation_id(struct ldb_context *ldb, const struct GUID *in
 		goto failed;
 	}
 
-	SMB_ASSERT(!GUID_all_zero(invocation_id_in));
 	*invocation_id_new = *invocation_id_in;
 
 	/* cache the domain_sid in the ldb */
@@ -1508,7 +1449,7 @@ const struct GUID *samdb_ntds_objectGUID(struct ldb_context *ldb)
 		goto failed;
 	}
 
-	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb, tmp_ctx), LDB_SCOPE_BASE, attrs, NULL);
+	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb), LDB_SCOPE_BASE, attrs, NULL);
 	if (ret) {
 		goto failed;
 	}
@@ -1583,15 +1524,7 @@ failed:
 */
 struct ldb_dn *samdb_server_dn(struct ldb_context *ldb, TALLOC_CTX *mem_ctx)
 {
-	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
-	struct ldb_dn *dn;
-	if (!tmp_ctx) {
-		return NULL;
-	}
-	dn = ldb_dn_get_parent(mem_ctx, samdb_ntds_settings_dn(ldb, tmp_ctx));
-	talloc_free(tmp_ctx);
-	return dn;
-	
+	return ldb_dn_get_parent(mem_ctx, samdb_ntds_settings_dn(ldb));
 }
 
 /*
@@ -1693,10 +1626,8 @@ int samdb_reference_dn(struct ldb_context *ldb, TALLOC_CTX *mem_ctx, struct ldb_
 	attrs[0] = attribute;
 	attrs[1] = NULL;
 
-	ret = dsdb_search(ldb, mem_ctx, &res, base, LDB_SCOPE_BASE, attrs, DSDB_SEARCH_ONE_ONLY|DSDB_SEARCH_SHOW_EXTENDED_DN, NULL);
+	ret = dsdb_search(ldb, mem_ctx, &res, base, LDB_SCOPE_BASE, attrs, DSDB_SEARCH_ONE_ONLY, NULL);
 	if (ret != LDB_SUCCESS) {
-		ldb_asprintf_errstring(ldb, "Cannot find DN %s to get attribute %s for reference dn: %s",
-				       ldb_dn_get_linearized(base), attribute, ldb_errstring(ldb));
 		return ret;
 	}
 
@@ -1715,53 +1646,6 @@ int samdb_reference_dn(struct ldb_context *ldb, TALLOC_CTX *mem_ctx, struct ldb_
 
 	talloc_free(res);
 	return LDB_SUCCESS;
-}
-
-/*
-  find if a DN (must have GUID component!) is our ntdsDsa
- */
-int samdb_dn_is_our_ntdsa(struct ldb_context *ldb, struct ldb_dn *dn, bool *is_ntdsa)
-{
-	NTSTATUS status;
-	struct GUID dn_guid;
-	const struct GUID *our_ntds_guid;
-	status = dsdb_get_extended_dn_guid(dn, &dn_guid, "GUID");
-	if (!NT_STATUS_IS_OK(status)) {
-		return LDB_ERR_OPERATIONS_ERROR;
-	}
-
-	our_ntds_guid = samdb_ntds_objectGUID(ldb);
-	if (!our_ntds_guid) {
-		DEBUG(0, ("Failed to find our NTDS Settings GUID for comparison with %s - %s\n", ldb_dn_get_linearized(dn), ldb_errstring(ldb)));
-		return LDB_ERR_OPERATIONS_ERROR;
-	}
-
-	*is_ntdsa = GUID_equal(&dn_guid, our_ntds_guid);
-	return LDB_SUCCESS;
-}
-
-/*
-  find a 'reference' DN that points at another object and indicate if it is our ntdsDsa
- */
-int samdb_reference_dn_is_our_ntdsa(struct ldb_context *ldb, struct ldb_dn *base,
-				    const char *attribute, bool *is_ntdsa)
-{
-	int ret;
-	struct ldb_dn *referenced_dn;
-	TALLOC_CTX *tmp_ctx = talloc_new(ldb);
-	if (tmp_ctx == NULL) {
-		return LDB_ERR_OPERATIONS_ERROR;
-	}
-	ret = samdb_reference_dn(ldb, tmp_ctx, base, attribute, &referenced_dn);
-	if (ret != LDB_SUCCESS) {
-		DEBUG(0, ("Failed to find object %s for attribute %s - %s\n", ldb_dn_get_linearized(base), attribute, ldb_errstring(ldb)));
-		return ret;
-	}
-
-	ret = samdb_dn_is_our_ntdsa(ldb, referenced_dn, is_ntdsa);
-	
-	talloc_free(tmp_ctx);
-	return ret;
 }
 
 /*
@@ -1878,7 +1762,7 @@ const char *samdb_client_site_name(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
 
 		allow_list[0] = l_subnet_name;
 
-		if (socket_allow_access(mem_ctx, NULL, allow_list, "", ip_address)) {
+		if (allow_access(mem_ctx, NULL, allow_list, "", ip_address)) {
 			sites_dn = ldb_msg_find_attr_as_dn(ldb, mem_ctx,
 							   res->msgs[i],
 							   "siteObject");
@@ -1930,19 +1814,46 @@ const char *samdb_client_site_name(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
 */
 bool samdb_is_pdc(struct ldb_context *ldb)
 {
+	const char *dom_attrs[] = { "fSMORoleOwner", NULL };
 	int ret;
+	struct ldb_result *dom_res;
+	TALLOC_CTX *tmp_ctx;
 	bool is_pdc;
+	struct ldb_dn *pdc;
 
-	ret = samdb_reference_dn_is_our_ntdsa(ldb, ldb_get_default_basedn(ldb), "fsmoRoleOwner", 
-					      &is_pdc);
-	if (ret != LDB_SUCCESS) {
-		DEBUG(1,("Failed to find if we are the PDC for this ldb: Searching for fSMORoleOwner in %s failed: %s\n", 
-			 ldb_dn_get_linearized(ldb_get_default_basedn(ldb)), 
-			 ldb_errstring(ldb)));
+	tmp_ctx = talloc_new(ldb);
+	if (tmp_ctx == NULL) {
+		DEBUG(1, ("talloc_new failed in samdb_is_pdc"));
 		return false;
 	}
 
+	ret = ldb_search(ldb, tmp_ctx, &dom_res, ldb_get_default_basedn(ldb), LDB_SCOPE_BASE, dom_attrs, NULL);
+	if (ret != LDB_SUCCESS) {
+		DEBUG(1,("Searching for fSMORoleOwner in %s failed: %s\n", 
+			 ldb_dn_get_linearized(ldb_get_default_basedn(ldb)), 
+			 ldb_errstring(ldb)));
+		goto failed;
+	}
+	if (dom_res->count != 1) {
+		goto failed;
+	}
+
+	pdc = ldb_msg_find_attr_as_dn(ldb, tmp_ctx, dom_res->msgs[0], "fSMORoleOwner");
+
+	if (ldb_dn_compare(samdb_ntds_settings_dn(ldb), pdc) == 0) {
+		is_pdc = true;
+	} else {
+		is_pdc = false;
+	}
+
+	talloc_free(tmp_ctx);
+
 	return is_pdc;
+
+failed:
+	DEBUG(1,("Failed to find if we are the PDC for this ldb\n"));
+	talloc_free(tmp_ctx);
+	return false;
 }
 
 /*
@@ -1950,11 +1861,37 @@ bool samdb_is_pdc(struct ldb_context *ldb)
 */
 bool samdb_is_gc(struct ldb_context *ldb)
 {
+	const char *attrs[] = { "options", NULL };
 	uint32_t options;
-	if (samdb_ntds_options(ldb, &options) != LDB_SUCCESS) {
+	int ret;
+	struct ldb_result *res;
+	TALLOC_CTX *tmp_ctx;
+
+	tmp_ctx = talloc_new(ldb);
+	if (tmp_ctx == NULL) {
+		DEBUG(1, ("talloc_new failed in samdb_is_pdc"));
 		return false;
 	}
-	return (options & DS_NTDSDSA_OPT_IS_GC) != 0;
+
+	/* Query cn=ntds settings,.... */
+	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb), LDB_SCOPE_BASE, attrs, NULL);
+	if (ret != LDB_SUCCESS) {
+		talloc_free(tmp_ctx);
+		return false;
+	}
+	if (res->count != 1) {
+		talloc_free(tmp_ctx);
+		return false;
+	}
+
+	options = ldb_msg_find_attr_as_uint(res->msgs[0], "options", 0);
+	talloc_free(tmp_ctx);
+
+	/* if options attribute has the 0x00000001 flag set, then enable the global catlog */
+	if (options & DS_NTDSDSA_OPT_IS_GC) {
+		return true;
+	}
+	return false;
 }
 
 /* Find a domain object in the parents of a particular DN.  */
@@ -2011,30 +1948,19 @@ int samdb_search_for_parent_domain(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
  *
  * Result codes from "enum samr_ValidationStatus" (consider "samr.idl")
  */
-enum samr_ValidationStatus samdb_check_password(const DATA_BLOB *utf8_blob,
+enum samr_ValidationStatus samdb_check_password(const DATA_BLOB *password,
 						const uint32_t pwdProperties,
 						const uint32_t minPwdLength)
 {
-	const char *utf8_pw = (const char *)utf8_blob->data;
-	size_t utf8_len = strlen_m(utf8_pw);
-
 	/* checks if the "minPwdLength" property is satisfied */
-	if (minPwdLength > utf8_len) {
+	if (minPwdLength > password->length)
 		return SAMR_VALIDATION_STATUS_PWD_TOO_SHORT;
-	}
 
 	/* checks the password complexity */
-	if (!(pwdProperties & DOMAIN_PASSWORD_COMPLEX)) {
-		return SAMR_VALIDATION_STATUS_SUCCESS;
-	}
-
-	if (utf8_len == 0) {
+	if (((pwdProperties & DOMAIN_PASSWORD_COMPLEX) != 0)
+			&& (password->data != NULL)
+			&& (!check_password_quality((const char *) password->data)))
 		return SAMR_VALIDATION_STATUS_NOT_COMPLEX_ENOUGH;
-	}
-
-	if (!check_password_quality(utf8_pw)) {
-		return SAMR_VALIDATION_STATUS_NOT_COMPLEX_ENOUGH;
-	}
 
 	return SAMR_VALIDATION_STATUS_SUCCESS;
 }
@@ -2079,7 +2005,7 @@ int samdb_set_password_callback(struct ldb_request *req, struct ldb_reply *ares)
  * Results: NT_STATUS_OK, NT_STATUS_INVALID_PARAMETER, NT_STATUS_UNSUCCESSFUL,
  *   NT_STATUS_WRONG_PASSWORD, NT_STATUS_PASSWORD_RESTRICTION
  */
-static NTSTATUS samdb_set_password_internal(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
+NTSTATUS samdb_set_password(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
 			    struct ldb_dn *user_dn, struct ldb_dn *domain_dn,
 			    const DATA_BLOB *new_password,
 			    const struct samr_Password *lmNewHash,
@@ -2087,15 +2013,13 @@ static NTSTATUS samdb_set_password_internal(struct ldb_context *ldb, TALLOC_CTX 
 			    const struct samr_Password *lmOldHash,
 			    const struct samr_Password *ntOldHash,
 			    enum samPwdChangeReason *reject_reason,
-			    struct samr_DomInfo1 **_dominfo,
-			    bool permit_interdomain_trust)
+			    struct samr_DomInfo1 **_dominfo)
 {
 	struct ldb_message *msg;
 	struct ldb_message_element *el;
 	struct ldb_request *req;
 	struct dsdb_control_password_change_status *pwd_stat = NULL;
 	int ret;
-	bool hash_values = false;
 	NTSTATUS status = NT_STATUS_OK;
 
 #define CHECK_RET(x) \
@@ -2131,7 +2055,6 @@ static NTSTATUS samdb_set_password_internal(struct ldb_context *ldb, TALLOC_CTX 
 			el = ldb_msg_find_element(msg, "unicodePwd");
 			el->flags = LDB_FLAG_MOD_REPLACE;
 		}
-		hash_values = true;
 	} else {
 		/* the password wasn't specified correctly */
 		talloc_free(msg);
@@ -2169,25 +2092,13 @@ static NTSTATUS samdb_set_password_internal(struct ldb_context *ldb, TALLOC_CTX 
 			return NT_STATUS_NO_MEMORY;
 		}
 	}
-	if (hash_values) {
-		ret = ldb_request_add_control(req,
-					      DSDB_CONTROL_PASSWORD_HASH_VALUES_OID,
-					      true, NULL);
-		if (ret != LDB_SUCCESS) {
-			talloc_free(req);
-			talloc_free(msg);
-			return NT_STATUS_NO_MEMORY;
-		}
-	}
-	if (permit_interdomain_trust) {
-		ret = ldb_request_add_control(req,
-					      DSDB_CONTROL_PERMIT_INTERDOMAIN_TRUST_UAC_OID,
-					      false, NULL);
-		if (ret != LDB_SUCCESS) {
-			talloc_free(req);
-			talloc_free(msg);
-			return NT_STATUS_NO_MEMORY;
-		}
+	ret = ldb_request_add_control(req,
+				      DSDB_CONTROL_PASSWORD_HASH_VALUES_OID,
+				      true, NULL);
+	if (ret != LDB_SUCCESS) {
+		talloc_free(req);
+		talloc_free(msg);
+		return NT_STATUS_NO_MEMORY;
 	}
 	ret = ldb_request_add_control(req,
 				      DSDB_CONTROL_PASSWORD_CHANGE_STATUS_OID,
@@ -2201,11 +2112,8 @@ static NTSTATUS samdb_set_password_internal(struct ldb_context *ldb, TALLOC_CTX 
 	ret = dsdb_autotransaction_request(ldb, req);
 
 	if (req->context != NULL) {
-		struct ldb_control *control = talloc_get_type_abort(req->context,
-								    struct ldb_control);
-		pwd_stat = talloc_get_type_abort(control->data,
-						 struct dsdb_control_password_change_status);
-		talloc_steal(mem_ctx, pwd_stat);
+		pwd_stat = talloc_steal(mem_ctx,
+					((struct ldb_control *)req->context)->data);
 	}
 
 	talloc_free(req);
@@ -2262,35 +2170,11 @@ static NTSTATUS samdb_set_password_internal(struct ldb_context *ldb, TALLOC_CTX 
 	} else if (ret == LDB_ERR_NO_SUCH_OBJECT) {
 		/* don't let the caller know if an account doesn't exist */
 		status = NT_STATUS_WRONG_PASSWORD;
-	} else if (ret == LDB_ERR_INSUFFICIENT_ACCESS_RIGHTS) {
-		status = NT_STATUS_ACCESS_DENIED;
 	} else if (ret != LDB_SUCCESS) {
-		DEBUG(1, ("Failed to set password on %s: %s\n",
-			  ldb_dn_get_linearized(msg->dn),
-			  ldb_errstring(ldb)));
 		status = NT_STATUS_UNSUCCESSFUL;
 	}
 
 	return status;
-}
-
-NTSTATUS samdb_set_password(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
-			    struct ldb_dn *user_dn, struct ldb_dn *domain_dn,
-			    const DATA_BLOB *new_password,
-			    const struct samr_Password *lmNewHash,
-			    const struct samr_Password *ntNewHash,
-			    const struct samr_Password *lmOldHash,
-			    const struct samr_Password *ntOldHash,
-			    enum samPwdChangeReason *reject_reason,
-			    struct samr_DomInfo1 **_dominfo)
-{
-	return samdb_set_password_internal(ldb, mem_ctx,
-			    user_dn, domain_dn,
-			    new_password,
-			    lmNewHash, ntNewHash,
-			    lmOldHash, ntOldHash,
-			    reject_reason, _dominfo,
-			    false); /* reject trusts */
 }
 
 /*
@@ -2313,7 +2197,6 @@ NTSTATUS samdb_set_password(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
  */
 NTSTATUS samdb_set_password_sid(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
 				const struct dom_sid *user_sid,
-				const uint32_t *new_version, /* optional for trusts */
 				const DATA_BLOB *new_password,
 				const struct samr_Password *lmNewHash,
 				const struct samr_Password *ntNewHash,
@@ -2322,381 +2205,48 @@ NTSTATUS samdb_set_password_sid(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
 				enum samPwdChangeReason *reject_reason,
 				struct samr_DomInfo1 **_dominfo) 
 {
-	TALLOC_CTX *frame = talloc_stackframe();
 	NTSTATUS nt_status;
-	const char * const user_attrs[] = {
-		"userAccountControl",
-		"sAMAccountName",
-		NULL
-	};
-	struct ldb_message *user_msg = NULL;
+	struct ldb_dn *user_dn;
 	int ret;
-	uint32_t uac = 0;
 
 	ret = ldb_transaction_start(ldb);
 	if (ret != LDB_SUCCESS) {
 		DEBUG(1, ("Failed to start transaction: %s\n", ldb_errstring(ldb)));
-		TALLOC_FREE(frame);
 		return NT_STATUS_TRANSACTION_ABORTED;
 	}
 
-	ret = dsdb_search_one(ldb, frame, &user_msg, ldb_get_default_basedn(ldb),
-			      LDB_SCOPE_SUBTREE, user_attrs, 0,
-			      "(&(objectSid=%s)(objectClass=user))",
-			      ldap_encode_ndr_dom_sid(frame, user_sid));
-	if (ret != LDB_SUCCESS) {
+	user_dn = samdb_search_dn(ldb, mem_ctx, NULL,
+				  "(&(objectSid=%s)(objectClass=user))", 
+				  ldap_encode_ndr_dom_sid(mem_ctx, user_sid));
+	if (!user_dn) {
 		ldb_transaction_cancel(ldb);
-		DEBUG(3, ("samdb_set_password_sid: SID[%s] not found in samdb %s - %s, "
-			  "returning NO_SUCH_USER\n",
-			  dom_sid_string(frame, user_sid),
-			  ldb_strerror(ret), ldb_errstring(ldb)));
-		TALLOC_FREE(frame);
+		DEBUG(3, ("samdb_set_password_sid: SID %s not found in samdb, returning NO_SUCH_USER\n",
+			  dom_sid_string(mem_ctx, user_sid)));
 		return NT_STATUS_NO_SUCH_USER;
 	}
 
-	uac = ldb_msg_find_attr_as_uint(user_msg, "userAccountControl", 0);
-	if (!(uac & UF_ACCOUNT_TYPE_MASK)) {
-		ldb_transaction_cancel(ldb);
-		DEBUG(1, ("samdb_set_password_sid: invalid "
-			  "userAccountControl[0x%08X] for SID[%s] DN[%s], "
-			  "returning NO_SUCH_USER\n",
-			  (unsigned)uac, dom_sid_string(frame, user_sid),
-			  ldb_dn_get_linearized(user_msg->dn)));
-		TALLOC_FREE(frame);
-		return NT_STATUS_NO_SUCH_USER;
-	}
-
-	if (uac & UF_INTERDOMAIN_TRUST_ACCOUNT) {
-		const char * const tdo_attrs[] = {
-			"trustAuthIncoming",
-			"trustDirection",
-			NULL
-		};
-		struct ldb_message *tdo_msg = NULL;
-		const char *account_name = NULL;
-		uint32_t trust_direction;
-		uint32_t i;
-		const struct ldb_val *old_val = NULL;
-		struct trustAuthInOutBlob old_blob = {};
-		uint32_t old_version = 0;
-		struct AuthenticationInformation *old_version_a = NULL;
-		uint32_t _new_version = 0;
-		struct trustAuthInOutBlob new_blob = {};
-		struct ldb_val new_val = {};
-		struct timeval tv = timeval_current();
-		NTTIME now = timeval_to_nttime(&tv);
-		enum ndr_err_code ndr_err;
-
-		if (new_password == NULL && ntNewHash == NULL) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: "
-				  "no new password provided "
-				  "sAMAccountName for SID[%s] DN[%s], "
-				  "returning INVALID_PARAMETER\n",
-				  dom_sid_string(frame, user_sid),
-				  ldb_dn_get_linearized(user_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_INVALID_PARAMETER;
-		}
-
-		if (new_password != NULL && ntNewHash != NULL) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: "
-				  "two new passwords provided "
-				  "sAMAccountName for SID[%s] DN[%s], "
-				  "returning INVALID_PARAMETER\n",
-				  dom_sid_string(frame, user_sid),
-				  ldb_dn_get_linearized(user_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_INVALID_PARAMETER;
-		}
-
-		if (new_password != NULL && (new_password->length % 2)) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(2, ("samdb_set_password_sid: "
-				  "invalid utf16 length (%zu) "
-				  "sAMAccountName for SID[%s] DN[%s], "
-				  "returning WRONG_PASSWORD\n",
-				  new_password->length,
-				  dom_sid_string(frame, user_sid),
-				  ldb_dn_get_linearized(user_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_WRONG_PASSWORD;
-		}
-
-		if (new_password != NULL && new_password->length >= 500) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(2, ("samdb_set_password_sid: "
-				  "utf16 password too long (%zu) "
-				  "sAMAccountName for SID[%s] DN[%s], "
-				  "returning WRONG_PASSWORD\n",
-				  new_password->length,
-				  dom_sid_string(frame, user_sid),
-				  ldb_dn_get_linearized(user_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_WRONG_PASSWORD;
-		}
-
-		account_name = ldb_msg_find_attr_as_string(user_msg,
-							"sAMAccountName", NULL);
-		if (account_name == NULL) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: missing "
-				  "sAMAccountName for SID[%s] DN[%s], "
-				  "returning NO_SUCH_USER\n",
-				  dom_sid_string(frame, user_sid),
-				  ldb_dn_get_linearized(user_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_NO_SUCH_USER;
-		}
-
-		nt_status = dsdb_trust_search_tdo_by_type(ldb,
-							  SEC_CHAN_DOMAIN,
-							  account_name,
-							  tdo_attrs,
-							  frame, &tdo_msg);
-		if (!NT_STATUS_IS_OK(nt_status)) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: dsdb_trust_search_tdo "
-				  "failed(%s) for sAMAccountName[%s] SID[%s] DN[%s], "
-				  "returning INTERNAL_DB_CORRUPTION\n",
-				  nt_errstr(nt_status), account_name,
-				  dom_sid_string(frame, user_sid),
-				  ldb_dn_get_linearized(user_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_INTERNAL_DB_CORRUPTION;
-		}
-
-		trust_direction = ldb_msg_find_attr_as_int(tdo_msg,
-							   "trustDirection", 0);
-		if (!(trust_direction & LSA_TRUST_DIRECTION_INBOUND)) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: direction[0x%08X] is "
-				  "not inbound for sAMAccountName[%s] "
-				  "DN[%s] TDO[%s], "
-				  "returning INTERNAL_DB_CORRUPTION\n",
-				  (unsigned)trust_direction,
-				  account_name,
-				  ldb_dn_get_linearized(user_msg->dn),
-				  ldb_dn_get_linearized(tdo_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_INTERNAL_DB_CORRUPTION;
-		}
-
-		old_val = ldb_msg_find_ldb_val(tdo_msg, "trustAuthIncoming");
-		if (old_val != NULL) {
-			ndr_err = ndr_pull_struct_blob(old_val, frame, &old_blob,
-					(ndr_pull_flags_fn_t)ndr_pull_trustAuthInOutBlob);
-			if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-				ldb_transaction_cancel(ldb);
-				DEBUG(1, ("samdb_set_password_sid: "
-					  "failed(%s) to parse "
-					  "trustAuthOutgoing sAMAccountName[%s] "
-					  "DN[%s] TDO[%s], "
-					  "returning INTERNAL_DB_CORRUPTION\n",
-					  ndr_map_error2string(ndr_err),
-					  account_name,
-					  ldb_dn_get_linearized(user_msg->dn),
-					  ldb_dn_get_linearized(tdo_msg->dn)));
-
-				TALLOC_FREE(frame);
-				return NT_STATUS_INTERNAL_DB_CORRUPTION;
-			}
-		}
-
-		for (i = old_blob.current.count; i > 0; i--) {
-			struct AuthenticationInformation *a =
-				&old_blob.current.array[i - 1];
-
-			switch (a->AuthType) {
-			case TRUST_AUTH_TYPE_NONE:
-				if (i == old_blob.current.count) {
-					/*
-					 * remove TRUST_AUTH_TYPE_NONE at the
-					 * end
-					 */
-					old_blob.current.count--;
-				}
-				break;
-
-			case TRUST_AUTH_TYPE_VERSION:
-				old_version_a = a;
-				old_version = a->AuthInfo.version.version;
-				break;
-
-			case TRUST_AUTH_TYPE_CLEAR:
-				break;
-
-			case TRUST_AUTH_TYPE_NT4OWF:
-				break;
-			}
-		}
-
-		if (new_version == NULL) {
-			_new_version = 0;
-			new_version = &_new_version;
-		}
-
-		if (old_version_a != NULL && *new_version != (old_version + 1)) {
-			old_version_a->LastUpdateTime = now;
-			old_version_a->AuthType = TRUST_AUTH_TYPE_NONE;
-		}
-
-		new_blob.count = MAX(old_blob.current.count, 2);
-		new_blob.current.array = talloc_zero_array(frame,
-						struct AuthenticationInformation,
-						new_blob.count);
-		if (new_blob.current.array == NULL) {
-			ldb_transaction_cancel(ldb);
-			TALLOC_FREE(frame);
-			return NT_STATUS_NO_MEMORY;
-		}
-		new_blob.previous.array = talloc_zero_array(frame,
-						struct AuthenticationInformation,
-						new_blob.count);
-		if (new_blob.current.array == NULL) {
-			ldb_transaction_cancel(ldb);
-			TALLOC_FREE(frame);
-			return NT_STATUS_NO_MEMORY;
-		}
-
-		for (i = 0; i < old_blob.current.count; i++) {
-			struct AuthenticationInformation *o =
-				&old_blob.current.array[i];
-			struct AuthenticationInformation *p =
-				&new_blob.previous.array[i];
-
-			*p = *o;
-			new_blob.previous.count++;
-		}
-		for (; i < new_blob.count; i++) {
-			struct AuthenticationInformation *pi =
-				&new_blob.previous.array[i];
-
-			if (i == 0) {
-				/*
-				 * new_blob.previous is still empty so
-				 * we'll do new_blob.previous = new_blob.current
-				 * below.
-				 */
-				break;
-			}
-
-			pi->LastUpdateTime = now;
-			pi->AuthType = TRUST_AUTH_TYPE_NONE;
-			new_blob.previous.count++;
-		}
-
-		for (i = 0; i < new_blob.count; i++) {
-			struct AuthenticationInformation *ci =
-				&new_blob.current.array[i];
-
-			ci->LastUpdateTime = now;
-			switch (i) {
-			case 0:
-				if (ntNewHash != NULL) {
-					ci->AuthType = TRUST_AUTH_TYPE_NT4OWF;
-					ci->AuthInfo.nt4owf.password = *ntNewHash;
-					break;
-				}
-
-				ci->AuthType = TRUST_AUTH_TYPE_CLEAR;
-				ci->AuthInfo.clear.size = new_password->length;
-				ci->AuthInfo.clear.password = new_password->data;
-				break;
-			case 1:
-				ci->AuthType = TRUST_AUTH_TYPE_VERSION;
-				ci->AuthInfo.version.version = *new_version;
-				break;
-			default:
-				ci->AuthType = TRUST_AUTH_TYPE_NONE;
-				break;
-			}
-
-			new_blob.current.count++;
-		}
-
-		if (new_blob.previous.count == 0) {
-			TALLOC_FREE(new_blob.previous.array);
-			new_blob.previous = new_blob.current;
-		}
-
-		ndr_err = ndr_push_struct_blob(&new_val, frame, &new_blob,
-				(ndr_push_flags_fn_t)ndr_push_trustAuthInOutBlob);
-		if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: "
-				  "failed(%s) to generate "
-				  "trustAuthOutgoing sAMAccountName[%s] "
-				  "DN[%s] TDO[%s], "
-				  "returning UNSUCCESSFUL\n",
-				  ndr_map_error2string(ndr_err),
-				  account_name,
-				  ldb_dn_get_linearized(user_msg->dn),
-				  ldb_dn_get_linearized(tdo_msg->dn)));
-			TALLOC_FREE(frame);
-			return NT_STATUS_UNSUCCESSFUL;
-		}
-
-		tdo_msg->num_elements = 0;
-		TALLOC_FREE(tdo_msg->elements);
-
-		ret = ldb_msg_add_empty(tdo_msg, "trustAuthIncoming",
-					LDB_FLAG_MOD_REPLACE, NULL);
-		if (ret != LDB_SUCCESS) {
-			ldb_transaction_cancel(ldb);
-			TALLOC_FREE(frame);
-			return NT_STATUS_NO_MEMORY;
-		}
-		ret = ldb_msg_add_value(tdo_msg, "trustAuthIncoming",
-					&new_val, NULL);
-		if (ret != LDB_SUCCESS) {
-			ldb_transaction_cancel(ldb);
-			TALLOC_FREE(frame);
-			return NT_STATUS_NO_MEMORY;
-		}
-
-		ret = ldb_modify(ldb, tdo_msg);
-		if (ret != LDB_SUCCESS) {
-			nt_status = dsdb_ldb_err_to_ntstatus(ret);
-			ldb_transaction_cancel(ldb);
-			DEBUG(1, ("samdb_set_password_sid: "
-				  "failed to replace "
-				  "trustAuthOutgoing sAMAccountName[%s] "
-				  "DN[%s] TDO[%s], "
-				  "%s - %s\n",
-				  account_name,
-				  ldb_dn_get_linearized(user_msg->dn),
-				  ldb_dn_get_linearized(tdo_msg->dn),
-				  nt_errstr(nt_status), ldb_errstring(ldb)));
-			TALLOC_FREE(frame);
-			return nt_status;
-		}
-	}
-
-	nt_status = samdb_set_password_internal(ldb, mem_ctx,
-						user_msg->dn, NULL,
-						new_password,
-						lmNewHash, ntNewHash,
-						lmOldHash, ntOldHash,
-						reject_reason, _dominfo,
-						true); /* permit trusts */
+	nt_status = samdb_set_password(ldb, mem_ctx,
+				       user_dn, NULL,
+				       new_password,
+				       lmNewHash, ntNewHash,
+				       lmOldHash, ntOldHash,
+				       reject_reason, _dominfo);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		ldb_transaction_cancel(ldb);
-		TALLOC_FREE(frame);
+		talloc_free(user_dn);
 		return nt_status;
 	}
 
 	ret = ldb_transaction_commit(ldb);
 	if (ret != LDB_SUCCESS) {
 		DEBUG(0,("Failed to commit transaction to change password on %s: %s\n",
-			 ldb_dn_get_linearized(user_msg->dn),
+			 ldb_dn_get_linearized(user_dn),
 			 ldb_errstring(ldb)));
-		TALLOC_FREE(frame);
+		talloc_free(user_dn);
 		return NT_STATUS_TRANSACTION_ABORTED;
 	}
 
-	TALLOC_FREE(frame);
+	talloc_free(user_dn);
 	return NT_STATUS_OK;
 }
 
@@ -2773,14 +2323,14 @@ struct ldb_dn *samdb_dns_domain_to_dn(struct ldb_context *ldb, TALLOC_CTX *mem_c
 	unsigned int i;
 	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
 	const char *binary_encoded;
-	const char * const *split_realm;
+	const char **split_realm;
 	struct ldb_dn *dn;
 
 	if (!tmp_ctx) {
 		return NULL;
 	}
 
-	split_realm = (const char * const *)str_list_make(tmp_ctx, dns_domain, ".");
+	split_realm = (const char **)str_list_make(tmp_ctx, dns_domain, ".");
 	if (!split_realm) {
 		talloc_free(tmp_ctx);
 		return NULL;
@@ -2804,77 +2354,6 @@ struct ldb_dn *samdb_dns_domain_to_dn(struct ldb_context *ldb, TALLOC_CTX *mem_c
 	talloc_free(tmp_ctx);
 	return dn;
 }
-
-
-/*
-  Find the DNS equivalent of a DN, in dotted DNS form
-*/
-char *samdb_dn_to_dns_domain(TALLOC_CTX *mem_ctx, struct ldb_dn *dn)
-{
-	int i, num_components = ldb_dn_get_comp_num(dn);
-	char *dns_name = talloc_strdup(mem_ctx, "");
-	if (dns_name == NULL) {
-		return NULL;
-	}
-
-	for (i=0; i<num_components; i++) {
-		const struct ldb_val *v = ldb_dn_get_component_val(dn, i);
-		char *s;
-		if (v == NULL) {
-			talloc_free(dns_name);
-			return NULL;
-		}
-		s = talloc_asprintf_append_buffer(dns_name, "%*.*s.",
-						  (int)v->length, (int)v->length, (char *)v->data);
-		if (s == NULL) {
-			talloc_free(dns_name);
-			return NULL;
-		}
-		dns_name = s;
-	}
-
-	/* remove the last '.' */
-	if (dns_name[0] != 0) {
-		dns_name[strlen(dns_name)-1] = 0;
-	}
-
-	return dns_name;
-}
-
-/*
-  Find the DNS _msdcs name for a given NTDS GUID. The resulting DNS
-  name is based on the forest DNS name
-*/
-char *samdb_ntds_msdcs_dns_name(struct ldb_context *samdb,
-				TALLOC_CTX *mem_ctx,
-				const struct GUID *ntds_guid)
-{
-	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
-	const char *guid_str;
-	struct ldb_dn *forest_dn;
-	const char *dnsforest;
-	char *ret;
-
-	guid_str = GUID_string(tmp_ctx, ntds_guid);
-	if (guid_str == NULL) {
-		talloc_free(tmp_ctx);
-		return NULL;
-	}
-	forest_dn = ldb_get_root_basedn(samdb);
-	if (forest_dn == NULL) {
-		talloc_free(tmp_ctx);
-		return NULL;
-	}
-	dnsforest = samdb_dn_to_dns_domain(tmp_ctx, forest_dn);
-	if (dnsforest == NULL) {
-		talloc_free(tmp_ctx);
-		return NULL;
-	}
-	ret = talloc_asprintf(mem_ctx, "%s._msdcs.%s", guid_str, dnsforest);
-	talloc_free(tmp_ctx);
-	return ret;
-}
-
 
 /*
   Find the DN of a domain, be it the netbios or DNS name 
@@ -2935,9 +2414,7 @@ struct ldb_dn *samdb_domain_to_dn(struct ldb_context *ldb, TALLOC_CTX *mem_ctx,
  */
 int dsdb_find_dn_by_guid(struct ldb_context *ldb, 
 			 TALLOC_CTX *mem_ctx,
-			 const struct GUID *guid,
-			 uint32_t dsdb_flags,
-			 struct ldb_dn **dn)
+			 const struct GUID *guid, struct ldb_dn **dn)
 {
 	int ret;
 	struct ldb_result *res;
@@ -2951,7 +2428,7 @@ int dsdb_find_dn_by_guid(struct ldb_context *ldb,
 	ret = dsdb_search(ldb, mem_ctx, &res, NULL, LDB_SCOPE_SUBTREE, attrs,
 			  DSDB_SEARCH_SEARCH_ALL_PARTITIONS |
 			  DSDB_SEARCH_SHOW_EXTENDED_DN |
-			  DSDB_SEARCH_ONE_ONLY | dsdb_flags,
+			  DSDB_SEARCH_ONE_ONLY,
 			  "objectGUID=%s", guid_str);
 	talloc_free(guid_str);
 	if (ret != LDB_SUCCESS) {
@@ -3120,18 +2597,13 @@ WERROR dsdb_loadreps(struct ldb_context *sam_ctx, TALLOC_CTX *mem_ctx, struct ld
 	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
 	unsigned int i;
 	struct ldb_message_element *el;
-	int ret;
 
 	*r = NULL;
 	*count = 0;
 
-	ret = dsdb_search_dn(sam_ctx, tmp_ctx, &res, dn, attrs, 0);
-	if (ret == LDB_ERR_NO_SUCH_OBJECT) {
-		/* partition hasn't been replicated yet */
-		return WERR_OK;
-	}
-	if (ret != LDB_SUCCESS) {
-		DEBUG(0,("dsdb_loadreps: failed to read partition object: %s\n", ldb_errstring(sam_ctx)));
+	if (ldb_search(sam_ctx, tmp_ctx, &res, dn, LDB_SCOPE_BASE, attrs, NULL) != LDB_SUCCESS ||
+	    res->count < 1) {
+		DEBUG(0,("dsdb_loadreps: failed to read partition object\n"));
 		talloc_free(tmp_ctx);
 		return WERR_DS_DRA_INTERNAL_ERROR;
 	}
@@ -3205,7 +2677,7 @@ WERROR dsdb_savereps(struct ldb_context *sam_ctx, TALLOC_CTX *mem_ctx, struct ld
 		el->values[i] = v;
 	}
 
-	if (dsdb_modify(sam_ctx, msg, 0) != LDB_SUCCESS) {
+	if (ldb_modify(sam_ctx, msg) != LDB_SUCCESS) {
 		DEBUG(0,("Failed to store %s - %s\n", attr, ldb_errstring(sam_ctx)));
 		goto failed;
 	}
@@ -3437,54 +2909,6 @@ failed:
 
 
 /*
- * return NTDSSiteSettings options. See MS-ADTS 7.1.1.2.2.1.1
- * flags are DS_NTDSSETTINGS_OPT_*
- */
-int samdb_ntds_site_settings_options(struct ldb_context *ldb_ctx,
-					uint32_t *options)
-{
-	int rc;
-	TALLOC_CTX *tmp_ctx;
-	struct ldb_result *res;
-	struct ldb_dn *site_dn;
-	const char *attrs[] = { "options", NULL };
-
-	tmp_ctx = talloc_new(ldb_ctx);
-	if (tmp_ctx == NULL)
-		goto failed;
-
-        /* Retrieve the site dn for the ldb that we
-	 * have open.  This is our local site.
-         */
-        site_dn = samdb_server_site_dn(ldb_ctx, tmp_ctx);
-	if (site_dn == NULL)
-		goto failed;
-
-	/* Perform a one level (child) search from the local
-         * site distinguided name.   We're looking for the
-         * "options" attribute within the nTDSSiteSettings
-         * object
-	 */
-	rc = ldb_search(ldb_ctx, tmp_ctx, &res, site_dn,
-			LDB_SCOPE_ONELEVEL, attrs,
-                        "objectClass=nTDSSiteSettings");
-
-        if (rc != LDB_SUCCESS || res->count != 1)
-		goto failed;
-
-	*options = ldb_msg_find_attr_as_uint(res->msgs[0], "options", 0);
-
-	talloc_free(tmp_ctx);
-
-	return LDB_SUCCESS;
-
-failed:
-	DEBUG(1,("Failed to find our NTDS Site Settings options in ldb!\n"));
-	talloc_free(tmp_ctx);
-	return LDB_ERR_NO_SUCH_OBJECT;
-}
-
-/*
   return NTDS options flags. See MS-ADTS 7.1.1.2.2.1.2.1.1 
 
   flags are DS_NTDS_OPTION_*
@@ -3501,7 +2925,7 @@ int samdb_ntds_options(struct ldb_context *ldb, uint32_t *options)
 		goto failed;
 	}
 
-	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb, tmp_ctx), LDB_SCOPE_BASE, attrs, NULL);
+	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb), LDB_SCOPE_BASE, attrs, NULL);
 	if (ret != LDB_SUCCESS) {
 		goto failed;
 	}
@@ -3528,7 +2952,7 @@ const char* samdb_ntds_object_category(TALLOC_CTX *tmp_ctx, struct ldb_context *
 	int ret;
 	struct ldb_result *res;
 
-	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb, tmp_ctx), LDB_SCOPE_BASE, attrs, NULL);
+	ret = ldb_search(ldb, tmp_ctx, &res, samdb_ntds_settings_dn(ldb), LDB_SCOPE_BASE, attrs, NULL);
 	if (ret != LDB_SUCCESS) {
 		goto failed;
 	}
@@ -3559,11 +2983,11 @@ const char *samdb_cn_to_lDAPDisplayName(TALLOC_CTX *mem_ctx, const char *cn)
 
 	/* "tolower()" and "toupper()" should also work properly on 0x00 */
 	tokens[0][0] = tolower(tokens[0][0]);
-	for (i = 1; i < str_list_length((const char * const *)tokens); i++)
+	for (i = 1; i < str_list_length((const char **)tokens); i++)
 		tokens[i][0] = toupper(tokens[i][0]);
 
 	ret = talloc_strdup(mem_ctx, tokens[0]);
-	for (i = 1; i < str_list_length((const char * const *)tokens); i++)
+	for (i = 1; i < str_list_length((const char **)tokens); i++)
 		ret = talloc_asprintf_append_buffer(ret, "%s", tokens[i]);
 
 	talloc_free(tokens);
@@ -3768,7 +3192,7 @@ bool dsdb_dn_is_deleted_val(const struct ldb_val *val)
  */
 bool dsdb_dn_is_upgraded_link_val(struct ldb_val *val)
 {
-	return memmem(val->data, val->length, "<RMD_VERSION=", 13) != NULL;
+	return memmem(val->data, val->length, "<RMD_ADDTIME=", 13) != NULL;
 }
 
 /*
@@ -3832,7 +3256,7 @@ int dsdb_find_nc_root(struct ldb_context *samdb, TALLOC_CTX *mem_ctx, struct ldb
 
 	ret = ldb_search(samdb, tmp_ctx, &root_res,
 			 ldb_dn_new(tmp_ctx, samdb, ""), LDB_SCOPE_BASE, root_attrs, NULL);
-	if (ret != LDB_SUCCESS || root_res->count == 0) {
+	if (ret != LDB_SUCCESS) {
 		DEBUG(1,("Searching for namingContexts in rootDSE failed: %s\n", ldb_errstring(samdb)));
 		talloc_free(tmp_ctx);
 		return ret;
@@ -3977,10 +3401,9 @@ int dsdb_load_udv_v2(struct ldb_context *samdb, struct ldb_dn *dn, TALLOC_CTX *m
 	const struct ldb_val *ouv_value;
 	unsigned int i;
 	int ret;
-	uint64_t highest_usn = 0;
+	uint64_t highest_usn;
 	const struct GUID *our_invocation_id;
-	static const struct timeval tv1970;
-	NTTIME nt1970 = timeval_to_nttime(&tv1970);
+	struct timeval now = timeval_current();
 
 	ret = ldb_search(samdb, mem_ctx, &r, dn, LDB_SCOPE_BASE, attrs, NULL);
 	if (ret != LDB_SUCCESS) {
@@ -4021,7 +3444,7 @@ int dsdb_load_udv_v2(struct ldb_context *samdb, struct ldb_dn *dn, TALLOC_CTX *m
 		return ldb_operr(samdb);
 	}
 
-	ret = ldb_sequence_number(samdb, LDB_SEQ_HIGHEST_SEQ, &highest_usn);
+	ret = dsdb_load_partition_usn(samdb, dn, &highest_usn, NULL);
 	if (ret != LDB_SUCCESS) {
 		/* nothing to add - this can happen after a vampire */
 		TYPESAFE_QSORT(*cursors, *count, drsuapi_DsReplicaCursor2_compare);
@@ -4031,7 +3454,7 @@ int dsdb_load_udv_v2(struct ldb_context *samdb, struct ldb_dn *dn, TALLOC_CTX *m
 	for (i=0; i<*count; i++) {
 		if (GUID_equal(our_invocation_id, &(*cursors)[i].source_dsa_invocation_id)) {
 			(*cursors)[i].highest_usn = highest_usn;
-			(*cursors)[i].last_sync_success = nt1970;
+			(*cursors)[i].last_sync_success = timeval_to_nttime(&now);
 			TYPESAFE_QSORT(*cursors, *count, drsuapi_DsReplicaCursor2_compare);
 			return LDB_SUCCESS;
 		}
@@ -4044,7 +3467,7 @@ int dsdb_load_udv_v2(struct ldb_context *samdb, struct ldb_dn *dn, TALLOC_CTX *m
 
 	(*cursors)[*count].source_dsa_invocation_id = *our_invocation_id;
 	(*cursors)[*count].highest_usn = highest_usn;
-	(*cursors)[*count].last_sync_success = nt1970;
+	(*cursors)[*count].last_sync_success = timeval_to_nttime(&now);
 	(*count)++;
 
 	TYPESAFE_QSORT(*cursors, *count, drsuapi_DsReplicaCursor2_compare);
@@ -4112,15 +3535,6 @@ int dsdb_request_add_controls(struct ldb_request *req, uint32_t dsdb_flags)
 		}
 	}
 
-	if (dsdb_flags & DSDB_SEARCH_NO_GLOBAL_CATALOG) {
-		ret = ldb_request_add_control(req,
-					      DSDB_CONTROL_NO_GLOBAL_CATALOG,
-					      false, NULL);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
-	}
-
 	if (dsdb_flags & DSDB_SEARCH_SHOW_DELETED) {
 		ret = ldb_request_add_control(req, LDB_CONTROL_SHOW_DELETED_OID, true, NULL);
 		if (ret != LDB_SUCCESS) {
@@ -4136,7 +3550,7 @@ int dsdb_request_add_controls(struct ldb_request *req, uint32_t dsdb_flags)
 	}
 
 	if (dsdb_flags & DSDB_SEARCH_SHOW_DN_IN_STORAGE_FORMAT) {
-		ret = ldb_request_add_control(req, DSDB_CONTROL_DN_STORAGE_FORMAT_OID, false, NULL);
+		ret = ldb_request_add_control(req, DSDB_CONTROL_DN_STORAGE_FORMAT_OID, true, NULL);
 		if (ret != LDB_SUCCESS) {
 			return ret;
 		}
@@ -4192,34 +3606,6 @@ int dsdb_request_add_controls(struct ldb_request *req, uint32_t dsdb_flags)
 
 	if (dsdb_flags & DSDB_PROVISION) {
 		ret = ldb_request_add_control(req, LDB_CONTROL_PROVISION_OID, false, NULL);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
-	}
-
-	/* This is a special control to bypass the password_hash module for use in pdb_samba4 for Samba3 upgrades */
-	if (dsdb_flags & DSDB_BYPASS_PASSWORD_HASH) {
-		ret = ldb_request_add_control(req, DSDB_CONTROL_BYPASS_PASSWORD_HASH_OID, true, NULL);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
-	}
-
-	if (dsdb_flags & DSDB_PASSWORD_BYPASS_LAST_SET) {
-		/* 
-		 * This must not be critical, as it will only be
-		 * handled (and need to be handled) if the other
-		 * attributes in the request bring password_hash into
-		 * action
-		 */
-		ret = ldb_request_add_control(req, DSDB_CONTROL_PASSWORD_BYPASS_LAST_SET_OID, false, NULL);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
-	}
-
-	if (dsdb_flags & DSDB_MODIFY_PARTIAL_REPLICA) {
-		ret = ldb_request_add_control(req, DSDB_CONTROL_PARTIAL_REPLICA, false, NULL);
 		if (ret != LDB_SUCCESS) {
 			return ret;
 		}
@@ -4289,36 +3675,6 @@ int dsdb_modify(struct ldb_context *ldb, const struct ldb_message *message,
 }
 
 /*
-  a delete with a set of flags
-*/
-int dsdb_delete(struct ldb_context *ldb, struct ldb_dn *dn,
-		uint32_t dsdb_flags)
-{
-	struct ldb_request *req;
-	int ret;
-
-	ret = ldb_build_del_req(&req, ldb, ldb,
-				dn,
-				NULL,
-				NULL,
-				ldb_op_default_callback,
-				NULL);
-
-	if (ret != LDB_SUCCESS) return ret;
-
-	ret = dsdb_request_add_controls(req, dsdb_flags);
-	if (ret != LDB_SUCCESS) {
-		talloc_free(req);
-		return ret;
-	}
-
-	ret = dsdb_autotransaction_request(ldb, req);
-
-	talloc_free(req);
-	return ret;
-}
-
-/*
   like dsdb_modify() but set all the element flags to
   LDB_FLAG_MOD_REPLACE
  */
@@ -4340,7 +3696,7 @@ int dsdb_replace(struct ldb_context *ldb, struct ldb_message *msg, uint32_t dsdb
  */
 int dsdb_search_dn(struct ldb_context *ldb,
 		   TALLOC_CTX *mem_ctx,
-		   struct ldb_result **_result,
+		   struct ldb_result **_res,
 		   struct ldb_dn *basedn,
 		   const char * const *attrs,
 		   uint32_t dsdb_flags)
@@ -4385,7 +3741,7 @@ int dsdb_search_dn(struct ldb_context *ldb,
 		return ret;
 	}
 
-	*_result = res;
+	*_res = res;
 	return LDB_SUCCESS;
 }
 
@@ -4395,7 +3751,7 @@ int dsdb_search_dn(struct ldb_context *ldb,
  */
 int dsdb_search_by_dn_guid(struct ldb_context *ldb,
 			   TALLOC_CTX *mem_ctx,
-			   struct ldb_result **_result,
+			   struct ldb_result **_res,
 			   const struct GUID *guid,
 			   const char * const *attrs,
 			   uint32_t dsdb_flags)
@@ -4410,7 +3766,7 @@ int dsdb_search_by_dn_guid(struct ldb_context *ldb,
 		return ldb_oom(ldb);
 	}
 
-	ret = dsdb_search_dn(ldb, mem_ctx, _result, dn, attrs, dsdb_flags);
+	ret = dsdb_search_dn(ldb, mem_ctx, _res, dn, attrs, dsdb_flags);
 	talloc_free(tmp_ctx);
 	return ret;
 }
@@ -4420,7 +3776,7 @@ int dsdb_search_by_dn_guid(struct ldb_context *ldb,
  */
 int dsdb_search(struct ldb_context *ldb,
 		TALLOC_CTX *mem_ctx,
-		struct ldb_result **_result,
+		struct ldb_result **_res,
 		struct ldb_dn *basedn,
 		enum ldb_scope scope,
 		const char * const *attrs,
@@ -4433,9 +3789,6 @@ int dsdb_search(struct ldb_context *ldb,
 	va_list ap;
 	char *expression = NULL;
 	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
-
-	/* cross-partitions searches with a basedn break multi-domain support */
-	SMB_ASSERT(basedn == NULL || (dsdb_flags & DSDB_SEARCH_SEARCH_ALL_PARTITIONS) == 0);
 
 	res = talloc_zero(tmp_ctx, struct ldb_result);
 	if (!res) {
@@ -4498,7 +3851,7 @@ int dsdb_search(struct ldb_context *ldb,
 		}
 	}
 
-	*_result = talloc_steal(mem_ctx, res);
+	*_res = talloc_steal(mem_ctx, res);
 	talloc_free(tmp_ctx);
 
 	return LDB_SUCCESS;
@@ -4655,12 +4008,8 @@ int dsdb_validate_dsa_guid(struct ldb_context *ldb,
 
 	account_dn = ldb_msg_find_attr_as_dn(ldb, tmp_ctx, msg, "serverReference");
 	if (account_dn == NULL) {
-		DEBUG(1,(__location__ ": Failed to find account dn "
-			 "(serverReference) for %s, parent of DSA with "
-			 "objectGUID %s, sid %s\n",
-			 ldb_dn_get_linearized(msg->dn),
-			 GUID_string(tmp_ctx, dsa_guid),
-			 dom_sid_string(tmp_ctx, sid)));
+		DEBUG(1,(__location__ ": Failed to find account_dn for DSA with objectGUID %s, sid %s\n",
+			 GUID_string(tmp_ctx, dsa_guid), dom_sid_string(tmp_ctx, sid)));
 		talloc_free(tmp_ctx);
 		return ldb_operr(ldb);
 	}
@@ -4867,475 +4216,3 @@ bool is_attr_in_list(const char * const * attrs, const char *attr)
 	return false;
 }
 
-
-/*
-  map an ldb error code to an approximate NTSTATUS code
- */
-NTSTATUS dsdb_ldb_err_to_ntstatus(int err)
-{
-	switch (err) {
-	case LDB_SUCCESS:
-		return NT_STATUS_OK;
-
-	case LDB_ERR_PROTOCOL_ERROR:
-		return NT_STATUS_DEVICE_PROTOCOL_ERROR;
-
-	case LDB_ERR_TIME_LIMIT_EXCEEDED:
-		return NT_STATUS_IO_TIMEOUT;
-
-	case LDB_ERR_SIZE_LIMIT_EXCEEDED:
-		return NT_STATUS_BUFFER_TOO_SMALL;
-
-	case LDB_ERR_COMPARE_FALSE:
-	case LDB_ERR_COMPARE_TRUE:
-		return NT_STATUS_REVISION_MISMATCH;
-
-	case LDB_ERR_AUTH_METHOD_NOT_SUPPORTED:
-		return NT_STATUS_NOT_SUPPORTED;
-
-	case LDB_ERR_STRONG_AUTH_REQUIRED:
-	case LDB_ERR_CONFIDENTIALITY_REQUIRED:
-	case LDB_ERR_SASL_BIND_IN_PROGRESS:
-	case LDB_ERR_INAPPROPRIATE_AUTHENTICATION:
-	case LDB_ERR_INVALID_CREDENTIALS:
-	case LDB_ERR_INSUFFICIENT_ACCESS_RIGHTS:
-	case LDB_ERR_UNWILLING_TO_PERFORM:
-		return NT_STATUS_ACCESS_DENIED;
-
-	case LDB_ERR_NO_SUCH_OBJECT:
-		return NT_STATUS_OBJECT_NAME_NOT_FOUND;
-
-	case LDB_ERR_REFERRAL:
-	case LDB_ERR_NO_SUCH_ATTRIBUTE:
-		return NT_STATUS_NOT_FOUND;
-
-	case LDB_ERR_UNSUPPORTED_CRITICAL_EXTENSION:
-		return NT_STATUS_NOT_SUPPORTED;
-
-	case LDB_ERR_ADMIN_LIMIT_EXCEEDED:
-		return NT_STATUS_BUFFER_TOO_SMALL;
-
-	case LDB_ERR_UNDEFINED_ATTRIBUTE_TYPE:
-	case LDB_ERR_INAPPROPRIATE_MATCHING:
-	case LDB_ERR_CONSTRAINT_VIOLATION:
-	case LDB_ERR_INVALID_ATTRIBUTE_SYNTAX:
-	case LDB_ERR_INVALID_DN_SYNTAX:
-	case LDB_ERR_NAMING_VIOLATION:
-	case LDB_ERR_OBJECT_CLASS_VIOLATION:
-	case LDB_ERR_NOT_ALLOWED_ON_NON_LEAF:
-	case LDB_ERR_NOT_ALLOWED_ON_RDN:
-		return NT_STATUS_INVALID_PARAMETER;
-
-	case LDB_ERR_ATTRIBUTE_OR_VALUE_EXISTS:
-	case LDB_ERR_ENTRY_ALREADY_EXISTS:
-		return NT_STATUS_ERROR_DS_OBJ_STRING_NAME_EXISTS;
-
-	case LDB_ERR_BUSY:
-		return NT_STATUS_NETWORK_BUSY;
-
-	case LDB_ERR_ALIAS_PROBLEM:
-	case LDB_ERR_ALIAS_DEREFERENCING_PROBLEM:
-	case LDB_ERR_UNAVAILABLE:
-	case LDB_ERR_LOOP_DETECT:
-	case LDB_ERR_OBJECT_CLASS_MODS_PROHIBITED:
-	case LDB_ERR_AFFECTS_MULTIPLE_DSAS:
-	case LDB_ERR_OTHER:
-	case LDB_ERR_OPERATIONS_ERROR:
-		break;
-	}
-	return NT_STATUS_UNSUCCESSFUL;
-}
-
-
-/*
-  create a new naming context that will hold a partial replica
- */
-int dsdb_create_partial_replica_NC(struct ldb_context *ldb,  struct ldb_dn *dn)
-{
-	TALLOC_CTX *tmp_ctx = talloc_new(ldb);
-	struct ldb_message *msg;
-	int ret;
-
-	msg = ldb_msg_new(tmp_ctx);
-	if (msg == NULL) {
-		talloc_free(tmp_ctx);
-		return ldb_oom(ldb);
-	}
-
-	msg->dn = dn;
-	ret = ldb_msg_add_string(msg, "objectClass", "top");
-	if (ret != LDB_SUCCESS) {
-		talloc_free(tmp_ctx);
-		return ldb_oom(ldb);
-	}
-
-	/* [MS-DRSR] implies that we should only add the 'top'
-	 * objectclass, but that would cause lots of problems with our
-	 * objectclass code as top is not structural, so we add
-	 * 'domainDNS' as well to keep things sane. We're expecting
-	 * this new NC to be of objectclass domainDNS after
-	 * replication anyway
-	 */
-	ret = ldb_msg_add_string(msg, "objectClass", "domainDNS");
-	if (ret != LDB_SUCCESS) {
-		talloc_free(tmp_ctx);
-		return ldb_oom(ldb);
-	}
-
-	ret = ldb_msg_add_fmt(msg, "instanceType", "%u",
-			      INSTANCE_TYPE_IS_NC_HEAD|
-			      INSTANCE_TYPE_NC_ABOVE|
-			      INSTANCE_TYPE_UNINSTANT);
-	if (ret != LDB_SUCCESS) {
-		talloc_free(tmp_ctx);
-		return ldb_oom(ldb);
-	}
-
-	ret = dsdb_add(ldb, msg, DSDB_MODIFY_PARTIAL_REPLICA);
-	if (ret != LDB_SUCCESS && ret != LDB_ERR_ENTRY_ALREADY_EXISTS) {
-		DEBUG(0,("Failed to create new NC for %s - %s (%s)\n",
-			 ldb_dn_get_linearized(dn),
-			 ldb_errstring(ldb), ldb_strerror(ret)));
-		talloc_free(tmp_ctx);
-		return ret;
-	}
-
-	DEBUG(1,("Created new NC for %s\n", ldb_dn_get_linearized(dn)));
-
-	talloc_free(tmp_ctx);
-	return LDB_SUCCESS;
-}
-
-/**
-  build a GUID from a string
-*/
-_PUBLIC_ NTSTATUS NS_GUID_from_string(const char *s, struct GUID *guid)
-{
-	NTSTATUS status = NT_STATUS_INVALID_PARAMETER;
-	uint32_t time_low;
-	uint32_t time_mid, time_hi_and_version;
-	uint32_t clock_seq[2];
-	uint32_t node[6];
-	int i;
-
-	if (s == NULL) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	if (11 == sscanf(s, "%08x-%04x%04x-%02x%02x%02x%02x-%02x%02x%02x%02x",
-			 &time_low, &time_mid, &time_hi_and_version, 
-			 &clock_seq[0], &clock_seq[1],
-			 &node[0], &node[1], &node[2], &node[3], &node[4], &node[5])) {
-	        status = NT_STATUS_OK;
-	}
-
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	}
-
-	guid->time_low = time_low;
-	guid->time_mid = time_mid;
-	guid->time_hi_and_version = time_hi_and_version;
-	guid->clock_seq[0] = clock_seq[0];
-	guid->clock_seq[1] = clock_seq[1];
-	for (i=0;i<6;i++) {
-		guid->node[i] = node[i];
-	}
-
-	return NT_STATUS_OK;
-}
-
-_PUBLIC_ char *NS_GUID_string(TALLOC_CTX *mem_ctx, const struct GUID *guid)
-{
-	return talloc_asprintf(mem_ctx, 
-			       "%08x-%04x%04x-%02x%02x%02x%02x-%02x%02x%02x%02x",
-			       guid->time_low, guid->time_mid,
-			       guid->time_hi_and_version,
-			       guid->clock_seq[0],
-			       guid->clock_seq[1],
-			       guid->node[0], guid->node[1],
-			       guid->node[2], guid->node[3],
-			       guid->node[4], guid->node[5]);
-}
-
-/*
- * Return the effective badPwdCount
- *
- * This requires that the user_msg have (if present):
- *  - badPasswordTime
- *  - badPwdCount
- *
- * This also requires that the domain_msg have (if present):
- *  - lockOutObservationWindow
- */
-static int dsdb_effective_badPwdCount(struct ldb_message *user_msg,
-				      int64_t lockOutObservationWindow,
-				      NTTIME now)
-{
-	int64_t badPasswordTime;
-	badPasswordTime = ldb_msg_find_attr_as_int64(user_msg, "badPasswordTime", 0);
-
-	if (badPasswordTime - lockOutObservationWindow >= now) {
-		return ldb_msg_find_attr_as_int(user_msg, "badPwdCount", 0);
-	} else {
-		return 0;
-	}
-}
-
-/*
- * Return the effective badPwdCount
- *
- * This requires that the user_msg have (if present):
- *  - badPasswordTime
- *  - badPwdCount
- *
- */
-int samdb_result_effective_badPwdCount(struct ldb_context *sam_ldb,
-				       TALLOC_CTX *mem_ctx,
-				       struct ldb_dn *domain_dn,
-				       struct ldb_message *user_msg)
-{
-	struct timeval tv_now = timeval_current();
-	NTTIME now = timeval_to_nttime(&tv_now);
-	int64_t lockOutObservationWindow = samdb_search_int64(sam_ldb, mem_ctx, 0, domain_dn,
-							      "lockOutObservationWindow", NULL);
-	return dsdb_effective_badPwdCount(user_msg, lockOutObservationWindow, now);
-}
-
-/*
- * Prepare an update to the badPwdCount and associated attributes.
- *
- * This requires that the user_msg have (if present):
- *  - objectSid
- *  - badPasswordTime
- *  - badPwdCount
- *
- * This also requires that the domain_msg have (if present):
- *  - pwdProperties
- *  - lockoutThreshold
- *  - lockOutObservationWindow
- */
-NTSTATUS dsdb_update_bad_pwd_count(TALLOC_CTX *mem_ctx,
-				   struct ldb_context *sam_ctx,
-				   struct ldb_message *user_msg,
-				   struct ldb_message *domain_msg,
-				   struct ldb_message **_mod_msg)
-{
-	int i, ret, badPwdCount;
-	int64_t lockoutThreshold, lockOutObservationWindow;
-	struct dom_sid *sid;
-	struct timeval tv_now = timeval_current();
-	NTTIME now = timeval_to_nttime(&tv_now);
-	NTSTATUS status;
-	uint32_t pwdProperties, rid = 0;
-	struct ldb_message *mod_msg;
-
-	sid = samdb_result_dom_sid(mem_ctx, user_msg, "objectSid");
-
-	pwdProperties = ldb_msg_find_attr_as_uint(domain_msg,
-						  "pwdProperties", -1);
-	if (sid && !(pwdProperties & DOMAIN_PASSWORD_LOCKOUT_ADMINS)) {
-		status = dom_sid_split_rid(NULL, sid, NULL, &rid);
-		if (!NT_STATUS_IS_OK(status)) {
-			/*
-			 * This can't happen anyway, but always try
-			 * and update the badPwdCount on failure
-			 */
-			rid = 0;
-		}
-	}
-	TALLOC_FREE(sid);
-
-	/*
-	 * Work out if we are doing password lockout on the domain.
-	 * Also, the built in administrator account is exempt:
-	 * http://msdn.microsoft.com/en-us/library/windows/desktop/aa375371%28v=vs.85%29.aspx
-	 */
-	lockoutThreshold = ldb_msg_find_attr_as_int(domain_msg,
-						    "lockoutThreshold", 0);
-	if (lockoutThreshold == 0 || (rid == DOMAIN_RID_ADMINISTRATOR)) {
-		DEBUG(5, ("Not updating badPwdCount on %s after wrong password\n",
-			  ldb_dn_get_linearized(user_msg->dn)));
-		return NT_STATUS_OK;
-	}
-
-	mod_msg = ldb_msg_new(mem_ctx);
-	if (mod_msg == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-	mod_msg->dn = ldb_dn_copy(mod_msg, user_msg->dn);
-	if (mod_msg->dn == NULL) {
-		TALLOC_FREE(mod_msg);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	lockOutObservationWindow = ldb_msg_find_attr_as_int64(domain_msg,
-							      "lockOutObservationWindow", 0);
-
-	badPwdCount = dsdb_effective_badPwdCount(user_msg, lockOutObservationWindow, now);
-
-	badPwdCount++;
-
-	ret = samdb_msg_add_int(sam_ctx, mod_msg, mod_msg, "badPwdCount", badPwdCount);
-	if (ret != LDB_SUCCESS) {
-		TALLOC_FREE(mod_msg);
-		return NT_STATUS_NO_MEMORY;
-	}
-	ret = samdb_msg_add_int64(sam_ctx, mod_msg, mod_msg, "badPasswordTime", now);
-	if (ret != LDB_SUCCESS) {
-		TALLOC_FREE(mod_msg);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (badPwdCount >= lockoutThreshold) {
-		ret = samdb_msg_add_int64(sam_ctx, mod_msg, mod_msg, "lockoutTime", now);
-		if (ret != LDB_SUCCESS) {
-			TALLOC_FREE(mod_msg);
-			return NT_STATUS_NO_MEMORY;
-		}
-		DEBUG(5, ("Locked out user %s after %d wrong passwords\n",
-			  ldb_dn_get_linearized(user_msg->dn), badPwdCount));
-	} else {
-		DEBUG(5, ("Updated badPwdCount on %s after %d wrong passwords\n",
-			  ldb_dn_get_linearized(user_msg->dn), badPwdCount));
-	}
-
-	/* mark all the message elements as LDB_FLAG_MOD_REPLACE */
-	for (i=0; i< mod_msg->num_elements; i++) {
-		mod_msg->elements[i].flags = LDB_FLAG_MOD_REPLACE;
-	}
-
-	*_mod_msg = mod_msg;
-	return NT_STATUS_OK;
-}
-
-/**
- * Sets defaults for a User object
- * List of default attributes set:
- * 	accountExpires, badPasswordTime, badPwdCount,
- * 	codePage, countryCode, lastLogoff, lastLogon
- * 	logonCount, pwdLastSet
- */
-int dsdb_user_obj_set_defaults(struct ldb_context *ldb, struct ldb_message *usr_obj)
-{
-	int i, ret;
-	const struct attribute_values {
-		const char *name;
-		const char *value;
-	} map[] = {
-		{
-			.name = "accountExpires",
-			.value = "9223372036854775807"
-		},
-		{
-			.name = "badPasswordTime",
-			.value = "0"
-		},
-		{
-			.name = "badPwdCount",
-			.value = "0"
-		},
-		{
-			.name = "codePage",
-			.value = "0"
-		},
-		{
-			.name = "countryCode",
-			.value = "0"
-		},
-		{
-			.name = "lastLogoff",
-			.value = "0"
-		},
-		{
-			.name = "lastLogon",
-			.value = "0"
-		},
-		{
-			.name = "logonCount",
-			.value = "0"
-		},
-		{
-			.name = "pwdLastSet",
-			.value = "0"
-		}
-	};
-
-	for (i = 0; i < ARRAY_SIZE(map); i++) {
-		ret = samdb_find_or_add_attribute(ldb, usr_obj,
-						  map[i].name, map[i].value);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
-	}
-
-	return LDB_SUCCESS;
-}
-
-/**
- * Sets 'sAMAccountType on user object based on userAccountControl
- * @param ldb Current ldb_context
- * @param usr_obj ldb_message representing User object
- * @param user_account_control Value for userAccountControl flags
- * @param account_type_p Optional pointer to account_type to return
- * @return LDB_SUCCESS or LDB_ERR* code on failure
- */
-int dsdb_user_obj_set_account_type(struct ldb_context *ldb, struct ldb_message *usr_obj,
-				   uint32_t user_account_control, uint32_t *account_type_p)
-{
-	int ret;
-	uint32_t account_type;
-	struct ldb_message_element *el;
-
-	account_type = ds_uf2atype(user_account_control);
-	if (account_type == 0) {
-		ldb_set_errstring(ldb, "dsdb: Unrecognized account type!");
-		return LDB_ERR_UNWILLING_TO_PERFORM;
-	}
-	ret = samdb_msg_add_uint(ldb, usr_obj, usr_obj,
-				 "sAMAccountType",
-				 account_type);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
-	el = ldb_msg_find_element(usr_obj, "sAMAccountType");
-	el->flags = LDB_FLAG_MOD_REPLACE;
-
-	if (account_type_p) {
-		*account_type_p = account_type;
-	}
-
-	return LDB_SUCCESS;
-}
-
-/**
- * Determine and set primaryGroupID based on userAccountControl value
- * @param ldb Current ldb_context
- * @param usr_obj ldb_message representing User object
- * @param user_account_control Value for userAccountControl flags
- * @param group_rid_p Optional pointer to group RID to return
- * @return LDB_SUCCESS or LDB_ERR* code on failure
- */
-int dsdb_user_obj_set_primary_group_id(struct ldb_context *ldb, struct ldb_message *usr_obj,
-				       uint32_t user_account_control, uint32_t *group_rid_p)
-{
-	int ret;
-	uint32_t rid;
-	struct ldb_message_element *el;
-
-	rid = ds_uf2prim_group_rid(user_account_control);
-
-	ret = samdb_msg_add_uint(ldb, usr_obj, usr_obj,
-				 "primaryGroupID", rid);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
-	el = ldb_msg_find_element(usr_obj, "primaryGroupID");
-	el->flags = LDB_FLAG_MOD_REPLACE;
-
-	if (group_rid_p) {
-		*group_rid_p = rid;
-	}
-
-	return LDB_SUCCESS;
-}

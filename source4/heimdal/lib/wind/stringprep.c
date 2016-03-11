@@ -111,7 +111,7 @@ wind_stringprep(const uint32_t *in, size_t in_len,
     return ret;
 }
 
-static const struct {
+const static struct {
     const char *name;
     wind_profile_flags flags;
 } profiles[] = {

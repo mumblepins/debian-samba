@@ -25,7 +25,7 @@
 #include "smb_server/smb_server.h"
 #include "system/filesys.h"
 #include "param/param.h"
-#include "cluster/cluster.h"
+
 
 /*
   send an oplock break request to a client
@@ -103,7 +103,7 @@ static const struct smb_message_struct
 /* 0x0d */ { "SMBunlock",	smbsrv_reply_unlock,		NEED_SESS|NEED_TCON },
 /* 0x0e */ { "SMBctemp",	smbsrv_reply_ctemp,		NEED_SESS|NEED_TCON },
 /* 0x0f */ { "SMBmknew",	smbsrv_reply_mknew,		NEED_SESS|NEED_TCON }, 
-/* 0x10 */ { "SMBcheckpath",	smbsrv_reply_chkpth,		NEED_SESS|NEED_TCON },
+/* 0x10 */ { "SMBchkpth",	smbsrv_reply_chkpth,		NEED_SESS|NEED_TCON },
 /* 0x11 */ { "SMBexit",		smbsrv_reply_exit,		NEED_SESS },
 /* 0x12 */ { "SMBlseek",	smbsrv_reply_lseek,		NEED_SESS|NEED_TCON },
 /* 0x13 */ { "SMBlockread",	smbsrv_reply_lockread,		NEED_SESS|NEED_TCON },
@@ -471,7 +471,6 @@ static void switch_message(int type, struct smbsrv_request *req)
 	int flags;
 	struct smbsrv_connection *smb_conn = req->smb_conn;
 	NTSTATUS status;
-	struct server_id_buf idbuf;
 
 	type &= 0xff;
 
@@ -492,13 +491,18 @@ static void switch_message(int type, struct smbsrv_request *req)
 		   hasn't already been initialised (to cope with SMB
 		   chaining) */
 
-		req->session = smbsrv_session_find(req->smb_conn, SVAL(req->in.hdr,HDR_UID), req->request_time);
+		/* In share mode security we must ignore the vuid. */
+		if (smb_conn->config.security == SEC_SHARE) {
+			if (req->tcon) {
+				req->session = req->tcon->sec_share.session;
+			}
+ 		} else {
+			req->session = smbsrv_session_find(req->smb_conn, SVAL(req->in.hdr,HDR_UID), req->request_time);
+		}
 	}
 
-	DEBUG(5, ("switch message %s (task_id %s)\n",
-		  smb_fn_name(type),
-		  server_id_str_buf(req->smb_conn->connection->server_id,
-				    &idbuf)));
+	DEBUG(5,("switch message %s (task_id %u)\n",
+		 smb_fn_name(type), (unsigned)req->smb_conn->connection->server_id.id));
 
 	/* this must be called before we do any reply */
 	if (flags & SIGNING_NO_REPLY) {
@@ -633,8 +637,7 @@ void smbsrv_chain_reply(struct smbsrv_request *req)
 	SSVAL(req->out.vwv, VWV(1), req->out.size - NBT_HDR_SIZE);
 
 	/* cleanup somestuff for the next request */
-	DLIST_REMOVE(req->smb_conn->requests, req);
-	talloc_unlink(req, req->ntvfs);
+	talloc_free(req->ntvfs);
 	req->ntvfs = NULL;
 	talloc_free(req->io_ptr);
 	req->io_ptr = NULL;
@@ -664,6 +667,7 @@ NTSTATUS smbsrv_init_smb_connection(struct smbsrv_connection *smb_conn, struct l
 
 	smb_conn->negotiate.zone_offset = get_time_zone(time(NULL));
 
+	smb_conn->config.security = lpcfg_security(lp_ctx);
 	smb_conn->config.nt_status_support = lpcfg_nt_status_support(lp_ctx);
 
 	status = smbsrv_init_sessions(smb_conn, UINT16_MAX);

@@ -62,9 +62,6 @@ static const char* KRB5_CALLCONV
 fcc_get_name(krb5_context context,
 	     krb5_ccache id)
 {
-    if (FCACHE(id) == NULL)
-        return NULL;
-
     return FILENAME(id);
 }
 
@@ -158,7 +155,7 @@ write_storage(krb5_context context, krb5_storage *sp, int fd)
 	return ret;
     }
     sret = write(fd, data.data, data.length);
-    ret = (sret != (ssize_t)data.length);
+    ret = (sret != data.length);
     krb5_data_free(&data);
     if (ret) {
 	ret = errno;
@@ -223,7 +220,7 @@ scrub_file (int fd)
         return errno;
     memset(buf, 0, sizeof(buf));
     while(pos > 0) {
-        ssize_t tmp = write(fd, buf, min((off_t)sizeof(buf), pos));
+        ssize_t tmp = write(fd, buf, min(sizeof(buf), pos));
 
 	if (tmp < 0)
 	    return errno;
@@ -337,11 +334,11 @@ fcc_gen_new(krb5_context context, krb5_ccache *id)
 
     fd = mkstemp(exp_file);
     if(fd < 0) {
-	int xret = errno;
-	krb5_set_error_message(context, xret, N_("mkstemp %s failed", ""), exp_file);
+	int ret = errno;
+	krb5_set_error_message(context, ret, N_("mkstemp %s failed", ""), exp_file);
 	free(f);
 	free(exp_file);
-	return xret;
+	return ret;
     }
     close(fd);
     f->filename = exp_file;
@@ -386,14 +383,8 @@ fcc_open(krb5_context context,
     krb5_boolean exclusive = ((flags | O_WRONLY) == flags ||
 			      (flags | O_RDWR) == flags);
     krb5_error_code ret;
-    const char *filename;
+    const char *filename = FILENAME(id);
     int fd;
-
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
-    filename = FILENAME(id);
-
     fd = open(filename, flags, mode);
     if(fd < 0) {
 	char buf[128];
@@ -420,12 +411,10 @@ fcc_initialize(krb5_context context,
 {
     krb5_fcache *f = FCACHE(id);
     int ret = 0;
-    int fd = 0;
+    int fd;
+    char *filename = f->filename;
 
-    if (f == NULL)
-        return krb5_einval(context, 2);
-
-    unlink (f->filename);
+    unlink (filename);
 
     ret = fcc_open(context, id, &fd, O_RDWR | O_CREAT | O_EXCL | O_BINARY | O_CLOEXEC, 0600);
     if(ret)
@@ -454,7 +443,7 @@ fcc_initialize(krb5_context context,
 	    }
 	}
 	ret |= krb5_store_principal(sp, primary_principal);
-
+	
 	ret |= write_storage(context, sp, fd);
 
 	krb5_storage_free(sp);
@@ -475,9 +464,6 @@ static krb5_error_code KRB5_CALLCONV
 fcc_close(krb5_context context,
 	  krb5_ccache id)
 {
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
     free (FILENAME(id));
     krb5_data_free(&id->data);
     return 0;
@@ -487,9 +473,6 @@ static krb5_error_code KRB5_CALLCONV
 fcc_destroy(krb5_context context,
 	    krb5_ccache id)
 {
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
     _krb5_erase_file(context, FILENAME(id));
     return 0;
 }
@@ -500,7 +483,7 @@ fcc_store_cred(krb5_context context,
 	       krb5_creds *creds)
 {
     int ret;
-    int fd = 0;
+    int fd;
 
     ret = fcc_open(context, id, &fd, O_WRONLY | O_APPEND | O_BINARY | O_CLOEXEC, 0);
     if(ret)
@@ -541,7 +524,7 @@ init_fcc (krb5_context context,
 	  int *ret_fd,
 	  krb5_deltat *kdc_offset)
 {
-    int fd = 0;
+    int fd;
     int8_t pvno, tag;
     krb5_storage *sp;
     krb5_error_code ret;
@@ -718,9 +701,6 @@ fcc_get_first (krb5_context context,
     krb5_error_code ret;
     krb5_principal principal;
 
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
     *cursor = malloc(sizeof(struct fcc_cursor));
     if (*cursor == NULL) {
         krb5_set_error_message(context, ENOMEM, N_("malloc: out of memory", ""));
@@ -753,13 +733,6 @@ fcc_get_next (krb5_context context,
 	      krb5_creds *creds)
 {
     krb5_error_code ret;
-
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
-    if (FCC_CURSOR(*cursor) == NULL)
-        return krb5_einval(context, 3);
-
     if((ret = fcc_lock(context, id, FCC_CURSOR(*cursor)->fd, FALSE)) != 0)
 	return ret;
 
@@ -776,13 +749,6 @@ fcc_end_get (krb5_context context,
 	     krb5_ccache id,
 	     krb5_cc_cursor *cursor)
 {
-
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
-    if (FCC_CURSOR(*cursor) == NULL)
-        return krb5_einval(context, 3);
-
     krb5_storage_free(FCC_CURSOR(*cursor)->sp);
     close (FCC_CURSOR(*cursor)->fd);
     free(*cursor);
@@ -800,9 +766,6 @@ fcc_remove_cred(krb5_context context,
     krb5_ccache copy, newfile;
     char *newname = NULL;
     int fd;
-
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
 
     ret = krb5_cc_new_unique(context, krb5_cc_type_memory, NULL, &copy);
     if (ret)
@@ -864,9 +827,6 @@ fcc_set_flags(krb5_context context,
 	      krb5_ccache id,
 	      krb5_flags flags)
 {
-    if (FCACHE(id) == NULL)
-        return krb5_einval(context, 2);
-
     return 0; /* XXX */
 }
 
@@ -874,12 +834,9 @@ static int KRB5_CALLCONV
 fcc_get_version(krb5_context context,
 		krb5_ccache id)
 {
-    if (FCACHE(id) == NULL)
-        return -1;
-
     return FCACHE(id)->version;
 }
-
+		
 struct fcache_iter {
     int first;
 };
@@ -907,9 +864,6 @@ fcc_get_cache_next(krb5_context context, krb5_cc_cursor cursor, krb5_ccache *id)
     const char *fn;
     char *expandedfn = NULL;
 
-    if (iter == NULL)
-        return krb5_einval(context, 2);
-
     if (!iter->first) {
 	krb5_clear_error_message(context);
 	return KRB5_CC_END;
@@ -925,7 +879,7 @@ fcc_get_cache_next(krb5_context context, krb5_cc_cursor cursor, krb5_ccache *id)
 	    return ret;
 	fn = expandedfn;
     }
-    /* check if file exists, don't return a non existent "next" */
+    /* check if file exists, don't return a non existant "next" */
     if (strncasecmp(fn, "FILE:", 5) == 0) {
 	struct stat sb;
 	ret = stat(fn + 5, &sb);
@@ -946,10 +900,6 @@ static krb5_error_code KRB5_CALLCONV
 fcc_end_cache_get(krb5_context context, krb5_cc_cursor cursor)
 {
     struct fcache_iter *iter = cursor;
-
-    if (iter == NULL)
-        return krb5_einval(context, 2);
-
     free(iter);
     return 0;
 }
@@ -973,8 +923,7 @@ fcc_move(krb5_context context, krb5_ccache from, krb5_ccache to)
     } else if (ret && errno == EXDEV) {
 	/* make a copy and delete the orignal */
 	krb5_ssize_t sz1, sz2;
-	int fd1;
-	int fd2 = 0;
+	int fd1, fd2;
 	char buf[BUFSIZ];
 
 	ret = fcc_open(context, from, &fd1, O_RDONLY | O_BINARY | O_CLOEXEC, 0);
@@ -1051,7 +1000,7 @@ fcc_lastchange(krb5_context context, krb5_ccache id, krb5_timestamp *mtime)
 {
     krb5_error_code ret;
     struct stat sb;
-    int fd = 0;
+    int fd;
 
     ret = fcc_open(context, id, &fd, O_RDONLY | O_BINARY | O_CLOEXEC, 0);
     if(ret)
@@ -1078,7 +1027,7 @@ fcc_get_kdc_offset(krb5_context context, krb5_ccache id, krb5_deltat *kdc_offset
 {
     krb5_error_code ret;
     krb5_storage *sp = NULL;
-    int fd = 0;
+    int fd;
     ret = init_fcc(context, id, &sp, &fd, kdc_offset);
     if (sp)
 	krb5_storage_free(sp);

@@ -3,17 +3,17 @@
    messages.c header
    Copyright (C) Andrew Tridgell 2000
    Copyright (C) 2001, 2002 by Martin Pool
-
+   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -42,10 +42,18 @@
 #define FLAG_MSG_GENERAL		0x0001
 #define FLAG_MSG_SMBD			0x0002
 #define FLAG_MSG_NMBD			0x0004
-#define FLAG_MSG_WINBIND		0x0008
+#define FLAG_MSG_PRINT_NOTIFY		0x0008
 #define FLAG_MSG_PRINT_GENERAL		0x0010
 /* dbwrap messages 4001-4999 */
 #define FLAG_MSG_DBWRAP			0x0020
+
+
+/*
+ * Virtual Node Numbers are identifying a node within a cluster. Ctdbd sets
+ * this, we retrieve our vnn from it.
+ */
+
+#define NONCLUSTER_VNN (0xFFFFFFFF)
 
 /*
  * ctdb gives us 64-bit server ids for messaging_send. This is done to avoid
@@ -60,19 +68,43 @@
 
 #include "librpc/gen_ndr/server_id.h"
 
+#ifdef CLUSTER_SUPPORT
 #define MSG_BROADCAST_PID_STR	"0:0"
+#else
+#define MSG_BROADCAST_PID_STR	"0"
+#endif
 
 struct messaging_context;
 struct messaging_rec;
 
+/*
+ * struct messaging_context belongs to messages.c, but because we still have
+ * messaging_dispatch, we need it here. Once we get rid of signals for
+ * notifying processes, this will go.
+ */
+
+struct messaging_context {
+	struct server_id id;
+	struct event_context *event_ctx;
+	struct messaging_callback *callbacks;
+
+	struct messaging_backend *local;
+	struct messaging_backend *remote;
+};
+
 struct messaging_backend {
-	int (*send_fn)(struct server_id src,
-		       struct server_id pid, int msg_type,
-		       const struct iovec *iov, int iovlen,
-		       const int *fds, size_t num_fds,
-		       struct messaging_backend *backend);
+	NTSTATUS (*send_fn)(struct messaging_context *msg_ctx,
+			    struct server_id pid, int msg_type,
+			    const DATA_BLOB *data,
+			    struct messaging_backend *backend);
 	void *private_data;
 };
+
+NTSTATUS messaging_tdb_init(struct messaging_context *msg_ctx,
+			    TALLOC_CTX *mem_ctx,
+			    struct messaging_backend **presult);
+
+bool messaging_tdb_parent_init(TALLOC_CTX *mem_ctx);
 
 NTSTATUS messaging_ctdbd_init(struct messaging_context *msg_ctx,
 			      TALLOC_CTX *mem_ctx,
@@ -83,18 +115,18 @@ bool message_send_all(struct messaging_context *msg_ctx,
 		      int msg_type,
 		      const void *buf, size_t len,
 		      int *n_sent);
+struct event_context *messaging_event_context(struct messaging_context *msg_ctx);
 struct messaging_context *messaging_init(TALLOC_CTX *mem_ctx, 
-					 struct tevent_context *ev);
+					 struct server_id server_id, 
+					 struct event_context *ev);
 
 struct server_id messaging_server_id(const struct messaging_context *msg_ctx);
-struct tevent_context *messaging_tevent_context(
-	struct messaging_context *msg_ctx);
-struct server_id_db *messaging_names_db(struct messaging_context *msg_ctx);
 
 /*
  * re-init after a fork
  */
-NTSTATUS messaging_reinit(struct messaging_context *msg_ctx);
+NTSTATUS messaging_reinit(struct messaging_context *msg_ctx,
+			  struct server_id id);
 
 NTSTATUS messaging_register(struct messaging_context *msg_ctx,
 			    void *private_data,
@@ -106,59 +138,14 @@ NTSTATUS messaging_register(struct messaging_context *msg_ctx,
 				       DATA_BLOB *data));
 void messaging_deregister(struct messaging_context *ctx, uint32_t msg_type,
 			  void *private_data);
-
-/**
- * CAVEAT:
- *
- * While the messaging_send*() functions are synchronuous by API,
- * they trigger a tevent-based loop upon sending bigger messages.
- *
- * Hence callers should not use these in purely synchonous code,
- * but run a tevent_loop instead.
- */
 NTSTATUS messaging_send(struct messaging_context *msg_ctx,
 			struct server_id server, 
 			uint32_t msg_type, const DATA_BLOB *data);
-
 NTSTATUS messaging_send_buf(struct messaging_context *msg_ctx,
 			    struct server_id server, uint32_t msg_type,
-			    const uint8_t *buf, size_t len);
-NTSTATUS messaging_send_iov_from(struct messaging_context *msg_ctx,
-				 struct server_id src, struct server_id dst,
-				 uint32_t msg_type,
-				 const struct iovec *iov, int iovlen,
-				 const int *fds, size_t num_fds);
-NTSTATUS messaging_send_iov(struct messaging_context *msg_ctx,
-			    struct server_id server, uint32_t msg_type,
-			    const struct iovec *iov, int iovlen,
-			    const int *fds, size_t num_fds);
-
-struct tevent_req *messaging_filtered_read_send(
-	TALLOC_CTX *mem_ctx, struct tevent_context *ev,
-	struct messaging_context *msg_ctx,
-	bool (*filter)(struct messaging_rec *rec, void *private_data),
-	void *private_data);
-int messaging_filtered_read_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
-				 struct messaging_rec **presult);
-
-struct tevent_req *messaging_read_send(TALLOC_CTX *mem_ctx,
-				       struct tevent_context *ev,
-				       struct messaging_context *msg,
-				       uint32_t msg_type);
-int messaging_read_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
-			struct messaging_rec **presult);
-
-struct tevent_req *messaging_handler_send(
-	TALLOC_CTX *mem_ctx, struct tevent_context *ev,
-	struct messaging_context *msg_ctx, uint32_t msg_type,
-	bool (*handler)(struct messaging_context *msg_ctx,
-			struct messaging_rec **rec, void *private_data),
-	void *private_data);
-int messaging_handler_recv(struct tevent_req *req);
-
-int messaging_cleanup(struct messaging_context *msg_ctx, pid_t pid);
-
-bool messaging_parent_dgm_cleanup_init(struct messaging_context *msg);
+			    const uint8 *buf, size_t len);
+void messaging_dispatch_rec(struct messaging_context *msg_ctx,
+			    struct messaging_rec *rec);
 
 #include "librpc/gen_ndr/ndr_messaging.h"
 

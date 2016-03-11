@@ -20,22 +20,20 @@
 */
 
 #include "includes.h"
-#include "system/network.h"
-#include <tevent.h>
-#include "lib/util/tevent_ntstatus.h"
 #include "libcli/raw/libcliraw.h"
 #include "libcli/smb2/smb2.h"
 #include "libcli/smb2/smb2_calls.h"
+#include "libcli/composite/composite.h"
 #include "auth/gensec/gensec.h"
-#include "auth/credentials/credentials.h"
-#include "../libcli/smb/smbXcli_base.h"
+
+#include <unistd.h>
 
 /**
   initialise a smb2_session structure
  */
 struct smb2_session *smb2_session_init(struct smb2_transport *transport,
 				       struct gensec_settings *settings,
-				       TALLOC_CTX *parent_ctx)
+				       TALLOC_CTX *parent_ctx, bool primary)
 {
 	struct smb2_session *session;
 	NTSTATUS status;
@@ -44,16 +42,17 @@ struct smb2_session *smb2_session_init(struct smb2_transport *transport,
 	if (!session) {
 		return NULL;
 	}
-	session->transport = talloc_steal(session, transport);
-
-	session->smbXcli = smbXcli_session_create(session, transport->conn);
-	if (session->smbXcli == NULL) {
-		talloc_free(session);
-		return NULL;
+	if (primary) {
+		session->transport = talloc_steal(session, transport);
+	} else {
+		session->transport = talloc_reference(session, transport);
 	}
 
+	session->pid = getpid();
+
 	/* prepare a gensec context for later use */
-	status = gensec_client_start(session, &session->gensec,
+	status = gensec_client_start(session, &session->gensec, 
+				     session->transport->socket->event.ctx, 
 				     settings);
 	if (!NT_STATUS_IS_OK(status)) {
 		talloc_free(session);
@@ -63,324 +62,228 @@ struct smb2_session *smb2_session_init(struct smb2_transport *transport,
 	gensec_want_feature(session->gensec, GENSEC_FEATURE_SESSION_KEY);
 
 	return session;
+}
+
+/**
+  send a session setup request
+*/
+struct smb2_request *smb2_session_setup_send(struct smb2_session *session, 
+					     struct smb2_session_setup *io)
+{
+	struct smb2_request *req;
+	NTSTATUS status;
+	
+	req = smb2_request_init(session->transport, SMB2_OP_SESSSETUP, 
+				0x18, true, io->in.secblob.length);
+	if (req == NULL) return NULL;
+
+	SBVAL(req->out.hdr,  SMB2_HDR_SESSION_ID, session->uid);
+	SCVAL(req->out.body, 0x02, io->in.vc_number);
+	SCVAL(req->out.body, 0x03, io->in.security_mode);
+	SIVAL(req->out.body, 0x04, io->in.capabilities);
+	SIVAL(req->out.body, 0x08, io->in.channel);
+	SBVAL(req->out.body, 0x10, io->in.previous_sessionid);
+
+	req->session = session;
+
+	status = smb2_push_o16s16_blob(&req->out, 0x0C, io->in.secblob);
+	if (!NT_STATUS_IS_OK(status)) {
+		talloc_free(req);
+		return NULL;
+	}
+
+	smb2_transport_send(req);
+
+	return req;
+}
+
+
+/**
+  recv a session setup reply
+*/
+NTSTATUS smb2_session_setup_recv(struct smb2_request *req, TALLOC_CTX *mem_ctx, 
+				 struct smb2_session_setup *io)
+{
+	NTSTATUS status;
+
+	if (!smb2_request_receive(req) || 
+	    (smb2_request_is_error(req) && 
+	     !NT_STATUS_EQUAL(req->status, NT_STATUS_MORE_PROCESSING_REQUIRED))) {
+		return smb2_request_destroy(req);
+	}
+
+	SMB2_CHECK_PACKET_RECV(req, 0x08, true);
+
+	io->out.session_flags = SVAL(req->in.body, 0x02);
+	io->out.uid           = BVAL(req->in.hdr,  SMB2_HDR_SESSION_ID);
+	
+	status = smb2_pull_o16s16_blob(&req->in, mem_ctx, req->in.body+0x04, &io->out.secblob);
+	if (!NT_STATUS_IS_OK(status)) {
+		smb2_request_destroy(req);
+		return status;
+	}
+
+	return smb2_request_destroy(req);
 }
 
 /*
- * Note: that the caller needs to keep 'transport' around as
- *       long as the returned session is active!
- */
-struct smb2_session *smb2_session_channel(struct smb2_transport *transport,
-					  struct gensec_settings *settings,
-					  TALLOC_CTX *parent_ctx,
-					  struct smb2_session *base_session)
+  sync session setup request
+*/
+NTSTATUS smb2_session_setup(struct smb2_session *session, 
+			    TALLOC_CTX *mem_ctx, struct smb2_session_setup *io)
 {
-	struct smb2_session *session;
-	NTSTATUS status;
-
-	session = talloc_zero(parent_ctx, struct smb2_session);
-	if (!session) {
-		return NULL;
-	}
-	session->transport = transport;
-
-	status = smb2cli_session_create_channel(session,
-						base_session->smbXcli,
-						transport->conn,
-						&session->smbXcli);
-	if (!NT_STATUS_IS_OK(status)) {
-		talloc_free(session);
-		return NULL;
-	}
-
-	session->needs_bind = true;
-
-	/* prepare a gensec context for later use */
-	status = gensec_client_start(session, &session->gensec,
-				     settings);
-	if (!NT_STATUS_IS_OK(status)) {
-		talloc_free(session);
-		return NULL;
-	}
-
-	gensec_want_feature(session->gensec, GENSEC_FEATURE_SESSION_KEY);
-
-	return session;
+	struct smb2_request *req = smb2_session_setup_send(session, io);
+	return smb2_session_setup_recv(req, mem_ctx, io);
 }
 
-struct smb2_session_setup_spnego_state {
-	struct tevent_context *ev;
-	struct smb2_session *session;
-	struct cli_credentials *credentials;
-	uint64_t previous_session_id;
-	bool session_bind;
-	bool reauth;
+
+struct smb2_session_state {
+	struct smb2_session_setup io;
+	struct smb2_request *req;
 	NTSTATUS gensec_status;
-	DATA_BLOB in_secblob;
-	DATA_BLOB out_secblob;
 };
 
-static void smb2_session_setup_spnego_done(struct tevent_req *subreq);
+/*
+  handle continuations of the spnego session setup
+*/
+static void session_request_handler(struct smb2_request *req)
+{
+	struct composite_context *c = talloc_get_type(req->async.private_data, 
+						      struct composite_context);
+	struct smb2_session_state *state = talloc_get_type(c->private_data, 
+							   struct smb2_session_state);
+	struct smb2_session *session = req->session;
+	NTSTATUS session_key_err;
+	DATA_BLOB session_key;
+	NTSTATUS peer_status;
+
+	c->status = smb2_session_setup_recv(req, c, &state->io);
+	peer_status = c->status;
+
+	if (NT_STATUS_EQUAL(peer_status, NT_STATUS_MORE_PROCESSING_REQUIRED) ||
+	    (NT_STATUS_IS_OK(peer_status) &&
+	     NT_STATUS_EQUAL(state->gensec_status, NT_STATUS_MORE_PROCESSING_REQUIRED))) {
+		c->status = gensec_update(session->gensec, c, 
+					  state->io.out.secblob,
+					  &state->io.in.secblob);
+		state->gensec_status = c->status;
+
+		session->uid = state->io.out.uid;
+	}
+
+	if (!NT_STATUS_IS_OK(c->status) &&
+	    !NT_STATUS_EQUAL(c->status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
+		composite_error(c, c->status);
+		return;
+	}
+
+	if (NT_STATUS_EQUAL(peer_status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
+		state->req = smb2_session_setup_send(session, &state->io);
+		if (state->req == NULL) {
+			composite_error(c, NT_STATUS_NO_MEMORY);
+			return;
+		}
+
+		state->req->async.fn = session_request_handler;
+		state->req->async.private_data = c;
+		return;
+	}
+
+	session_key_err = gensec_session_key(session->gensec, &session_key);
+	if (NT_STATUS_IS_OK(session_key_err)) {
+		session->session_key = session_key;
+	}
+
+	if (session->transport->signing_required) {
+		if (session->session_key.length == 0) {
+			DEBUG(0,("Wrong session key length %u for SMB2 signing\n",
+				 (unsigned)session->session_key.length));
+			composite_error(c, NT_STATUS_ACCESS_DENIED);
+			return;
+		}
+		session->signing_active = true;
+	}
+
+	composite_done(c);
+}
 
 /*
   a composite function that does a full SPNEGO session setup
  */
-struct tevent_req *smb2_session_setup_spnego_send(
-				TALLOC_CTX *mem_ctx,
-				struct tevent_context *ev,
-				struct smb2_session *session,
-				struct cli_credentials *credentials,
-				uint64_t previous_session_id)
+struct composite_context *smb2_session_setup_spnego_send(struct smb2_session *session, 
+							 struct cli_credentials *credentials)
 {
-	struct tevent_req *req;
-	struct smb2_session_setup_spnego_state *state;
-	uint64_t current_session_id;
+	struct composite_context *c;
+	struct smb2_session_state *state;
 	const char *chosen_oid;
-	struct tevent_req *subreq;
-	NTSTATUS status;
-	const DATA_BLOB *server_gss_blob;
-	DATA_BLOB negprot_secblob = data_blob_null;
-	uint32_t timeout_msec;
-	uint8_t in_flags = 0;
 
-	timeout_msec = session->transport->options.request_timeout * 1000;
+	c = composite_create(session, session->transport->socket->event.ctx);
+	if (c == NULL) return NULL;
 
-	req = tevent_req_create(mem_ctx, &state,
-				struct smb2_session_setup_spnego_state);
-	if (req == NULL) {
-		return NULL;
+	state = talloc(c, struct smb2_session_state);
+	if (composite_nomem(state, c)) return c;
+	c->private_data = state;
+
+	ZERO_STRUCT(state->io);
+	state->io.in.vc_number          = 0;
+	if (session->transport->signing_required) {
+		state->io.in.security_mode = 
+			SMB2_NEGOTIATE_SIGNING_ENABLED | SMB2_NEGOTIATE_SIGNING_REQUIRED;
 	}
-	state->ev = ev;
-	state->session = session;
-	state->credentials = credentials;
-	state->previous_session_id = previous_session_id;
+	state->io.in.capabilities       = 0;
+	state->io.in.channel            = 0;
+	state->io.in.previous_sessionid = 0;
 
-	current_session_id = smb2cli_session_current_id(state->session->smbXcli);
-	if (state->session->needs_bind) {
-		state->session_bind = true;
-	} else if (current_session_id != 0) {
-		state->reauth = true;
-	}
-	server_gss_blob = smbXcli_conn_server_gss_blob(session->transport->conn);
-	if (server_gss_blob) {
-		negprot_secblob = *server_gss_blob;
-	}
+	c->status = gensec_set_credentials(session->gensec, credentials);
+	if (!composite_is_ok(c)) return c;
 
-	status = gensec_set_credentials(session->gensec, credentials);
-	if (tevent_req_nterror(req, status)) {
-		return tevent_req_post(req, ev);
-	}
+	c->status = gensec_set_target_hostname(session->gensec, 
+					       session->transport->socket->hostname);
+	if (!composite_is_ok(c)) return c;
 
-	status = gensec_set_target_hostname(session->gensec,
-					    smbXcli_conn_remote_name(session->transport->conn));
-	if (tevent_req_nterror(req, status)) {
-		return tevent_req_post(req, ev);
-	}
+	c->status = gensec_set_target_service(session->gensec, "cifs");
+	if (!composite_is_ok(c)) return c;
 
-	status = gensec_set_target_service(session->gensec, "cifs");
-	if (tevent_req_nterror(req, status)) {
-		return tevent_req_post(req, ev);
-	}
-
-	if (negprot_secblob.length > 0) {
+	if (session->transport->negotiate.secblob.length > 0) {
 		chosen_oid = GENSEC_OID_SPNEGO;
 	} else {
 		chosen_oid = GENSEC_OID_NTLMSSP;
 	}
 
-	status = gensec_start_mech_by_oid(session->gensec, chosen_oid);
-	if (tevent_req_nterror(req, status)) {
-		return tevent_req_post(req, ev);
+	c->status = gensec_start_mech_by_oid(session->gensec, chosen_oid);
+	if (!composite_is_ok(c)) return c;
+
+	c->status = gensec_update(session->gensec, c, 
+				  session->transport->negotiate.secblob,
+				  &state->io.in.secblob);
+	if (!NT_STATUS_EQUAL(c->status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
+		composite_error(c, c->status);
+		return c;
 	}
-
-	status = gensec_update_ev(session->gensec, state,
-			       state->ev,
-			       negprot_secblob,
-			       &state->in_secblob);
-	if (!NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
-		tevent_req_nterror(req, status);
-		return tevent_req_post(req, ev);
-	}
-	state->gensec_status = status;
-
-	if (state->session_bind) {
-		in_flags |= SMB2_SESSION_FLAG_BINDING;
-	}
-
-	subreq = smb2cli_session_setup_send(state, state->ev,
-					    session->transport->conn,
-					    timeout_msec,
-					    session->smbXcli,
-					    in_flags,
-					    0, /* in_capabilities */
-					    0, /* in_channel */
-					    state->previous_session_id,
-					    &state->in_secblob);
-	if (tevent_req_nomem(subreq, req)) {
-		return tevent_req_post(req, ev);
-	}
-	tevent_req_set_callback(subreq, smb2_session_setup_spnego_done, req);
-
-	return req;
-}
-
-/*
-  handle continuations of the spnego session setup
-*/
-static void smb2_session_setup_spnego_done(struct tevent_req *subreq)
-{
-	struct tevent_req *req =
-		tevent_req_callback_data(subreq,
-		struct tevent_req);
-	struct smb2_session_setup_spnego_state *state =
-		tevent_req_data(req,
-		struct smb2_session_setup_spnego_state);
-	struct smb2_session *session = state->session;
-	NTSTATUS peer_status;
-	NTSTATUS status;
-	struct iovec *recv_iov;
-	uint32_t timeout_msec;
-	uint8_t in_flags = 0;
-
-	timeout_msec = session->transport->options.request_timeout * 1000;
-
-	status = smb2cli_session_setup_recv(subreq, state,
-					    &recv_iov,
-					    &state->out_secblob);
-	if (!NT_STATUS_IS_OK(status) &&
-	    !NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
-		tevent_req_nterror(req, status);
-		return;
-	}
-	peer_status = status;
-
-	if (NT_STATUS_EQUAL(state->gensec_status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
-		status = gensec_update_ev(session->gensec, state,
-				       state->ev,
-				       state->out_secblob,
-				       &state->in_secblob);
-		state->gensec_status = status;
-	}
-
-	if (!NT_STATUS_IS_OK(status) &&
-	    !NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
-		tevent_req_nterror(req, status);
-		return;
-	}
-
-	if (NT_STATUS_IS_OK(peer_status) && NT_STATUS_IS_OK(state->gensec_status)) {
-		DATA_BLOB session_key;
-
-		if (state->reauth) {
-			tevent_req_done(req);
-			return;
-		}
-
-		if (cli_credentials_is_anonymous(state->credentials)) {
-			/*
-			 * Windows server does not set the
-			 * SMB2_SESSION_FLAG_IS_GUEST nor
-			 * SMB2_SESSION_FLAG_IS_NULL flag.
-			 *
-			 * This fix makes sure we do not try
-			 * to verify a signature on the final
-			 * session setup response.
-			 */
-			tevent_req_done(req);
-			return;
-		}
-
-		status = gensec_session_key(session->gensec, state,
-					    &session_key);
-		if (tevent_req_nterror(req, status)) {
-			return;
-		}
-
-		if (state->session_bind) {
-			status = smb2cli_session_set_channel_key(session->smbXcli,
-								 session_key,
-								 recv_iov);
-			if (tevent_req_nterror(req, status)) {
-				return;
-			}
-			session->needs_bind = false;
-		} else {
-			status = smb2cli_session_set_session_key(session->smbXcli,
-								 session_key,
-								 recv_iov);
-			if (tevent_req_nterror(req, status)) {
-				return;
-			}
-		}
-		tevent_req_done(req);
-		return;
-	}
-
-	if (state->session_bind) {
-		in_flags |= SMB2_SESSION_FLAG_BINDING;
-	}
-
-	subreq = smb2cli_session_setup_send(state, state->ev,
-					    session->transport->conn,
-					    timeout_msec,
-					    session->smbXcli,
-					    in_flags,
-					    0, /* in_capabilities */
-					    0, /* in_channel */
-					    state->previous_session_id,
-					    &state->in_secblob);
-	if (tevent_req_nomem(subreq, req)) {
-		return;
-	}
-	tevent_req_set_callback(subreq, smb2_session_setup_spnego_done, req);
+	state->gensec_status = c->status;
+		
+	state->req = smb2_session_setup_send(session, &state->io);
+	composite_continue_smb2(c, state->req, session_request_handler, c);
+	return c;
 }
 
 /*
   receive a composite session setup reply
 */
-NTSTATUS smb2_session_setup_spnego_recv(struct tevent_req *req)
+NTSTATUS smb2_session_setup_spnego_recv(struct composite_context *c)
 {
-	return tevent_req_simple_recv_ntstatus(req);
+	NTSTATUS status;
+	status = composite_wait(c);
+	talloc_free(c);
+	return status;
 }
 
 /*
   sync version of smb2_session_setup_spnego
 */
 NTSTATUS smb2_session_setup_spnego(struct smb2_session *session, 
-				   struct cli_credentials *credentials,
-				   uint64_t previous_session_id)
+				   struct cli_credentials *credentials)
 {
-	struct tevent_req *subreq;
-	NTSTATUS status;
-	bool ok;
-	TALLOC_CTX *frame = talloc_stackframe();
-	struct tevent_context *ev = session->transport->ev;
-
-	if (frame == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	subreq = smb2_session_setup_spnego_send(frame, ev,
-						session, credentials,
-						previous_session_id);
-	if (subreq == NULL) {
-		TALLOC_FREE(frame);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	ok = tevent_req_poll(subreq, ev);
-	if (!ok) {
-		status = map_nt_error_from_unix_common(errno);
-		TALLOC_FREE(frame);
-		return status;
-	}
-
-	status = smb2_session_setup_spnego_recv(subreq);
-	TALLOC_FREE(subreq);
-	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(frame);
-		return status;
-	}
-
-	TALLOC_FREE(frame);
-	return NT_STATUS_OK;
+	struct composite_context *c = smb2_session_setup_spnego_send(session, credentials);
+	return smb2_session_setup_spnego_recv(c);
 }

@@ -19,11 +19,11 @@
 
 #include "includes.h"
 #include "system/filesys.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_open.h"
+#include "dbwrap.h"
 #include "util_tdb.h"
 #include "printer_list.h"
 
+#define PL_DB_NAME() lock_path("printer_list.tdb")
 #define PL_KEY_PREFIX "PRINTERLIST/PRN/"
 #define PL_KEY_FORMAT PL_KEY_PREFIX"%s"
 #define PL_TIMESTAMP_KEY "PRINTERLIST/GLOBAL/LAST_REFRESH"
@@ -33,22 +33,13 @@
 static struct db_context *get_printer_list_db(void)
 {
 	static struct db_context *db;
-	char *db_path;
 
 	if (db != NULL) {
 		return db;
 	}
-
-	db_path = lock_path("printer_list.tdb");
-	if (db_path == NULL) {
-		return NULL;
-	}
-
-	db = db_open(NULL, db_path, 0,
+	db = db_open(NULL, PL_DB_NAME(), 0,
 		     TDB_DEFAULT|TDB_CLEAR_IF_FIRST|TDB_INCOMPATIBLE_HASH,
-		     O_RDWR|O_CREAT, 0644, DBWRAP_LOCK_ORDER_1,
-		     DBWRAP_FLAG_NONE);
-	TALLOC_FREE(db_path);
+		     O_RDWR|O_CREAT, 0644);
 	return db;
 }
 
@@ -98,10 +89,10 @@ NTSTATUS printer_list_get_printer(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	status = dbwrap_fetch_bystring_upper(db, key, key, &data);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(6, ("Failed to fetch record! "
-			  "The printer database is empty?\n"));
+	data = dbwrap_fetch_bystring_upper(db, key, key);
+	if (data.dptr == NULL) {
+		DEBUG(1, ("Failed to fetch record!\n"));
+		status = NT_STATUS_NOT_FOUND;
 		goto done;
 	}
 
@@ -141,7 +132,6 @@ NTSTATUS printer_list_get_printer(TALLOC_CTX *mem_ctx,
 done:
 	SAFE_FREE(nstr);
 	SAFE_FREE(cstr);
-	SAFE_FREE(lstr);
 	TALLOC_FREE(key);
 	return status;
 }
@@ -157,6 +147,8 @@ NTSTATUS printer_list_set_printer(TALLOC_CTX *mem_ctx,
 	TDB_DATA data;
 	uint64_t time_64;
 	uint32_t time_h, time_l;
+	const char *str = NULL;
+	const char *str2 = NULL;
 	NTSTATUS status;
 	int len;
 
@@ -171,25 +163,24 @@ NTSTATUS printer_list_set_printer(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	if (comment == NULL) {
-		comment = "";
+	if (comment) {
+		str = comment;
+	} else {
+		str = "";
 	}
 
-	if (location == NULL) {
-		location = "";
+	if (location) {
+		str2 = location;
+	} else {
+		str2 = "";
 	}
+
 
 	time_64 = last_refresh;
 	time_l = time_64 & 0xFFFFFFFFL;
 	time_h = time_64 >> 32;
 
-	len = tdb_pack(NULL, 0,
-		       PL_DATA_FORMAT,
-		       time_h,
-		       time_l,
-		       name,
-		       comment,
-		       location);
+	len = tdb_pack(NULL, 0, PL_DATA_FORMAT, time_h, time_l, name, str, str2);
 
 	data.dptr = talloc_array(key, uint8_t, len);
 	if (!data.dptr) {
@@ -200,12 +191,7 @@ NTSTATUS printer_list_set_printer(TALLOC_CTX *mem_ctx,
 	data.dsize = len;
 
 	len = tdb_pack(data.dptr, data.dsize,
-		       PL_DATA_FORMAT,
-		       time_h,
-		       time_l,
-		       name,
-		       comment,
-		       location);
+		       PL_DATA_FORMAT, time_h, time_l, name, str, str2);
 
 	status = dbwrap_store_bystring_upper(db, key, data, TDB_REPLACE);
 
@@ -229,15 +215,15 @@ NTSTATUS printer_list_get_last_refresh(time_t *last_refresh)
 
 	ZERO_STRUCT(data);
 
-	status = dbwrap_fetch_bystring(db, talloc_tos(), PL_TIMESTAMP_KEY, &data);
-	if (!NT_STATUS_IS_OK(status)) {
+	data = dbwrap_fetch_bystring(db, talloc_tos(), PL_TIMESTAMP_KEY);
+	if (data.dptr == NULL) {
 		DEBUG(1, ("Failed to fetch record!\n"));
+		status = NT_STATUS_NOT_FOUND;
 		goto done;
 	}
 
 	ret = tdb_unpack(data.dptr, data.dsize,
 			 PL_TSTAMP_FORMAT, &time_h, &time_l);
-	TALLOC_FREE(data.dptr);
 	if (ret == -1) {
 		DEBUG(1, ("Failed to un pack printer data"));
 		status = NT_STATUS_INTERNAL_DB_CORRUPTION;
@@ -292,24 +278,22 @@ done:
 typedef int (printer_list_trv_fn_t)(struct db_record *, void *);
 
 static NTSTATUS printer_list_traverse(printer_list_trv_fn_t *fn,
-				      void *private_data,
-				      bool read_only)
+						void *private_data)
 {
 	struct db_context *db;
-	NTSTATUS status;
+	int ret;
 
 	db = get_printer_list_db();
 	if (db == NULL) {
 		return NT_STATUS_INTERNAL_DB_CORRUPTION;
 	}
 
-	if (read_only) {
-		status = dbwrap_traverse_read(db, fn, private_data, NULL);
-	} else {
-		status = dbwrap_traverse(db, fn, private_data, NULL);
+	ret = db->traverse(db, fn, private_data);
+	if (ret < 0) {
+		return NT_STATUS_UNSUCCESSFUL;
 	}
 
-	return status;
+	return NT_STATUS_OK;
 }
 
 struct printer_list_clean_state {
@@ -327,20 +311,14 @@ static int printer_list_clean_fn(struct db_record *rec, void *private_data)
 	char *comment;
 	char *location;
 	int ret;
-	TDB_DATA key;
-	TDB_DATA value;
-
-	key = dbwrap_record_get_key(rec);
 
 	/* skip anything that does not contain PL_DATA_FORMAT data */
-	if (strncmp((char *)key.dptr,
+	if (strncmp((char *)rec->key.dptr,
 		    PL_KEY_PREFIX, sizeof(PL_KEY_PREFIX)-1)) {
 		return 0;
 	}
 
-	value = dbwrap_record_get_value(rec);
-
-	ret = tdb_unpack(value.dptr, value.dsize,
+	ret = tdb_unpack(rec->value.dptr, rec->value.dsize,
 			 PL_DATA_FORMAT, &time_h, &time_l, &name, &comment,
 			 &location);
 	if (ret == -1) {
@@ -356,7 +334,7 @@ static int printer_list_clean_fn(struct db_record *rec, void *private_data)
 	refresh = (time_t)(((uint64_t)time_h << 32) + time_l);
 
 	if (refresh < state->last_refresh) {
-		state->status = dbwrap_record_delete(rec);
+		state->status = rec->delete_rec(rec);
 		if (!NT_STATUS_IS_OK(state->status)) {
 			return -1;
 		}
@@ -377,7 +355,7 @@ NTSTATUS printer_list_clean_old(void)
 
 	state.status = NT_STATUS_OK;
 
-	status = printer_list_traverse(printer_list_clean_fn, &state, false);
+	status = printer_list_traverse(printer_list_clean_fn, &state);
 	if (NT_STATUS_EQUAL(status, NT_STATUS_UNSUCCESSFUL) &&
 	    !NT_STATUS_IS_OK(state.status)) {
 		status = state.status;
@@ -401,19 +379,13 @@ static int printer_list_exec_fn(struct db_record *rec, void *private_data)
 	char *comment;
 	char *location;
 	int ret;
-	TDB_DATA key;
-	TDB_DATA value;
-
-	key = dbwrap_record_get_key(rec);
 
 	/* always skip PL_TIMESTAMP_KEY key */
-	if (strequal((const char *)key.dptr, PL_TIMESTAMP_KEY)) {
+	if (strequal((const char *)rec->key.dptr, PL_TIMESTAMP_KEY)) {
 		return 0;
 	}
 
-	value = dbwrap_record_get_value(rec);
-
-	ret = tdb_unpack(value.dptr, value.dsize,
+	ret = tdb_unpack(rec->value.dptr, rec->value.dsize,
 			 PL_DATA_FORMAT, &time_h, &time_l, &name, &comment,
 			 &location);
 	if (ret == -1) {
@@ -430,8 +402,8 @@ static int printer_list_exec_fn(struct db_record *rec, void *private_data)
 	return 0;
 }
 
-NTSTATUS printer_list_read_run_fn(void (*fn)(const char *, const char *, const char *, void *),
-				  void *private_data)
+NTSTATUS printer_list_run_fn(void (*fn)(const char *, const char *, const char *, void *),
+			     void *private_data)
 {
 	struct printer_list_exec_state state;
 	NTSTATUS status;
@@ -440,7 +412,7 @@ NTSTATUS printer_list_read_run_fn(void (*fn)(const char *, const char *, const c
 	state.private_data = private_data;
 	state.status = NT_STATUS_OK;
 
-	status = printer_list_traverse(printer_list_exec_fn, &state, true);
+	status = printer_list_traverse(printer_list_exec_fn, &state);
 	if (NT_STATUS_EQUAL(status, NT_STATUS_UNSUCCESSFUL) &&
 	    !NT_STATUS_IS_OK(state.status)) {
 		status = state.status;

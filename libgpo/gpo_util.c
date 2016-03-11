@@ -16,16 +16,19 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-
+#define TALLOC_DEPRECATED 1
 #include "includes.h"
 #include "system/filesys.h"
 #include "librpc/gen_ndr/ndr_misc.h"
 #include "../librpc/gen_ndr/ndr_security.h"
 #include "../libgpo/gpo.h"
 #include "../libcli/security/security.h"
-#include "registry.h"
-#include "libgpo/gpo_proto.h"
-#include "libgpo/gpext/gpext.h"
+#if _SAMBA_BUILD_ == 4
+#include "auth/auth.h"
+#include <talloc.h>
+#include "source4/libgpo/ads_convenience.h"
+#endif
+#undef strdup
 
 #if 0
 #define DEFAULT_DOMAIN_POLICY "Default Domain Policy"
@@ -229,14 +232,15 @@ void dump_gp_ext(struct GP_EXT *gp_ext, int debuglevel)
 /****************************************************************
 ****************************************************************/
 
-void dump_gpo(const struct GROUP_POLICY_OBJECT *gpo,
+void dump_gpo(ADS_STRUCT *ads,
+	      TALLOC_CTX *mem_ctx,
+	      struct GROUP_POLICY_OBJECT *gpo,
 	      int debuglevel)
 {
 	int lvl = debuglevel;
-	TALLOC_CTX *frame = talloc_stackframe();
 
 	if (gpo == NULL) {
-		goto out;
+		return;
 	}
 
 	DEBUG(lvl,("---------------------\n\n"));
@@ -300,9 +304,9 @@ void dump_gpo(const struct GROUP_POLICY_OBJECT *gpo,
 
 		struct GP_EXT *gp_ext = NULL;
 
-		if (!ads_parse_gp_ext(frame, gpo->machine_extensions,
+		if (!ads_parse_gp_ext(mem_ctx, gpo->machine_extensions,
 				      &gp_ext)) {
-			goto out;
+			return;
 		}
 		dump_gp_ext(gp_ext, lvl);
 	}
@@ -313,9 +317,9 @@ void dump_gpo(const struct GROUP_POLICY_OBJECT *gpo,
 
 		struct GP_EXT *gp_ext = NULL;
 
-		if (!ads_parse_gp_ext(frame, gpo->user_extensions,
+		if (!ads_parse_gp_ext(mem_ctx, gpo->user_extensions,
 				      &gp_ext)) {
-			goto out;
+			return;
 		}
 		dump_gp_ext(gp_ext, lvl);
 	}
@@ -324,28 +328,29 @@ void dump_gpo(const struct GROUP_POLICY_OBJECT *gpo,
 
 		NDR_PRINT_DEBUG(security_descriptor, gpo->security_descriptor);
 	}
- out:
-	talloc_free(frame);
 }
 
 /****************************************************************
 ****************************************************************/
 
-void dump_gpo_list(const struct GROUP_POLICY_OBJECT *gpo_list,
+void dump_gpo_list(ADS_STRUCT *ads,
+		   TALLOC_CTX *mem_ctx,
+		   struct GROUP_POLICY_OBJECT *gpo_list,
 		   int debuglevel)
 {
-	const struct GROUP_POLICY_OBJECT *gpo = NULL;
+	struct GROUP_POLICY_OBJECT *gpo = NULL;
 
 	for (gpo = gpo_list; gpo; gpo = gpo->next) {
-		dump_gpo(gpo, debuglevel);
+		dump_gpo(ads, mem_ctx, gpo, debuglevel);
 	}
 }
 
 /****************************************************************
 ****************************************************************/
 
-void dump_gplink(const struct GP_LINK *gp_link)
+void dump_gplink(ADS_STRUCT *ads, TALLOC_CTX *mem_ctx, struct GP_LINK *gp_link)
 {
+	ADS_STATUS status;
 	int i;
 	int lvl = 10;
 
@@ -385,6 +390,22 @@ void dump_gplink(const struct GP_LINK *gp_link)
 			DEBUGADD(lvl,("GPO_LINK_OPT_DISABLED"));
 		}
 		DEBUGADD(lvl,("\n"));
+
+		if (ads != NULL && mem_ctx != NULL) {
+
+			struct GROUP_POLICY_OBJECT gpo;
+
+			status = ads_get_gpo(ads, mem_ctx,
+					     gp_link->link_names[i],
+					     NULL, NULL, &gpo);
+			if (!ADS_ERR_OK(status)) {
+				DEBUG(lvl,("get gpo for %s failed: %s\n",
+					gp_link->link_names[i],
+					ads_errstr(status)));
+				return;
+			}
+			dump_gpo(ads, mem_ctx, &gpo, lvl);
+		}
 	}
 }
 
@@ -393,10 +414,10 @@ void dump_gplink(const struct GP_LINK *gp_link)
 /****************************************************************
 ****************************************************************/
 
-bool gpo_get_gp_ext_from_gpo(TALLOC_CTX *mem_ctx,
-			     uint32_t flags,
-			     const struct GROUP_POLICY_OBJECT *gpo,
-			     struct GP_EXT **gp_ext)
+static bool gpo_get_gp_ext_from_gpo(TALLOC_CTX *mem_ctx,
+				    uint32_t flags,
+				    struct GROUP_POLICY_OBJECT *gpo,
+				    struct GP_EXT **gp_ext)
 {
 	ZERO_STRUCTP(*gp_ext);
 
@@ -426,18 +447,127 @@ bool gpo_get_gp_ext_from_gpo(TALLOC_CTX *mem_ctx,
 /****************************************************************
 ****************************************************************/
 
-NTSTATUS gpo_process_gpo_list(TALLOC_CTX *mem_ctx,
-			      const struct security_token *token,
-			      const struct GROUP_POLICY_OBJECT *deleted_gpo_list,
-			      const struct GROUP_POLICY_OBJECT *changed_gpo_list,
-			      const char *extensions_guid_filter,
-			      uint32_t flags)
+ADS_STATUS gpo_process_a_gpo(ADS_STRUCT *ads,
+			     TALLOC_CTX *mem_ctx,
+			     const struct security_token *token,
+			     struct registry_key *root_key,
+			     struct GROUP_POLICY_OBJECT *gpo,
+			     const char *extension_guid_filter,
+			     uint32_t flags)
 {
-	NTSTATUS status = NT_STATUS_OK;
+	struct GP_EXT *gp_ext = NULL;
+	int i;
+
+	DEBUG(10,("gpo_process_a_gpo: processing gpo %s (%s)\n",
+		gpo->name, gpo->display_name));
+	if (extension_guid_filter) {
+		DEBUGADD(10,("gpo_process_a_gpo: using filter %s (%s)\n",
+			extension_guid_filter,
+			cse_gpo_guid_string_to_name(extension_guid_filter)));
+	}
+
+	if (!gpo_get_gp_ext_from_gpo(mem_ctx, flags, gpo, &gp_ext)) {
+		return ADS_ERROR_NT(NT_STATUS_INVALID_PARAMETER);
+	}
+
+	if (!gp_ext || !gp_ext->num_exts) {
+		if (flags & GPO_INFO_FLAG_VERBOSE) {
+			DEBUG(0,("gpo_process_a_gpo: "
+				"no policies in %s (%s) for this extension\n",
+				gpo->name, gpo->display_name));
+		}
+		return ADS_SUCCESS;
+	}
+
+	for (i=0; i<gp_ext->num_exts; i++) {
+
+		NTSTATUS ntstatus;
+
+		if (extension_guid_filter &&
+		    !strequal(extension_guid_filter,
+			      gp_ext->extensions_guid[i])) {
+			continue;
+		}
+
+		ntstatus = gpext_process_extension(ads, mem_ctx,
+						   flags, token, root_key, gpo,
+						   gp_ext->extensions_guid[i],
+						   gp_ext->snapins_guid[i]);
+		if (!NT_STATUS_IS_OK(ntstatus)) {
+			ADS_ERROR_NT(ntstatus);
+		}
+	}
+
+	return ADS_SUCCESS;
+}
+
+/****************************************************************
+****************************************************************/
+
+static ADS_STATUS gpo_process_gpo_list_by_ext(ADS_STRUCT *ads,
+					      TALLOC_CTX *mem_ctx,
+					      const struct security_token *token,
+					      struct registry_key *root_key,
+					      struct GROUP_POLICY_OBJECT *gpo_list,
+					      const char *extensions_guid,
+					      uint32_t flags)
+{
+	ADS_STATUS status;
+	struct GROUP_POLICY_OBJECT *gpo;
+
+	for (gpo = gpo_list; gpo; gpo = gpo->next) {
+
+		if (gpo->link_type == GP_LINK_LOCAL) {
+			continue;
+		}
+
+
+		/* FIXME: we need to pass down the *list* down to the
+		 * extension, otherwise we cannot store the e.g. the *list* of
+		 * logon-scripts correctly (for more then one GPO) */
+
+		status = gpo_process_a_gpo(ads, mem_ctx, token, root_key,
+					   gpo, extensions_guid, flags);
+
+		if (!ADS_ERR_OK(status)) {
+			DEBUG(0,("failed to process gpo by ext: %s\n",
+				ads_errstr(status)));
+			return status;
+		}
+	}
+
+	return ADS_SUCCESS;
+}
+
+/****************************************************************
+****************************************************************/
+
+ADS_STATUS gpo_process_gpo_list(ADS_STRUCT *ads,
+				TALLOC_CTX *mem_ctx,
+				const struct security_token *token,
+				struct GROUP_POLICY_OBJECT *gpo_list,
+				const char *extensions_guid_filter,
+				uint32_t flags)
+{
+	ADS_STATUS status = ADS_SUCCESS;
+	struct gp_extension *gp_ext_list = NULL;
+	struct gp_extension *gp_ext = NULL;
 	struct registry_key *root_key = NULL;
 	struct gp_registry_context *reg_ctx = NULL;
+#if 0
 	WERROR werr;
+#endif
+	status = ADS_ERROR_NT(init_gp_extensions(mem_ctx));
+	if (!ADS_ERR_OK(status)) {
+		return status;
+	}
 
+	gp_ext_list = get_gp_extension_list();
+	if (!gp_ext_list) {
+		return ADS_ERROR_NT(NT_STATUS_DLL_INIT_FAILED);
+	}
+/* FIXME Needs to be replaced with new patchfile_preg calls */
+#if 0
 	/* get the key here */
 	if (flags & GPO_LIST_FLAG_MACHINE) {
 		werr = gp_init_reg_ctx(mem_ctx, KEY_HKLM, REG_KEY_WRITE,
@@ -450,19 +580,44 @@ NTSTATUS gpo_process_gpo_list(TALLOC_CTX *mem_ctx,
 	}
 	if (!W_ERROR_IS_OK(werr)) {
 		talloc_free(reg_ctx);
-		return werror_to_ntstatus(werr);
+		return ADS_ERROR_NT(werror_to_ntstatus(werr));
 	}
+#endif
 
 	root_key = reg_ctx->curr_key;
 
-	status = gpext_process_extension(mem_ctx,
-					 flags, token, root_key,
-					 deleted_gpo_list,
-					 changed_gpo_list,
-					 extensions_guid_filter);
+	for (gp_ext = gp_ext_list; gp_ext; gp_ext = gp_ext->next) {
+
+		const char *guid_str = NULL;
+
+		guid_str = GUID_string(mem_ctx, gp_ext->guid);
+		if (!guid_str) {
+			status = ADS_ERROR_NT(NT_STATUS_NO_MEMORY);
+			goto done;
+		}
+
+		if (extensions_guid_filter &&
+		    (!strequal(guid_str, extensions_guid_filter)))  {
+			continue;
+		}
+
+		DEBUG(0,("-------------------------------------------------\n"));
+		DEBUG(0,("gpo_process_gpo_list: processing ext: %s {%s}\n",
+			gp_ext->name, guid_str));
+
+
+		status = gpo_process_gpo_list_by_ext(ads, mem_ctx, token,
+						     root_key, gpo_list,
+						     guid_str, flags);
+		if (!ADS_ERR_OK(status)) {
+			goto done;
+		}
+	}
+
+ done:
 	talloc_free(reg_ctx);
 	talloc_free(root_key);
-	gpext_free_gp_extensions();
+	free_gp_extensions();
 
 	return status;
 }
@@ -476,8 +631,9 @@ NTSTATUS gpo_process_gpo_list(TALLOC_CTX *mem_ctx,
 NTSTATUS check_refresh_gpo(ADS_STRUCT *ads,
 			   TALLOC_CTX *mem_ctx,
                            const char *cache_dir,
+                           struct loadparm_context *lp_ctx,
 			   uint32_t flags,
-			   const struct GROUP_POLICY_OBJECT *gpo)
+			   struct GROUP_POLICY_OBJECT *gpo)
 {
 	NTSTATUS result;
 	char *server = NULL;
@@ -515,7 +671,7 @@ NTSTATUS check_refresh_gpo(ADS_STRUCT *ads,
 
 		DEBUG(1,("check_refresh_gpo: need to refresh GPO\n"));
 
-		result = gpo_fetch_files(mem_ctx, ads, cache_dir, gpo);
+		result = gpo_fetch_files(mem_ctx, ads, lp_ctx, cache_dir, gpo);
 		if (!NT_STATUS_IS_OK(result)) {
 			goto out;
 		}
@@ -562,11 +718,12 @@ NTSTATUS check_refresh_gpo(ADS_STRUCT *ads,
 NTSTATUS check_refresh_gpo_list(ADS_STRUCT *ads,
 				TALLOC_CTX *mem_ctx,
 				const char *cache_dir,
+                                struct loadparm_context *lp_ctx,
 				uint32_t flags,
-				const struct GROUP_POLICY_OBJECT *gpo_list)
+				struct GROUP_POLICY_OBJECT *gpo_list)
 {
 	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
-	const struct GROUP_POLICY_OBJECT *gpo;
+	struct GROUP_POLICY_OBJECT *gpo;
 
 	if (!gpo_list) {
 		return NT_STATUS_INVALID_PARAMETER;
@@ -574,7 +731,7 @@ NTSTATUS check_refresh_gpo_list(ADS_STRUCT *ads,
 
 	for (gpo = gpo_list; gpo; gpo = gpo->next) {
 
-		result = check_refresh_gpo(ads, mem_ctx, cache_dir, flags, gpo);
+		result = check_refresh_gpo(ads, mem_ctx, cache_dir, lp_ctx, flags, gpo);
 		if (!NT_STATUS_IS_OK(result)) {
 			goto out;
 		}
@@ -593,7 +750,7 @@ NTSTATUS check_refresh_gpo_list(ADS_STRUCT *ads,
 
 NTSTATUS gpo_get_unix_path(TALLOC_CTX *mem_ctx,
                            const char *cache_dir,
-			   const struct GROUP_POLICY_OBJECT *gpo,
+			   struct GROUP_POLICY_OBJECT *gpo,
 			   char **unix_path)
 {
 	char *server, *share, *nt_path;
@@ -612,29 +769,24 @@ char *gpo_flag_str(TALLOC_CTX *ctx, uint32_t flags)
 		return NULL;
 	}
 
-	str = talloc_strdup(ctx, "");
-	if (!str) {
-		return NULL;
-	}
-
 	if (flags & GPO_INFO_FLAG_SLOWLINK)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_SLOWLINK ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_SLOWLINK ");
 	if (flags & GPO_INFO_FLAG_VERBOSE)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_VERBOSE ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_VERBOSE ");
 	if (flags & GPO_INFO_FLAG_SAFEMODE_BOOT)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_SAFEMODE_BOOT ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_SAFEMODE_BOOT ");
 	if (flags & GPO_INFO_FLAG_NOCHANGES)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_NOCHANGES ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_NOCHANGES ");
 	if (flags & GPO_INFO_FLAG_MACHINE)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_MACHINE ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_MACHINE ");
 	if (flags & GPO_INFO_FLAG_LOGRSOP_TRANSITION)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_LOGRSOP_TRANSITION ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_LOGRSOP_TRANSITION ");
 	if (flags & GPO_INFO_FLAG_LINKTRANSITION)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_LINKTRANSITION ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_LINKTRANSITION ");
 	if (flags & GPO_INFO_FLAG_FORCED_REFRESH)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_FORCED_REFRESH ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_FORCED_REFRESH ");
 	if (flags & GPO_INFO_FLAG_BACKGROUND)
-		str = talloc_strdup_append(str, "GPO_INFO_FLAG_BACKGROUND ");
+		str = talloc_append_string(ctx, str, "GPO_INFO_FLAG_BACKGROUND ");
 
 	return str;
 }
@@ -687,107 +839,34 @@ NTSTATUS gp_find_file(TALLOC_CTX *mem_ctx,
 
 ADS_STATUS gp_get_machine_token(ADS_STRUCT *ads,
 				TALLOC_CTX *mem_ctx,
+				struct loadparm_context *lp_ctx,
 				const char *dn,
 				struct security_token **token)
 {
-#ifdef HAVE_ADS
 	struct security_token *ad_token = NULL;
 	ADS_STATUS status;
+#if _SAMBA_BUILD_ == 4
+	struct auth_session_info *info;
+#else
 	NTSTATUS ntstatus;
+#endif
 
+#ifndef HAVE_ADS
+	return ADS_ERROR_NT(NT_STATUS_NOT_SUPPORTED);
+#endif
 	status = ads_get_sid_token(ads, mem_ctx, dn, &ad_token);
 	if (!ADS_ERR_OK(status)) {
 		return status;
 	}
+#if _SAMBA_BUILD_ == 4
+	info = system_session(mem_ctx, lp_ctx);
+	*token = info->security_token;
+#else
 	ntstatus = merge_nt_token(mem_ctx, ad_token, get_system_token(),
 				  token);
 	if (!NT_STATUS_IS_OK(ntstatus)) {
 		return ADS_ERROR_NT(ntstatus);
 	}
-	return ADS_SUCCESS;
-#else
-	return ADS_ERROR_NT(NT_STATUS_NOT_SUPPORTED);
 #endif
-}
-
-/****************************************************************
-****************************************************************/
-
-NTSTATUS gpo_copy(TALLOC_CTX *mem_ctx,
-		  const struct GROUP_POLICY_OBJECT *gpo_src,
-		  struct GROUP_POLICY_OBJECT **gpo_dst)
-{
-	struct GROUP_POLICY_OBJECT *gpo;
-
-	gpo = talloc_zero(mem_ctx, struct GROUP_POLICY_OBJECT);
-	NT_STATUS_HAVE_NO_MEMORY(gpo);
-
-	gpo->options		= gpo_src->options;
-	gpo->version		= gpo_src->version;
-
-	gpo->ds_path		= talloc_strdup(gpo, gpo_src->ds_path);
-	if (gpo->ds_path == NULL) {
-		TALLOC_FREE(gpo);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	gpo->file_sys_path	= talloc_strdup(gpo, gpo_src->file_sys_path);
-	if (gpo->file_sys_path == NULL) {
-		TALLOC_FREE(gpo);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	gpo->display_name	= talloc_strdup(gpo, gpo_src->display_name);
-	if (gpo->display_name == NULL) {
-		TALLOC_FREE(gpo);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	gpo->name		= talloc_strdup(gpo, gpo_src->name);
-	if (gpo->name == NULL) {
-		TALLOC_FREE(gpo);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	gpo->link		= talloc_strdup(gpo, gpo_src->link);
-	if (gpo->link == NULL) {
-		TALLOC_FREE(gpo);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	gpo->link_type		= gpo_src->link_type;
-
-	if (gpo_src->user_extensions) {
-		gpo->user_extensions = talloc_strdup(gpo, gpo_src->user_extensions);
-		if (gpo->user_extensions == NULL) {
-			TALLOC_FREE(gpo);
-			return NT_STATUS_NO_MEMORY;
-		}
-	}
-
-	if (gpo_src->machine_extensions) {
-		gpo->machine_extensions = talloc_strdup(gpo, gpo_src->machine_extensions);
-		if (gpo->machine_extensions == NULL) {
-			TALLOC_FREE(gpo);
-			return NT_STATUS_NO_MEMORY;
-		}
-	}
-
-	if (gpo_src->security_descriptor == NULL) {
-		/* existing SD assumed */
-		TALLOC_FREE(gpo);
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-	gpo->security_descriptor = security_descriptor_copy(gpo,
-						gpo_src->security_descriptor);
-	if (gpo->security_descriptor == NULL) {
-		TALLOC_FREE(gpo);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	gpo->next = gpo->prev = NULL;
-
-	*gpo_dst = gpo;
-
-	return NT_STATUS_OK;
+	return ADS_SUCCESS;
 }

@@ -22,32 +22,26 @@
 #include "smbd/smbd.h"
 #include "smbd/globals.h"
 #include "../libcli/smb/smb_common.h"
-#include "../libcli/smb/smb2_negotiate_context.h"
-#include "../lib/tsocket/tsocket.h"
-#include "../librpc/ndr/libndr.h"
-#include "../libcli/smb/smb_signing.h"
-
-extern fstring remote_proto;
 
 /*
  * this is the entry point if SMB2 is selected via
- * the SMB negprot and the given dialect.
+ * the SMB negprot
  */
-static void reply_smb20xx(struct smb_request *req, uint16_t dialect)
+void reply_smb2002(struct smb_request *req, uint16_t choice)
 {
-	uint8_t *smb2_inpdu;
+	uint8_t *smb2_inbuf;
 	uint8_t *smb2_hdr;
 	uint8_t *smb2_body;
 	uint8_t *smb2_dyn;
-	size_t len = SMB2_HDR_BODY + 0x24 + 2;
+	size_t len = 4 + SMB2_HDR_BODY + 0x24 + 2;
 
-	smb2_inpdu = talloc_zero_array(talloc_tos(), uint8_t, len);
-	if (smb2_inpdu == NULL) {
+	smb2_inbuf = talloc_zero_array(talloc_tos(), uint8_t, len);
+	if (smb2_inbuf == NULL) {
 		DEBUG(0, ("Could not push spnego blob\n"));
 		reply_nterror(req, NT_STATUS_NO_MEMORY);
 		return;
 	}
-	smb2_hdr = smb2_inpdu;
+	smb2_hdr = smb2_inbuf + 4;
 	smb2_body = smb2_hdr + SMB2_HDR_BODY;
 	smb2_dyn = smb2_body + 0x24;
 
@@ -57,80 +51,20 @@ static void reply_smb20xx(struct smb_request *req, uint16_t dialect)
 	SSVAL(smb2_body, 0x00, 0x0024);	/* struct size */
 	SSVAL(smb2_body, 0x02, 0x0001);	/* dialect count */
 
-	SSVAL(smb2_dyn,  0x00, dialect);
+	SSVAL(smb2_dyn,  0x00, 0x0202);	/* dialect 2.002 */
 
 	req->outbuf = NULL;
 
-	smbd_smb2_first_negprot(req->xconn, smb2_inpdu, len);
+	smbd_smb2_first_negprot(req->sconn, smb2_inbuf, len);
 	return;
-}
-
-/*
- * this is the entry point if SMB2 is selected via
- * the SMB negprot and the "SMB 2.002" dialect.
- */
-void reply_smb2002(struct smb_request *req, uint16_t choice)
-{
-	reply_smb20xx(req, SMB2_DIALECT_REVISION_202);
-}
-
-/*
- * this is the entry point if SMB2 is selected via
- * the SMB negprot and the "SMB 2.???" dialect.
- */
-void reply_smb20ff(struct smb_request *req, uint16_t choice)
-{
-	struct smbXsrv_connection *xconn = req->xconn;
-	xconn->smb2.allow_2ff = true;
-	reply_smb20xx(req, SMB2_DIALECT_REVISION_2FF);
-}
-
-enum protocol_types smbd_smb2_protocol_dialect_match(const uint8_t *indyn,
-				const int dialect_count,
-				uint16_t *dialect)
-{
-	struct {
-		enum protocol_types proto;
-		uint16_t dialect;
-	} pd[] = {
-		{ PROTOCOL_SMB3_11, SMB3_DIALECT_REVISION_311 },
-		{ PROTOCOL_SMB3_10, SMB3_DIALECT_REVISION_310 },
-		{ PROTOCOL_SMB3_02, SMB3_DIALECT_REVISION_302 },
-		{ PROTOCOL_SMB3_00, SMB3_DIALECT_REVISION_300 },
-		{ PROTOCOL_SMB2_24, SMB2_DIALECT_REVISION_224 },
-		{ PROTOCOL_SMB2_22, SMB2_DIALECT_REVISION_222 },
-		{ PROTOCOL_SMB2_10, SMB2_DIALECT_REVISION_210 },
-		{ PROTOCOL_SMB2_02, SMB2_DIALECT_REVISION_202 },
-	};
-	size_t i;
-
-	for (i = 0; i < ARRAY_SIZE(pd); i ++) {
-		size_t c = 0;
-
-		if (lp_server_max_protocol() < pd[i].proto) {
-			continue;
-		}
-		if (lp_server_min_protocol() > pd[i].proto) {
-			continue;
-		}
-
-		for (c = 0; c < dialect_count; c++) {
-			*dialect = SVAL(indyn, c*2);
-			if (*dialect == pd[i].dialect) {
-				return pd[i].proto;
-			}
-		}
-	}
-
-	return PROTOCOL_NONE;
 }
 
 NTSTATUS smbd_smb2_request_process_negprot(struct smbd_smb2_request *req)
 {
-	struct smbXsrv_connection *xconn = req->xconn;
 	NTSTATUS status;
 	const uint8_t *inbody;
 	const uint8_t *indyn = NULL;
+	int i = req->current_idx;
 	DATA_BLOB outbody;
 	DATA_BLOB outdyn;
 	DATA_BLOB negprot_spnego_blob;
@@ -140,146 +74,49 @@ NTSTATUS smbd_smb2_request_process_negprot(struct smbd_smb2_request *req)
 	size_t c;
 	uint16_t security_mode;
 	uint16_t dialect_count;
-	uint16_t in_security_mode;
-	uint32_t in_capabilities;
-	DATA_BLOB in_guid_blob;
-	struct GUID in_guid;
-	struct smb2_negotiate_contexts in_c = { .num_contexts = 0, };
-	struct smb2_negotiate_context *in_preauth = NULL;
-	struct smb2_negotiate_context *in_cipher = NULL;
-	struct smb2_negotiate_contexts out_c = { .num_contexts = 0, };
-	DATA_BLOB out_negotiate_context_blob = data_blob_null;
-	uint32_t out_negotiate_context_offset = 0;
-	uint16_t out_negotiate_context_count = 0;
 	uint16_t dialect = 0;
 	uint32_t capabilities;
-	DATA_BLOB out_guid_blob;
-	struct GUID out_guid;
-	enum protocol_types protocol = PROTOCOL_NONE;
 	uint32_t max_limit;
 	uint32_t max_trans = lp_smb2_max_trans();
 	uint32_t max_read = lp_smb2_max_read();
 	uint32_t max_write = lp_smb2_max_write();
-	NTTIME now = timeval_to_nttime(&req->request_time);
-	bool signing_required = true;
 
 	status = smbd_smb2_request_verify_sizes(req, 0x24);
 	if (!NT_STATUS_IS_OK(status)) {
 		return smbd_smb2_request_error(req, status);
 	}
-	inbody = SMBD_SMB2_IN_BODY_PTR(req);
+	inbody = (const uint8_t *)req->in.vector[i+1].iov_base;
 
 	dialect_count = SVAL(inbody, 0x02);
-
-	in_security_mode = SVAL(inbody, 0x04);
-	in_capabilities = IVAL(inbody, 0x08);
-	in_guid_blob = data_blob_const(inbody + 0x0C, 16);
-
 	if (dialect_count == 0) {
 		return smbd_smb2_request_error(req, NT_STATUS_INVALID_PARAMETER);
 	}
 
-	status = GUID_from_ndr_blob(&in_guid_blob, &in_guid);
-	if (!NT_STATUS_IS_OK(status)) {
-		return smbd_smb2_request_error(req, status);
-	}
-
 	expected_dyn_size = dialect_count * 2;
-	if (SMBD_SMB2_IN_DYN_LEN(req) < expected_dyn_size) {
+	if (req->in.vector[i+2].iov_len < expected_dyn_size) {
 		return smbd_smb2_request_error(req, NT_STATUS_INVALID_PARAMETER);
 	}
-	indyn = SMBD_SMB2_IN_DYN_PTR(req);
+	indyn = (const uint8_t *)req->in.vector[i+2].iov_base;
 
-	protocol = smbd_smb2_protocol_dialect_match(indyn,
-					dialect_count,
-					&dialect);
-
-	for (c=0; protocol == PROTOCOL_NONE && c < dialect_count; c++) {
-		if (lp_server_max_protocol() < PROTOCOL_SMB2_10) {
+	for (c=0; c < dialect_count; c++) {
+		dialect = SVAL(indyn, c*2);
+		if (dialect == SMB2_DIALECT_REVISION_202) {
 			break;
 		}
-
-		dialect = SVAL(indyn, c*2);
-		if (dialect == SMB2_DIALECT_REVISION_2FF) {
-			if (xconn->smb2.allow_2ff) {
-				xconn->smb2.allow_2ff = false;
-				protocol = PROTOCOL_SMB2_10;
-				break;
-			}
-		}
 	}
 
-	if (protocol == PROTOCOL_NONE) {
-		return smbd_smb2_request_error(req, NT_STATUS_NOT_SUPPORTED);
+	if (dialect != SMB2_DIALECT_REVISION_202) {
+		return smbd_smb2_request_error(req, NT_STATUS_INVALID_PARAMETER);
 	}
 
-	if (protocol >= PROTOCOL_SMB3_10) {
-		uint32_t in_negotiate_context_offset = 0;
-		uint16_t in_negotiate_context_count = 0;
-		DATA_BLOB in_negotiate_context_blob = data_blob_null;
-		size_t ofs;
-
-		in_negotiate_context_offset = IVAL(inbody, 0x1C);
-		in_negotiate_context_count = SVAL(inbody, 0x20);
-
-		ofs = SMB2_HDR_BODY;
-		ofs += SMBD_SMB2_IN_BODY_LEN(req);
-		ofs += expected_dyn_size;
-		if ((ofs % 8) != 0) {
-			ofs += 8 - (ofs % 8);
-		}
-
-		if (in_negotiate_context_offset != ofs) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		ofs -= SMB2_HDR_BODY;
-		ofs -= SMBD_SMB2_IN_BODY_LEN(req);
-
-		if (SMBD_SMB2_IN_DYN_LEN(req) < ofs) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		in_negotiate_context_blob = data_blob_const(indyn,
-						SMBD_SMB2_IN_DYN_LEN(req));
-
-		in_negotiate_context_blob.data += ofs;
-		in_negotiate_context_blob.length -= ofs;
-
-		status = smb2_negotiate_context_parse(req,
-					in_negotiate_context_blob, &in_c);
-		if (!NT_STATUS_IS_OK(status)) {
-			return smbd_smb2_request_error(req, status);
-		}
-
-		if (in_negotiate_context_count != in_c.num_contexts) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-	}
+	set_Protocol(PROTOCOL_SMB2);
 
 	if (get_remote_arch() != RA_SAMBA) {
 		set_remote_arch(RA_VISTA);
 	}
 
-	fstr_sprintf(remote_proto, "SMB%X_%02X",
-		     (dialect >> 8) & 0xFF, dialect & 0xFF);
-
-	reload_services(req->sconn, conn_snum_used, true);
-	DEBUG(3,("Selected protocol %s\n", remote_proto));
-
-	in_preauth = smb2_negotiate_context_find(&in_c,
-					SMB2_PREAUTH_INTEGRITY_CAPABILITIES);
-	if (protocol >= PROTOCOL_SMB3_10 && in_preauth == NULL) {
-		return smbd_smb2_request_error(req, NT_STATUS_INVALID_PARAMETER);
-	}
-	in_cipher = smb2_negotiate_context_find(&in_c,
-					SMB2_ENCRYPTION_CAPABILITIES);
-
 	/* negprot_spnego() returns a the server guid in the first 16 bytes */
-	negprot_spnego_blob = negprot_spnego(req, xconn);
+	negprot_spnego_blob = negprot_spnego(req, req->sconn);
 	if (negprot_spnego_blob.data == NULL) {
 		return smbd_smb2_request_error(req, NT_STATUS_NO_MEMORY);
 	}
@@ -289,13 +126,7 @@ NTSTATUS smbd_smb2_request_process_negprot(struct smbd_smb2_request *req)
 	}
 
 	security_mode = SMB2_NEGOTIATE_SIGNING_ENABLED;
-	/*
-	 * We use xconn->smb1.signing_state as that's already present
-	 * and used lpcfg_server_signing_allowed() to get the correct
-	 * defaults, e.g. signing_required for an ad_dc.
-	 */
-	signing_required = smb_signing_is_mandatory(xconn->smb1.signing_state);
-	if (signing_required) {
+	if (lp_server_signing() == Required) {
 		security_mode |= SMB2_NEGOTIATE_SIGNING_REQUIRED;
 	}
 
@@ -304,194 +135,15 @@ NTSTATUS smbd_smb2_request_process_negprot(struct smbd_smb2_request *req)
 		capabilities |= SMB2_CAP_DFS;
 	}
 
-	if (protocol >= PROTOCOL_SMB2_10 &&
-	    lp_smb2_leases() &&
-	    lp_oplocks(GLOBAL_SECTION_SNUM) &&
-	    !lp_kernel_oplocks(GLOBAL_SECTION_SNUM))
-	{
-		capabilities |= SMB2_CAP_LEASING;
-	}
-
-	if ((protocol >= PROTOCOL_SMB2_24) &&
-	    (lp_smb_encrypt(-1) != SMB_SIGNING_OFF) &&
-	    (in_capabilities & SMB2_CAP_ENCRYPTION)) {
-		capabilities |= SMB2_CAP_ENCRYPTION;
-	}
-
 	/*
+	 * Unless we implement SMB2_CAP_LARGE_MTU,
 	 * 0x10000 (65536) is the maximum allowed message size
-	 * for SMB 2.0
 	 */
 	max_limit = 0x10000;
 
-	if (protocol >= PROTOCOL_SMB2_10) {
-		int p = 0;
-
-		if (tsocket_address_is_inet(req->sconn->local_address, "ip")) {
-			p = tsocket_address_inet_port(req->sconn->local_address);
-		}
-
-		/* largeMTU is not supported over NBT (tcp port 139) */
-		if (p != NBT_SMB_PORT) {
-			capabilities |= SMB2_CAP_LARGE_MTU;
-			xconn->smb2.credits.multicredit = true;
-
-			/*
-			 * We allow up to almost 16MB.
-			 *
-			 * The maximum PDU size is 0xFFFFFF (16776960)
-			 * and we need some space for the header.
-			 */
-			max_limit = 0xFFFF00;
-		}
-	}
-
-	/*
-	 * the defaults are 8MB, but we'll limit this to max_limit based on
-	 * the dialect (64kb for SMB 2.0, 8MB for SMB >= 2.1 with LargeMTU)
-	 *
-	 * user configured values exceeding the limits will be overwritten,
-	 * only smaller values will be accepted
-	 */
-
-	max_trans = MIN(max_limit, lp_smb2_max_trans());
-	max_read = MIN(max_limit, lp_smb2_max_read());
-	max_write = MIN(max_limit, lp_smb2_max_write());
-
-	if (in_preauth != NULL) {
-		size_t needed = 4;
-		uint16_t hash_count;
-		uint16_t salt_length;
-		uint16_t selected_preauth = 0;
-		const uint8_t *p;
-		uint8_t buf[38];
-		DATA_BLOB b;
-		size_t i;
-
-		if (in_preauth->data.length < needed) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		hash_count = SVAL(in_preauth->data.data, 0);
-		salt_length = SVAL(in_preauth->data.data, 2);
-
-		if (hash_count == 0) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		p = in_preauth->data.data + needed;
-		needed += hash_count * 2;
-		needed += salt_length;
-
-		if (in_preauth->data.length < needed) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		for (i=0; i < hash_count; i++) {
-			uint16_t v;
-
-			v = SVAL(p, 0);
-			p += 2;
-
-			if (v == SMB2_PREAUTH_INTEGRITY_SHA512) {
-				selected_preauth = v;
-				break;
-			}
-		}
-
-		if (selected_preauth == 0) {
-			return smbd_smb2_request_error(req,
-				NT_STATUS_SMB_NO_PREAUTH_INTEGRITY_HASH_OVERLAP);
-		}
-
-		SSVAL(buf, 0,  1); /* HashAlgorithmCount */
-		SSVAL(buf, 2, 32); /* SaltLength */
-		SSVAL(buf, 4, selected_preauth);
-		generate_random_buffer(buf + 6, 32);
-
-		b = data_blob_const(buf, sizeof(buf));
-		status = smb2_negotiate_context_add(req, &out_c,
-					SMB2_PREAUTH_INTEGRITY_CAPABILITIES, b);
-		if (!NT_STATUS_IS_OK(status)) {
-			return smbd_smb2_request_error(req, status);
-		}
-
-		req->preauth = &req->xconn->smb2.preauth;
-	}
-
-	if (in_cipher != NULL) {
-		size_t needed = 2;
-		uint16_t cipher_count;
-		const uint8_t *p;
-		uint8_t buf[4];
-		DATA_BLOB b;
-		size_t i;
-		bool aes_128_ccm_supported = false;
-		bool aes_128_gcm_supported = false;
-
-		capabilities &= ~SMB2_CAP_ENCRYPTION;
-
-		if (in_cipher->data.length < needed) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		cipher_count = SVAL(in_cipher->data.data, 0);
-
-		if (cipher_count == 0) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		p = in_cipher->data.data + needed;
-		needed += cipher_count * 2;
-
-		if (in_cipher->data.length < needed) {
-			return smbd_smb2_request_error(req,
-					NT_STATUS_INVALID_PARAMETER);
-		}
-
-		for (i=0; i < cipher_count; i++) {
-			uint16_t v;
-
-			v = SVAL(p, 0);
-			p += 2;
-
-			if (v == SMB2_ENCRYPTION_AES128_GCM) {
-				aes_128_gcm_supported = true;
-			}
-			if (v == SMB2_ENCRYPTION_AES128_CCM) {
-				aes_128_ccm_supported = true;
-			}
-		}
-
-		/*
-		 * For now we preferr CCM because our implementation
-		 * is faster than GCM, see bug #11451.
-		 */
-		if (aes_128_ccm_supported) {
-			xconn->smb2.server.cipher = SMB2_ENCRYPTION_AES128_CCM;
-		} else if (aes_128_gcm_supported) {
-			xconn->smb2.server.cipher = SMB2_ENCRYPTION_AES128_GCM;
-		}
-
-		SSVAL(buf, 0, 1); /* ChiperCount */
-		SSVAL(buf, 2, xconn->smb2.server.cipher);
-
-		b = data_blob_const(buf, sizeof(buf));
-		status = smb2_negotiate_context_add(req, &out_c,
-					SMB2_ENCRYPTION_CAPABILITIES, b);
-		if (!NT_STATUS_IS_OK(status)) {
-			return smbd_smb2_request_error(req, status);
-		}
-	}
-
-	if (capabilities & SMB2_CAP_ENCRYPTION) {
-		xconn->smb2.server.cipher = SMB2_ENCRYPTION_AES128_CCM;
-	}
+	max_trans = MIN(max_limit, max_trans);
+	max_read  = MIN(max_limit, max_read);
+	max_write = MIN(max_limit, max_write);
 
 	security_offset = SMB2_HDR_BODY + 0x40;
 
@@ -504,60 +156,7 @@ NTSTATUS smbd_smb2_request_process_negprot(struct smbd_smb2_request *req)
 	security_buffer = data_blob_const(NULL, 0);
 #endif
 
-	if (out_c.num_contexts != 0) {
-		status = smb2_negotiate_context_push(req,
-						&out_negotiate_context_blob,
-						out_c);
-		if (!NT_STATUS_IS_OK(status)) {
-			return smbd_smb2_request_error(req, status);
-		}
-	}
-
-	if (out_negotiate_context_blob.length != 0) {
-		static const uint8_t zeros[8];
-		size_t pad = 0;
-		size_t ofs;
-		bool ok;
-
-		outdyn = data_blob_dup_talloc(req, security_buffer);
-		if (outdyn.length != security_buffer.length) {
-			return smbd_smb2_request_error(req,
-						NT_STATUS_NO_MEMORY);
-		}
-
-		ofs = security_offset + security_buffer.length;
-		if ((ofs % 8) != 0) {
-			pad = 8 - (ofs % 8);
-		}
-		ofs += pad;
-
-		ok = data_blob_append(req, &outdyn, zeros, pad);
-		if (!ok) {
-			return smbd_smb2_request_error(req,
-						NT_STATUS_NO_MEMORY);
-		}
-
-		ok = data_blob_append(req, &outdyn,
-				      out_negotiate_context_blob.data,
-				      out_negotiate_context_blob.length);
-		if (!ok) {
-			return smbd_smb2_request_error(req,
-						NT_STATUS_NO_MEMORY);
-		}
-
-		out_negotiate_context_offset = ofs;
-		out_negotiate_context_count = out_c.num_contexts;
-	} else {
-		outdyn = security_buffer;
-	}
-
-	out_guid_blob = data_blob_const(negprot_spnego_blob.data, 16);
-	status = GUID_from_ndr_blob(&out_guid_blob, &out_guid);
-	if (!NT_STATUS_IS_OK(status)) {
-		return smbd_smb2_request_error(req, status);
-	}
-
-	outbody = smbd_smb2_generate_outbody(req, 0x40);
+	outbody = data_blob_talloc(req->out.vector, NULL, 0x40);
 	if (outbody.data == NULL) {
 		return smbd_smb2_request_error(req, NT_STATUS_NO_MEMORY);
 	}
@@ -566,54 +165,28 @@ NTSTATUS smbd_smb2_request_process_negprot(struct smbd_smb2_request *req)
 	SSVAL(outbody.data, 0x02,
 	      security_mode);			/* security mode */
 	SSVAL(outbody.data, 0x04, dialect);	/* dialect revision */
-	SSVAL(outbody.data, 0x06,
-	      out_negotiate_context_count);	/* reserved/NegotiateContextCount */
+	SSVAL(outbody.data, 0x06, 0);		/* reserved */
 	memcpy(outbody.data + 0x08,
-	       out_guid_blob.data, 16);	/* server guid */
+	       negprot_spnego_blob.data, 16);	/* server guid */
 	SIVAL(outbody.data, 0x18,
 	      capabilities);			/* capabilities */
 	SIVAL(outbody.data, 0x1C, max_trans);	/* max transact size */
-	SIVAL(outbody.data, 0x20, max_read);	/* max read size */
-	SIVAL(outbody.data, 0x24, max_write);	/* max write size */
-	SBVAL(outbody.data, 0x28, now);		/* system time */
+	SIVAL(outbody.data, 0x20, max_trans);	/* max read size */
+	SIVAL(outbody.data, 0x24, max_trans);	/* max write size */
+	SBVAL(outbody.data, 0x28, 0);		/* system time */
 	SBVAL(outbody.data, 0x30, 0);		/* server start time */
 	SSVAL(outbody.data, 0x38,
 	      security_offset);			/* security buffer offset */
 	SSVAL(outbody.data, 0x3A,
 	      security_buffer.length);		/* security buffer length */
-	SIVAL(outbody.data, 0x3C,
-	      out_negotiate_context_offset);	/* reserved/NegotiateContextOffset */
+	SIVAL(outbody.data, 0x3C, 0);		/* reserved */
+
+	outdyn = security_buffer;
 
 	req->sconn->using_smb2 = true;
-
-	if (dialect != SMB2_DIALECT_REVISION_2FF) {
-		status = smbXsrv_connection_init_tables(xconn, protocol);
-		if (!NT_STATUS_IS_OK(status)) {
-			return smbd_smb2_request_error(req, status);
-		}
-
-		xconn->smb2.client.capabilities = in_capabilities;
-		xconn->smb2.client.security_mode = in_security_mode;
-		xconn->smb2.client.guid = in_guid;
-		xconn->smb2.client.num_dialects = dialect_count;
-		xconn->smb2.client.dialects = talloc_array(xconn,
-							   uint16_t,
-							   dialect_count);
-		if (xconn->smb2.client.dialects == NULL) {
-			return smbd_smb2_request_error(req, NT_STATUS_NO_MEMORY);
-		}
-		for (c=0; c < dialect_count; c++) {
-			xconn->smb2.client.dialects[c] = SVAL(indyn, c*2);
-		}
-
-		xconn->smb2.server.capabilities = capabilities;
-		xconn->smb2.server.security_mode = security_mode;
-		xconn->smb2.server.guid = out_guid;
-		xconn->smb2.server.dialect = dialect;
-		xconn->smb2.server.max_trans = max_trans;
-		xconn->smb2.server.max_read  = max_read;
-		xconn->smb2.server.max_write = max_write;
-	}
+	req->sconn->smb2.max_trans = max_trans;
+	req->sconn->smb2.max_read  = max_read;
+	req->sconn->smb2.max_write = max_write;
 
 	return smbd_smb2_request_done(req, outbody, &outdyn);
 }

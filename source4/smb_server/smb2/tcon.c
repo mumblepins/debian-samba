@@ -241,7 +241,7 @@ static NTSTATUS smb2srv_tcon_backend(struct smb2srv_request *req, union smb_tcon
 	enum ntvfs_type type;
 	const char *service = io->smb2.in.path;
 	struct share_config *scfg;
-	char *sharetype;
+	const char *sharetype;
 	uint64_t ntvfs_caps = 0;
 
 	if (strncmp(service, "\\\\", 2) == 0) {
@@ -265,7 +265,7 @@ static NTSTATUS smb2srv_tcon_backend(struct smb2srv_request *req, union smb_tcon
 	}
 
 	/* work out what sort of connection this is */
-	sharetype = share_string_option(req, scfg, SHARE_TYPE, "DISK");
+	sharetype = share_string_option(scfg, SHARE_TYPE, "DISK");
 	if (sharetype && strcmp(sharetype, "IPC") == 0) {
 		type = NTVFS_IPC;
 	} else if (sharetype && strcmp(sharetype, "PRINTER") == 0) {
@@ -273,7 +273,6 @@ static NTSTATUS smb2srv_tcon_backend(struct smb2srv_request *req, union smb_tcon
 	} else {
 		type = NTVFS_DISK;
 	}
-	TALLOC_FREE(sharetype);
 
 	tcon = smbsrv_smb2_tcon_new(req->session, scfg->name);
 	if (!tcon) {
@@ -360,14 +359,23 @@ failed:
 
 static void smb2srv_tcon_send(struct smb2srv_request *req, union smb_tcon *io)
 {
+	uint16_t credit;
+
 	if (!NT_STATUS_IS_OK(req->status)) {
 		smb2srv_send_error(req, req->status);
 		return;
+	}
+	if (io->smb2.out.share_type == NTVFS_IPC) {
+		/* if it's an IPC share vista returns 0x0005 */
+		credit = 0x0005;
+	} else {
+		credit = 0x0001;
 	}
 
 	SMB2SRV_CHECK(smb2srv_setup_reply(req, 0x10, false, 0));
 
 	SIVAL(req->out.hdr,	SMB2_HDR_TID,	io->smb2.out.tid);
+	SSVAL(req->out.hdr,	SMB2_HDR_CREDIT,credit);
 
 	SCVAL(req->out.body,	0x02,		io->smb2.out.share_type);
 	SCVAL(req->out.body,	0x03,		io->smb2.out.reserved);
@@ -434,7 +442,11 @@ static void smb2srv_tdis_send(struct smb2srv_request *req)
 
 void smb2srv_tdis_recv(struct smb2srv_request *req)
 {
+	uint16_t _pad;
+
 	SMB2SRV_CHECK_BODY_SIZE(req, 0x04, false);
+
+	_pad	= SVAL(req->in.body, 0x02);
 
 	req->status = smb2srv_tdis_backend(req);
 

@@ -6,11 +6,8 @@ if bld.CONFIG_SET('WITH_PAM_MODULES'):
                   pam_smb_passwd.c
                   pam_smb_acct.c
                   support.c''',
-        allow_warnings=True,
-        deps='''tdb talloc pam PAM_ERRORS wbclient cap asn1util param pdb
-                LIBTSOCKET''',
+        deps='''tdb talloc pam PAM_ERRORS wbclient cap ASN1_UTIL param LIB_NONSMBD passdb SMBLDAP
+                LIBNTLMSSP LIBTSOCKET''',
         cflags='-DLOCALEDIR=\"%s/locale\"' % bld.env.DATADIR,
         realname='pam_smbpass.so',
-        install_path='${PAMMODULESDIR}',
-        enabled=bld.env.with_pam_smbpass
         )

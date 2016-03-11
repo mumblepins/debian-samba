@@ -84,14 +84,12 @@ bool security_token_is_sid(const struct security_token *token, const struct dom_
 bool security_token_is_sid_string(const struct security_token *token, const char *sid_string)
 {
 	bool ret;
-	struct dom_sid sid;
+	struct dom_sid *sid = dom_sid_parse_talloc(NULL, sid_string);
+	if (!sid) return false;
 
-	ret = dom_sid_parse(sid_string, &sid);
-	if (!ret) {
-		return false;
-	}
+	ret = security_token_is_sid(token, sid);
 
-	ret = security_token_is_sid(token, &sid);
+	talloc_free(sid);
 	return ret;
 }
 
@@ -119,14 +117,12 @@ bool security_token_has_sid(const struct security_token *token, const struct dom
 bool security_token_has_sid_string(const struct security_token *token, const char *sid_string)
 {
 	bool ret;
-	struct dom_sid sid;
+	struct dom_sid *sid = dom_sid_parse_talloc(NULL, sid_string);
+	if (!sid) return false;
 
-	ret = dom_sid_parse(sid_string, &sid);
-	if (!ret) {
-		return false;
-	}
+	ret = security_token_has_sid(token, sid);
 
-	ret = security_token_has_sid(token, &sid);
+	talloc_free(sid);
 	return ret;
 }
 

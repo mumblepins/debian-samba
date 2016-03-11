@@ -47,7 +47,7 @@ static void register_name_response(struct subnet_record *subrec,
 	struct nmb_name *answer_name = &nmb->answers->rr_name;
 	struct nmb_packet *sent_nmb = &rrec->packet->packet.nmb;
 	int ttl = 0;
-	uint16_t nb_flags = 0;
+	uint16 nb_flags = 0;
 	struct in_addr register_ip;
 	fstring reg_name;
 	
@@ -210,7 +210,7 @@ static void wins_registration_timeout(struct subnet_record *subrec,
 	   failure, and go into our standard name refresh mode. This
 	   copes with all the wins servers being down */
 	if (wins_srv_is_dead(rrec->packet->ip, register_ip)) {
-		uint16_t nb_flags = get_nb_flags(sent_nmb->additional->rdata);
+		uint16 nb_flags = get_nb_flags(sent_nmb->additional->rdata);
 		int ttl = sent_nmb->additional->ttl;
 
 		standard_success_register(subrec, userdata, nmbname, nb_flags, ttl, register_ip);
@@ -261,7 +261,7 @@ static void register_name_timeout_response(struct subnet_record *subrec,
 	bool bcast = sent_nmb->header.nm_flags.bcast;
 	bool success = False;
 	struct nmb_name *question_name = &sent_nmb->question.question_name;
-	uint16_t nb_flags = 0;
+	uint16 nb_flags = 0;
 	int ttl = 0;
 	struct in_addr registered_ip;
 	
@@ -306,7 +306,7 @@ static void register_name_timeout_response(struct subnet_record *subrec,
 ****************************************************************************/
 
 static void multihomed_register_one(struct nmb_name *nmbname,
-				    uint16_t nb_flags,
+				    uint16 nb_flags,
 				    register_name_success_function success_fn,
 				    register_name_fail_function fail_fn,
 				    struct in_addr ip,
@@ -356,7 +356,7 @@ static void wins_next_registration(struct response_record *rrec)
 {
 	struct nmb_packet *sent_nmb = &rrec->packet->packet.nmb;
 	struct nmb_name *nmbname = &sent_nmb->question.question_name;
-	uint16_t nb_flags = get_nb_flags(sent_nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(sent_nmb->additional->rdata);
 	struct userdata_struct *userdata = rrec->userdata;
 	const char *tag;
 	struct in_addr last_ip;
@@ -400,7 +400,7 @@ static void wins_next_registration(struct response_record *rrec)
  Try and register one of our names on the unicast subnet - multihomed.
 ****************************************************************************/
 
-static void multihomed_register_name(struct nmb_name *nmbname, uint16_t nb_flags,
+static void multihomed_register_name(struct nmb_name *nmbname, uint16 nb_flags,
 				     register_name_success_function success_fn,
 				     register_name_fail_function fail_fn)
 {
@@ -475,84 +475,24 @@ static void multihomed_register_name(struct nmb_name *nmbname, uint16_t nb_flags
 ****************************************************************************/
 
 void register_name(struct subnet_record *subrec,
-                   const char *name, int type, uint16_t nb_flags,
+                   const char *name, int type, uint16 nb_flags,
                    register_name_success_function success_fn,
                    register_name_fail_function fail_fn,
                    struct userdata_struct *userdata)
 {
 	struct nmb_name nmbname;
 	nstring nname;
-	size_t converted_size;
 
 	errno = 0;
-	converted_size = push_ascii_nstring(nname, name);
-	if (converted_size != (size_t)-1) {
-		/* Success. */
-		make_nmb_name(&nmbname, name, type);
-	} else if (errno == E2BIG) {
-		/*
-		 * Name converted to CH_DOS is too large.
-		 * try to truncate.
-		 */
-		char *converted_str_dos = NULL;
-		char *converted_str_unix = NULL;
-		bool ok;
-
-		converted_size = 0;
-
-		ok = convert_string_talloc(talloc_tos(),
-				CH_UNIX,
-				CH_DOS,
-				name,
-				strlen(name)+1,
-				&converted_str_dos,
-				&converted_size);
-		if (!ok) {
-			DEBUG(0,("register_name: NetBIOS name %s cannot be "
-				"converted. Failing to register name.\n",
-				name));
-			return;
-		}
-
-		/*
-		 * As it's now CH_DOS codepage
-		 * we truncate by writing '\0' at
-		 * MAX_NETBIOSNAME_LEN-1 and then
-		 * convert back to CH_UNIX which we
-		 * need for the make_nmb_name() call.
-		 */
-		if (converted_size >= MAX_NETBIOSNAME_LEN) {
-			converted_str_dos[MAX_NETBIOSNAME_LEN-1] = '\0';
-		}
-
-		ok = convert_string_talloc(talloc_tos(),
-				CH_DOS,
-				CH_UNIX,
-				converted_str_dos,
-				strlen(converted_str_dos)+1,
-				&converted_str_unix,
-				&converted_size);
-		if (!ok) {
-			DEBUG(0,("register_name: NetBIOS name %s cannot be "
-				"converted back to CH_UNIX. "
-				"Failing to register name.\n",
-				converted_str_dos));
-			TALLOC_FREE(converted_str_dos);
-			return;
-		}
-
-		make_nmb_name(&nmbname, converted_str_unix, type);
-
-		TALLOC_FREE(converted_str_dos);
-		TALLOC_FREE(converted_str_unix);
+	push_ascii_nstring(nname, name);
+        if (errno == E2BIG) {
+		unstring tname;
+		pull_ascii_nstring(tname, sizeof(tname), nname);
+		DEBUG(0,("register_name: NetBIOS name %s is too long. Truncating to %s\n",
+			name, tname));
+		make_nmb_name(&nmbname, tname, type);
 	} else {
-		/*
-		 * Generic conversion error. Fail to register.
-		 */
-		DEBUG(0,("register_name: NetBIOS name %s cannot be "
-			"converted (%s). Failing to register name.\n",
-			name, strerror(errno)));
-		return;
+		make_nmb_name(&nmbname, name, type);
 	}
 
 	/* Always set the NB_ACTIVE flag on the name we are

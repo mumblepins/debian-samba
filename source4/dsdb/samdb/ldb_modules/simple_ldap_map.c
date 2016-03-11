@@ -33,7 +33,6 @@
 #include "librpc/gen_ndr/ndr_misc.h"
 #include "librpc/ndr/libndr.h"
 #include "dsdb/samdb/samdb.h"
-#include "dsdb/common/util.h"
 #include <ldb_handlers.h>
 
 struct entryuuid_private {
@@ -176,13 +175,7 @@ static struct ldb_val usn_to_entryCSN(struct ldb_module *module, TALLOC_CTX *ctx
 	struct ldb_val out;
 	unsigned long long usn = strtoull((const char *)val->data, NULL, 10);
 	time_t t = (usn >> 24);
-	struct tm *tm = gmtime(&t);
-	/* CSN timestamp is YYYYMMDDhhmmss.ssssssZ */
-	out = data_blob_string_const(talloc_asprintf(ctx,
-		"%04u%02u%02u%02u%02u%02u.000000Z#%06x#000#000000",
-		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
-		tm->tm_hour, tm->tm_min, tm->tm_sec,
-		(unsigned int)(usn & 0xFFFFFF)));
+	out = data_blob_string_const(talloc_asprintf(ctx, "%s#%06x#00#000000", ldb_timestring(ctx, t), (unsigned int)(usn & 0xFFFFFF)));
 	return out;
 }
 
@@ -368,7 +361,7 @@ static const struct ldb_map_attribute entryuuid_attributes[] =
 	},
 	{
 		.local_name = "distinguishedName",
-		.type = LDB_MAP_RENDROP,
+		.type = LDB_MAP_RENAME,
 		.u = {
 			.rename = {
 				 .remote_name = "entryDN"
@@ -482,8 +475,6 @@ static const char * const entryuuid_wildcard_attributes[] = {
 	"usnCreated",
 	"usnChanged",
 	"memberOf",
-	"name",
-	"distinguishedName",
 	NULL
 };
 
@@ -830,6 +821,7 @@ static int entryuuid_sequence_number(struct ldb_module *module, struct ldb_reque
 	struct ldb_context *ldb;
 	int ret;
 	struct map_private *map_private;
+	struct entryuuid_private *entryuuid_private;
 	unsigned long long seq_num = 0;
 	struct ldb_request *search_req;
 
@@ -849,11 +841,8 @@ static int entryuuid_sequence_number(struct ldb_module *module, struct ldb_reque
 	seq = talloc_get_type(req->op.extended.data, struct ldb_seqnum_request);
 
 	map_private = talloc_get_type(ldb_module_get_private(module), struct map_private);
-	if (!map_private) {
-		ldb_debug_set(ldb, LDB_DEBUG_FATAL,
-			      "private data is not of type struct map_private");
-		return LDB_ERR_PROTOCOL_ERROR;
-	}
+
+	entryuuid_private = talloc_get_type(map_private->caller_private, struct entryuuid_private);
 
 	/* All this to get the DN of the parition, so we can search the right thing */
 	partition_ctrl = ldb_request_get_control(req, DSDB_CONTROL_CURRENT_PARTITION_OID);
@@ -913,10 +902,13 @@ static int entryuuid_sequence_number(struct ldb_module *module, struct ldb_reque
 		seqr->seq_num++;
 		break;
 	case LDB_SEQ_HIGHEST_TIMESTAMP:
-		return ldb_module_error(module, LDB_ERR_OPERATIONS_ERROR, "LDB_SEQ_HIGHEST_TIMESTAMP not supported");
+	{
+		seqr->seq_num = (seq_num >> 24);
+		break;
 	}
-
+	}
 	seqr->flags = 0;
+	seqr->flags |= LDB_SEQ_TIMESTAMP_SEQUENCE;
 	seqr->flags |= LDB_SEQ_GLOBAL_SEQUENCE;
 
 	/* send request done */

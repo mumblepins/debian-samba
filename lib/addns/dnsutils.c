@@ -22,13 +22,8 @@
   License along with this library; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "includes.h"
-#include "librpc/ndr/libndr.h"
-#include "librpc/gen_ndr/ndr_misc.h"
-
 #include "dns.h"
 #include <ctype.h>
-
 
 static DNS_ERROR LabelList( TALLOC_CTX *mem_ctx,
 			    const char *name,
@@ -58,7 +53,7 @@ static DNS_ERROR LabelList( TALLOC_CTX *mem_ctx,
 		return ERROR_DNS_INVALID_NAME;
 	}
 
-	if (!(result = talloc_zero(mem_ctx, struct dns_domain_label))) {
+	if (!(result = TALLOC_ZERO_P(mem_ctx, struct dns_domain_label))) {
 		return ERROR_DNS_NO_MEMORY;
 	}
 
@@ -138,10 +133,17 @@ char *dns_generate_keyname( TALLOC_CTX *mem_ctx )
 	char *result = NULL;
 #if defined(WITH_DNS_UPDATES)
 
-	struct GUID guid;
+	uuid_t uuid;
 
-	guid = GUID_random();
-	result = GUID_string(mem_ctx, &guid);
+	/*
+	 * uuid_unparse gives 36 bytes plus '\0'
+	 */
+	if (!(result = TALLOC_ARRAY(mem_ctx, char, 37))) {
+		return NULL;
+	}
+
+	uuid_generate( uuid );
+	uuid_unparse( uuid, result );
 
 #endif
 

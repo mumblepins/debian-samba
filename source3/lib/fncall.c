@@ -20,6 +20,8 @@
 #include "includes.h"
 #include "../lib/util/tevent_unix.h"
 
+#if WITH_PTHREADPOOL
+
 #include "lib/pthreadpool/pthreadpool.h"
 
 struct fncall_state {
@@ -40,7 +42,7 @@ struct fncall_context {
 	struct fncall_state **orphaned;
 	int num_orphaned;
 
-	struct tevent_fd *fde;
+	struct fd_event *fde;
 };
 
 static void fncall_handler(struct tevent_context *ev, struct tevent_fd *fde,
@@ -122,8 +124,7 @@ static int fncall_next_job_id(struct fncall_context *ctx)
 }
 
 static void fncall_unset_pending(struct tevent_req *req);
-static void fncall_cleanup(struct tevent_req *req,
-			   enum tevent_req_state req_state);
+static int fncall_destructor(struct tevent_req *req);
 
 static bool fncall_set_pending(struct tevent_req *req,
 			       struct fncall_context *ctx,
@@ -142,12 +143,12 @@ static bool fncall_set_pending(struct tevent_req *req,
 	pending[num_pending] = req;
 	num_pending += 1;
 	ctx->pending = pending;
-	tevent_req_set_cleanup_fn(req, fncall_cleanup);
+	talloc_set_destructor(req, fncall_destructor);
 
 	/*
 	 * Make sure that the orphaned array of fncall_state structs has
 	 * enough space. A job can change from pending to orphaned in
-	 * fncall_cleanup, and to fail in a talloc destructor should be
+	 * fncall_destructor, and to fail in a talloc destructor should be
 	 * avoided if possible.
 	 */
 
@@ -185,8 +186,6 @@ static void fncall_unset_pending(struct tevent_req *req)
 	int num_pending = talloc_array_length(ctx->pending);
 	int i;
 
-	tevent_req_set_cleanup_fn(req, NULL);
-
 	if (num_pending == 1) {
 		TALLOC_FREE(ctx->fde);
 		TALLOC_FREE(ctx->pending);
@@ -208,24 +207,16 @@ static void fncall_unset_pending(struct tevent_req *req)
 				      num_pending - 1);
 }
 
-static void fncall_cleanup(struct tevent_req *req,
-			   enum tevent_req_state req_state)
+static int fncall_destructor(struct tevent_req *req)
 {
 	struct fncall_state *state = tevent_req_data(
 		req, struct fncall_state);
 	struct fncall_context *ctx = state->ctx;
 
-	switch (req_state) {
-	case TEVENT_REQ_RECEIVED:
-		break;
-	default:
-		return;
-	}
-
 	fncall_unset_pending(req);
 
 	if (state->done) {
-		return;
+		return 0;
 	}
 
 	/*
@@ -234,6 +225,8 @@ static void fncall_cleanup(struct tevent_req *req,
 	 */
 	ctx->orphaned[ctx->num_orphaned] = talloc_move(ctx->orphaned, &state);
 	ctx->num_orphaned += 1;
+
+	return 0;
 }
 
 struct tevent_req *fncall_send(TALLOC_CTX *mem_ctx, struct tevent_context *ev,
@@ -273,7 +266,7 @@ struct tevent_req *fncall_send(TALLOC_CTX *mem_ctx, struct tevent_context *ev,
 		return tevent_req_post(req, ev);
 	}
 	if (!fncall_set_pending(req, state->ctx, ev)) {
-		tevent_req_oom(req);
+		tevent_req_nomem(NULL, req);
 		return tevent_req_post(req, ev);
 	}
 	return req;
@@ -287,7 +280,7 @@ static void fncall_handler(struct tevent_context *ev, struct tevent_fd *fde,
 	int i, num_pending;
 	int job_id;
 
-	if (pthreadpool_finished_jobs(ctx->pool, &job_id, 1) < 0) {
+	if (pthreadpool_finished_job(ctx->pool, &job_id) != 0) {
 		return;
 	}
 
@@ -330,3 +323,43 @@ int fncall_recv(struct tevent_req *req, int *perr)
 	}
 	return 0;
 }
+
+#else  /* WITH_PTHREADPOOL */
+
+struct fncall_context {
+	uint8_t dummy;
+};
+
+struct fncall_context *fncall_context_init(TALLOC_CTX *mem_ctx,
+					   int max_threads)
+{
+	return talloc(mem_ctx, struct fncall_context);
+}
+
+struct fncall_state {
+	uint8_t dummy;
+};
+
+struct tevent_req *fncall_send(TALLOC_CTX *mem_ctx, struct tevent_context *ev,
+			       struct fncall_context *ctx,
+			       void (*fn)(void *private_data),
+			       void *private_data)
+{
+	struct tevent_req *req;
+	struct fncall_state *state;
+
+	req = tevent_req_create(mem_ctx, &state, struct fncall_state);
+	if (req == NULL) {
+		return NULL;
+	}
+	fn(private_data);
+	tevent_req_post(req, ev);
+	return req;
+}
+
+int fncall_recv(struct tevent_req *req, int *perr)
+{
+	return 0;
+}
+
+#endif

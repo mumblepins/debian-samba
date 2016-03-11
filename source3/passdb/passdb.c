@@ -30,8 +30,6 @@
 #include "../libcli/security/security.h"
 #include "../lib/util/util_pw.h"
 #include "util_tdb.h"
-#include "auth/credentials/credentials.h"
-#include "lib/param/param.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
@@ -48,7 +46,7 @@ const char *my_sam_name(void)
 {
        /* Standalone servers can only use the local netbios name */
        if ( lp_server_role() == ROLE_STANDALONE )
-               return lp_netbios_name();
+               return global_myname();
 
        /* Default to the DOMAIN name when not specified */
        return lp_workgroup();
@@ -76,7 +74,7 @@ struct samu *samu_new( TALLOC_CTX *ctx )
 {
 	struct samu *user;
 
-	if ( !(user = talloc_zero( ctx, struct samu )) ) {
+	if ( !(user = TALLOC_ZERO_P( ctx, struct samu )) ) {
 		DEBUG(0,("samuser_new: Talloc failed!\n"));
 		return NULL;
 	}
@@ -95,6 +93,7 @@ struct samu *samu_new( TALLOC_CTX *ctx )
 	user->pass_can_change_time  = (time_t)0;
 	user->logoff_time           = get_time_t_max();
 	user->kickoff_time          = get_time_t_max();
+	user->pass_must_change_time = get_time_t_max();
 	user->fields_present        = 0x00ffffff;
 	user->logon_divs = 168; 	/* hours per week */
 	user->hours_len = 21; 		/* 21 times 8 bits = 168 */
@@ -147,11 +146,10 @@ static int count_commas(const char *str)
  attributes and a user SID.
 *********************************************************************/
 
-static NTSTATUS samu_set_unix_internal(struct pdb_methods *methods,
-				       struct samu *user, const struct passwd *pwd, bool create)
+static NTSTATUS samu_set_unix_internal(struct samu *user, const struct passwd *pwd, bool create)
 {
-	const char *guest_account = lp_guest_account();
-	const char *domain = lp_netbios_name();
+	const char *guest_account = lp_guestaccount();
+	const char *domain = global_myname();
 	char *fullname;
 	uint32_t urid;
 
@@ -230,16 +228,16 @@ static NTSTATUS samu_set_unix_internal(struct pdb_methods *methods,
 		/* set some basic attributes */
 
 		pdb_set_profile_path(user, talloc_sub_specified(user, 
-			lp_logon_path(), pwd->pw_name, NULL, domain, pwd->pw_uid, pwd->pw_gid),
+			lp_logon_path(), pwd->pw_name, domain, pwd->pw_uid, pwd->pw_gid), 
 			PDB_DEFAULT);		
 		pdb_set_homedir(user, talloc_sub_specified(user, 
-			lp_logon_home(), pwd->pw_name, NULL, domain, pwd->pw_uid, pwd->pw_gid),
+			lp_logon_home(), pwd->pw_name, domain, pwd->pw_uid, pwd->pw_gid),
 			PDB_DEFAULT);
 		pdb_set_dir_drive(user, talloc_sub_specified(user, 
-			lp_logon_drive(), pwd->pw_name, NULL, domain, pwd->pw_uid, pwd->pw_gid),
+			lp_logon_drive(), pwd->pw_name, domain, pwd->pw_uid, pwd->pw_gid),
 			PDB_DEFAULT);
 		pdb_set_logon_script(user, talloc_sub_specified(user, 
-			lp_logon_script(), pwd->pw_name, NULL, domain, pwd->pw_uid, pwd->pw_gid),
+			lp_logon_script(), pwd->pw_name, domain, pwd->pw_uid, pwd->pw_gid), 
 			PDB_DEFAULT);
 	}
 
@@ -248,11 +246,11 @@ static NTSTATUS samu_set_unix_internal(struct pdb_methods *methods,
 	   initialized and will fill in these fields later (such as from a 
 	   netr_SamInfo3 structure) */
 
-	if ( create && (methods->capabilities(methods) & PDB_CAP_STORE_RIDS)) {
+	if ( create && (pdb_capabilities() & PDB_CAP_STORE_RIDS)) {
 		uint32_t user_rid;
 		struct dom_sid user_sid;
 
-		if ( !methods->new_rid(methods, &user_rid) ) {
+		if ( !pdb_new_rid( &user_rid ) ) {
 			DEBUG(3, ("Could not allocate a new RID\n"));
 			return NT_STATUS_ACCESS_DENIED;
 		}
@@ -284,13 +282,12 @@ static NTSTATUS samu_set_unix_internal(struct pdb_methods *methods,
 
 NTSTATUS samu_set_unix(struct samu *user, const struct passwd *pwd)
 {
-	return samu_set_unix_internal( NULL, user, pwd, False );
+	return samu_set_unix_internal( user, pwd, False );
 }
 
-NTSTATUS samu_alloc_rid_unix(struct pdb_methods *methods,
-			     struct samu *user, const struct passwd *pwd)
+NTSTATUS samu_alloc_rid_unix(struct samu *user, const struct passwd *pwd)
 {
-	return samu_set_unix_internal( methods, user, pwd, True );
+	return samu_set_unix_internal( user, pwd, True );
 }
 
 /**********************************************************
@@ -383,12 +380,14 @@ uint32_t pdb_decode_acct_ctrl(const char *p)
 void pdb_sethexpwd(char p[33], const unsigned char *pwd, uint32_t acct_ctrl)
 {
 	if (pwd != NULL) {
-		hex_encode_buf(p, pwd, 16);
+		int i;
+		for (i = 0; i < 16; i++)
+			slprintf(&p[i*2], 3, "%02X", pwd[i]);
 	} else {
 		if (acct_ctrl & ACB_PWNOTREQ)
-			strlcpy(p, "NO PASSWORDXXXXXXXXXXXXXXXXXXXXX", 33);
+			safe_strcpy(p, "NO PASSWORDXXXXXXXXXXXXXXXXXXXXX", 32);
 		else
-			strlcpy(p, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 33);
+			safe_strcpy(p, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 32);
 	}
 }
 
@@ -432,9 +431,12 @@ bool pdb_gethexpwd(const char *p, unsigned char *pwd)
 void pdb_sethexhours(char *p, const unsigned char *hours)
 {
 	if (hours != NULL) {
-		hex_encode_buf(p, hours, 21);
+		int i;
+		for (i = 0; i < 21; i++) {
+			slprintf(&p[i*2], 3, "%02X", hours[i]);
+		}
 	} else {
-		strlcpy(p, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 44);
+		safe_strcpy(p, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 43);
 	}
 }
 
@@ -587,7 +589,7 @@ bool algorithmic_pdb_rid_is_user(uint32_t rid)
 bool lookup_global_sam_name(const char *name, int flags, uint32_t *rid,
 			    enum lsa_SidType *type)
 {
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	bool ret;
 
 	/* Windows treats "MACHINE\None" as a special name for 
@@ -625,7 +627,7 @@ bool lookup_global_sam_name(const char *name, int flags, uint32_t *rid,
 		TALLOC_FREE(sam_account);
 
 		if (ret) {
-			if (!sid_check_is_in_our_sam(&user_sid)) {
+			if (!sid_check_is_in_our_domain(&user_sid)) {
 				DEBUG(0, ("User %s with invalid SID %s in passdb\n",
 					  name, sid_string_dbg(&user_sid)));
 				return False;
@@ -641,32 +643,24 @@ bool lookup_global_sam_name(const char *name, int flags, uint32_t *rid,
 	 * Maybe it is a group ?
 	 */
 
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
-		return false;
-	}
-
 	become_root();
-	ret = pdb_getgrnam(map, name);
+	ret = pdb_getgrnam(&map, name);
 	unbecome_root();
 
  	if (!ret) {
-		TALLOC_FREE(map);
 		return False;
 	}
 
 	/* BUILTIN groups are looked up elsewhere */
-	if (!sid_check_is_in_our_sam(&map->sid)) {
+	if (!sid_check_is_in_our_domain(&map.sid)) {
 		DEBUG(10, ("Found group %s (%s) not in our domain -- "
-			   "ignoring.", name, sid_string_dbg(&map->sid)));
-		TALLOC_FREE(map);
+			   "ignoring.", name, sid_string_dbg(&map.sid)));
 		return False;
 	}
 
 	/* yes it's a mapped group */
-	sid_peek_rid(&map->sid, rid);
-	*type = map->sid_name_use;
-	TALLOC_FREE(map);
+	sid_peek_rid(&map.sid, rid);
+	*type = map.sid_name_use;
 	return True;
 }
 
@@ -1024,6 +1018,7 @@ static bool init_samu_from_buffer_v0(struct samu *sampass, uint8_t *buf, uint32_
 	pdb_set_logoff_time(sampass, logoff_time, PDB_SET);
 	pdb_set_kickoff_time(sampass, kickoff_time, PDB_SET);
 	pdb_set_pass_can_change_time(sampass, pass_can_change_time, PDB_SET);
+	pdb_set_pass_must_change_time(sampass, pass_must_change_time, PDB_SET);
 	pdb_set_pass_last_set_time(sampass, pass_last_set_time, PDB_SET);
 
 	pdb_set_username(sampass, username, PDB_SET); 
@@ -1214,6 +1209,7 @@ static bool init_samu_from_buffer_v1(struct samu *sampass, uint8_t *buf, uint32_
 	/* Change from V0 is addition of bad_password_time field. */
 	pdb_set_bad_password_time(sampass, bad_password_time, PDB_SET);
 	pdb_set_pass_can_change_time(sampass, pass_can_change_time, PDB_SET);
+	pdb_set_pass_must_change_time(sampass, pass_must_change_time, PDB_SET);
 	pdb_set_pass_last_set_time(sampass, pass_last_set_time, PDB_SET);
 
 	pdb_set_username(sampass, username, PDB_SET); 
@@ -1404,6 +1400,7 @@ static bool init_samu_from_buffer_v2(struct samu *sampass, uint8_t *buf, uint32_
 	pdb_set_kickoff_time(sampass, kickoff_time, PDB_SET);
 	pdb_set_bad_password_time(sampass, bad_password_time, PDB_SET);
 	pdb_set_pass_can_change_time(sampass, pass_can_change_time, PDB_SET);
+	pdb_set_pass_must_change_time(sampass, pass_must_change_time, PDB_SET);
 	pdb_set_pass_last_set_time(sampass, pass_last_set_time, PDB_SET);
 
 	pdb_set_username(sampass, username, PDB_SET); 
@@ -1639,6 +1636,7 @@ static bool init_samu_from_buffer_v3(struct samu *sampass, uint8_t *buf, uint32_
 	pdb_set_kickoff_time(sampass, convert_uint32_t_to_time_t(kickoff_time), PDB_SET);
 	pdb_set_bad_password_time(sampass, convert_uint32_t_to_time_t(bad_password_time), PDB_SET);
 	pdb_set_pass_can_change_time(sampass, convert_uint32_t_to_time_t(pass_can_change_time), PDB_SET);
+	pdb_set_pass_must_change_time(sampass, convert_uint32_t_to_time_t(pass_must_change_time), PDB_SET);
 	pdb_set_pass_last_set_time(sampass, convert_uint32_t_to_time_t(pass_last_set_time), PDB_SET);
 
 	pdb_set_username(sampass, username, PDB_SET); 
@@ -2300,25 +2298,12 @@ bool is_dc_trusted_domain_situation(const char *domain_name)
  Caller must free password, but not account_name.
 *******************************************************************/
 
-static bool get_trust_pw_clear2(const char *domain,
-				const char **account_name,
-				enum netr_SchannelType *channel,
-				char **cur_pw,
-				time_t *_last_set_time,
-				char **prev_pw)
+bool get_trust_pw_clear(const char *domain, char **ret_pwd,
+			const char **account_name,
+			enum netr_SchannelType *channel)
 {
 	char *pwd;
 	time_t last_set_time;
-
-	if (cur_pw != NULL) {
-		*cur_pw = NULL;
-	}
-	if (_last_set_time != NULL) {
-		*_last_set_time = 0;
-	}
-	if (prev_pw != NULL) {
-		*prev_pw = NULL;
-	}
 
 	/* if we are a DC and this is not our domain, then lookup an account
 	 * for the domain trust */
@@ -2328,7 +2313,7 @@ static bool get_trust_pw_clear2(const char *domain,
 			return false;
 		}
 
-		if (!pdb_get_trusteddom_pw(domain, cur_pw, NULL,
+		if (!pdb_get_trusteddom_pw(domain, ret_pwd, NULL,
 					   &last_set_time))
 		{
 			DEBUG(0, ("get_trust_pw: could not fetch trust "
@@ -2343,10 +2328,6 @@ static bool get_trust_pw_clear2(const char *domain,
 
 		if (account_name != NULL) {
 			*account_name = lp_workgroup();
-		}
-
-		if (_last_set_time != NULL) {
-			*_last_set_time = last_set_time;
 		}
 
 		return true;
@@ -2372,53 +2353,17 @@ static bool get_trust_pw_clear2(const char *domain,
 	pwd = secrets_fetch_machine_password(lp_workgroup(), &last_set_time, channel);
 
 	if (pwd != NULL) {
-		struct timeval expire;
-
-		*cur_pw = pwd;
-
+		*ret_pwd = pwd;
 		if (account_name != NULL) {
-			*account_name = lp_netbios_name();
-		}
-
-		if (_last_set_time != NULL) {
-			*_last_set_time = last_set_time;
-		}
-
-		if (prev_pw == NULL) {
-			return true;
-		}
-
-		ZERO_STRUCT(expire);
-		expire.tv_sec = lp_machine_password_timeout();
-		expire.tv_sec /= 2;
-		expire.tv_sec += last_set_time;
-		if (timeval_expired(&expire)) {
-			return true;
-		}
-
-		pwd = secrets_fetch_prev_machine_password(lp_workgroup());
-		if (pwd != NULL) {
-			*prev_pw = pwd;
+			*account_name = global_myname();
 		}
 
 		return true;
 	}
 
-	DEBUG(5, ("get_trust_pw_clear2: could not fetch clear text trust "
+	DEBUG(5, ("get_trust_pw_clear: could not fetch clear text trust "
 		  "account password for domain %s\n", domain));
 	return false;
-}
-
-bool get_trust_pw_clear(const char *domain, char **ret_pwd,
-			const char **account_name,
-			enum netr_SchannelType *channel)
-{
-	return get_trust_pw_clear2(domain,
-				   account_name,
-				   channel,
-				   ret_pwd,
-				   NULL,
-				   NULL);
 }
 
 /*******************************************************************
@@ -2426,44 +2371,16 @@ bool get_trust_pw_clear(const char *domain, char **ret_pwd,
  appropriate account name is stored in account_name.
 *******************************************************************/
 
-static bool get_trust_pw_hash2(const char *domain,
-			       const char **account_name,
-			       enum netr_SchannelType *channel,
-			       struct samr_Password *current_nt_hash,
-			       time_t *last_set_time,
-			       struct samr_Password **_previous_nt_hash)
+bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
+		       const char **account_name,
+		       enum netr_SchannelType *channel)
 {
-	char *cur_pw = NULL;
-	char *prev_pw = NULL;
-	char **_prev_pw = NULL;
-	bool ok;
+	char *pwd = NULL;
+	time_t last_set_time;
 
-	if (_previous_nt_hash != NULL) {
-		*_previous_nt_hash = NULL;
-		_prev_pw = &prev_pw;
-	}
-
-	ok = get_trust_pw_clear2(domain, account_name, channel,
-				 &cur_pw, last_set_time, _prev_pw);
-	if (ok) {
-		struct samr_Password *previous_nt_hash = NULL;
-
-		E_md4hash(cur_pw, current_nt_hash->hash);
-		SAFE_FREE(cur_pw);
-
-		if (prev_pw == NULL) {
-			return true;
-		}
-
-		previous_nt_hash = SMB_MALLOC_P(struct samr_Password);
-		if (previous_nt_hash == NULL) {
-			return false;
-		}
-
-		E_md4hash(prev_pw, previous_nt_hash->hash);
-		SAFE_FREE(prev_pw);
-
-		*_previous_nt_hash = previous_nt_hash;
+	if (get_trust_pw_clear(domain, &pwd, account_name, channel)) {
+		E_md4hash(pwd, ret_pwd);
+		SAFE_FREE(pwd);
 		return true;
 	} else if (is_dc_trusted_domain_situation(domain)) {
 		return false;
@@ -2471,13 +2388,12 @@ static bool get_trust_pw_hash2(const char *domain,
 
 	/* as a fallback, try to get the hashed pwd directly from the tdb... */
 
-	if (secrets_fetch_trust_account_password_legacy(domain,
-							current_nt_hash->hash,
-							last_set_time,
+	if (secrets_fetch_trust_account_password_legacy(domain, ret_pwd,
+							&last_set_time,
 							channel))
 	{
 		if (account_name != NULL) {
-			*account_name = lp_netbios_name();
+			*account_name = global_myname();
 		}
 
 		return true;
@@ -2486,197 +2402,4 @@ static bool get_trust_pw_hash2(const char *domain,
 	DEBUG(5, ("get_trust_pw_hash: could not fetch trust account "
 		"password for domain %s\n", domain));
 	return False;
-}
-
-bool get_trust_pw_hash(const char *domain, uint8_t ret_pwd[16],
-		       const char **account_name,
-		       enum netr_SchannelType *channel)
-{
-	struct samr_Password current_nt_hash;
-	bool ok;
-
-	ok = get_trust_pw_hash2(domain, account_name, channel,
-				&current_nt_hash, NULL, NULL);
-	if (!ok) {
-		return false;
-	}
-
-	memcpy(ret_pwd, current_nt_hash.hash, sizeof(current_nt_hash.hash));
-	return true;
-}
-
-NTSTATUS pdb_get_trust_credentials(const char *netbios_domain,
-				   const char *dns_domain, /* optional */
-				   TALLOC_CTX *mem_ctx,
-				   struct cli_credentials **_creds)
-{
-	TALLOC_CTX *frame = talloc_stackframe();
-	NTSTATUS status = NT_STATUS_INTERNAL_ERROR;
-	struct loadparm_context *lp_ctx;
-	enum netr_SchannelType channel;
-	time_t last_set_time;
-	const char *_account_name;
-	const char *account_name;
-	char *cur_pw = NULL;
-	char *prev_pw = NULL;
-	struct samr_Password cur_nt_hash;
-	struct cli_credentials *creds = NULL;
-	bool ok;
-
-	/*
-	 * If this is our primary trust relationship, use the common
-	 * code to read the secrets.ldb or secrets.tdb file.
-	 */
-	if (strequal(netbios_domain, lp_workgroup())) {
-		struct db_context *db_ctx = secrets_db_ctx();
-		if (db_ctx == NULL) {
-			DEBUG(1, ("failed to open secrets.tdb to obtain our trust credentials for %s\n",
-				  netbios_domain));
-			status = NT_STATUS_INTERNAL_ERROR;
-			goto fail;
-		}
-
-		lp_ctx = loadparm_init_s3(frame, loadparm_s3_helpers());
-		if (lp_ctx == NULL) {
-			DEBUG(1, ("loadparm_init_s3 failed\n"));
-			status = NT_STATUS_INTERNAL_ERROR;
-			goto fail;
-		}
-
-		creds = cli_credentials_init(mem_ctx);
-		if (creds == NULL) {
-			status = NT_STATUS_NO_MEMORY;
-			goto fail;
-		}
-
-		cli_credentials_set_conf(creds, lp_ctx);
-
-		ok = cli_credentials_set_domain(creds, netbios_domain, CRED_SPECIFIED);
-		if (!ok) {
-			status = NT_STATUS_NO_MEMORY;
-			goto fail;
-		}
-
-		status = cli_credentials_set_machine_account_db_ctx(creds,
-								    lp_ctx,
-								    db_ctx);
-		if (!NT_STATUS_IS_OK(status)) {
-			goto fail;
-		}
-		goto done;
-	} else if (!IS_DC) {
-		DEBUG(1, ("Refusing to get trust account info for %s, "
-			  "which is not our primary domain %s, "
-			  "as we are not a DC\n",
-			  netbios_domain, lp_workgroup()));
-		status = NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
-		goto fail;
-	}
-
-	status = pdb_get_trusteddom_creds(netbios_domain, mem_ctx, &creds);
-	if (NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
-	if (!NT_STATUS_EQUAL(status, NT_STATUS_NOT_IMPLEMENTED)) {
-		goto fail;
-	}
-
-	ok = get_trust_pw_clear2(netbios_domain,
-				 &_account_name,
-				 &channel,
-				 &cur_pw,
-				 &last_set_time,
-				 &prev_pw);
-	if (!ok) {
-		ok = get_trust_pw_hash2(netbios_domain,
-					&_account_name,
-					&channel,
-					&cur_nt_hash,
-					&last_set_time,
-					NULL);
-		if (!ok) {
-			DEBUG(1, ("get_trust_pw_*2 failed for domain[%s]\n",
-				  netbios_domain));
-			status = NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
-			goto fail;
-		}
-	}
-
-	account_name = talloc_asprintf(frame, "%s$", _account_name);
-	if (account_name == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto fail;
-	}
-
-	lp_ctx = loadparm_init_s3(frame, loadparm_s3_helpers());
-	if (lp_ctx == NULL) {
-		DEBUG(1, ("loadparm_init_s3 failed\n"));
-		status = NT_STATUS_INTERNAL_ERROR;
-		goto fail;
-	}
-
-	creds = cli_credentials_init(mem_ctx);
-	if (creds == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto fail;
-	}
-
-	cli_credentials_set_conf(creds, lp_ctx);
-
-	cli_credentials_set_secure_channel_type(creds, channel);
-	cli_credentials_set_password_last_changed_time(creds, last_set_time);
-
-	ok = cli_credentials_set_domain(creds, netbios_domain, CRED_SPECIFIED);
-	if (!ok) {
-		status = NT_STATUS_NO_MEMORY;
-		goto fail;
-	}
-
-	if (dns_domain != NULL) {
-		ok = cli_credentials_set_realm(creds, dns_domain, CRED_SPECIFIED);
-		if (!ok) {
-			status = NT_STATUS_NO_MEMORY;
-			goto fail;
-		}
-	}
-
-	ok = cli_credentials_set_username(creds, account_name, CRED_SPECIFIED);
-	if (!ok) {
-		status = NT_STATUS_NO_MEMORY;
-		goto fail;
-	}
-
-	if (cur_pw == NULL) {
-		ok = cli_credentials_set_nt_hash(creds, &cur_nt_hash, CRED_SPECIFIED);
-		if (!ok) {
-			status = NT_STATUS_NO_MEMORY;
-			goto fail;
-		}
-		goto done;
-	}
-
-	ok = cli_credentials_set_password(creds, cur_pw, CRED_SPECIFIED);
-	if (!ok) {
-		status = NT_STATUS_NO_MEMORY;
-		goto fail;
-	}
-
-	if (prev_pw != NULL) {
-		ok = cli_credentials_set_old_password(creds, prev_pw, CRED_SPECIFIED);
-		if (!ok) {
-			status = NT_STATUS_NO_MEMORY;
-			goto fail;
-		}
-	}
-
- done:
-	*_creds = creds;
-	creds = NULL;
-	status = NT_STATUS_OK;
- fail:
-	TALLOC_FREE(creds);
-	SAFE_FREE(cur_pw);
-	SAFE_FREE(prev_pw);
-	TALLOC_FREE(frame);
-	return status;
 }

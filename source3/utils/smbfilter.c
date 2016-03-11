@@ -22,7 +22,6 @@
 #include "system/select.h"
 #include "../lib/util/select.h"
 #include "libsmb/nmblib.h"
-#include "lib/sys_rw_data.h"
 
 #define SECURITY_MASK 0
 #define SECURITY_SET  0
@@ -36,6 +35,7 @@
 #define CLI_CAPABILITY_SET  0
 
 static char *netbiosname;
+static char packet[BUFFER_SIZE];
 
 static void save_file(const char *fname, void *ppacket, size_t length)
 {
@@ -85,8 +85,7 @@ static void filter_request(char *buf, size_t buf_len)
 	int type = CVAL(buf,smb_com);
 	unsigned x;
 	fstring name1,name2;
-	int name_len1 = 0;
-	int name_len2;
+	int name_len1, name_len2;
 	int name_type1, name_type2;
 
 	if (msg_type) {
@@ -179,18 +178,18 @@ static void filter_child(int c, struct sockaddr_storage *dest_ss)
 {
 	NTSTATUS status;
 	int s = -1;
-	char packet[128*1024];
 
 	/* we have a connection from a new client, now connect to the server */
-	status = open_socket_out(dest_ss, TCP_SMB_PORT, LONG_CONNECT_TIMEOUT, &s);
-	if (!NT_STATUS_IS_OK(status)) {
+	status = open_socket_out(dest_ss, 445, LONG_CONNECT_TIMEOUT, &s);
+
+	if (s == -1) {
 		char addr[INET6_ADDRSTRLEN];
 		if (dest_ss) {
 			print_sockaddr(addr, sizeof(addr), dest_ss);
 		}
 
 		d_printf("Unable to connect to %s (%s)\n",
-			 dest_ss?addr:"NULL", nt_errstr(status));
+			 dest_ss?addr:"NULL",strerror(errno));
 		exit(1);
 	}
 
@@ -279,7 +278,7 @@ static void start_filter(char *desthost)
 	/* start listening on port 445 locally */
 
 	zero_sockaddr(&my_ss);
-	s = open_socket_in(SOCK_STREAM, TCP_SMB_PORT, 0, &my_ss, True);
+	s = open_socket_in(SOCK_STREAM, 445, 0, &my_ss, True);
 
 	if (s == -1) {
 		d_printf("bind failed\n");
@@ -323,7 +322,7 @@ int main(int argc, char *argv[])
 	const char *configfile;
 	TALLOC_CTX *frame = talloc_stackframe();
 
-	smb_init_locale();
+	load_case_tables();
 
 	setup_logging(argv[0], DEBUG_STDOUT);
 
@@ -339,7 +338,7 @@ int main(int argc, char *argv[])
 		netbiosname = argv[2];
 	}
 
-	if (!lp_load_global(configfile)) {
+	if (!lp_load(configfile,True,False,False,True)) {
 		d_printf("Unable to load config file\n");
 	}
 

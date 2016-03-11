@@ -27,7 +27,7 @@
 
 #ifndef USE_DMAPI
 
-uint32_t dmapi_file_flags(const char * const path) { return 0; }
+uint32 dmapi_file_flags(const char * const path) { return 0; }
 bool dmapi_have_session(void) { return False; }
 const void * dmapi_get_current_session(void) { return NULL; }
 
@@ -96,7 +96,7 @@ static int dmapi_init_session(struct smbd_dmapi_context *ctx)
 	do {
 		dm_sessid_t *new_sessions;
 		nsessions *= 2;
-		new_sessions = talloc_realloc(tmp_ctx, sessions, 
+		new_sessions = TALLOC_REALLOC_ARRAY(tmp_ctx, sessions, 
 						    dm_sessid_t, nsessions);
 		if (new_sessions == NULL) {
 			talloc_free(tmp_ctx);
@@ -259,27 +259,25 @@ bool dmapi_destroy_session(void)
    is used in vfs_tsmsm.c will work with other DMAPI-based HSM 
    implementations as well.
 */
-uint32_t dmapi_file_flags(const char * const path)
+uint32 dmapi_file_flags(const char * const path)
 {
 	int		err;
 	dm_eventset_t   events = {0};
 	uint		nevents;
 
 	dm_sessid_t     dmapi_session;
-	dm_sessid_t     *dmapi_session_ptr;
-	const void      *_dmapi_session_ptr;
+	const void      *dmapi_session_ptr;
 	void	        *dm_handle = NULL;
 	size_t	        dm_handle_len = 0;
 
-	uint32_t        flags = 0;
+	uint32	        flags = 0;
 
-	_dmapi_session_ptr = dmapi_get_current_session();
-	if (_dmapi_session_ptr == NULL) {
+	dmapi_session_ptr = dmapi_get_current_session();
+	if (dmapi_session_ptr == NULL) {
 		return 0;
 	}
 
-	dmapi_session_ptr = discard_const_p(dm_sessid_t, _dmapi_session_ptr);
-	dmapi_session = *dmapi_session_ptr;
+	dmapi_session = *(dm_sessid_t *)dmapi_session_ptr;
 	if (dmapi_session == DM_NO_SESSION) {
 		return 0;
 	}
@@ -291,7 +289,7 @@ uint32_t dmapi_file_flags(const char * const path)
 	become_root();
 #endif
 
-	err = dm_path_to_handle(discard_const_p(char, path),
+	err = dm_path_to_handle(CONST_DISCARD(char *, path),
 		&dm_handle, &dm_handle_len);
 	if (err < 0) {
 		DEBUG(DMAPI_TRACE, ("dm_path_to_handle(%s): %s\n",
@@ -310,7 +308,7 @@ uint32_t dmapi_file_flags(const char * const path)
 
 		set_effective_capability(DMAPI_ACCESS_CAPABILITY);
 
-		err = dm_path_to_handle(discard_const_p(char, path),
+		err = dm_path_to_handle(CONST_DISCARD(char *, path),
 			&dm_handle, &dm_handle_len);
 		if (err < 0) {
 			DEBUG(DMAPI_TRACE,

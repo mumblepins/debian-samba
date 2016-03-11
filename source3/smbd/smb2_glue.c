@@ -26,23 +26,20 @@
 struct smb_request *smbd_smb2_fake_smb_request(struct smbd_smb2_request *req)
 {
 	struct smb_request *smbreq;
-	const uint8_t *inhdr = SMBD_SMB2_IN_HDR_PTR(req);
+	const uint8_t *inhdr;
+	int i = req->current_idx;
 
-	if (req->smb1req) {
-		smbreq = req->smb1req;
-	} else {
-		smbreq = talloc_zero(req, struct smb_request);
-		if (smbreq == NULL) {
-			return NULL;
-		}
+	inhdr = (const uint8_t *)req->in.vector[i+0].iov_base;
+
+	smbreq = talloc_zero(req, struct smb_request);
+	if (smbreq == NULL) {
+		return NULL;
 	}
 
-	smbreq->request_time = req->request_time;
-	smbreq->vuid = req->session->compat->vuid;
-	smbreq->tid = req->tcon->compat->cnum;
-	smbreq->conn = req->tcon->compat;
+	smbreq->vuid = req->session->compat_vuser->vuid;
+	smbreq->tid = req->tcon->compat_conn->cnum;
+	smbreq->conn = req->tcon->compat_conn;
 	smbreq->sconn = req->sconn;
-	smbreq->xconn = req->xconn;
 	smbreq->smbpid = (uint16_t)IVAL(inhdr, SMB2_HDR_PID);
 	smbreq->flags2 = FLAGS2_UNICODE_STRINGS |
 			 FLAGS2_32_BIT_ERROR_CODES |
@@ -60,40 +57,20 @@ struct smb_request *smbd_smb2_fake_smb_request(struct smbd_smb2_request *req)
 }
 
 /*********************************************************
- Are there unread bytes for recvfile ?
-*********************************************************/
-
-size_t smbd_smb2_unread_bytes(struct smbd_smb2_request *req)
-{
-	if (req->smb1req) {
-		return req->smb1req->unread_bytes;
-	}
-	return 0;
-}
-
-/*********************************************************
  Called from file_free() to remove any chained fsp pointers.
 *********************************************************/
 
 void remove_smb2_chained_fsp(files_struct *fsp)
 {
 	struct smbd_server_connection *sconn = fsp->conn->sconn;
-	struct smbXsrv_connection *xconn = NULL;
+	struct smbd_smb2_request *smb2req;
 
-	if (sconn->client != NULL) {
-		xconn = sconn->client->connections;
-	}
-
-	for (; xconn != NULL; xconn = xconn->next) {
-		struct smbd_smb2_request *smb2req;
-
-		for (smb2req = xconn->smb2.requests; smb2req; smb2req = smb2req->next) {
-			if (smb2req->compat_chain_fsp == fsp) {
-				smb2req->compat_chain_fsp = NULL;
-			}
-			if (smb2req->smb1req && smb2req->smb1req->chain_fsp == fsp) {
-				smb2req->smb1req->chain_fsp = NULL;
-			}
+	for (smb2req = sconn->smb2.requests; smb2req; smb2req = smb2req->next) {
+		if (smb2req->compat_chain_fsp == fsp) {
+			smb2req->compat_chain_fsp = NULL;
+		}
+		if (smb2req->smb1req && smb2req->smb1req->chain_fsp == fsp) {
+			smb2req->smb1req->chain_fsp = NULL;
 		}
 	}
 }

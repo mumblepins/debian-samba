@@ -24,9 +24,8 @@
 
 #include "includes.h"
 #include "smbldap.h"
+#include "secrets.h"
 #include "../libcli/security/security.h"
-#include <tevent.h>
-#include "lib/param/loadparm.h"
 
 /* Try not to hit the up or down server forever */
 
@@ -35,6 +34,226 @@
 
 #define SMBLDAP_IDLE_TIME 150		/* After 2.5 minutes disconnect */
 
+
+/* attributes used by Samba 2.2 */
+
+ATTRIB_MAP_ENTRY attrib_map_v22[] = {
+	{ LDAP_ATTR_UID,		"uid" 		},
+	{ LDAP_ATTR_UIDNUMBER,		LDAP_ATTRIBUTE_UIDNUMBER},
+	{ LDAP_ATTR_GIDNUMBER,		LDAP_ATTRIBUTE_GIDNUMBER},
+	{ LDAP_ATTR_UNIX_HOME,		"homeDirectory"	},
+	{ LDAP_ATTR_PWD_LAST_SET,	"pwdLastSet"	},
+	{ LDAP_ATTR_PWD_CAN_CHANGE,	"pwdCanChange"	},
+	{ LDAP_ATTR_PWD_MUST_CHANGE,	"pwdMustChange"	},
+	{ LDAP_ATTR_LOGON_TIME,		"logonTime" 	},
+	{ LDAP_ATTR_LOGOFF_TIME,	"logoffTime"	},
+	{ LDAP_ATTR_KICKOFF_TIME,	"kickoffTime"	},
+	{ LDAP_ATTR_CN,			"cn"		},
+	{ LDAP_ATTR_SN,			"sn"		},
+	{ LDAP_ATTR_DISPLAY_NAME,	"displayName"	},
+	{ LDAP_ATTR_HOME_PATH,		"smbHome"	},
+	{ LDAP_ATTR_HOME_DRIVE,		"homeDrive"	},
+	{ LDAP_ATTR_LOGON_SCRIPT,	"scriptPath"	},
+	{ LDAP_ATTR_PROFILE_PATH,	"profilePath"	},
+	{ LDAP_ATTR_DESC,		"description"	},
+	{ LDAP_ATTR_USER_WKS,		"userWorkstations"},
+	{ LDAP_ATTR_USER_RID,		"rid"		},
+	{ LDAP_ATTR_PRIMARY_GROUP_RID,	"primaryGroupID"},
+	{ LDAP_ATTR_LMPW,		"lmPassword"	},
+	{ LDAP_ATTR_NTPW,		"ntPassword"	},
+	{ LDAP_ATTR_DOMAIN,		"domain"	},
+	{ LDAP_ATTR_OBJCLASS,		"objectClass"	},
+	{ LDAP_ATTR_ACB_INFO,		"acctFlags"	},
+	{ LDAP_ATTR_MOD_TIMESTAMP,	"modifyTimestamp"	},
+	{ LDAP_ATTR_LIST_END,		NULL 		}
+};
+
+ATTRIB_MAP_ENTRY attrib_map_to_delete_v22[] = {
+	{ LDAP_ATTR_PWD_LAST_SET,	"pwdLastSet"	},
+	{ LDAP_ATTR_PWD_CAN_CHANGE,	"pwdCanChange"	},
+	{ LDAP_ATTR_PWD_MUST_CHANGE,	"pwdMustChange"	},
+	{ LDAP_ATTR_LOGON_TIME,		"logonTime" 	},
+	{ LDAP_ATTR_LOGOFF_TIME,	"logoffTime"	},
+	{ LDAP_ATTR_KICKOFF_TIME,	"kickoffTime"	},
+	{ LDAP_ATTR_DISPLAY_NAME,	"displayName"	},
+	{ LDAP_ATTR_HOME_PATH,		"smbHome"	},
+	{ LDAP_ATTR_HOME_DRIVE,		"homeDrives"	},
+	{ LDAP_ATTR_LOGON_SCRIPT,	"scriptPath"	},
+	{ LDAP_ATTR_PROFILE_PATH,	"profilePath"	},
+	{ LDAP_ATTR_USER_WKS,		"userWorkstations"},
+	{ LDAP_ATTR_USER_RID,		"rid"		},
+	{ LDAP_ATTR_PRIMARY_GROUP_RID,	"primaryGroupID"},
+	{ LDAP_ATTR_LMPW,		"lmPassword"	},
+	{ LDAP_ATTR_NTPW,		"ntPassword"	},
+	{ LDAP_ATTR_DOMAIN,		"domain"	},
+	{ LDAP_ATTR_ACB_INFO,		"acctFlags"	},
+	{ LDAP_ATTR_LIST_END,		NULL 		}
+};
+
+/* attributes used by Samba 3.0's sambaSamAccount */
+
+ATTRIB_MAP_ENTRY attrib_map_v30[] = {
+	{ LDAP_ATTR_UID,		"uid" 			},
+	{ LDAP_ATTR_UIDNUMBER,		LDAP_ATTRIBUTE_UIDNUMBER},
+	{ LDAP_ATTR_GIDNUMBER,		LDAP_ATTRIBUTE_GIDNUMBER},
+	{ LDAP_ATTR_UNIX_HOME,		"homeDirectory"		},
+	{ LDAP_ATTR_PWD_LAST_SET,	"sambaPwdLastSet"	},
+	{ LDAP_ATTR_PWD_CAN_CHANGE,	"sambaPwdCanChange"	},
+	{ LDAP_ATTR_PWD_MUST_CHANGE,	"sambaPwdMustChange"	},
+	{ LDAP_ATTR_LOGON_TIME,		"sambaLogonTime" 	},
+	{ LDAP_ATTR_LOGOFF_TIME,	"sambaLogoffTime"	},
+	{ LDAP_ATTR_KICKOFF_TIME,	"sambaKickoffTime"	},
+	{ LDAP_ATTR_CN,			"cn"			},
+	{ LDAP_ATTR_SN,			"sn"			},
+	{ LDAP_ATTR_DISPLAY_NAME,	"displayName"		},
+	{ LDAP_ATTR_HOME_DRIVE,		"sambaHomeDrive"	},
+	{ LDAP_ATTR_HOME_PATH,		"sambaHomePath"		},
+	{ LDAP_ATTR_LOGON_SCRIPT,	"sambaLogonScript"	},
+	{ LDAP_ATTR_PROFILE_PATH,	"sambaProfilePath"	},
+	{ LDAP_ATTR_DESC,		"description"		},
+	{ LDAP_ATTR_USER_WKS,		"sambaUserWorkstations"	},
+	{ LDAP_ATTR_USER_SID,		LDAP_ATTRIBUTE_SID	},
+	{ LDAP_ATTR_PRIMARY_GROUP_SID,	"sambaPrimaryGroupSID"	},
+	{ LDAP_ATTR_LMPW,		"sambaLMPassword"	},
+	{ LDAP_ATTR_NTPW,		"sambaNTPassword"	},
+	{ LDAP_ATTR_DOMAIN,		"sambaDomainName"	},
+	{ LDAP_ATTR_OBJCLASS,		"objectClass"		},
+	{ LDAP_ATTR_ACB_INFO,		"sambaAcctFlags"	},
+	{ LDAP_ATTR_MUNGED_DIAL,	"sambaMungedDial"	},
+	{ LDAP_ATTR_BAD_PASSWORD_COUNT,	"sambaBadPasswordCount" },
+	{ LDAP_ATTR_BAD_PASSWORD_TIME,	"sambaBadPasswordTime" 	},
+	{ LDAP_ATTR_PWD_HISTORY,	"sambaPasswordHistory"  },
+	{ LDAP_ATTR_MOD_TIMESTAMP,	"modifyTimestamp"	},
+	{ LDAP_ATTR_LOGON_HOURS,	"sambaLogonHours"	},
+	{ LDAP_ATTR_LIST_END,		NULL 			}
+};
+
+ATTRIB_MAP_ENTRY attrib_map_to_delete_v30[] = {
+	{ LDAP_ATTR_PWD_LAST_SET,	"sambaPwdLastSet"	},
+	{ LDAP_ATTR_PWD_CAN_CHANGE,	"sambaPwdCanChange"	},
+	{ LDAP_ATTR_PWD_MUST_CHANGE,	"sambaPwdMustChange"	},
+	{ LDAP_ATTR_LOGON_TIME,		"sambaLogonTime" 	},
+	{ LDAP_ATTR_LOGOFF_TIME,	"sambaLogoffTime"	},
+	{ LDAP_ATTR_KICKOFF_TIME,	"sambaKickoffTime"	},
+	{ LDAP_ATTR_DISPLAY_NAME,	"displayName"		},
+	{ LDAP_ATTR_HOME_DRIVE,		"sambaHomeDrive"	},
+	{ LDAP_ATTR_HOME_PATH,		"sambaHomePath"		},
+	{ LDAP_ATTR_LOGON_SCRIPT,	"sambaLogonScript"	},
+	{ LDAP_ATTR_PROFILE_PATH,	"sambaProfilePath"	},
+	{ LDAP_ATTR_USER_WKS,		"sambaUserWorkstations"	},
+	{ LDAP_ATTR_USER_SID,		LDAP_ATTRIBUTE_SID	},
+	{ LDAP_ATTR_PRIMARY_GROUP_SID,	"sambaPrimaryGroupSID"	},
+	{ LDAP_ATTR_LMPW,		"sambaLMPassword"	},
+	{ LDAP_ATTR_NTPW,		"sambaNTPassword"	},
+	{ LDAP_ATTR_DOMAIN,		"sambaDomainName"	},
+	{ LDAP_ATTR_ACB_INFO,		"sambaAcctFlags"	},
+	{ LDAP_ATTR_MUNGED_DIAL,	"sambaMungedDial"	},
+	{ LDAP_ATTR_BAD_PASSWORD_COUNT,	"sambaBadPasswordCount" },
+	{ LDAP_ATTR_BAD_PASSWORD_TIME,	"sambaBadPasswordTime" 	},
+	{ LDAP_ATTR_PWD_HISTORY,	"sambaPasswordHistory"  },
+	{ LDAP_ATTR_LOGON_HOURS,	"sambaLogonHours"	},
+	{ LDAP_ATTR_LIST_END,		NULL 			}
+};
+
+/* attributes used for allocating RIDs */
+
+ATTRIB_MAP_ENTRY dominfo_attr_list[] = {
+	{ LDAP_ATTR_DOMAIN,		"sambaDomainName"	},
+	{ LDAP_ATTR_NEXT_RID,	        "sambaNextRid"	        },
+	{ LDAP_ATTR_NEXT_USERRID,	"sambaNextUserRid"	},
+	{ LDAP_ATTR_NEXT_GROUPRID,	"sambaNextGroupRid"	},
+	{ LDAP_ATTR_DOM_SID,		LDAP_ATTRIBUTE_SID	},
+	{ LDAP_ATTR_ALGORITHMIC_RID_BASE,"sambaAlgorithmicRidBase"},
+	{ LDAP_ATTR_OBJCLASS,		"objectClass"		},
+	{ LDAP_ATTR_LIST_END,		NULL			},
+};
+
+/* Samba 3.0 group mapping attributes */
+
+ATTRIB_MAP_ENTRY groupmap_attr_list[] = {
+	{ LDAP_ATTR_GIDNUMBER,		LDAP_ATTRIBUTE_GIDNUMBER},
+	{ LDAP_ATTR_GROUP_SID,		LDAP_ATTRIBUTE_SID	},
+	{ LDAP_ATTR_GROUP_TYPE,		"sambaGroupType"	},
+	{ LDAP_ATTR_SID_LIST,		"sambaSIDList"		},
+	{ LDAP_ATTR_DESC,		"description"		},
+	{ LDAP_ATTR_DISPLAY_NAME,	"displayName"		},
+	{ LDAP_ATTR_CN,			"cn"			},
+	{ LDAP_ATTR_OBJCLASS,		"objectClass"		},
+	{ LDAP_ATTR_LIST_END,		NULL			}	
+};
+
+ATTRIB_MAP_ENTRY groupmap_attr_list_to_delete[] = {
+	{ LDAP_ATTR_GROUP_SID,		LDAP_ATTRIBUTE_SID	},
+	{ LDAP_ATTR_GROUP_TYPE,		"sambaGroupType"	},
+	{ LDAP_ATTR_DESC,		"description"		},
+	{ LDAP_ATTR_DISPLAY_NAME,	"displayName"		},
+	{ LDAP_ATTR_SID_LIST,		"sambaSIDList"		},
+	{ LDAP_ATTR_LIST_END,		NULL			}	
+};
+
+/* idmap_ldap sambaUnixIdPool */
+
+ATTRIB_MAP_ENTRY idpool_attr_list[] = {
+	{ LDAP_ATTR_UIDNUMBER,		LDAP_ATTRIBUTE_UIDNUMBER},
+	{ LDAP_ATTR_GIDNUMBER,		LDAP_ATTRIBUTE_GIDNUMBER},
+	{ LDAP_ATTR_OBJCLASS,		"objectClass"		},
+	{ LDAP_ATTR_LIST_END,		NULL			}	
+};
+
+ATTRIB_MAP_ENTRY sidmap_attr_list[] = {
+	{ LDAP_ATTR_SID,		LDAP_ATTRIBUTE_SID	},
+	{ LDAP_ATTR_UIDNUMBER,		LDAP_ATTRIBUTE_UIDNUMBER},
+	{ LDAP_ATTR_GIDNUMBER,		LDAP_ATTRIBUTE_GIDNUMBER},
+	{ LDAP_ATTR_OBJCLASS,		"objectClass"		},
+	{ LDAP_ATTR_LIST_END,		NULL			}	
+};
+
+/**********************************************************************
+ perform a simple table lookup and return the attribute name 
+ **********************************************************************/
+ 
+ const char* get_attr_key2string( ATTRIB_MAP_ENTRY table[], int key )
+{
+	int i = 0;
+
+	while ( table[i].attrib != LDAP_ATTR_LIST_END ) {
+		if ( table[i].attrib == key )
+			return table[i].name;
+		i++;
+	}
+
+	return NULL;
+}
+
+
+/**********************************************************************
+ Return the list of attribute names from a mapping table
+ **********************************************************************/
+
+ const char** get_attr_list( TALLOC_CTX *mem_ctx, ATTRIB_MAP_ENTRY table[] )
+{
+	const char **names;
+	int i = 0;
+
+	while ( table[i].attrib != LDAP_ATTR_LIST_END )
+		i++;
+	i++;
+
+	names = TALLOC_ARRAY( mem_ctx, const char*, i );
+	if ( !names ) {
+		DEBUG(0,("get_attr_list: out of memory\n"));
+		return NULL;
+	}
+
+	i = 0;
+	while ( table[i].attrib != LDAP_ATTR_LIST_END ) {
+		names[i] = talloc_strdup( names, table[i].name );
+		i++;
+	}
+	names[i] = NULL;
+
+	return names;
+}
 
 /*******************************************************************
  Search an attribute and return the first value found.
@@ -45,7 +264,6 @@
 				    int max_len)
 {
 	char **values;
-	size_t size = 0;
 
 	if ( !attribute )
 		return False;
@@ -58,7 +276,7 @@
 		return False;
 	}
 
-	if (!convert_string(CH_UTF8, CH_UNIX,values[0], -1, value, max_len, &size)) {
+	if (convert_string(CH_UTF8, CH_UNIX,values[0], -1, value, max_len, False) == (size_t)-1) {
 		DEBUG(1, ("smbldap_get_single_attribute: string conversion of [%s] = [%s] failed!\n", 
 			  attribute, values[0]));
 		ldap_value_free(values);
@@ -186,7 +404,7 @@
 			return NULL;
 		}
 
-		if (strcasecmp_m(tmp, result) < 0) {
+		if (StrCaseCmp(tmp, result) < 0) {
 			TALLOC_FREE(result);
 			result = tmp;
 		} else {
@@ -247,7 +465,7 @@
 	return 0;
 }
 
- void smbldap_talloc_autofree_ldapmsg(TALLOC_CTX *mem_ctx, LDAPMessage *result)
+ void talloc_autofree_ldapmsg(TALLOC_CTX *mem_ctx, LDAPMessage *result)
 {
 	LDAPMessage **handle;
 
@@ -255,7 +473,7 @@
 		return;
 	}
 
-	handle = talloc(mem_ctx, LDAPMessage *);
+	handle = TALLOC_P(mem_ctx, LDAPMessage *);
 	SMB_ASSERT(handle != NULL);
 
 	*handle = result;
@@ -267,7 +485,7 @@
 	return 0;
 }
 
- void smbldap_talloc_autofree_ldapmod(TALLOC_CTX *mem_ctx, LDAPMod **mod)
+ void talloc_autofree_ldapmod(TALLOC_CTX *mem_ctx, LDAPMod **mod)
 {
 	LDAPMod ***handle;
 
@@ -275,7 +493,7 @@
 		return;
 	}
 
-	handle = talloc(mem_ctx, LDAPMod **);
+	handle = TALLOC_P(mem_ctx, LDAPMod **);
 	SMB_ASSERT(handle != NULL);
 
 	*handle = mod;
@@ -353,7 +571,7 @@ static void smbldap_set_mod_internal(LDAPMod *** modlist, int modop, const char 
 		mods[i]->mod_bvalues[j] = SMB_MALLOC_P(struct berval);
 		SMB_ASSERT(mods[i]->mod_bvalues[j] != NULL);
 
-		mods[i]->mod_bvalues[j]->bv_val = (char *)smb_memdup(blob->data, blob->length);
+		mods[i]->mod_bvalues[j]->bv_val = (char *)memdup(blob->data, blob->length);
 		SMB_ASSERT(mods[i]->mod_bvalues[j]->bv_val != NULL);
 		mods[i]->mod_bvalues[j]->bv_len = blob->length;
 
@@ -412,6 +630,12 @@ static void smbldap_make_mod_internal(LDAP *ldap_struct, LDAPMessage *existing,
 	bool existed;
 	DATA_BLOB oldblob = data_blob_null;
 
+	if (attribute == NULL) {
+		/* This can actually happen for ldapsam_compat where we for
+		 * example don't have a password history */
+		return;
+	}
+
 	if (existing != NULL) {
 		if (op & LDAP_MOD_BVALUES) {
 			existed = smbldap_talloc_single_blob(talloc_tos(), ldap_struct, existing, attribute, &oldblob);
@@ -429,7 +653,7 @@ static void smbldap_make_mod_internal(LDAP *ldap_struct, LDAPMessage *existing,
 			equal = (newblob && (data_blob_cmp(&oldblob, newblob) == 0));
 		} else {
 			/* all of our string attributes are case insensitive */
-			equal = (newval && (strcasecmp_m(oldval, newval) == 0));
+			equal = (newval && (StrCaseCmp(oldval, newval) == 0));
 		}
 
 		if (equal) {
@@ -554,7 +778,7 @@ static void smbldap_store_state(LDAP *ld, struct smbldap_state *smbldap_state)
  start TLS on an existing LDAP connection
 *******************************************************************/
 
-int smbldap_start_tls(LDAP *ldap_struct, int version)
+int smb_ldap_start_tls(LDAP *ldap_struct, int version)
 { 
 #ifdef LDAP_OPT_X_TLS
 	int rc;
@@ -725,7 +949,7 @@ static int smb_ldap_upgrade_conn(LDAP *ldap_struct, int *new_version)
  open a connection to the ldap server (just until the bind)
  ******************************************************************/
 
-int smbldap_setup_full_conn(LDAP **ldap_struct, const char *uri)
+int smb_ldap_setup_full_conn(LDAP **ldap_struct, const char *uri)
 {
 	int rc, version;
 
@@ -739,7 +963,7 @@ int smbldap_setup_full_conn(LDAP **ldap_struct, const char *uri)
 		return rc;
 	}
 
-	rc = smbldap_start_tls(*ldap_struct, version);
+	rc = smb_ldap_start_tls(*ldap_struct, version);
 	if (rc) {
 		return rc;
 	}
@@ -776,7 +1000,7 @@ static int smbldap_open_connection (struct smbldap_state *ldap_state)
 
 	/* Start TLS if required */
 
-	rc = smbldap_start_tls(*ldap_struct, version);
+	rc = smb_ldap_start_tls(*ldap_struct, version);
 	if (rc) {
 		return rc;
 	}
@@ -870,7 +1094,7 @@ static int rebindproc_connect_with_state (LDAP *ldap_struct,
 	 * our credentials. At least *try* to secure the connection - Guenther */
 
 	smb_ldap_upgrade_conn(ldap_struct, &version);
-	smbldap_start_tls(ldap_struct, version);
+	smb_ldap_start_tls(ldap_struct, version);
 
 	/** @TODO Should we be doing something to check what servers we rebind to?
 	    Could we get a referral to a machine that we don't want to give our
@@ -947,6 +1171,22 @@ static int smbldap_connect_system(struct smbldap_state *ldap_state)
 	int rc;
 	int version;
 
+	if (!ldap_state->anonymous && !ldap_state->bind_dn) {
+		char *bind_dn = NULL;
+		char *bind_secret = NULL;
+
+		/* get the default dn and password only if they are not set already */
+		if (!fetch_ldap_pw(&bind_dn, &bind_secret)) {
+			DEBUG(0, ("ldap_connect_system: Failed to retrieve password from secrets.tdb\n"));
+			rc = LDAP_INVALID_CREDENTIALS;
+			goto done;
+		}
+		smbldap_set_creds(ldap_state, false, bind_dn, bind_secret);
+		SAFE_FREE(bind_dn);
+		memset(bind_secret, '\0', strlen(bind_secret));
+		SAFE_FREE(bind_secret);
+	}
+
 	/* removed the sasl_bind_s "EXTERNAL" stuff, as my testsuite 
 	   (OpenLDAP) doesnt' seem to support it */
 
@@ -971,20 +1211,7 @@ static int smbldap_connect_system(struct smbldap_state *ldap_state)
 #endif /*defined(LDAP_API_FEATURE_X_OPENLDAP) && (LDAP_API_VERSION > 2000)*/
 #endif
 
-	/* When there is an alternative bind callback is set,
-	   attempt to use it to perform the bind */
-	if (ldap_state->bind_callback != NULL) {
-		/* We have to allow bind callback to be run under become_root/unbecome_root
-		   to make sure within smbd the callback has proper write access to its resources,
-		   like credential cache. This is similar to passdb case where this callback is supposed
-		   to be used. When used outside smbd, become_root()/unbecome_root() are no-op.
-		*/
-		become_root();
-		rc = ldap_state->bind_callback(ldap_struct, ldap_state, ldap_state->bind_callback_data);
-		unbecome_root();
-	} else {
-		rc = ldap_simple_bind_s(ldap_struct, ldap_state->bind_dn, ldap_state->bind_secret);
-	}
+	rc = ldap_simple_bind_s(ldap_struct, ldap_state->bind_dn, ldap_state->bind_secret);
 
 	if (rc != LDAP_SUCCESS) {
 		char *ld_error = NULL;
@@ -1021,8 +1248,8 @@ done:
 	return rc;
 }
 
-static void smbldap_idle_fn(struct tevent_context *tevent_ctx,
-			    struct tevent_timer *te,
+static void smbldap_idle_fn(struct event_context *event_ctx,
+			    struct timed_event *te,
 			    struct timeval now_abs,
 			    void *private_data);
 
@@ -1078,13 +1305,13 @@ static int smbldap_open(struct smbldap_state *ldap_state)
 
 
 	ldap_state->last_ping = time_mono(NULL);
-	ldap_state->pid = getpid();
+	ldap_state->pid = sys_getpid();
 
 	TALLOC_FREE(ldap_state->idle_event);
 
-	if (ldap_state->tevent_context != NULL) {
-		ldap_state->idle_event = tevent_add_timer(
-			ldap_state->tevent_context, ldap_state,
+	if (ldap_state->event_context != NULL) {
+		ldap_state->idle_event = event_add_timed(
+			ldap_state->event_context, ldap_state,
 			timeval_current_ofs(SMBLDAP_IDLE_TIME, 0),
 			smbldap_idle_fn, ldap_state);
 	}
@@ -1117,113 +1344,77 @@ static NTSTATUS smbldap_close(struct smbldap_state *ldap_state)
 	return NT_STATUS_OK;
 }
 
-static SIG_ATOMIC_T got_alarm;
+static bool got_alarm;
+
+static void (*old_handler)(int);
 
 static void gotalarm_sig(int dummy)
 {
-	got_alarm = 1;
+	got_alarm = True;
 }
 
-static time_t calc_ldap_abs_endtime(int ldap_to)
-{
-	if (ldap_to == 0) {
-		/* No timeout - don't
-		   return a value for
-		   the alarm. */
-		return (time_t)0;
-	}
-
-	/* Make the alarm time one second beyond
-	   the timout we're setting for the
-	   remote search timeout, to allow that
-	   to fire in preference. */
-
-	return time_mono(NULL)+ldap_to+1;
-}
-
-static int end_ldap_local_alarm(time_t absolute_endtime, int rc)
-{
-	if (absolute_endtime) {
-		alarm(0);
-		CatchSignal(SIGALRM, SIG_IGN);
-		if (got_alarm) {
-			/* Client timeout error code. */
-			got_alarm = 0;
-			return LDAP_TIMEOUT;
-		}
-	}
-	return rc;
-}
-
-static void setup_ldap_local_alarm(struct smbldap_state *ldap_state, time_t absolute_endtime)
+static int another_ldap_try(struct smbldap_state *ldap_state, int *rc,
+			    int *attempts, time_t endtime)
 {
 	time_t now = time_mono(NULL);
+	int open_rc = LDAP_SERVER_DOWN;
 
-	if (absolute_endtime) {
-		got_alarm = 0;
-		CatchSignal(SIGALRM, gotalarm_sig);
-		alarm(absolute_endtime - now);
-	}
+	if (*rc != LDAP_SERVER_DOWN)
+		goto no_next;
 
-	if (ldap_state->pid != getpid()) {
+	if (now >= endtime) {
 		smbldap_close(ldap_state);
+		*rc = LDAP_TIMEOUT;
+		goto no_next;
 	}
-}
 
-static void get_ldap_errs(struct smbldap_state *ldap_state, char **pp_ld_error, int *p_ld_errno)
-{
-	ldap_get_option(ldap_state->ldap_struct,
-			LDAP_OPT_ERROR_NUMBER, p_ld_errno);
+	if (*attempts == 0) {
+		got_alarm = False;
+		old_handler = CatchSignal(SIGALRM, gotalarm_sig);
+		alarm(endtime - now);
 
-	ldap_get_option(ldap_state->ldap_struct,
-			LDAP_OPT_ERROR_STRING, pp_ld_error);
-}
-
-static int get_cached_ldap_connect(struct smbldap_state *ldap_state, time_t abs_endtime)
-{
-	int attempts = 0;
+		if (ldap_state->pid != sys_getpid())
+			smbldap_close(ldap_state);
+	}
 
 	while (1) {
-		int rc;
-		time_t now;
 
-		now = time_mono(NULL);
-		ldap_state->last_use = now;
+		if (*attempts != 0)
+			smb_msleep(1000);
 
-		if (abs_endtime && now > abs_endtime) {
-			smbldap_close(ldap_state);
-			return LDAP_TIMEOUT;
+		*attempts += 1;
+
+		open_rc = smbldap_open(ldap_state);
+
+		if (open_rc == LDAP_SUCCESS) {
+			ldap_state->last_use = now;
+			return True;
 		}
 
-		rc = smbldap_open(ldap_state);
-
-		if (rc == LDAP_SUCCESS) {
-			return LDAP_SUCCESS;
-		}
-
-		attempts++;
-		DEBUG(1, ("Connection to LDAP server failed for the "
-			"%d try!\n", attempts));
-
-		if (rc == LDAP_INSUFFICIENT_ACCESS) {
+		if (open_rc == LDAP_INSUFFICIENT_ACCESS) {
 			/* The fact that we are non-root or any other
 			 * access-denied condition will not change in the next
 			 * round of trying */
-			return rc;
+			*rc = open_rc;
+			break;
 		}
 
 		if (got_alarm) {
-			smbldap_close(ldap_state);
-			return LDAP_TIMEOUT;
+			*rc = LDAP_TIMEOUT;
+			break;
 		}
 
-		smb_msleep(1000);
-
-		if (got_alarm) {
-			smbldap_close(ldap_state);
-			return LDAP_TIMEOUT;
+		if (open_rc != LDAP_SUCCESS) {
+			DEBUG(1, ("Connection to LDAP server failed for the "
+				  "%d try!\n", *attempts));
 		}
 	}
+
+ no_next:
+	CatchSignal(SIGALRM, old_handler);
+	alarm(0);
+	ldap_state->last_use = now;
+	return False;
 }
 
 /*********************************************************************
@@ -1236,11 +1427,10 @@ static int smbldap_search_ext(struct smbldap_state *ldap_state,
 			      int sizelimit, LDAPMessage **res)
 {
 	int 		rc = LDAP_SERVER_DOWN;
+	int 		attempts = 0;
 	char           *utf8_filter;
-	int		to = lp_ldap_timeout();
-	time_t		abs_endtime = calc_ldap_abs_endtime(to);
+	time_t		endtime = time_mono(NULL)+lp_ldap_timeout();
 	struct		timeval timeout;
-	struct		timeval *timeout_ptr = NULL;
 	size_t		converted_size;
 
 	SMB_ASSERT(ldap_state);
@@ -1277,50 +1467,60 @@ static int smbldap_search_ext(struct smbldap_state *ldap_state,
 		return LDAP_NO_MEMORY;
 	}
 
-	/* Setup remote timeout for the ldap_search_ext_s call. */
-	if (to) {
-		timeout.tv_sec = to;
-		timeout.tv_usec = 0;
-		timeout_ptr = &timeout;
-	}
+	/* Setup timeout for the ldap_search_ext_s call - local and remote. */
+	timeout.tv_sec = lp_ldap_timeout();
+	timeout.tv_usec = 0;
 
-	setup_ldap_local_alarm(ldap_state, abs_endtime);
+	/* Setup alarm timeout.... Do we need both of these ? JRA.
+	 * Yes, I think we do need both of these. The server timeout only
+	 * covers the case where the server's operation takes too long. It
+	 * does not cover the case where the request hangs on its way to the
+	 * server. The server side timeout is not strictly necessary, it's
+	 * just a bit more kind to the server. VL. */
 
-	while (1) {
-		char *ld_error = NULL;
-		int ld_errno;
+	got_alarm = 0;
+	CatchSignal(SIGALRM, gotalarm_sig);
+	alarm(lp_ldap_timeout());
+	/* End setup timeout. */
 
-		rc = get_cached_ldap_connect(ldap_state, abs_endtime);
-		if (rc != LDAP_SUCCESS) {
-			break;
-		}
-
+	while (another_ldap_try(ldap_state, &rc, &attempts, endtime)) {
 		rc = ldap_search_ext_s(ldap_state->ldap_struct, base, scope, 
 				       utf8_filter,
-				       discard_const_p(char *, attrs),
-				       attrsonly, sctrls, cctrls, timeout_ptr,
+				       CONST_DISCARD(char **, attrs),
+				       attrsonly, sctrls, cctrls, &timeout,
 				       sizelimit, res);
-		if (rc == LDAP_SUCCESS) {
-			break;
+		if (rc != LDAP_SUCCESS) {
+			char *ld_error = NULL;
+			int ld_errno;
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_NUMBER, &ld_errno);
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_STRING, &ld_error);
+			DEBUG(10, ("Failed search for base: %s, error: %d (%s) "
+				   "(%s)\n", base, ld_errno,
+				   ldap_err2string(rc),
+				   ld_error ? ld_error : "unknown"));
+			SAFE_FREE(ld_error);
+
+			if (ld_errno == LDAP_SERVER_DOWN) {
+				ldap_unbind(ldap_state->ldap_struct);
+				ldap_state->ldap_struct = NULL;
+			}
 		}
-
-		get_ldap_errs(ldap_state, &ld_error, &ld_errno);
-
-		DEBUG(10, ("Failed search for base: %s, error: %d (%s) "
-			   "(%s)\n", base, ld_errno,
-			   ldap_err2string(rc),
-			   ld_error ? ld_error : "unknown"));
-		SAFE_FREE(ld_error);
-
-		if (ld_errno != LDAP_SERVER_DOWN) {
-			break;
-		}
-		ldap_unbind(ldap_state->ldap_struct);
-		ldap_state->ldap_struct = NULL;
 	}
 
 	TALLOC_FREE(utf8_filter);
-	return end_ldap_local_alarm(abs_endtime, rc);
+
+	/* Teardown timeout. */
+	CatchSignal(SIGALRM, SIG_IGN);
+	alarm(0);
+
+	if (got_alarm != 0)
+		return LDAP_TIMELIMIT_EXCEEDED;
+
+	return rc;
 }
 
 int smbldap_search(struct smbldap_state *ldap_state, 
@@ -1368,7 +1568,7 @@ int smbldap_search_paged(struct smbldap_state *ldap_state,
 	}
 	ber_flatten(cookie_be, &cookie_bv);
 
-	pr.ldctl_oid = discard_const_p(char, ADS_PAGE_CTL_OID);
+	pr.ldctl_oid = CONST_DISCARD(char *, ADS_PAGE_CTL_OID);
 	pr.ldctl_iscritical = (char) critical;
 	pr.ldctl_value.bv_len = cookie_bv->bv_len;
 	pr.ldctl_value.bv_val = cookie_bv->bv_val;
@@ -1426,8 +1626,9 @@ done:
 int smbldap_modify(struct smbldap_state *ldap_state, const char *dn, LDAPMod *attrs[])
 {
 	int 		rc = LDAP_SERVER_DOWN;
+	int 		attempts = 0;
 	char           *utf8_dn;
-	time_t		abs_endtime = calc_ldap_abs_endtime(lp_ldap_timeout());
+	time_t		endtime = time_mono(NULL)+lp_ldap_timeout();
 	size_t		converted_size;
 
 	SMB_ASSERT(ldap_state);
@@ -1438,46 +1639,40 @@ int smbldap_modify(struct smbldap_state *ldap_state, const char *dn, LDAPMod *at
 		return LDAP_NO_MEMORY;
 	}
 
-	setup_ldap_local_alarm(ldap_state, abs_endtime);
-
-	while (1) {
-		char *ld_error = NULL;
-		int ld_errno;
-
-		rc = get_cached_ldap_connect(ldap_state, abs_endtime);
-		if (rc != LDAP_SUCCESS) {
-			break;
-		}
-
+	while (another_ldap_try(ldap_state, &rc, &attempts, endtime)) {
 		rc = ldap_modify_s(ldap_state->ldap_struct, utf8_dn, attrs);
-		if (rc == LDAP_SUCCESS) {
-			break;
+		if (rc != LDAP_SUCCESS) {
+			char *ld_error = NULL;
+			int ld_errno;
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_NUMBER, &ld_errno);
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_STRING, &ld_error);
+			DEBUG(10, ("Failed to modify dn: %s, error: %d (%s) "
+				   "(%s)\n", dn, ld_errno,
+				   ldap_err2string(rc),
+				   ld_error ? ld_error : "unknown"));
+			SAFE_FREE(ld_error);
+
+			if (ld_errno == LDAP_SERVER_DOWN) {
+				ldap_unbind(ldap_state->ldap_struct);
+				ldap_state->ldap_struct = NULL;
+			}
 		}
-
-		get_ldap_errs(ldap_state, &ld_error, &ld_errno);
-
-		DEBUG(10, ("Failed to modify dn: %s, error: %d (%s) "
-			   "(%s)\n", dn, ld_errno,
-			   ldap_err2string(rc),
-			   ld_error ? ld_error : "unknown"));
-		SAFE_FREE(ld_error);
-
-		if (ld_errno != LDAP_SERVER_DOWN) {
-			break;
-		}
-		ldap_unbind(ldap_state->ldap_struct);
-		ldap_state->ldap_struct = NULL;
 	}
 
 	TALLOC_FREE(utf8_dn);
-	return end_ldap_local_alarm(abs_endtime, rc);
+	return rc;
 }
 
 int smbldap_add(struct smbldap_state *ldap_state, const char *dn, LDAPMod *attrs[])
 {
 	int 		rc = LDAP_SERVER_DOWN;
+	int 		attempts = 0;
 	char           *utf8_dn;
-	time_t		abs_endtime = calc_ldap_abs_endtime(lp_ldap_timeout());
+	time_t		endtime = time_mono(NULL)+lp_ldap_timeout();
 	size_t		converted_size;
 
 	SMB_ASSERT(ldap_state);
@@ -1488,46 +1683,40 @@ int smbldap_add(struct smbldap_state *ldap_state, const char *dn, LDAPMod *attrs
 		return LDAP_NO_MEMORY;
 	}
 
-	setup_ldap_local_alarm(ldap_state, abs_endtime);
-
-	while (1) {
-		char *ld_error = NULL;
-		int ld_errno;
-
-		rc = get_cached_ldap_connect(ldap_state, abs_endtime);
-		if (rc != LDAP_SUCCESS) {
-			break;
-		}
-
+	while (another_ldap_try(ldap_state, &rc, &attempts, endtime)) {
 		rc = ldap_add_s(ldap_state->ldap_struct, utf8_dn, attrs);
-		if (rc == LDAP_SUCCESS) {
-			break;
+		if (rc != LDAP_SUCCESS) {
+			char *ld_error = NULL;
+			int ld_errno;
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_NUMBER, &ld_errno);
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_STRING, &ld_error);
+			DEBUG(10, ("Failed to add dn: %s, error: %d (%s) "
+				   "(%s)\n", dn, ld_errno,
+				   ldap_err2string(rc),
+				   ld_error ? ld_error : "unknown"));
+			SAFE_FREE(ld_error);
+
+			if (ld_errno == LDAP_SERVER_DOWN) {
+				ldap_unbind(ldap_state->ldap_struct);
+				ldap_state->ldap_struct = NULL;
+			}
 		}
-
-		get_ldap_errs(ldap_state, &ld_error, &ld_errno);
-
-		DEBUG(10, ("Failed to add dn: %s, error: %d (%s) "
-			   "(%s)\n", dn, ld_errno,
-			   ldap_err2string(rc),
-			   ld_error ? ld_error : "unknown"));
-		SAFE_FREE(ld_error);
-
-		if (ld_errno != LDAP_SERVER_DOWN) {
-			break;
-		}
-		ldap_unbind(ldap_state->ldap_struct);
-		ldap_state->ldap_struct = NULL;
 	}
 
 	TALLOC_FREE(utf8_dn);
-	return end_ldap_local_alarm(abs_endtime, rc);
+	return rc;
 }
 
 int smbldap_delete(struct smbldap_state *ldap_state, const char *dn)
 {
 	int 		rc = LDAP_SERVER_DOWN;
+	int 		attempts = 0;
 	char           *utf8_dn;
-	time_t		abs_endtime = calc_ldap_abs_endtime(lp_ldap_timeout());
+	time_t		endtime = time_mono(NULL)+lp_ldap_timeout();
 	size_t		converted_size;
 
 	SMB_ASSERT(ldap_state);
@@ -1538,39 +1727,32 @@ int smbldap_delete(struct smbldap_state *ldap_state, const char *dn)
 		return LDAP_NO_MEMORY;
 	}
 
-	setup_ldap_local_alarm(ldap_state, abs_endtime);
-
-	while (1) {
-		char *ld_error = NULL;
-		int ld_errno;
-
-		rc = get_cached_ldap_connect(ldap_state, abs_endtime);
-		if (rc != LDAP_SUCCESS) {
-			break;
-		}
-
+	while (another_ldap_try(ldap_state, &rc, &attempts, endtime)) {
 		rc = ldap_delete_s(ldap_state->ldap_struct, utf8_dn);
-		if (rc == LDAP_SUCCESS) {
-			break;
+		if (rc != LDAP_SUCCESS) {
+			char *ld_error = NULL;
+			int ld_errno;
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_NUMBER, &ld_errno);
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_STRING, &ld_error);
+			DEBUG(10, ("Failed to delete dn: %s, error: %d (%s) "
+				   "(%s)\n", dn, ld_errno,
+				   ldap_err2string(rc),
+				   ld_error ? ld_error : "unknown"));
+			SAFE_FREE(ld_error);
+
+			if (ld_errno == LDAP_SERVER_DOWN) {
+				ldap_unbind(ldap_state->ldap_struct);
+				ldap_state->ldap_struct = NULL;
+			}
 		}
-
-		get_ldap_errs(ldap_state, &ld_error, &ld_errno);
-
-		DEBUG(10, ("Failed to delete dn: %s, error: %d (%s) "
-			   "(%s)\n", dn, ld_errno,
-			   ldap_err2string(rc),
-			   ld_error ? ld_error : "unknown"));
-		SAFE_FREE(ld_error);
-
-		if (ld_errno != LDAP_SERVER_DOWN) {
-			break;
-		}
-		ldap_unbind(ldap_state->ldap_struct);
-		ldap_state->ldap_struct = NULL;
 	}
 
 	TALLOC_FREE(utf8_dn);
-	return end_ldap_local_alarm(abs_endtime, rc);
+	return rc;
 }
 
 int smbldap_extended_operation(struct smbldap_state *ldap_state, 
@@ -1579,45 +1761,39 @@ int smbldap_extended_operation(struct smbldap_state *ldap_state,
 			       char **retoidp, struct berval **retdatap)
 {
 	int 		rc = LDAP_SERVER_DOWN;
-	time_t		abs_endtime = calc_ldap_abs_endtime(lp_ldap_timeout());
+	int 		attempts = 0;
+	time_t		endtime = time_mono(NULL)+lp_ldap_timeout();
 
 	if (!ldap_state)
 		return (-1);
 
-	setup_ldap_local_alarm(ldap_state, abs_endtime);
-
-	while (1) {
-		char *ld_error = NULL;
-		int ld_errno;
-
-		rc = get_cached_ldap_connect(ldap_state, abs_endtime);
-		if (rc != LDAP_SUCCESS) {
-			break;
-		}
-
+	while (another_ldap_try(ldap_state, &rc, &attempts, endtime)) {
 		rc = ldap_extended_operation_s(ldap_state->ldap_struct, reqoid,
 					       reqdata, serverctrls,
 					       clientctrls, retoidp, retdatap);
-		if (rc == LDAP_SUCCESS) {
-			break;
+		if (rc != LDAP_SUCCESS) {
+			char *ld_error = NULL;
+			int ld_errno;
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_NUMBER, &ld_errno);
+
+			ldap_get_option(ldap_state->ldap_struct,
+					LDAP_OPT_ERROR_STRING, &ld_error);
+			DEBUG(10, ("Extended operation failed with error: "
+				   "%d (%s) (%s)\n", ld_errno,
+				   ldap_err2string(rc),
+				   ld_error ? ld_error : "unknown"));
+			SAFE_FREE(ld_error);
+
+			if (ld_errno == LDAP_SERVER_DOWN) {
+				ldap_unbind(ldap_state->ldap_struct);
+				ldap_state->ldap_struct = NULL;
+			}
 		}
-
-		get_ldap_errs(ldap_state, &ld_error, &ld_errno);
-
-		DEBUG(10, ("Extended operation failed with error: "
-			   "%d (%s) (%s)\n", ld_errno,
-			   ldap_err2string(rc),
-			   ld_error ? ld_error : "unknown"));
-		SAFE_FREE(ld_error);
-
-		if (ld_errno != LDAP_SERVER_DOWN) {
-			break;
-		}
-		ldap_unbind(ldap_state->ldap_struct);
-		ldap_state->ldap_struct = NULL;
 	}
 
-	return end_ldap_local_alarm(abs_endtime, rc);
+	return rc;
 }
 
 /*******************************************************************
@@ -1627,13 +1803,12 @@ int smbldap_search_suffix (struct smbldap_state *ldap_state,
 			   const char *filter, const char **search_attr,
 			   LDAPMessage ** result)
 {
-	return smbldap_search(ldap_state, lp_ldap_suffix(talloc_tos()),
-			      LDAP_SCOPE_SUBTREE,
+	return smbldap_search(ldap_state, lp_ldap_suffix(), LDAP_SCOPE_SUBTREE,
 			      filter, search_attr, 0, result);
 }
 
-static void smbldap_idle_fn(struct tevent_context *tevent_ctx,
-			    struct tevent_timer *te,
+static void smbldap_idle_fn(struct event_context *event_ctx,
+			    struct timed_event *te,
 			    struct timeval now_abs,
 			    void *private_data)
 {
@@ -1650,8 +1825,8 @@ static void smbldap_idle_fn(struct tevent_context *tevent_ctx,
 		DEBUG(10,("ldap connection not idle...\n"));
 
 		/* this needs to be made monotonic clock aware inside tevent: */
-		state->idle_event = tevent_add_timer(
-			tevent_ctx, state,
+		state->idle_event = event_add_timed(
+			event_ctx, state,
 			timeval_add(&now_abs, SMBLDAP_IDLE_TIME, 0),
 			smbldap_idle_fn,
 			private_data);
@@ -1676,8 +1851,6 @@ void smbldap_free_struct(struct smbldap_state **ldap_state)
 
 	SAFE_FREE((*ldap_state)->bind_dn);
 	SAFE_FREE((*ldap_state)->bind_secret);
-	(*ldap_state)->bind_callback = NULL;
-	(*ldap_state)->bind_callback_data = NULL;
 
 	TALLOC_FREE(*ldap_state);
 
@@ -1695,14 +1868,11 @@ static int smbldap_state_destructor(struct smbldap_state *state)
  Intitalise the 'general' ldap structures, on which ldap operations may be conducted
  *********************************************************************/
 
-NTSTATUS smbldap_init(TALLOC_CTX *mem_ctx, struct tevent_context *tevent_ctx,
+NTSTATUS smbldap_init(TALLOC_CTX *mem_ctx, struct event_context *event_ctx,
 		      const char *location,
-		      bool anon,
-		      const char *bind_dn,
-		      const char *bind_secret,
 		      struct smbldap_state **smbldap_state)
 {
-	*smbldap_state = talloc_zero(mem_ctx, struct smbldap_state);
+	*smbldap_state = TALLOC_ZERO_P(mem_ctx, struct smbldap_state);
 	if (!*smbldap_state) {
 		DEBUG(0, ("talloc() failed for ldapsam private_data!\n"));
 		return NT_STATUS_NO_MEMORY;
@@ -1714,11 +1884,7 @@ NTSTATUS smbldap_init(TALLOC_CTX *mem_ctx, struct tevent_context *tevent_ctx,
 		(*smbldap_state)->uri = "ldap://localhost";
 	}
 
-	(*smbldap_state)->tevent_context = tevent_ctx;
-
-	if (bind_dn && bind_secret) {
-		smbldap_set_creds(*smbldap_state, anon, bind_dn, bind_secret);
-	}
+	(*smbldap_state)->event_context = event_ctx;
 
 	talloc_set_destructor(*smbldap_state, smbldap_state_destructor);
 	return NT_STATUS_OK;
@@ -1769,7 +1935,7 @@ static bool smbldap_check_root_dse(LDAP *ld, const char **attrs, const char *val
 	}
 
 	rc = ldap_search_s(ld, "", LDAP_SCOPE_BASE, 
-			   "(objectclass=*)", discard_const_p(char *, attrs), 0 , &msg);
+			   "(objectclass=*)", CONST_DISCARD(char **, attrs), 0 , &msg);
 
 	if (rc != LDAP_SUCCESS) {
 		DEBUG(3,("smbldap_check_root_dse: Could not search rootDSE\n"));
@@ -1857,9 +2023,6 @@ bool smbldap_set_creds(struct smbldap_state *ldap_state, bool anon, const char *
 	/* free any previously set credential */
 
 	SAFE_FREE(ldap_state->bind_dn);
-	ldap_state->bind_callback = NULL;
-	ldap_state->bind_callback_data = NULL;
-
 	if (ldap_state->bind_secret) {
 		/* make sure secrets are zeroed out of memory */
 		memset(ldap_state->bind_secret, '\0', strlen(ldap_state->bind_secret));

@@ -1,21 +1,20 @@
-/*
+/* 
    Unix SMB/CIFS implementation.
 
    libndr interface
 
    Copyright (C) Andrew Tridgell 2003
-   Copyright (C) Jelmer Vernooij 2005-2008
-
+   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -30,21 +29,24 @@
 #include "includes.h"
 #include "librpc/ndr/libndr.h"
 #include "../lib/util/dlinklist.h"
+#if _SAMBA_BUILD_ == 4
+#include "param/param.h"
+#endif
 
 #define NDR_BASE_MARSHALL_SIZE 1024
 
 /* this guid indicates NDR encoding in a protocol tower */
-const struct ndr_syntax_id ndr_transfer_syntax_ndr = {
+const struct ndr_syntax_id ndr_transfer_syntax = {
   { 0x8a885d04, 0x1ceb, 0x11c9, {0x9f, 0xe8}, {0x08,0x00,0x2b,0x10,0x48,0x60} },
   2
 };
 
-const struct ndr_syntax_id ndr_transfer_syntax_ndr64 = {
+const struct ndr_syntax_id ndr64_transfer_syntax = {
   { 0x71710533, 0xbeba, 0x4937, {0x83, 0x19}, {0xb5,0xdb,0xef,0x9c,0xcc,0x36} },
   1
 };
 
-const struct ndr_syntax_id ndr_syntax_id_null = {
+const struct ndr_syntax_id null_ndr_syntax_id = {
   { 0, 0, 0, { 0, 0 }, { 0, 0, 0, 0, 0, 0 } },
   0
 };
@@ -73,111 +75,6 @@ _PUBLIC_ struct ndr_pull *ndr_pull_init_blob(const DATA_BLOB *blob, TALLOC_CTX *
 	ndr->data_size = blob->length;
 
 	return ndr;
-}
-
-_PUBLIC_ enum ndr_err_code ndr_pull_append(struct ndr_pull *ndr, DATA_BLOB *blob)
-{
-	enum ndr_err_code ndr_err;
-	DATA_BLOB b;
-	uint32_t append = 0;
-	bool ok;
-
-	if (blob->length == 0) {
-		return NDR_ERR_SUCCESS;
-	}
-
-	ndr_err = ndr_token_retrieve(&ndr->array_size_list, ndr, &append);
-	if (ndr_err == NDR_ERR_TOKEN) {
-		append = 0;
-		ndr_err = NDR_ERR_SUCCESS;
-	}
-	NDR_CHECK(ndr_err);
-
-	if (ndr->data_size == 0) {
-		ndr->data = NULL;
-		append = UINT32_MAX;
-	}
-
-	if (append == UINT32_MAX) {
-		/*
-		 * append == UINT32_MAX means that
-		 * ndr->data is either NULL or a valid
-		 * talloc child of ndr, which means
-		 * we can use data_blob_append() without
-		 * data_blob_talloc() of the existing callers data
-		 */
-		b = data_blob_const(ndr->data, ndr->data_size);
-	} else {
-		b = data_blob_talloc(ndr, ndr->data, ndr->data_size);
-		if (b.data == NULL) {
-			return ndr_pull_error(ndr, NDR_ERR_ALLOC, "%s", __location__);
-		}
-	}
-
-	ok = data_blob_append(ndr, &b, blob->data, blob->length);
-	if (!ok) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "%s", __location__);
-	}
-
-	ndr->data = b.data;
-	ndr->data_size = b.length;
-
-	return ndr_token_store(ndr, &ndr->array_size_list, ndr, UINT32_MAX);
-}
-
-_PUBLIC_ enum ndr_err_code ndr_pull_pop(struct ndr_pull *ndr)
-{
-	uint32_t skip = 0;
-	uint32_t append = 0;
-
-	if (ndr->relative_base_offset != 0) {
-		return ndr_pull_error(ndr, NDR_ERR_RELATIVE,
-				      "%s", __location__);
-	}
-	if (ndr->relative_highest_offset != 0) {
-		return ndr_pull_error(ndr, NDR_ERR_RELATIVE,
-				      "%s", __location__);
-	}
-	if (ndr->relative_list != NULL) {
-		return ndr_pull_error(ndr, NDR_ERR_RELATIVE,
-				      "%s", __location__);
-	}
-	if (ndr->relative_base_list != NULL) {
-		return ndr_pull_error(ndr, NDR_ERR_RELATIVE,
-				      "%s", __location__);
-	}
-
-	/*
-	 * we need to keep up to 7 bytes
-	 * in order to get the aligment right.
-	 */
-	skip = ndr->offset & 0xFFFFFFF8;
-
-	if (skip == 0) {
-		return NDR_ERR_SUCCESS;
-	}
-
-	ndr->offset -= skip;
-	ndr->data_size -= skip;
-
-	append = ndr_token_peek(&ndr->array_size_list, ndr);
-	if (append != UINT32_MAX) {
-		/*
-		 * here we assume, that ndr->data is not a
-		 * talloc child of ndr.
-		 */
-		ndr->data += skip;
-		return NDR_ERR_SUCCESS;
-	}
-
-	memmove(ndr->data, ndr->data + skip, ndr->data_size);
-
-	ndr->data = talloc_realloc(ndr, ndr->data, uint8_t, ndr->data_size);
-	if (ndr->data_size != 0 && ndr->data == NULL) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "%s", __location__);
-	}
-
-	return NDR_ERR_SUCCESS;
 }
 
 /*
@@ -222,7 +119,6 @@ _PUBLIC_ struct ndr_push *ndr_push_init_ctx(TALLOC_CTX *mem_ctx)
 	ndr->alloc_size = NDR_BASE_MARSHALL_SIZE;
 	ndr->data = talloc_array(ndr, uint8_t, ndr->alloc_size);
 	if (!ndr->data) {
-		talloc_free(ndr);
 		return NULL;
 	}
 
@@ -269,38 +165,6 @@ _PUBLIC_ enum ndr_err_code ndr_push_expand(struct ndr_push *ndr, uint32_t extra_
 	}
 
 	return NDR_ERR_SUCCESS;
-}
-
-_PUBLIC_ void ndr_print_debugc_helper(struct ndr_print *ndr, const char *format, ...)
-{
-	va_list ap;
-	char *s = NULL;
-	uint32_t i;
-	int ret;
-	int dbgc_class;
-
-	va_start(ap, format);
-	ret = vasprintf(&s, format, ap);
-	va_end(ap);
-
-	if (ret == -1) {
-		return;
-	}
-
-	dbgc_class = *(int *)ndr->private_data;
-
-	if (ndr->no_newline) {
-		DEBUGADDC(dbgc_class, 1,("%s", s));
-		free(s);
-		return;
-	}
-
-	for (i=0;i<ndr->depth;i++) {
-		DEBUGADDC(dbgc_class, 1,("    "));
-	}
-
-	DEBUGADDC(dbgc_class, 1,("%s\n", s));
-	free(s);
 }
 
 _PUBLIC_ void ndr_print_debug_helper(struct ndr_print *ndr, const char *format, ...) 
@@ -371,25 +235,6 @@ _PUBLIC_ void ndr_print_string_helper(struct ndr_print *ndr, const char *format,
 		ndr->private_data = talloc_asprintf_append_buffer((char *)ndr->private_data,
 								  "\n");
 	}
-}
-
-/*
-  a useful helper function for printing idl structures via DEBUGC()
-*/
-_PUBLIC_ void ndr_print_debugc(int dbgc_class, ndr_print_fn_t fn, const char *name, void *ptr)
-{
-	struct ndr_print *ndr;
-
-	DEBUGC(dbgc_class, 1,(" "));
-
-	ndr = talloc_zero(NULL, struct ndr_print);
-	if (!ndr) return;
-	ndr->private_data = &dbgc_class;
-	ndr->print = ndr_print_debugc_helper;
-	ndr->depth = 1;
-	ndr->flags = 0;
-	fn(ndr, name, ptr);
-	talloc_free(ndr);
 }
 
 /*
@@ -558,15 +403,6 @@ _PUBLIC_ enum ndr_err_code ndr_pull_error(struct ndr_pull *ndr,
 	va_list ap;
 	int ret;
 
-	if (ndr->flags & LIBNDR_FLAG_INCOMPLETE_BUFFER) {
-		switch (ndr_err) {
-		case NDR_ERR_BUFSIZE:
-			return NDR_ERR_INCOMPLETE_BUFFER;
-		default:
-			break;
-		}
-	}
-
 	va_start(ap, format);
 	ret = vasprintf(&s, format, ap);
 	va_end(ap);
@@ -636,10 +472,8 @@ _PUBLIC_ enum ndr_err_code ndr_pull_subcontext_start(struct ndr_pull *ndr,
 		uint16_t content_size;
 		NDR_CHECK(ndr_pull_uint16(ndr, NDR_SCALARS, &content_size));
 		if (size_is >= 0 && size_is != content_size) {
-			return ndr_pull_error(ndr, NDR_ERR_SUBCONTEXT, "Bad subcontext (PULL) size_is(%d) (0x%04x) mismatch content_size %d (0x%04x)",
-						(int)size_is, (int)size_is,
-						(int)content_size,
-						(int)content_size);
+			return ndr_pull_error(ndr, NDR_ERR_SUBCONTEXT, "Bad subcontext (PULL) size_is(%d) mismatch content_size %d", 
+						(int)size_is, (int)content_size);
 		}
 		r_content_size = content_size;
 		break;
@@ -649,10 +483,8 @@ _PUBLIC_ enum ndr_err_code ndr_pull_subcontext_start(struct ndr_pull *ndr,
 		uint32_t content_size;
 		NDR_CHECK(ndr_pull_uint3264(ndr, NDR_SCALARS, &content_size));
 		if (size_is >= 0 && size_is != content_size) {
-			return ndr_pull_error(ndr, NDR_ERR_SUBCONTEXT, "Bad subcontext (PULL) size_is(%d) (0x%08x) mismatch content_size %d (0x%08x)",
-						(int)size_is, (int)size_is,
-						(int)content_size,
-						(int)content_size);
+			return ndr_pull_error(ndr, NDR_ERR_SUBCONTEXT, "Bad subcontext (PULL) size_is(%d) mismatch content_size %d", 
+						(int)size_is, (int)content_size);
 		}
 		r_content_size = content_size;
 		break;
@@ -725,23 +557,6 @@ _PUBLIC_ enum ndr_err_code ndr_pull_subcontext_start(struct ndr_pull *ndr,
 		NDR_CHECK(ndr_pull_uint32(ndr, NDR_SCALARS, &reserved));
 		break;
 	}
-	case 0xFFFFFFFF:
-		/*
-		 * a shallow copy like subcontext
-		 * useful for DCERPC pipe chunks.
-		 */
-		subndr = talloc_zero(ndr, struct ndr_pull);
-		NDR_ERR_HAVE_NO_MEMORY(subndr);
-
-		subndr->flags		= ndr->flags;
-		subndr->current_mem_ctx	= ndr->current_mem_ctx;
-		subndr->data		= ndr->data;
-		subndr->offset		= ndr->offset;
-		subndr->data_size	= ndr->data_size;
-
-		*_subndr = subndr;
-		return NDR_ERR_SUCCESS;
-
 	default:
 		return ndr_pull_error(ndr, NDR_ERR_SUBCONTEXT, "Bad subcontext (PULL) header_size %d", 
 				      (int)header_size);
@@ -774,35 +589,13 @@ _PUBLIC_ enum ndr_err_code ndr_pull_subcontext_end(struct ndr_pull *ndr,
 				 ssize_t size_is)
 {
 	uint32_t advance;
-	uint32_t highest_ofs;
-
-	if (header_size == 0xFFFFFFFF) {
-		advance = subndr->offset - ndr->offset;
-	} else if (size_is >= 0) {
+	if (size_is >= 0) {
 		advance = size_is;
 	} else if (header_size > 0) {
 		advance = subndr->data_size;
 	} else {
 		advance = subndr->offset;
 	}
-
-	if (subndr->offset > ndr->relative_highest_offset) {
-		highest_ofs = subndr->offset;
-	} else {
-		highest_ofs = subndr->relative_highest_offset;
-	}
-	if (!(subndr->flags & LIBNDR_FLAG_SUBCONTEXT_NO_UNREAD_BYTES)) {
-		/*
-		 * avoid an error unless SUBCONTEXT_NO_UNREAD_BYTES is specified
-		 */
-		highest_ofs = advance;
-	}
-	if (highest_ofs < advance) {
-		return ndr_pull_error(subndr, NDR_ERR_UNREAD_BYTES,
-				      "not all bytes consumed ofs[%u] advance[%u]",
-				      highest_ofs, advance);
-	}
-
 	NDR_CHECK(ndr_pull_advance(ndr, advance));
 	return NDR_ERR_SUCCESS;
 }
@@ -1647,7 +1440,6 @@ const static struct {
 	{ NDR_ERR_INVALID_POINTER, "Invalid Pointer" },
 	{ NDR_ERR_UNREAD_BYTES, "Unread Bytes" },
 	{ NDR_ERR_NDR64, "NDR64 assertion error" },
-	{ NDR_ERR_INCOMPLETE_BUFFER, "Incomplete Buffer" },
 	{ 0, NULL }
 };
 

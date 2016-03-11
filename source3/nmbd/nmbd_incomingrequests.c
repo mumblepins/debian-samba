@@ -60,7 +60,7 @@ void process_name_release_request(struct subnet_record *subrec,
 	struct nmb_name *question = &nmb->question.question_name;
 	unstring qname;
 	bool bcast = nmb->header.nm_flags.bcast;
-	uint16_t nb_flags = get_nb_flags(nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(nmb->additional->rdata);
 	bool group = (nb_flags & NB_GROUP) ? True : False;
 	struct name_record *namerec;
 	int rcode = 0;
@@ -192,7 +192,7 @@ void process_name_registration_request(struct subnet_record *subrec,
 	struct nmb_packet *nmb = &p->packet.nmb;
 	struct nmb_name *question = &nmb->question.question_name;
 	bool bcast = nmb->header.nm_flags.bcast;
-	uint16_t nb_flags = get_nb_flags(nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(nmb->additional->rdata);
 	bool group = (nb_flags & NB_GROUP) ? True : False;
 	struct name_record *namerec = NULL;
 	int ttl = nmb->additional->ttl;
@@ -290,14 +290,14 @@ static int status_compare(char *n1,char *n2)
 		;
 	for (l2=0;l2<15 && n2[l2] && n2[l2] != ' ';l2++)
 		;
-	l3 = strlen(lp_netbios_name());
+	l3 = strlen(global_myname());
 
-	if ((l1==l3) && strncmp(n1,lp_netbios_name(),l3) == 0 &&
-			(l2!=l3 || strncmp(n2,lp_netbios_name(),l3) != 0))
+	if ((l1==l3) && strncmp(n1,global_myname(),l3) == 0 && 
+			(l2!=l3 || strncmp(n2,global_myname(),l3) != 0))
 		return -1;
 
-	if ((l2==l3) && strncmp(n2,lp_netbios_name(),l3) == 0 &&
-			(l1!=l3 || strncmp(n1,lp_netbios_name(),l3) != 0))
+	if ((l2==l3) && strncmp(n2,global_myname(),l3) == 0 && 
+			(l1!=l3 || strncmp(n1,global_myname(),l3) != 0))
 		return 1;
 
 	return memcmp(n1,n2,sizeof(name1));
@@ -347,10 +347,7 @@ subnet %s - name not found.\n", nmb_namestr(&nmb->question.question_name),
 			unstring name;
 
 			pull_ascii_nstring(name, sizeof(name), namerec->name.name);
-			if (!strupper_m(name)) {
-				DEBUG(2,("strupper_m %s failed\n", name));
-				return;
-			}
+			strupper_m(name);
 			if (!strequal(name,"*") &&
 					!strequal(name,"__SAMBA__") &&
 					(name_type < 0x1b || name_type >= 0x20 || 

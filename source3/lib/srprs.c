@@ -24,9 +24,12 @@
  * @brief  A simple recursive parser.
  */
 
-#include "includes.h"
 #include "srprs.h"
 #include "cbuf.h"
+#include <ctype.h>
+#include <string.h>
+#include <assert.h>
+#include <stdio.h>
 
 bool srprs_skipws(const char** ptr) {
 	while (isspace(**ptr))
@@ -125,22 +128,26 @@ fail:
 
 bool srprs_hex(const char** ptr, size_t len, unsigned* u)
 {
-	const char *str = *ptr;
-	const char *pos = *ptr;
+	static const char* FMT[] = {
+		"%1x","%2x","%3x","%4x","%5x","%6x","%7x","%8x",
+		"%9x","%10x","%11x","%12x","%13x","%14x","%15x","%16x"
+	};
+
+	const char* pos = *ptr;
 	int ret;
 	int i;
-	char buf[8+1] = {};
 
-	assert((len >= 1) && (len <= 8));
+	assert((len > 0)
+	       && (len <= 2*sizeof(unsigned))
+	       && (len <= sizeof(FMT)/sizeof(const char*)));
 
 	for (i=0; i<len; i++) {
 		if (!srprs_charset(&pos, "0123456789abcdefABCDEF", NULL)) {
 			break;
 		}
-		buf[i] = str[i];
 	}
 
-	ret = sscanf(buf, "%8x", u);
+	ret = sscanf(*ptr, FMT[len-1], u);
 
 	if ( ret != 1 ) {
 		return false;

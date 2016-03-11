@@ -3,7 +3,6 @@
  *  RPC Pipe client routines
  *  Largely rewritten by Jeremy Allison		    2005.
  *  Heavily modified by Simo Sorce		    2010.
- *  Copyright Andrew Bartlett                       2011.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,19 +21,19 @@
 #include "includes.h"
 #include "../lib/util/tevent_ntstatus.h"
 #include "librpc/gen_ndr/ndr_epmapper_c.h"
+#include "../librpc/gen_ndr/ndr_schannel.h"
 #include "../librpc/gen_ndr/ndr_dssetup.h"
 #include "../libcli/auth/schannel.h"
-#include "../libcli/auth/netlogon_creds_cli.h"
-#include "auth_generic.h"
+#include "../libcli/auth/spnego.h"
+#include "../libcli/auth/ntlmssp.h"
+#include "ntlmssp_wrap.h"
 #include "librpc/gen_ndr/ndr_dcerpc.h"
-#include "librpc/gen_ndr/ndr_netlogon_c.h"
 #include "librpc/rpc/dcerpc.h"
+#include "librpc/crypto/gse.h"
+#include "librpc/crypto/spnego.h"
 #include "rpc_dce.h"
 #include "cli_pipe.h"
-#include "libsmb/libsmb.h"
-#include "auth/gensec/gensec.h"
-#include "auth/credentials/credentials.h"
-#include "../libcli/smb/smbXcli_base.h"
+#include "client.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_RPC_CLI
@@ -56,9 +55,9 @@ static const char *rpccli_pipe_txt(TALLOC_CTX *mem_ctx,
  Rpc pipe call id.
  ********************************************************************/
 
-static uint32_t get_rpc_call_id(void)
+static uint32 get_rpc_call_id(void)
 {
-	static uint32_t call_id = 0;
+	static uint32 call_id = 0;
 	return ++call_id;
 }
 
@@ -68,7 +67,7 @@ static uint32_t get_rpc_call_id(void)
  ********************************************************************/
 
 struct rpc_read_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_cli_transport *transport;
 	uint8_t *data;
 	size_t size;
@@ -78,7 +77,7 @@ struct rpc_read_state {
 static void rpc_read_done(struct tevent_req *subreq);
 
 static struct tevent_req *rpc_read_send(TALLOC_CTX *mem_ctx,
-					struct tevent_context *ev,
+					struct event_context *ev,
 					struct rpc_cli_transport *transport,
 					uint8_t *data, size_t size)
 {
@@ -148,7 +147,7 @@ static NTSTATUS rpc_read_recv(struct tevent_req *req)
 }
 
 struct rpc_write_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_cli_transport *transport;
 	const uint8_t *data;
 	size_t size;
@@ -158,7 +157,7 @@ struct rpc_write_state {
 static void rpc_write_done(struct tevent_req *subreq);
 
 static struct tevent_req *rpc_write_send(TALLOC_CTX *mem_ctx,
-					 struct tevent_context *ev,
+					 struct event_context *ev,
 					 struct rpc_cli_transport *transport,
 					 const uint8_t *data, size_t size)
 {
@@ -233,7 +232,7 @@ static NTSTATUS rpc_write_recv(struct tevent_req *req)
  ****************************************************************************/
 
 struct get_complete_frag_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_pipe_client *cli;
 	uint16_t frag_len;
 	DATA_BLOB *pdu;
@@ -243,7 +242,7 @@ static void get_complete_frag_got_header(struct tevent_req *subreq);
 static void get_complete_frag_got_rest(struct tevent_req *subreq);
 
 static struct tevent_req *get_complete_frag_send(TALLOC_CTX *mem_ctx,
-						 struct tevent_context *ev,
+						 struct event_context *ev,
 						 struct rpc_pipe_client *cli,
 						 DATA_BLOB *pdu)
 {
@@ -282,10 +281,6 @@ static struct tevent_req *get_complete_frag_send(TALLOC_CTX *mem_ctx,
 	}
 
 	state->frag_len = dcerpc_get_frag_length(pdu);
-	if (state->frag_len < RPC_HEADER_LEN) {
-		tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
-		return tevent_req_post(req, ev);
-	}
 
 	/*
 	 * Ensure we have frag_len bytes of data.
@@ -334,10 +329,6 @@ static void get_complete_frag_got_header(struct tevent_req *subreq)
 	}
 
 	state->frag_len = dcerpc_get_frag_length(state->pdu);
-	if (state->frag_len < RPC_HEADER_LEN) {
-		tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
-		return;
-	}
 
 	if (!data_blob_realloc(NULL, state->pdu, state->frag_len)) {
 		tevent_req_nterror(req, NT_STATUS_NO_MEMORY);
@@ -387,13 +378,12 @@ static NTSTATUS cli_pipe_validate_current_pdu(TALLOC_CTX *mem_ctx,
 						struct ncacn_packet *pkt,
 						DATA_BLOB *pdu,
 						uint8_t expected_pkt_type,
-						uint32_t call_id,
 						DATA_BLOB *rdata,
 						DATA_BLOB *reply_pdu)
 {
-	const struct dcerpc_response *r = NULL;
-	DATA_BLOB tmp_stub = data_blob_null;
+	struct dcerpc_response *r;
 	NTSTATUS ret = NT_STATUS_OK;
+	size_t pad_len = 0;
 
 	/*
 	 * Point the return values at the real data including the RPC
@@ -401,128 +391,50 @@ static NTSTATUS cli_pipe_validate_current_pdu(TALLOC_CTX *mem_ctx,
 	 */
 	*rdata = *pdu;
 
-	if ((pkt->ptype == DCERPC_PKT_BIND_ACK) &&
-	    !(pkt->pfc_flags & DCERPC_PFC_FLAG_LAST)) {
-		/*
-		 * TODO: do we still need this hack which was introduced
-		 * in commit a42afcdcc7ab9aa9ed193ae36d3dbb10843447f0.
-		 *
-		 * I don't even know what AS/U might be...
-		 */
-		DEBUG(5, (__location__ ": bug in server (AS/U?), setting "
-			  "fragment first/last ON.\n"));
-		pkt->pfc_flags |= DCERPC_PFC_FLAG_FIRST | DCERPC_PFC_FLAG_LAST;
-	}
-
 	/* Ensure we have the correct type. */
 	switch (pkt->ptype) {
-	case DCERPC_PKT_BIND_NAK:
-		DEBUG(1, (__location__ ": Bind NACK received from %s!\n",
-			  rpccli_pipe_txt(talloc_tos(), cli)));
-
-		ret = dcerpc_verify_ncacn_packet_header(pkt,
-						DCERPC_PKT_BIND_NAK,
-						0, /* max_auth_info */
-						DCERPC_PFC_FLAG_FIRST |
-						DCERPC_PFC_FLAG_LAST,
-						0); /* optional flags */
-		if (!NT_STATUS_IS_OK(ret)) {
-			DEBUG(1, (__location__ ": Connection to %s got an unexpected "
-				  "RPC packet type - %u, expected %u: %s\n",
-				  rpccli_pipe_txt(talloc_tos(), cli),
-				  pkt->ptype, expected_pkt_type,
-				  nt_errstr(ret)));
-			NDR_PRINT_DEBUG(ncacn_packet, pkt);
-			return ret;
-		}
-
-		/* Use this for now... */
-		return NT_STATUS_NETWORK_ACCESS_DENIED;
-
-	case DCERPC_PKT_BIND_ACK:
-		ret = dcerpc_verify_ncacn_packet_header(pkt,
-					expected_pkt_type,
-					pkt->u.bind_ack.auth_info.length,
-					DCERPC_PFC_FLAG_FIRST |
-					DCERPC_PFC_FLAG_LAST,
-					DCERPC_PFC_FLAG_CONC_MPX |
-					DCERPC_PFC_FLAG_SUPPORT_HEADER_SIGN);
-		if (!NT_STATUS_IS_OK(ret)) {
-			DEBUG(1, (__location__ ": Connection to %s got an unexpected "
-				  "RPC packet type - %u, expected %u: %s\n",
-				  rpccli_pipe_txt(talloc_tos(), cli),
-				  pkt->ptype, expected_pkt_type,
-				  nt_errstr(ret)));
-			NDR_PRINT_DEBUG(ncacn_packet, pkt);
-			return ret;
-		}
-
-		break;
-
 	case DCERPC_PKT_ALTER_RESP:
-		ret = dcerpc_verify_ncacn_packet_header(pkt,
-					expected_pkt_type,
-					pkt->u.alter_resp.auth_info.length,
-					DCERPC_PFC_FLAG_FIRST |
-					DCERPC_PFC_FLAG_LAST,
-					DCERPC_PFC_FLAG_CONC_MPX |
-					DCERPC_PFC_FLAG_SUPPORT_HEADER_SIGN);
-		if (!NT_STATUS_IS_OK(ret)) {
-			DEBUG(1, (__location__ ": Connection to %s got an unexpected "
-				  "RPC packet type - %u, expected %u: %s\n",
-				  rpccli_pipe_txt(talloc_tos(), cli),
-				  pkt->ptype, expected_pkt_type,
-				  nt_errstr(ret)));
-			NDR_PRINT_DEBUG(ncacn_packet, pkt);
-			return ret;
-		}
+	case DCERPC_PKT_BIND_ACK:
 
+		/* Client code never receives this kind of packets */
 		break;
+
 
 	case DCERPC_PKT_RESPONSE:
 
 		r = &pkt->u.response;
 
-		ret = dcerpc_verify_ncacn_packet_header(pkt,
-						expected_pkt_type,
-						r->stub_and_verifier.length,
-						0, /* required_flags */
-						DCERPC_PFC_FLAG_FIRST |
-						DCERPC_PFC_FLAG_LAST);
+		/* Here's where we deal with incoming sign/seal. */
+		ret = dcerpc_check_auth(cli->auth, pkt,
+					&r->stub_and_verifier,
+					DCERPC_RESPONSE_LENGTH,
+					pdu, &pad_len);
 		if (!NT_STATUS_IS_OK(ret)) {
-			DEBUG(1, (__location__ ": Connection to %s got an unexpected "
-				  "RPC packet type - %u, expected %u: %s\n",
-				  rpccli_pipe_txt(talloc_tos(), cli),
-				  pkt->ptype, expected_pkt_type,
-				  nt_errstr(ret)));
-			NDR_PRINT_DEBUG(ncacn_packet, pkt);
 			return ret;
 		}
 
-		tmp_stub.data = r->stub_and_verifier.data;
-		tmp_stub.length = r->stub_and_verifier.length;
-
-		/* Here's where we deal with incoming sign/seal. */
-		ret = dcerpc_check_auth(cli->auth, pkt,
-					&tmp_stub,
-					DCERPC_RESPONSE_LENGTH,
-					pdu);
-		if (!NT_STATUS_IS_OK(ret)) {
-			DEBUG(1, (__location__ ": Connection to %s got an unexpected "
-				  "RPC packet type - %u, expected %u: %s\n",
-				  rpccli_pipe_txt(talloc_tos(), cli),
-				  pkt->ptype, expected_pkt_type,
-				  nt_errstr(ret)));
-			NDR_PRINT_DEBUG(ncacn_packet, pkt);
-			return ret;
+		if (pkt->frag_length < DCERPC_RESPONSE_LENGTH + pad_len) {
+			return NT_STATUS_BUFFER_TOO_SMALL;
 		}
 
 		/* Point the return values at the NDR data. */
-		*rdata = tmp_stub;
+		rdata->data = r->stub_and_verifier.data;
 
-		DEBUG(10, ("Got pdu len %lu, data_len %lu\n",
+		if (pkt->auth_length) {
+			/* We've already done integer wrap tests in
+			 * dcerpc_check_auth(). */
+			rdata->length = r->stub_and_verifier.length
+					 - pad_len
+					 - DCERPC_AUTH_TRAILER_LENGTH
+					 - pkt->auth_length;
+		} else {
+			rdata->length = r->stub_and_verifier.length;
+		}
+
+		DEBUG(10, ("Got pdu len %lu, data_len %lu, ss_len %u\n",
 			   (long unsigned int)pdu->length,
-			   (long unsigned int)rdata->length));
+			   (long unsigned int)rdata->length,
+			   (unsigned int)pad_len));
 
 		/*
 		 * If this is the first reply, and the allocation hint is
@@ -543,23 +455,13 @@ static NTSTATUS cli_pipe_validate_current_pdu(TALLOC_CTX *mem_ctx,
 
 		break;
 
-	case DCERPC_PKT_FAULT:
+	case DCERPC_PKT_BIND_NAK:
+		DEBUG(1, (__location__ ": Bind NACK received from %s!\n",
+			  rpccli_pipe_txt(talloc_tos(), cli)));
+		/* Use this for now... */
+		return NT_STATUS_NETWORK_ACCESS_DENIED;
 
-		ret = dcerpc_verify_ncacn_packet_header(pkt,
-						DCERPC_PKT_FAULT,
-						0, /* max_auth_info */
-						DCERPC_PFC_FLAG_FIRST |
-						DCERPC_PFC_FLAG_LAST,
-						DCERPC_PFC_FLAG_DID_NOT_EXECUTE);
-		if (!NT_STATUS_IS_OK(ret)) {
-			DEBUG(1, (__location__ ": Connection to %s got an unexpected "
-				  "RPC packet type - %u, expected %u: %s\n",
-				  rpccli_pipe_txt(talloc_tos(), cli),
-				  pkt->ptype, expected_pkt_type,
-				  nt_errstr(ret)));
-			NDR_PRINT_DEBUG(ncacn_packet, pkt);
-			return ret;
-		}
+	case DCERPC_PKT_FAULT:
 
 		DEBUG(1, (__location__ ": RPC fault code %s received "
 			  "from %s!\n",
@@ -574,16 +476,26 @@ static NTSTATUS cli_pipe_validate_current_pdu(TALLOC_CTX *mem_ctx,
 			  "from %s!\n",
 			  (unsigned int)pkt->ptype,
 			  rpccli_pipe_txt(talloc_tos(), cli)));
-		return NT_STATUS_RPC_PROTOCOL_ERROR;
+		return NT_STATUS_INVALID_INFO_CLASS;
 	}
 
-
-	if (pkt->call_id != call_id) {
+	if (pkt->ptype != expected_pkt_type) {
 		DEBUG(3, (__location__ ": Connection to %s got an unexpected "
-			  "RPC call_id - %u, not %u\n",
+			  "RPC packet type - %u, not %u\n",
 			  rpccli_pipe_txt(talloc_tos(), cli),
-			  pkt->call_id, call_id));
-		return NT_STATUS_RPC_PROTOCOL_ERROR;
+			  pkt->ptype, expected_pkt_type));
+		return NT_STATUS_INVALID_INFO_CLASS;
+	}
+
+	/* Do this just before return - we don't want to modify any rpc header
+	   data before now as we may have needed to do cryptographic actions on
+	   it before. */
+
+	if ((pkt->ptype == DCERPC_PKT_BIND_ACK) &&
+	    !(pkt->pfc_flags & DCERPC_PFC_FLAG_LAST)) {
+		DEBUG(5, (__location__ ": bug in server (AS/U?), setting "
+			  "fragment first/last ON.\n"));
+		pkt->pfc_flags |= DCERPC_PFC_FLAG_FIRST | DCERPC_PFC_FLAG_LAST;
 	}
 
 	return NT_STATUS_OK;
@@ -594,7 +506,7 @@ static NTSTATUS cli_pipe_validate_current_pdu(TALLOC_CTX *mem_ctx,
 ****************************************************************************/
 
 struct cli_api_pipe_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_cli_transport *transport;
 	uint8_t *rdata;
 	uint32_t rdata_len;
@@ -605,7 +517,7 @@ static void cli_api_pipe_write_done(struct tevent_req *subreq);
 static void cli_api_pipe_read_done(struct tevent_req *subreq);
 
 static struct tevent_req *cli_api_pipe_send(TALLOC_CTX *mem_ctx,
-					    struct tevent_context *ev,
+					    struct event_context *ev,
 					    struct rpc_cli_transport *transport,
 					    uint8_t *data, size_t data_len,
 					    uint32_t max_rdata_len)
@@ -694,7 +606,7 @@ static void cli_api_pipe_write_done(struct tevent_req *subreq)
 		return;
 	}
 
-	state->rdata = talloc_array(state, uint8_t, RPC_HEADER_LEN);
+	state->rdata = TALLOC_ARRAY(state, uint8_t, RPC_HEADER_LEN);
 	if (tevent_req_nomem(state->rdata, req)) {
 		return;
 	}
@@ -775,10 +687,9 @@ static NTSTATUS cli_api_pipe_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
  ****************************************************************************/
 
 struct rpc_api_pipe_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_pipe_client *cli;
 	uint8_t expected_pkt_type;
-	uint32_t call_id;
 
 	DATA_BLOB incoming_frag;
 	struct ncacn_packet *pkt;
@@ -794,11 +705,10 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq);
 static void rpc_api_pipe_auth3_done(struct tevent_req *subreq);
 
 static struct tevent_req *rpc_api_pipe_send(TALLOC_CTX *mem_ctx,
-					    struct tevent_context *ev,
+					    struct event_context *ev,
 					    struct rpc_pipe_client *cli,
 					    DATA_BLOB *data, /* Outgoing PDU */
-					    uint8_t expected_pkt_type,
-					    uint32_t call_id)
+					    uint8_t expected_pkt_type)
 {
 	struct tevent_req *req, *subreq;
 	struct rpc_api_pipe_state *state;
@@ -812,7 +722,9 @@ static struct tevent_req *rpc_api_pipe_send(TALLOC_CTX *mem_ctx,
 	state->ev = ev;
 	state->cli = cli;
 	state->expected_pkt_type = expected_pkt_type;
-	state->call_id = call_id;
+	state->incoming_frag = data_blob_null;
+	state->reply_pdu = data_blob_null;
+	state->reply_pdu_offset = 0;
 	state->endianess = DCERPC_DREP_LE;
 
 	/*
@@ -936,12 +848,6 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 
 	state->pkt = talloc(state, struct ncacn_packet);
 	if (!state->pkt) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
 		tevent_req_nterror(req, NT_STATUS_NO_MEMORY);
 		return;
 	}
@@ -951,13 +857,15 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 					  state->pkt,
 					  !state->endianess);
 	if (!NT_STATUS_IS_OK(status)) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
 		tevent_req_nterror(req, status);
+		return;
+	}
+
+	if (state->incoming_frag.length != state->pkt->frag_length) {
+		DEBUG(5, ("Incorrect pdu length %u, expected %u\n",
+			  (unsigned int)state->incoming_frag.length,
+			  (unsigned int)state->pkt->frag_length));
+		tevent_req_nterror(req,  NT_STATUS_INVALID_PARAMETER);
 		return;
 	}
 
@@ -965,7 +873,6 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 						state->cli, state->pkt,
 						&state->incoming_frag,
 						state->expected_pkt_type,
-						state->call_id,
 						&rdata,
 						&state->reply_pdu);
 
@@ -974,28 +881,6 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 		  (unsigned)state->reply_pdu_offset,
 		  nt_errstr(status)));
 
-	if (state->pkt->ptype != DCERPC_PKT_FAULT && !NT_STATUS_IS_OK(status)) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
-	} else if (NT_STATUS_EQUAL(status, NT_STATUS_RPC_PROTOCOL_ERROR)) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
-	} else if (NT_STATUS_EQUAL(status, NT_STATUS_RPC_SEC_PKG_ERROR)) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
-	}
 	if (!NT_STATUS_IS_OK(status)) {
 		tevent_req_nterror(req, status);
 		return;
@@ -1020,24 +905,7 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 			 "%s\n",
 			 state->endianess?"little":"big",
 			 state->pkt->drep[0]?"little":"big"));
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
-		tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
-		return;
-	}
-
-	if (state->reply_pdu_offset + rdata.length > MAX_RPC_DATA_SIZE) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
-		tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
+		tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
 		return;
 	}
 
@@ -1045,12 +913,6 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 	if (state->reply_pdu.length < state->reply_pdu_offset + rdata.length) {
 		if (!data_blob_realloc(NULL, &state->reply_pdu,
 				state->reply_pdu_offset + rdata.length)) {
-			/*
-			 * TODO: do a real async disconnect ...
-			 *
-			 * For now do it sync...
-			 */
-			TALLOC_FREE(state->cli->transport);
 			tevent_req_nterror(req, NT_STATUS_NO_MEMORY);
 			return;
 		}
@@ -1079,14 +941,6 @@ static void rpc_api_pipe_got_pdu(struct tevent_req *subreq)
 
 	subreq = get_complete_frag_send(state, state->ev, state->cli,
 					&state->incoming_frag);
-	if (subreq == NULL) {
-		/*
-		 * TODO: do a real async disconnect ...
-		 *
-		 * For now do it sync...
-		 */
-		TALLOC_FREE(state->cli->transport);
-	}
 	if (tevent_req_nomem(subreq, req)) {
 		return;
 	}
@@ -1122,42 +976,125 @@ static NTSTATUS rpc_api_pipe_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
 }
 
 /*******************************************************************
+ Creates spnego auth bind.
+ ********************************************************************/
+
+static NTSTATUS create_spnego_auth_bind_req(TALLOC_CTX *mem_ctx,
+					    struct pipe_auth_data *auth,
+					    DATA_BLOB *auth_token)
+{
+	struct spnego_context *spnego_ctx;
+	DATA_BLOB in_token = data_blob_null;
+	NTSTATUS status;
+
+	spnego_ctx = talloc_get_type_abort(auth->auth_ctx,
+					   struct spnego_context);
+
+	/* Negotiate the initial auth token */
+	status = spnego_get_client_auth_token(mem_ctx, spnego_ctx,
+					      &in_token, auth_token);
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
+	}
+
+	DEBUG(5, ("Created GSS Authentication Token:\n"));
+	dump_data(5, auth_token->data, auth_token->length);
+
+	return NT_STATUS_OK;
+}
+
+/*******************************************************************
+ Creates krb5 auth bind.
+ ********************************************************************/
+
+static NTSTATUS create_gssapi_auth_bind_req(TALLOC_CTX *mem_ctx,
+					    struct pipe_auth_data *auth,
+					    DATA_BLOB *auth_token)
+{
+	struct gse_context *gse_ctx;
+	DATA_BLOB in_token = data_blob_null;
+	NTSTATUS status;
+
+	gse_ctx = talloc_get_type_abort(auth->auth_ctx,
+					struct gse_context);
+
+	/* Negotiate the initial auth token */
+	status = gse_get_client_auth_token(mem_ctx, gse_ctx,
+					   &in_token,
+					   auth_token);
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
+	}
+
+	DEBUG(5, ("Created GSS Authentication Token:\n"));
+	dump_data(5, auth_token->data, auth_token->length);
+
+	return NT_STATUS_OK;
+}
+
+/*******************************************************************
  Creates NTLMSSP auth bind.
  ********************************************************************/
 
-static NTSTATUS create_generic_auth_rpc_bind_req(struct rpc_pipe_client *cli,
-						 TALLOC_CTX *mem_ctx,
-						 DATA_BLOB *auth_token,
-						 bool *client_hdr_signing)
+static NTSTATUS create_ntlmssp_auth_rpc_bind_req(struct rpc_pipe_client *cli,
+						 DATA_BLOB *auth_token)
 {
-	struct gensec_security *gensec_security;
+	struct auth_ntlmssp_state *ntlmssp_ctx;
 	DATA_BLOB null_blob = data_blob_null;
 	NTSTATUS status;
 
-	gensec_security = cli->auth->auth_ctx;
+	ntlmssp_ctx = talloc_get_type_abort(cli->auth->auth_ctx,
+					    struct auth_ntlmssp_state);
 
-	DEBUG(5, ("create_generic_auth_rpc_bind_req: generate first token\n"));
-	status = gensec_update(gensec_security, mem_ctx, null_blob, auth_token);
+	DEBUG(5, ("create_ntlmssp_auth_rpc_bind_req: Processing NTLMSSP Negotiate\n"));
+	status = auth_ntlmssp_update(ntlmssp_ctx, null_blob, auth_token);
 
-	if (!NT_STATUS_IS_OK(status) &&
-	    !NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED))
-	{
+	if (!NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
+		data_blob_free(auth_token);
 		return status;
 	}
 
-	if (client_hdr_signing == NULL) {
+	DEBUG(5, ("create_ntlmssp_auth_rpc_bind_req: NTLMSSP Negotiate:\n"));
+	dump_data(5, auth_token->data, auth_token->length);
+
+	return NT_STATUS_OK;
+}
+
+/*******************************************************************
+ Creates schannel auth bind.
+ ********************************************************************/
+
+static NTSTATUS create_schannel_auth_rpc_bind_req(struct rpc_pipe_client *cli,
+						  DATA_BLOB *auth_token)
+{
+	NTSTATUS status;
+	struct NL_AUTH_MESSAGE r;
+
+	/* Use lp_workgroup() if domain not specified */
+
+	if (!cli->auth->domain || !cli->auth->domain[0]) {
+		cli->auth->domain = talloc_strdup(cli, lp_workgroup());
+		if (cli->auth->domain == NULL) {
+			return NT_STATUS_NO_MEMORY;
+		}
+	}
+
+	/*
+	 * Now marshall the data into the auth parse_struct.
+	 */
+
+	r.MessageType			= NL_NEGOTIATE_REQUEST;
+	r.Flags				= NL_FLAG_OEM_NETBIOS_DOMAIN_NAME |
+					  NL_FLAG_OEM_NETBIOS_COMPUTER_NAME;
+	r.oem_netbios_domain.a		= cli->auth->domain;
+	r.oem_netbios_computer.a	= global_myname();
+
+	status = dcerpc_push_schannel_bind(cli, &r, auth_token);
+	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
 
-	if (cli->auth->auth_level < DCERPC_AUTH_LEVEL_INTEGRITY) {
-		*client_hdr_signing = false;
-		return status;
-	}
-
-	*client_hdr_signing = gensec_have_feature(gensec_security,
-						GENSEC_FEATURE_SIGN_PKT_HEADER);
-
-	return status;
+	return NT_STATUS_OK;
 }
 
 /*******************************************************************
@@ -1166,25 +1103,19 @@ static NTSTATUS create_generic_auth_rpc_bind_req(struct rpc_pipe_client *cli,
 
 static NTSTATUS create_bind_or_alt_ctx_internal(TALLOC_CTX *mem_ctx,
 						enum dcerpc_pkt_type ptype,
-						uint32_t rpc_call_id,
+						uint32 rpc_call_id,
 						const struct ndr_syntax_id *abstract,
 						const struct ndr_syntax_id *transfer,
 						const DATA_BLOB *auth_info,
-						bool client_hdr_signing,
 						DATA_BLOB *blob)
 {
-	uint16_t auth_len = auth_info->length;
+	uint16 auth_len = auth_info->length;
 	NTSTATUS status;
 	union dcerpc_payload u;
 	struct dcerpc_ctx_list ctx_list;
-	uint8_t pfc_flags = DCERPC_PFC_FLAG_FIRST | DCERPC_PFC_FLAG_LAST;
 
 	if (auth_len) {
 		auth_len -= DCERPC_AUTH_TRAILER_LENGTH;
-	}
-
-	if (client_hdr_signing) {
-		pfc_flags |= DCERPC_PFC_FLAG_SUPPORT_HEADER_SIGN;
 	}
 
 	ctx_list.context_id = 0;
@@ -1200,7 +1131,9 @@ static NTSTATUS create_bind_or_alt_ctx_internal(TALLOC_CTX *mem_ctx,
 	u.bind.auth_info	= *auth_info;
 
 	status = dcerpc_push_ncacn_packet(mem_ctx,
-					  ptype, pfc_flags,
+					  ptype,
+					  DCERPC_PFC_FLAG_FIRST |
+					  DCERPC_PFC_FLAG_LAST,
 					  auth_len,
 					  rpc_call_id,
 					  &u,
@@ -1220,7 +1153,7 @@ static NTSTATUS create_bind_or_alt_ctx_internal(TALLOC_CTX *mem_ctx,
 static NTSTATUS create_rpc_bind_req(TALLOC_CTX *mem_ctx,
 				    struct rpc_pipe_client *cli,
 				    struct pipe_auth_data *auth,
-				    uint32_t rpc_call_id,
+				    uint32 rpc_call_id,
 				    const struct ndr_syntax_id *abstract,
 				    const struct ndr_syntax_id *transfer,
 				    DATA_BLOB *rpc_out)
@@ -1230,19 +1163,46 @@ static NTSTATUS create_rpc_bind_req(TALLOC_CTX *mem_ctx,
 	NTSTATUS ret = NT_STATUS_OK;
 
 	switch (auth->auth_type) {
+	case DCERPC_AUTH_TYPE_SCHANNEL:
+		ret = create_schannel_auth_rpc_bind_req(cli, &auth_token);
+		if (!NT_STATUS_IS_OK(ret)) {
+			return ret;
+		}
+		break;
+
+	case DCERPC_AUTH_TYPE_NTLMSSP:
+		ret = create_ntlmssp_auth_rpc_bind_req(cli, &auth_token);
+		if (!NT_STATUS_IS_OK(ret)) {
+			return ret;
+		}
+		break;
+
+	case DCERPC_AUTH_TYPE_SPNEGO:
+		ret = create_spnego_auth_bind_req(cli, auth, &auth_token);
+		if (!NT_STATUS_IS_OK(ret)) {
+			return ret;
+		}
+		break;
+
+	case DCERPC_AUTH_TYPE_KRB5:
+		ret = create_gssapi_auth_bind_req(mem_ctx, auth, &auth_token);
+		if (!NT_STATUS_IS_OK(ret)) {
+			return ret;
+		}
+		break;
+
+	case DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM:
+		auth_token = data_blob_talloc(mem_ctx,
+					      "NCALRPC_AUTH_TOKEN",
+					      18);
+		break;
+
 	case DCERPC_AUTH_TYPE_NONE:
 		break;
 
 	default:
-		ret = create_generic_auth_rpc_bind_req(cli, mem_ctx,
-						       &auth_token,
-						       &auth->client_hdr_signing);
-
-		if (!NT_STATUS_IS_OK(ret) &&
-		    !NT_STATUS_EQUAL(ret, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
-			return ret;
-		}
-		break;
+		/* "Can't" happen. */
+		return NT_STATUS_INVALID_INFO_CLASS;
 	}
 
 	if (auth_token.length != 0) {
@@ -1250,7 +1210,7 @@ static NTSTATUS create_rpc_bind_req(TALLOC_CTX *mem_ctx,
 						auth->auth_type,
 						auth->auth_level,
 						0, /* auth_pad_length */
-						auth->auth_context_id,
+						1, /* auth_context_id */
 						&auth_token,
 						&auth_info);
 		if (!NT_STATUS_IS_OK(ret)) {
@@ -1265,7 +1225,6 @@ static NTSTATUS create_rpc_bind_req(TALLOC_CTX *mem_ctx,
 					      abstract,
 					      transfer,
 					      &auth_info,
-					      auth->client_hdr_signing,
 					      rpc_out);
 	return ret;
 }
@@ -1278,31 +1237,26 @@ static NTSTATUS create_rpc_bind_req(TALLOC_CTX *mem_ctx,
  ********************************************************************/
 
 struct rpc_api_pipe_req_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_pipe_client *cli;
 	uint8_t op_num;
 	uint32_t call_id;
-	const DATA_BLOB *req_data;
+	DATA_BLOB *req_data;
 	uint32_t req_data_sent;
-	DATA_BLOB req_trailer;
-	uint32_t req_trailer_sent;
-	bool verify_bitmask1;
-	bool verify_pcontext;
 	DATA_BLOB rpc_out;
 	DATA_BLOB reply_pdu;
 };
 
 static void rpc_api_pipe_req_write_done(struct tevent_req *subreq);
 static void rpc_api_pipe_req_done(struct tevent_req *subreq);
-static NTSTATUS prepare_verification_trailer(struct rpc_api_pipe_req_state *state);
 static NTSTATUS prepare_next_frag(struct rpc_api_pipe_req_state *state,
 				  bool *is_last_frag);
 
-static struct tevent_req *rpc_api_pipe_req_send(TALLOC_CTX *mem_ctx,
-					 struct tevent_context *ev,
+struct tevent_req *rpc_api_pipe_req_send(TALLOC_CTX *mem_ctx,
+					 struct event_context *ev,
 					 struct rpc_pipe_client *cli,
 					 uint8_t op_num,
-					 const DATA_BLOB *req_data)
+					 DATA_BLOB *req_data)
 {
 	struct tevent_req *req, *subreq;
 	struct rpc_api_pipe_req_state *state;
@@ -1330,11 +1284,6 @@ static struct tevent_req *rpc_api_pipe_req_send(TALLOC_CTX *mem_ctx,
 		goto post_status;
 	}
 
-	status = prepare_verification_trailer(state);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto post_status;
-	}
-
 	status = prepare_next_frag(state, &is_last_frag);
 	if (!NT_STATUS_IS_OK(status)) {
 		goto post_status;
@@ -1343,8 +1292,7 @@ static struct tevent_req *rpc_api_pipe_req_send(TALLOC_CTX *mem_ctx,
 	if (is_last_frag) {
 		subreq = rpc_api_pipe_send(state, ev, state->cli,
 					   &state->rpc_out,
-					   DCERPC_PKT_RESPONSE,
-					   state->call_id);
+					   DCERPC_PKT_RESPONSE);
 		if (subreq == NULL) {
 			goto fail;
 		}
@@ -1369,163 +1317,25 @@ static struct tevent_req *rpc_api_pipe_req_send(TALLOC_CTX *mem_ctx,
 	return NULL;
 }
 
-static NTSTATUS prepare_verification_trailer(struct rpc_api_pipe_req_state *state)
-{
-	struct pipe_auth_data *a = state->cli->auth;
-	struct dcerpc_sec_verification_trailer *t;
-	struct dcerpc_sec_vt *c = NULL;
-	struct ndr_push *ndr = NULL;
-	enum ndr_err_code ndr_err;
-	size_t align = 0;
-	size_t pad = 0;
-
-	if (a == NULL) {
-		return NT_STATUS_OK;
-	}
-
-	if (a->auth_level < DCERPC_AUTH_LEVEL_INTEGRITY) {
-		return NT_STATUS_OK;
-	}
-
-	t = talloc_zero(state, struct dcerpc_sec_verification_trailer);
-	if (t == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (!a->verified_bitmask1) {
-		t->commands = talloc_realloc(t, t->commands,
-					     struct dcerpc_sec_vt,
-					     t->count.count + 1);
-		if (t->commands == NULL) {
-			return NT_STATUS_NO_MEMORY;
-		}
-		c = &t->commands[t->count.count++];
-		ZERO_STRUCTP(c);
-
-		c->command = DCERPC_SEC_VT_COMMAND_BITMASK1;
-		if (a->client_hdr_signing) {
-			c->u.bitmask1 = DCERPC_SEC_VT_CLIENT_SUPPORTS_HEADER_SIGNING;
-		}
-		state->verify_bitmask1 = true;
-	}
-
-	if (!state->cli->verified_pcontext) {
-		t->commands = talloc_realloc(t, t->commands,
-					     struct dcerpc_sec_vt,
-					     t->count.count + 1);
-		if (t->commands == NULL) {
-			return NT_STATUS_NO_MEMORY;
-		}
-		c = &t->commands[t->count.count++];
-		ZERO_STRUCTP(c);
-
-		c->command = DCERPC_SEC_VT_COMMAND_PCONTEXT;
-		c->u.pcontext.abstract_syntax = state->cli->abstract_syntax;
-		c->u.pcontext.transfer_syntax = state->cli->transfer_syntax;
-
-		state->verify_pcontext = true;
-	}
-
-	if (!a->hdr_signing) {
-		t->commands = talloc_realloc(t, t->commands,
-					     struct dcerpc_sec_vt,
-					     t->count.count + 1);
-		if (t->commands == NULL) {
-			return NT_STATUS_NO_MEMORY;
-		}
-		c = &t->commands[t->count.count++];
-		ZERO_STRUCTP(c);
-
-		c->command = DCERPC_SEC_VT_COMMAND_HEADER2;
-		c->u.header2.ptype = DCERPC_PKT_REQUEST;
-		c->u.header2.drep[0] = DCERPC_DREP_LE;
-		c->u.header2.drep[1] = 0;
-		c->u.header2.drep[2] = 0;
-		c->u.header2.drep[3] = 0;
-		c->u.header2.call_id = state->call_id;
-		c->u.header2.context_id = 0;
-		c->u.header2.opnum = state->op_num;
-	}
-
-	if (t->count.count == 0) {
-		TALLOC_FREE(t);
-		return NT_STATUS_OK;
-	}
-
-	c = &t->commands[t->count.count - 1];
-	c->command |= DCERPC_SEC_VT_COMMAND_END;
-
-	if (DEBUGLEVEL >= 10) {
-		NDR_PRINT_DEBUG(dcerpc_sec_verification_trailer, t);
-	}
-
-	ndr = ndr_push_init_ctx(state);
-	if (ndr == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	ndr_err = ndr_push_dcerpc_sec_verification_trailer(ndr,
-						NDR_SCALARS | NDR_BUFFERS,
-						t);
-	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		return ndr_map_error2ntstatus(ndr_err);
-	}
-	state->req_trailer = ndr_push_blob(ndr);
-
-	align = state->req_data->length & 0x3;
-	if (align > 0) {
-		pad = 4 - align;
-	}
-	if (pad > 0) {
-		bool ok;
-		uint8_t *p;
-		const uint8_t zeros[4] = { 0, };
-
-		ok = data_blob_append(ndr, &state->req_trailer, zeros, pad);
-		if (!ok) {
-			return NT_STATUS_NO_MEMORY;
-		}
-
-		/* move the padding to the start */
-		p = state->req_trailer.data;
-		memmove(p + pad, p, state->req_trailer.length - pad);
-		memset(p, 0, pad);
-	}
-
-	return NT_STATUS_OK;
-}
-
 static NTSTATUS prepare_next_frag(struct rpc_api_pipe_req_state *state,
 				  bool *is_last_frag)
 {
+	size_t data_sent_thistime;
 	size_t auth_len;
 	size_t frag_len;
 	uint8_t flags = 0;
 	size_t pad_len;
 	size_t data_left;
-	size_t data_thistime;
-	size_t trailer_left;
-	size_t trailer_thistime = 0;
-	size_t total_left;
-	size_t total_thistime;
 	NTSTATUS status;
-	bool ok;
 	union dcerpc_payload u;
 
 	data_left = state->req_data->length - state->req_data_sent;
-	trailer_left = state->req_trailer.length - state->req_trailer_sent;
-	total_left = data_left + trailer_left;
-	if ((total_left < data_left) || (total_left < trailer_left)) {
-		/*
-		 * overflow
-		 */
-		return NT_STATUS_INVALID_PARAMETER_MIX;
-	}
 
 	status = dcerpc_guess_sizes(state->cli->auth,
-				    DCERPC_REQUEST_LENGTH, total_left,
+				    DCERPC_REQUEST_LENGTH, data_left,
 				    state->cli->max_xmit_frag,
-				    &total_thistime,
+				    CLIENT_NDR_PADDING_SIZE,
+				    &data_sent_thistime,
 				    &frag_len, &auth_len, &pad_len);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
@@ -1535,20 +1345,15 @@ static NTSTATUS prepare_next_frag(struct rpc_api_pipe_req_state *state,
 		flags = DCERPC_PFC_FLAG_FIRST;
 	}
 
-	if (total_thistime == total_left) {
+	if (data_sent_thistime == data_left) {
 		flags |= DCERPC_PFC_FLAG_LAST;
-	}
-
-	data_thistime = MIN(total_thistime, data_left);
-	if (data_thistime < total_thistime) {
-		trailer_thistime = total_thistime - data_thistime;
 	}
 
 	data_blob_free(&state->rpc_out);
 
 	ZERO_STRUCT(u.request);
 
-	u.request.alloc_hint	= total_left;
+	u.request.alloc_hint	= state->req_data->length;
 	u.request.context_id	= 0;
 	u.request.opnum		= state->op_num;
 
@@ -1568,26 +1373,11 @@ static NTSTATUS prepare_next_frag(struct rpc_api_pipe_req_state *state,
 	 * at this stage */
 	dcerpc_set_frag_length(&state->rpc_out, frag_len);
 
-	if (data_thistime > 0) {
-		/* Copy in the data. */
-		ok = data_blob_append(NULL, &state->rpc_out,
+	/* Copy in the data. */
+	if (!data_blob_append(NULL, &state->rpc_out,
 				state->req_data->data + state->req_data_sent,
-				data_thistime);
-		if (!ok) {
-			return NT_STATUS_NO_MEMORY;
-		}
-		state->req_data_sent += data_thistime;
-	}
-
-	if (trailer_thistime > 0) {
-		/* Copy in the verification trailer. */
-		ok = data_blob_append(NULL, &state->rpc_out,
-				state->req_trailer.data + state->req_trailer_sent,
-				trailer_thistime);
-		if (!ok) {
-			return NT_STATUS_NO_MEMORY;
-		}
-		state->req_trailer_sent += trailer_thistime;
+				data_sent_thistime)) {
+		return NT_STATUS_NO_MEMORY;
 	}
 
 	switch (state->cli->auth->auth_level) {
@@ -1607,6 +1397,7 @@ static NTSTATUS prepare_next_frag(struct rpc_api_pipe_req_state *state,
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
+	state->req_data_sent += data_sent_thistime;
 	*is_last_frag = ((flags & DCERPC_PFC_FLAG_LAST) != 0);
 
 	return status;
@@ -1637,8 +1428,7 @@ static void rpc_api_pipe_req_write_done(struct tevent_req *subreq)
 	if (is_last_frag) {
 		subreq = rpc_api_pipe_send(state, state->ev, state->cli,
 					   &state->rpc_out,
-					   DCERPC_PKT_RESPONSE,
-					   state->call_id);
+					   DCERPC_PKT_RESPONSE);
 		if (tevent_req_nomem(subreq, req)) {
 			return;
 		}
@@ -1670,24 +1460,10 @@ static void rpc_api_pipe_req_done(struct tevent_req *subreq)
 		tevent_req_nterror(req, status);
 		return;
 	}
-
-	if (state->cli->auth == NULL) {
-		tevent_req_done(req);
-		return;
-	}
-
-	if (state->verify_bitmask1) {
-		state->cli->auth->verified_bitmask1 = true;
-	}
-
-	if (state->verify_pcontext) {
-		state->cli->verified_pcontext = true;
-	}
-
 	tevent_req_done(req);
 }
 
-static NTSTATUS rpc_api_pipe_req_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
+NTSTATUS rpc_api_pipe_req_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
 			       DATA_BLOB *reply_pdu)
 {
 	struct rpc_api_pipe_req_state *state = tevent_req_data(
@@ -1739,7 +1515,7 @@ static bool check_bind_response(const struct dcerpc_bind_ack *r,
 
 	if (r->num_results != 0x1 || ctx.result != 0) {
 		DEBUG(2,("bind_rpc_pipe: bind denied results: %d reason: %x\n",
-		          r->num_results, ctx.reason.value));
+		          r->num_results, ctx.reason));
 	}
 
 	DEBUG(5,("check_bind_response: accepted!\n"));
@@ -1755,8 +1531,9 @@ static bool check_bind_response(const struct dcerpc_bind_ack *r,
 
 static NTSTATUS create_rpc_bind_auth3(TALLOC_CTX *mem_ctx,
 				struct rpc_pipe_client *cli,
-				struct pipe_auth_data *auth,
-				uint32_t rpc_call_id,
+				uint32 rpc_call_id,
+				enum dcerpc_AuthType auth_type,
+				enum dcerpc_AuthLevel auth_level,
 				DATA_BLOB *pauth_blob,
 				DATA_BLOB *rpc_out)
 {
@@ -1766,10 +1543,10 @@ static NTSTATUS create_rpc_bind_auth3(TALLOC_CTX *mem_ctx,
 	u.auth3._pad = 0;
 
 	status = dcerpc_push_dcerpc_auth(mem_ctx,
-					 auth->auth_type,
-					 auth->auth_level,
+					 auth_type,
+					 auth_level,
 					 0, /* auth_pad_length */
-					 auth->auth_context_id,
+					 1, /* auth_context_id */
 					 pauth_blob,
 					 &u.auth3.auth_info);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -1799,8 +1576,9 @@ static NTSTATUS create_rpc_bind_auth3(TALLOC_CTX *mem_ctx,
  ********************************************************************/
 
 static NTSTATUS create_rpc_alter_context(TALLOC_CTX *mem_ctx,
-					struct pipe_auth_data *auth,
-					uint32_t rpc_call_id,
+					enum dcerpc_AuthType auth_type,
+					enum dcerpc_AuthLevel auth_level,
+					uint32 rpc_call_id,
 					const struct ndr_syntax_id *abstract,
 					const struct ndr_syntax_id *transfer,
 					const DATA_BLOB *pauth_blob, /* spnego auth blob already created. */
@@ -1810,10 +1588,10 @@ static NTSTATUS create_rpc_alter_context(TALLOC_CTX *mem_ctx,
 	NTSTATUS status;
 
 	status = dcerpc_push_dcerpc_auth(mem_ctx,
-					 auth->auth_type,
-					 auth->auth_level,
+					 auth_type,
+					 auth_level,
 					 0, /* auth_pad_length */
-					 auth->auth_context_id,
+					 1, /* auth_context_id */
 					 pauth_blob,
 					 &auth_info);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -1826,7 +1604,6 @@ static NTSTATUS create_rpc_alter_context(TALLOC_CTX *mem_ctx,
 						 abstract,
 						 transfer,
 						 &auth_info,
-					         false, /* client_hdr_signing */
 						 rpc_out);
 	data_blob_free(&auth_info);
 	return status;
@@ -1837,7 +1614,7 @@ static NTSTATUS create_rpc_alter_context(TALLOC_CTX *mem_ctx,
 ****************************************************************************/
 
 struct rpc_pipe_bind_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_pipe_client *cli;
 	DATA_BLOB rpc_out;
 	bool auth3;
@@ -1853,7 +1630,7 @@ static NTSTATUS rpc_bind_finish_send(struct tevent_req *req,
 				     DATA_BLOB *credentials);
 
 struct tevent_req *rpc_pipe_bind_send(TALLOC_CTX *mem_ctx,
-				      struct tevent_context *ev,
+				      struct event_context *ev,
 				      struct rpc_pipe_client *cli,
 				      struct pipe_auth_data *auth)
 {
@@ -1885,13 +1662,12 @@ struct tevent_req *rpc_pipe_bind_send(TALLOC_CTX *mem_ctx,
 				     &cli->transfer_syntax,
 				     &state->rpc_out);
 
-	if (!NT_STATUS_IS_OK(status) &&
-	    !NT_STATUS_EQUAL(status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
+	if (!NT_STATUS_IS_OK(status)) {
 		goto post_status;
 	}
 
 	subreq = rpc_api_pipe_send(state, ev, cli, &state->rpc_out,
-				   DCERPC_PKT_BIND_ACK, state->rpc_call_id);
+				   DCERPC_PKT_BIND_ACK);
 	if (subreq == NULL) {
 		goto fail;
 	}
@@ -1913,7 +1689,9 @@ static void rpc_pipe_bind_step_one_done(struct tevent_req *subreq)
 	struct rpc_pipe_bind_state *state = tevent_req_data(
 		req, struct rpc_pipe_bind_state);
 	struct pipe_auth_data *pauth = state->cli->auth;
-	struct gensec_security *gensec_security;
+	struct auth_ntlmssp_state *ntlmssp_ctx;
+	struct spnego_context *spnego_ctx;
+	struct gse_context *gse_ctx;
 	struct ncacn_packet *pkt = NULL;
 	struct dcerpc_auth auth;
 	DATA_BLOB auth_token = data_blob_null;
@@ -1946,50 +1724,36 @@ static void rpc_pipe_bind_step_one_done(struct tevent_req *subreq)
 	switch(pauth->auth_type) {
 
 	case DCERPC_AUTH_TYPE_NONE:
+	case DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM:
+	case DCERPC_AUTH_TYPE_SCHANNEL:
 		/* Bind complete. */
 		tevent_req_done(req);
 		return;
 
-	default:
-		if (pkt->auth_length == 0) {
-			tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
+	case DCERPC_AUTH_TYPE_NTLMSSP:
+	case DCERPC_AUTH_TYPE_SPNEGO:
+	case DCERPC_AUTH_TYPE_KRB5:
+		/* Paranoid lenght checks */
+		if (pkt->frag_length < DCERPC_AUTH_TRAILER_LENGTH
+						+ pkt->auth_length) {
+			tevent_req_nterror(req,
+					NT_STATUS_INFO_LENGTH_MISMATCH);
 			return;
 		}
-
 		/* get auth credentials */
-		status = dcerpc_pull_auth_trailer(pkt, talloc_tos(),
-						  &pkt->u.bind_ack.auth_info,
-						  &auth, NULL, true);
+		status = dcerpc_pull_dcerpc_auth(talloc_tos(),
+						 &pkt->u.bind_ack.auth_info,
+						 &auth, false);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(0, ("Failed to pull dcerpc auth: %s.\n",
 				  nt_errstr(status)));
 			tevent_req_nterror(req, status);
 			return;
 		}
-
-		if (auth.auth_type != pauth->auth_type) {
-			DEBUG(0, (__location__ " Auth type %u mismatch expected %u.\n",
-				  auth.auth_type, pauth->auth_type));
-			tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
-			return;
-		}
-
-		if (auth.auth_level != pauth->auth_level) {
-			DEBUG(0, (__location__ " Auth level %u mismatch expected %u.\n",
-				  auth.auth_level, pauth->auth_level));
-			tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
-			return;
-		}
-
-		if (auth.auth_context_id != pauth->auth_context_id) {
-			DEBUG(0, (__location__ " Auth context id %u mismatch expected %u.\n",
-				  (unsigned)auth.auth_context_id,
-				  (unsigned)pauth->auth_context_id));
-			tevent_req_nterror(req, NT_STATUS_RPC_PROTOCOL_ERROR);
-			return;
-		}
-
 		break;
+
+	default:
+		goto err_out;
 	}
 
 	/*
@@ -1999,43 +1763,82 @@ static void rpc_pipe_bind_step_one_done(struct tevent_req *subreq)
 	switch(pauth->auth_type) {
 
 	case DCERPC_AUTH_TYPE_NONE:
+	case DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM:
+	case DCERPC_AUTH_TYPE_SCHANNEL:
 		/* Bind complete. */
 		tevent_req_done(req);
 		return;
 
-	default:
-		gensec_security = pauth->auth_ctx;
-
-		if (pkt->pfc_flags & DCERPC_PFC_FLAG_SUPPORT_HEADER_SIGN) {
-			if (pauth->client_hdr_signing) {
-				pauth->hdr_signing = true;
-				gensec_want_feature(gensec_security,
-						    GENSEC_FEATURE_SIGN_PKT_HEADER);
-			}
-		}
-
-		status = gensec_update(gensec_security, state,
-				       auth.credentials, &auth_token);
+	case DCERPC_AUTH_TYPE_NTLMSSP:
+		ntlmssp_ctx = talloc_get_type_abort(pauth->auth_ctx,
+						    struct auth_ntlmssp_state);
+		status = auth_ntlmssp_update(ntlmssp_ctx,
+					     auth.credentials, &auth_token);
 		if (NT_STATUS_EQUAL(status,
 				    NT_STATUS_MORE_PROCESSING_REQUIRED)) {
 			status = rpc_bind_next_send(req, state,
 							&auth_token);
 		} else if (NT_STATUS_IS_OK(status)) {
-			if (auth_token.length == 0) {
-				/* Bind complete. */
-				tevent_req_done(req);
-				return;
-			}
 			status = rpc_bind_finish_send(req, state,
 							&auth_token);
 		}
 		break;
+
+	case DCERPC_AUTH_TYPE_SPNEGO:
+		spnego_ctx = talloc_get_type_abort(pauth->auth_ctx,
+						   struct spnego_context);
+		status = spnego_get_client_auth_token(state,
+						spnego_ctx,
+						&auth.credentials,
+						&auth_token);
+		if (!NT_STATUS_IS_OK(status)) {
+			break;
+		}
+		if (auth_token.length == 0) {
+			/* Bind complete. */
+			tevent_req_done(req);
+			return;
+		}
+		if (spnego_require_more_processing(spnego_ctx)) {
+			status = rpc_bind_next_send(req, state,
+							&auth_token);
+		} else {
+			status = rpc_bind_finish_send(req, state,
+							&auth_token);
+		}
+		break;
+
+	case DCERPC_AUTH_TYPE_KRB5:
+		gse_ctx = talloc_get_type_abort(pauth->auth_ctx,
+						struct gse_context);
+		status = gse_get_client_auth_token(state,
+						   gse_ctx,
+						   &auth.credentials,
+						   &auth_token);
+		if (!NT_STATUS_IS_OK(status)) {
+			break;
+		}
+
+		if (gse_require_more_processing(gse_ctx)) {
+			status = rpc_bind_next_send(req, state, &auth_token);
+		} else {
+			status = rpc_bind_finish_send(req, state, &auth_token);
+		}
+		break;
+
+	default:
+		goto err_out;
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
 		tevent_req_nterror(req, status);
 	}
 	return;
+
+err_out:
+	DEBUG(0,("cli_finish_bind_auth: unknown auth type %u\n",
+		 (unsigned int)state->cli->auth->auth_type));
+	tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
 }
 
 static NTSTATUS rpc_bind_next_send(struct tevent_req *req,
@@ -2049,7 +1852,9 @@ static NTSTATUS rpc_bind_next_send(struct tevent_req *req,
 	/* Now prepare the alter context pdu. */
 	data_blob_free(&state->rpc_out);
 
-	status = create_rpc_alter_context(state, auth,
+	status = create_rpc_alter_context(state,
+					  auth->auth_type,
+					  auth->auth_level,
 					  state->rpc_call_id,
 					  &state->cli->abstract_syntax,
 					  &state->cli->transfer_syntax,
@@ -2060,8 +1865,7 @@ static NTSTATUS rpc_bind_next_send(struct tevent_req *req,
 	}
 
 	subreq = rpc_api_pipe_send(state, state->ev, state->cli,
-				   &state->rpc_out, DCERPC_PKT_ALTER_RESP,
-				   state->rpc_call_id);
+				   &state->rpc_out, DCERPC_PKT_ALTER_RESP);
 	if (subreq == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -2082,8 +1886,10 @@ static NTSTATUS rpc_bind_finish_send(struct tevent_req *req,
 	/* Now prepare the auth3 context pdu. */
 	data_blob_free(&state->rpc_out);
 
-	status = create_rpc_bind_auth3(state, state->cli, auth,
+	status = create_rpc_bind_auth3(state, state->cli,
 					state->rpc_call_id,
+					auth->auth_type,
+					auth->auth_level,
 					auth_token,
 					&state->rpc_out);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -2091,8 +1897,7 @@ static NTSTATUS rpc_bind_finish_send(struct tevent_req *req,
 	}
 
 	subreq = rpc_api_pipe_send(state, state->ev, state->cli,
-				   &state->rpc_out, DCERPC_PKT_AUTH3,
-				   state->rpc_call_id);
+				   &state->rpc_out, DCERPC_PKT_AUTH3);
 	if (subreq == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -2109,11 +1914,11 @@ NTSTATUS rpc_pipe_bind(struct rpc_pipe_client *cli,
 		       struct pipe_auth_data *auth)
 {
 	TALLOC_CTX *frame = talloc_stackframe();
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct tevent_req *req;
 	NTSTATUS status = NT_STATUS_OK;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto fail;
@@ -2125,7 +1930,8 @@ NTSTATUS rpc_pipe_bind(struct rpc_pipe_client *cli,
 		goto fail;
 	}
 
-	if (!tevent_req_poll_ntstatus(req, ev, &status)) {
+	if (!tevent_req_poll(req, ev)) {
+		status = map_nt_error_from_unix(errno);
 		goto fail;
 	}
 
@@ -2192,25 +1998,6 @@ static uint32_t rpccli_bh_set_timeout(struct dcerpc_binding_handle *h,
 	return rpccli_set_timeout(hs->rpc_cli, timeout);
 }
 
-static void rpccli_bh_auth_info(struct dcerpc_binding_handle *h,
-				enum dcerpc_AuthType *auth_type,
-				enum dcerpc_AuthLevel *auth_level)
-{
-	struct rpccli_bh_state *hs = dcerpc_binding_handle_data(h,
-				     struct rpccli_bh_state);
-
-	if (hs->rpc_cli == NULL) {
-		return;
-	}
-
-	if (hs->rpc_cli->auth == NULL) {
-		return;
-	}
-
-	*auth_type = hs->rpc_cli->auth->auth_type;
-	*auth_level = hs->rpc_cli->auth->auth_level;
-}
-
 struct rpccli_bh_raw_call_state {
 	DATA_BLOB in_data;
 	DATA_BLOB out_data;
@@ -2245,7 +2032,7 @@ static struct tevent_req *rpccli_bh_raw_call_send(TALLOC_CTX *mem_ctx,
 
 	ok = rpccli_bh_is_connected(h);
 	if (!ok) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
@@ -2328,16 +2115,15 @@ static struct tevent_req *rpccli_bh_disconnect_send(TALLOC_CTX *mem_ctx,
 
 	ok = rpccli_bh_is_connected(h);
 	if (!ok) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
 	/*
 	 * TODO: do a real async disconnect ...
 	 *
-	 * For now we do it sync...
+	 * For now the caller needs to free rpc_cli
 	 */
-	TALLOC_FREE(hs->rpc_cli->transport);
 	hs->rpc_cli = NULL;
 
 	tevent_req_done(req);
@@ -2391,7 +2177,6 @@ static const struct dcerpc_binding_handle_ops rpccli_bh_ops = {
 	.name			= "rpccli",
 	.is_connected		= rpccli_bh_is_connected,
 	.set_timeout		= rpccli_bh_set_timeout,
-	.auth_info		= rpccli_bh_auth_info,
 	.raw_call_send		= rpccli_bh_raw_call_send,
 	.raw_call_recv		= rpccli_bh_raw_call_recv,
 	.disconnect_send	= rpccli_bh_disconnect_send,
@@ -2402,17 +2187,15 @@ static const struct dcerpc_binding_handle_ops rpccli_bh_ops = {
 };
 
 /* initialise a rpc_pipe_client binding handle */
-struct dcerpc_binding_handle *rpccli_bh_create(struct rpc_pipe_client *c,
-					const struct GUID *object,
-					const struct ndr_interface_table *table)
+struct dcerpc_binding_handle *rpccli_bh_create(struct rpc_pipe_client *c)
 {
 	struct dcerpc_binding_handle *h;
 	struct rpccli_bh_state *hs;
 
 	h = dcerpc_binding_handle_create(c,
 					 &rpccli_bh_ops,
-					 object,
-					 table,
+					 NULL,
+					 NULL, /* TODO */
 					 &hs,
 					 struct rpccli_bh_state,
 					 __location__);
@@ -2424,213 +2207,223 @@ struct dcerpc_binding_handle *rpccli_bh_create(struct rpc_pipe_client *c,
 	return h;
 }
 
+bool rpccli_get_pwd_hash(struct rpc_pipe_client *rpc_cli, uint8_t nt_hash[16])
+{
+	struct auth_ntlmssp_state *a = NULL;
+	struct cli_state *cli;
+
+	if (rpc_cli->auth->auth_type == DCERPC_AUTH_TYPE_NTLMSSP) {
+		a = talloc_get_type_abort(rpc_cli->auth->auth_ctx,
+					  struct auth_ntlmssp_state);
+	} else if (rpc_cli->auth->auth_type == DCERPC_AUTH_TYPE_SPNEGO) {
+		struct spnego_context *spnego_ctx;
+		enum spnego_mech auth_type;
+		void *auth_ctx;
+		NTSTATUS status;
+
+		spnego_ctx = talloc_get_type_abort(rpc_cli->auth->auth_ctx,
+						   struct spnego_context);
+		status = spnego_get_negotiated_mech(spnego_ctx,
+						    &auth_type, &auth_ctx);
+		if (!NT_STATUS_IS_OK(status)) {
+			return false;
+		}
+
+		if (auth_type == SPNEGO_NTLMSSP) {
+			a = talloc_get_type_abort(auth_ctx,
+						  struct auth_ntlmssp_state);
+		}
+	}
+
+	if (a) {
+		memcpy(nt_hash, auth_ntlmssp_get_nt_hash(a), 16);
+		return true;
+	}
+
+	cli = rpc_pipe_np_smb_conn(rpc_cli);
+	if (cli == NULL) {
+		return false;
+	}
+	E_md4hash(cli->password ? cli->password : "", nt_hash);
+	return true;
+}
+
+NTSTATUS rpccli_ncalrpc_bind_data(TALLOC_CTX *mem_ctx,
+				  struct pipe_auth_data **presult)
+{
+	struct pipe_auth_data *result;
+
+	result = talloc(mem_ctx, struct pipe_auth_data);
+	if (result == NULL) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	result->auth_type = DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM;
+	result->auth_level = DCERPC_AUTH_LEVEL_CONNECT;
+
+	result->user_name = talloc_strdup(result, "");
+	result->domain = talloc_strdup(result, "");
+	if ((result->user_name == NULL) || (result->domain == NULL)) {
+		TALLOC_FREE(result);
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	*presult = result;
+	return NT_STATUS_OK;
+}
+
 NTSTATUS rpccli_anon_bind_data(TALLOC_CTX *mem_ctx,
 			       struct pipe_auth_data **presult)
 {
 	struct pipe_auth_data *result;
-	struct auth_generic_state *auth_generic_ctx;
-	NTSTATUS status;
 
-	result = talloc_zero(mem_ctx, struct pipe_auth_data);
+	result = talloc(mem_ctx, struct pipe_auth_data);
 	if (result == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
 	result->auth_type = DCERPC_AUTH_TYPE_NONE;
 	result->auth_level = DCERPC_AUTH_LEVEL_NONE;
-	result->auth_context_id = 0;
 
-	status = auth_generic_client_prepare(result,
-					     &auth_generic_ctx);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to create auth_generic context: %s\n",
-			  nt_errstr(status)));
-	}
-
-	status = auth_generic_set_username(auth_generic_ctx, "");
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to set username: %s\n",
-			  nt_errstr(status)));
-	}
-
-	status = auth_generic_set_domain(auth_generic_ctx, "");
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to set domain: %s\n",
-			  nt_errstr(status)));
-		return status;
-	}
-
-	status = gensec_set_credentials(auth_generic_ctx->gensec_security,
-					auth_generic_ctx->credentials);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to set GENSEC credentials: %s\n",
-			  nt_errstr(status)));
-		return status;
-	}
-	talloc_unlink(auth_generic_ctx, auth_generic_ctx->credentials);
-	auth_generic_ctx->credentials = NULL;
-
-	result->auth_ctx = talloc_move(result, &auth_generic_ctx->gensec_security);
-	talloc_free(auth_generic_ctx);
-	*presult = result;
-	return NT_STATUS_OK;
-}
-
-static NTSTATUS rpccli_generic_bind_data(TALLOC_CTX *mem_ctx,
-					 enum dcerpc_AuthType auth_type,
-					 enum dcerpc_AuthLevel auth_level,
-					 const char *server,
-					 const char *target_service,
-					 const char *domain,
-					 const char *username,
-					 const char *password,
-					 enum credentials_use_kerberos use_kerberos,
-					 struct netlogon_creds_CredentialState *creds,
-					 struct pipe_auth_data **presult)
-{
-	struct auth_generic_state *auth_generic_ctx;
-	struct pipe_auth_data *result;
-	NTSTATUS status;
-
-	result = talloc_zero(mem_ctx, struct pipe_auth_data);
-	if (result == NULL) {
+	result->user_name = talloc_strdup(result, "");
+	result->domain = talloc_strdup(result, "");
+	if ((result->user_name == NULL) || (result->domain == NULL)) {
+		TALLOC_FREE(result);
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	result->auth_type = auth_type;
-	result->auth_level = auth_level;
-	result->auth_context_id = 1;
-
-	status = auth_generic_client_prepare(result,
-					     &auth_generic_ctx);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = auth_generic_set_username(auth_generic_ctx, username);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = auth_generic_set_domain(auth_generic_ctx, domain);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = auth_generic_set_password(auth_generic_ctx, password);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = gensec_set_target_service(auth_generic_ctx->gensec_security, target_service);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = gensec_set_target_hostname(auth_generic_ctx->gensec_security, server);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	cli_credentials_set_kerberos_state(auth_generic_ctx->credentials, use_kerberos);
-	cli_credentials_set_netlogon_creds(auth_generic_ctx->credentials, creds);
-
-	status = auth_generic_client_start_by_authtype(auth_generic_ctx, auth_type, auth_level);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	result->auth_ctx = talloc_move(result, &auth_generic_ctx->gensec_security);
-	talloc_free(auth_generic_ctx);
 	*presult = result;
 	return NT_STATUS_OK;
-
- fail:
-	TALLOC_FREE(result);
-	return status;
 }
 
-/* This routine steals the creds pointer that is passed in */
-static NTSTATUS rpccli_generic_bind_data_from_creds(TALLOC_CTX *mem_ctx,
-						    enum dcerpc_AuthType auth_type,
-						    enum dcerpc_AuthLevel auth_level,
-						    const char *server,
-						    const char *target_service,
-						    struct cli_credentials *creds,
-						    struct pipe_auth_data **presult)
+static int cli_auth_ntlmssp_data_destructor(struct pipe_auth_data *auth)
 {
-	struct auth_generic_state *auth_generic_ctx;
-	struct pipe_auth_data *result;
-	NTSTATUS status;
-
-	result = talloc_zero(mem_ctx, struct pipe_auth_data);
-	if (result == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	result->auth_type = auth_type;
-	result->auth_level = auth_level;
-	result->auth_context_id = 1;
-
-	status = auth_generic_client_prepare(result,
-					     &auth_generic_ctx);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = auth_generic_set_creds(auth_generic_ctx, creds);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = gensec_set_target_service(auth_generic_ctx->gensec_security, target_service);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = gensec_set_target_hostname(auth_generic_ctx->gensec_security, server);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	status = auth_generic_client_start_by_authtype(auth_generic_ctx, auth_type, auth_level);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto fail;
-	}
-
-	result->auth_ctx = talloc_move(result, &auth_generic_ctx->gensec_security);
-	talloc_free(auth_generic_ctx);
-	*presult = result;
-	return NT_STATUS_OK;
-
- fail:
-	TALLOC_FREE(result);
-	return status;
+	TALLOC_FREE(auth->auth_ctx);
+	return 0;
 }
 
-NTSTATUS rpccli_ncalrpc_bind_data(TALLOC_CTX *mem_ctx,
+static NTSTATUS rpccli_ntlmssp_bind_data(TALLOC_CTX *mem_ctx,
+				  enum dcerpc_AuthType auth_type,
+				  enum dcerpc_AuthLevel auth_level,
+				  const char *domain,
+				  const char *username,
+				  const char *password,
 				  struct pipe_auth_data **presult)
 {
-	return rpccli_generic_bind_data(mem_ctx,
-					DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM,
-					DCERPC_AUTH_LEVEL_CONNECT,
-					NULL, /* server */
-					"host", /* target_service */
-					NAME_NT_AUTHORITY, /* domain */
-					"SYSTEM",
-					"", /* password */
-					CRED_DONT_USE_KERBEROS,
-					NULL, /* netlogon_creds_CredentialState */
-					presult);
+	struct auth_ntlmssp_state *ntlmssp_ctx;
+	struct pipe_auth_data *result;
+	NTSTATUS status;
+
+	result = talloc(mem_ctx, struct pipe_auth_data);
+	if (result == NULL) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	result->auth_type = auth_type;
+	result->auth_level = auth_level;
+
+	result->user_name = talloc_strdup(result, username);
+	result->domain = talloc_strdup(result, domain);
+	if ((result->user_name == NULL) || (result->domain == NULL)) {
+		status = NT_STATUS_NO_MEMORY;
+		goto fail;
+	}
+
+	status = auth_ntlmssp_client_start(NULL,
+				      global_myname(),
+				      lp_workgroup(),
+				      lp_client_ntlmv2_auth(),
+				      &ntlmssp_ctx);
+	if (!NT_STATUS_IS_OK(status)) {
+		goto fail;
+	}
+
+	talloc_set_destructor(result, cli_auth_ntlmssp_data_destructor);
+
+	status = auth_ntlmssp_set_username(ntlmssp_ctx, username);
+	if (!NT_STATUS_IS_OK(status)) {
+		goto fail;
+	}
+
+	status = auth_ntlmssp_set_domain(ntlmssp_ctx, domain);
+	if (!NT_STATUS_IS_OK(status)) {
+		goto fail;
+	}
+
+	status = auth_ntlmssp_set_password(ntlmssp_ctx, password);
+	if (!NT_STATUS_IS_OK(status)) {
+		goto fail;
+	}
+
+	/*
+	 * Turn off sign+seal to allow selected auth level to turn it back on.
+	 */
+	auth_ntlmssp_and_flags(ntlmssp_ctx, ~(NTLMSSP_NEGOTIATE_SIGN |
+						NTLMSSP_NEGOTIATE_SEAL));
+
+	if (auth_level == DCERPC_AUTH_LEVEL_INTEGRITY) {
+		auth_ntlmssp_or_flags(ntlmssp_ctx, NTLMSSP_NEGOTIATE_SIGN);
+	} else if (auth_level == DCERPC_AUTH_LEVEL_PRIVACY) {
+		auth_ntlmssp_or_flags(ntlmssp_ctx, NTLMSSP_NEGOTIATE_SEAL |
+						     NTLMSSP_NEGOTIATE_SIGN);
+	}
+
+	result->auth_ctx = ntlmssp_ctx;
+	*presult = result;
+	return NT_STATUS_OK;
+
+ fail:
+	TALLOC_FREE(result);
+	return status;
+}
+
+NTSTATUS rpccli_schannel_bind_data(TALLOC_CTX *mem_ctx, const char *domain,
+				   enum dcerpc_AuthLevel auth_level,
+				   struct netlogon_creds_CredentialState *creds,
+				   struct pipe_auth_data **presult)
+{
+	struct schannel_state *schannel_auth;
+	struct pipe_auth_data *result;
+
+	result = talloc(mem_ctx, struct pipe_auth_data);
+	if (result == NULL) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	result->auth_type = DCERPC_AUTH_TYPE_SCHANNEL;
+	result->auth_level = auth_level;
+
+	result->user_name = talloc_strdup(result, "");
+	result->domain = talloc_strdup(result, domain);
+	if ((result->user_name == NULL) || (result->domain == NULL)) {
+		goto fail;
+	}
+
+	schannel_auth = talloc(result, struct schannel_state);
+	if (schannel_auth == NULL) {
+		goto fail;
+	}
+
+	schannel_auth->state = SCHANNEL_STATE_START;
+	schannel_auth->seq_num = 0;
+	schannel_auth->initiator = true;
+	schannel_auth->creds = netlogon_creds_copy(result, creds);
+
+	result->auth_ctx = schannel_auth;
+	*presult = result;
+	return NT_STATUS_OK;
+
+ fail:
+	TALLOC_FREE(result);
+	return NT_STATUS_NO_MEMORY;
 }
 
 /**
  * Create an rpc pipe client struct, connecting to a tcp port.
  */
 static NTSTATUS rpc_pipe_open_tcp_port(TALLOC_CTX *mem_ctx, const char *host,
-				       const struct sockaddr_storage *ss_addr,
 				       uint16_t port,
-				       const struct ndr_interface_table *table,
+				       const struct ndr_syntax_id *abstract_syntax,
 				       struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
@@ -2638,13 +2431,13 @@ static NTSTATUS rpc_pipe_open_tcp_port(TALLOC_CTX *mem_ctx, const char *host,
 	NTSTATUS status;
 	int fd;
 
-	result = talloc_zero(mem_ctx, struct rpc_pipe_client);
+	result = TALLOC_ZERO_P(mem_ctx, struct rpc_pipe_client);
 	if (result == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	result->abstract_syntax = table->syntax_id;
-	result->transfer_syntax = ndr_transfer_syntax_ndr;
+	result->abstract_syntax = *abstract_syntax;
+	result->transfer_syntax = ndr_transfer_syntax;
 
 	result->desthost = talloc_strdup(result, host);
 	result->srv_name_slash = talloc_asprintf_strupper_m(
@@ -2657,13 +2450,9 @@ static NTSTATUS rpc_pipe_open_tcp_port(TALLOC_CTX *mem_ctx, const char *host,
 	result->max_xmit_frag = RPC_MAX_PDU_FRAG_LEN;
 	result->max_recv_frag = RPC_MAX_PDU_FRAG_LEN;
 
-	if (ss_addr == NULL) {
-		if (!resolve_name(host, &addr, NBT_NAME_SERVER, false)) {
-			status = NT_STATUS_NOT_FOUND;
-			goto fail;
-		}
-	} else {
-		addr = *ss_addr;
+	if (!resolve_name(host, &addr, 0, false)) {
+		status = NT_STATUS_NOT_FOUND;
+		goto fail;
 	}
 
 	status = open_socket_out(&addr, port, 60*1000, &fd);
@@ -2680,7 +2469,7 @@ static NTSTATUS rpc_pipe_open_tcp_port(TALLOC_CTX *mem_ctx, const char *host,
 
 	result->transport->transport = NCACN_IP_TCP;
 
-	result->binding_handle = rpccli_bh_create(result, NULL, table);
+	result->binding_handle = rpccli_bh_create(result);
 	if (result->binding_handle == NULL) {
 		TALLOC_FREE(result);
 		return NT_STATUS_NO_MEMORY;
@@ -2700,8 +2489,7 @@ static NTSTATUS rpc_pipe_open_tcp_port(TALLOC_CTX *mem_ctx, const char *host,
  * target host.
  */
 static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
-				      const struct sockaddr_storage *addr,
-				      const struct ndr_interface_table *table,
+				      const struct ndr_syntax_id *abstract_syntax,
 				      uint16_t *pport)
 {
 	NTSTATUS status;
@@ -2710,8 +2498,6 @@ static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
 	struct pipe_auth_data *auth = NULL;
 	struct dcerpc_binding *map_binding = NULL;
 	struct dcerpc_binding *res_binding = NULL;
-	enum dcerpc_transport_t transport;
-	const char *endpoint = NULL;
 	struct epm_twr_t *map_tower = NULL;
 	struct epm_twr_t *res_towers = NULL;
 	struct policy_handle *entry_handle = NULL;
@@ -2726,16 +2512,15 @@ static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
 		goto done;
 	}
 
-	if (ndr_syntax_id_equal(&table->syntax_id,
+	if (ndr_syntax_id_equal(abstract_syntax,
 				&ndr_table_epmapper.syntax_id)) {
 		*pport = 135;
-		status = NT_STATUS_OK;
-		goto done;
+		return NT_STATUS_OK;
 	}
 
 	/* open the connection to the endpoint mapper */
-	status = rpc_pipe_open_tcp_port(tmp_ctx, host, addr, 135,
-					&ndr_table_epmapper,
+	status = rpc_pipe_open_tcp_port(tmp_ctx, host, 135,
+					&ndr_table_epmapper.syntax_id,
 					&epm_pipe);
 
 	if (!NT_STATUS_IS_OK(status)) {
@@ -2755,19 +2540,18 @@ static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
 
 	/* create tower for asking the epmapper */
 
-	status = dcerpc_parse_binding(tmp_ctx, "ncacn_ip_tcp:[135]",
-				      &map_binding);
-	if (!NT_STATUS_IS_OK(status)) {
+	map_binding = TALLOC_ZERO_P(tmp_ctx, struct dcerpc_binding);
+	if (map_binding == NULL) {
+		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 
-	status = dcerpc_binding_set_abstract_syntax(map_binding,
-						    &table->syntax_id);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
+	map_binding->transport = NCACN_IP_TCP;
+	map_binding->object = *abstract_syntax;
+	map_binding->host = host; /* needed? */
+	map_binding->endpoint = "0"; /* correct? needed? */
 
-	map_tower = talloc_zero(tmp_ctx, struct epm_twr_t);
+	map_tower = TALLOC_ZERO_P(tmp_ctx, struct epm_twr_t);
 	if (map_tower == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
@@ -2781,14 +2565,14 @@ static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
 
 	/* allocate further parameters for the epm_Map call */
 
-	res_towers = talloc_array(tmp_ctx, struct epm_twr_t, max_towers);
+	res_towers = TALLOC_ARRAY(tmp_ctx, struct epm_twr_t, max_towers);
 	if (res_towers == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 	towers.twr = res_towers;
 
-	entry_handle = talloc_zero(tmp_ctx, struct policy_handle);
+	entry_handle = TALLOC_ZERO_P(tmp_ctx, struct policy_handle);
 	if (entry_handle == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
@@ -2798,8 +2582,8 @@ static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
 
 	status = dcerpc_epm_Map(epm_handle,
 				tmp_ctx,
-				discard_const_p(struct GUID,
-					      &(table->syntax_id.uuid)),
+				CONST_DISCARD(struct GUID *,
+					      &(abstract_syntax->uuid)),
 				map_tower,
 				entry_handle,
 				max_towers,
@@ -2830,21 +2614,13 @@ static NTSTATUS rpc_pipe_get_tcp_port(const char *host,
 		goto done;
 	}
 
-	transport = dcerpc_binding_get_transport(res_binding);
-	endpoint = dcerpc_binding_get_string_option(res_binding, "endpoint");
-
 	/* are further checks here necessary? */
-	if (transport != NCACN_IP_TCP) {
-		status = NT_STATUS_INVALID_NETWORK_RESPONSE;
+	if (res_binding->transport != NCACN_IP_TCP) {
+		status = NT_STATUS_UNSUCCESSFUL;
 		goto done;
 	}
 
-	if (endpoint == NULL) {
-		status = NT_STATUS_INVALID_NETWORK_RESPONSE;
-		goto done;
-	}
-
-	*pport = (uint16_t)atoi(endpoint);
+	*pport = (uint16_t)atoi(res_binding->endpoint);
 
 done:
 	TALLOC_FREE(tmp_ctx);
@@ -2857,42 +2633,40 @@ done:
  * host.
  */
 NTSTATUS rpc_pipe_open_tcp(TALLOC_CTX *mem_ctx, const char *host,
-			   const struct sockaddr_storage *addr,
-			   const struct ndr_interface_table *table,
+			   const struct ndr_syntax_id *abstract_syntax,
 			   struct rpc_pipe_client **presult)
 {
 	NTSTATUS status;
 	uint16_t port = 0;
 
-	status = rpc_pipe_get_tcp_port(host, addr, table, &port);
+	status = rpc_pipe_get_tcp_port(host, abstract_syntax, &port);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
 
-	return rpc_pipe_open_tcp_port(mem_ctx, host, addr, port,
-				      table, presult);
+	return rpc_pipe_open_tcp_port(mem_ctx, host, port,
+					abstract_syntax, presult);
 }
 
 /********************************************************************
  Create a rpc pipe client struct, connecting to a unix domain socket
  ********************************************************************/
 NTSTATUS rpc_pipe_open_ncalrpc(TALLOC_CTX *mem_ctx, const char *socket_path,
-			       const struct ndr_interface_table *table,
+			       const struct ndr_syntax_id *abstract_syntax,
 			       struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
 	struct sockaddr_un addr;
 	NTSTATUS status;
 	int fd;
-	socklen_t salen;
 
 	result = talloc_zero(mem_ctx, struct rpc_pipe_client);
 	if (result == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	result->abstract_syntax = table->syntax_id;
-	result->transfer_syntax = ndr_transfer_syntax_ndr;
+	result->abstract_syntax = *abstract_syntax;
+	result->transfer_syntax = ndr_transfer_syntax;
 
 	result->desthost = get_myname(result);
 	result->srv_name_slash = talloc_asprintf_strupper_m(
@@ -2914,9 +2688,8 @@ NTSTATUS rpc_pipe_open_ncalrpc(TALLOC_CTX *mem_ctx, const char *socket_path,
 	ZERO_STRUCT(addr);
 	addr.sun_family = AF_UNIX;
 	strlcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
-	salen = sizeof(struct sockaddr_un);
 
-	if (connect(fd, (struct sockaddr *)(void *)&addr, salen) == -1) {
+	if (sys_connect(fd, (struct sockaddr *)(void *)&addr) == -1) {
 		DEBUG(0, ("connect(%s) failed: %s\n", socket_path,
 			  strerror(errno)));
 		close(fd);
@@ -2931,7 +2704,7 @@ NTSTATUS rpc_pipe_open_ncalrpc(TALLOC_CTX *mem_ctx, const char *socket_path,
 
 	result->transport->transport = NCALRPC;
 
-	result->binding_handle = rpccli_bh_create(result, NULL, table);
+	result->binding_handle = rpccli_bh_create(result);
 	if (result->binding_handle == NULL) {
 		TALLOC_FREE(result);
 		return NT_STATUS_NO_MEMORY;
@@ -2970,7 +2743,7 @@ static int rpc_pipe_client_np_ref_destructor(struct rpc_pipe_client_np_ref *np_r
  ****************************************************************************/
 
 static NTSTATUS rpc_pipe_open_np(struct cli_state *cli,
-				 const struct ndr_interface_table *table,
+				 const struct ndr_syntax_id *abstract_syntax,
 				 struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
@@ -2983,14 +2756,14 @@ static NTSTATUS rpc_pipe_open_np(struct cli_state *cli,
 		return NT_STATUS_INVALID_HANDLE;
 	}
 
-	result = talloc_zero(NULL, struct rpc_pipe_client);
+	result = TALLOC_ZERO_P(NULL, struct rpc_pipe_client);
 	if (result == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	result->abstract_syntax = table->syntax_id;
-	result->transfer_syntax = ndr_transfer_syntax_ndr;
-	result->desthost = talloc_strdup(result, smbXcli_conn_remote_name(cli->conn));
+	result->abstract_syntax = *abstract_syntax;
+	result->transfer_syntax = ndr_transfer_syntax;
+	result->desthost = talloc_strdup(result, cli->desthost);
 	result->srv_name_slash = talloc_asprintf_strupper_m(
 		result, "\\\\%s", result->desthost);
 
@@ -3002,7 +2775,7 @@ static NTSTATUS rpc_pipe_open_np(struct cli_state *cli,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	status = rpc_transport_np_init(result, cli, table,
+	status = rpc_transport_np_init(result, cli, abstract_syntax,
 				       &result->transport);
 	if (!NT_STATUS_IS_OK(status)) {
 		TALLOC_FREE(result);
@@ -3022,7 +2795,7 @@ static NTSTATUS rpc_pipe_open_np(struct cli_state *cli,
 	DLIST_ADD(np_ref->cli->pipe_list, np_ref->pipe);
 	talloc_set_destructor(np_ref, rpc_pipe_client_np_ref_destructor);
 
-	result->binding_handle = rpccli_bh_create(result, NULL, table);
+	result->binding_handle = rpccli_bh_create(result);
 	if (result->binding_handle == NULL) {
 		TALLOC_FREE(result);
 		return NT_STATUS_NO_MEMORY;
@@ -3038,17 +2811,15 @@ static NTSTATUS rpc_pipe_open_np(struct cli_state *cli,
 
 static NTSTATUS cli_rpc_pipe_open(struct cli_state *cli,
 				  enum dcerpc_transport_t transport,
-				  const struct ndr_interface_table *table,
+				  const struct ndr_syntax_id *interface,
 				  struct rpc_pipe_client **presult)
 {
 	switch (transport) {
 	case NCACN_IP_TCP:
-		return rpc_pipe_open_tcp(NULL,
-					 smbXcli_conn_remote_name(cli->conn),
-					 smbXcli_conn_remote_sockaddr(cli->conn),
-					 table, presult);
+		return rpc_pipe_open_tcp(NULL, cli->desthost, interface,
+					 presult);
 	case NCACN_NP:
-		return rpc_pipe_open_np(cli, table, presult);
+		return rpc_pipe_open_np(cli, interface, presult);
 	default:
 		return NT_STATUS_NOT_IMPLEMENTED;
 	}
@@ -3060,14 +2831,14 @@ static NTSTATUS cli_rpc_pipe_open(struct cli_state *cli,
 
 NTSTATUS cli_rpc_pipe_open_noauth_transport(struct cli_state *cli,
 					    enum dcerpc_transport_t transport,
-					    const struct ndr_interface_table *table,
+					    const struct ndr_syntax_id *interface,
 					    struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
 	struct pipe_auth_data *auth;
 	NTSTATUS status;
 
-	status = cli_rpc_pipe_open(cli, transport, table, &result);
+	status = cli_rpc_pipe_open(cli, transport, interface, &result);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
@@ -3086,26 +2857,24 @@ NTSTATUS cli_rpc_pipe_open_noauth_transport(struct cli_state *cli,
 	 * from the enclosing SMB creds
 	 */
 
-	if (transport == NCACN_NP) {
-		struct smbXcli_session *session;
+	TALLOC_FREE(auth->user_name);
+	TALLOC_FREE(auth->domain);
 
-		if (smbXcli_conn_protocol(cli->conn) >= PROTOCOL_SMB2_02) {
-			session = cli->smb2.session;
-		} else {
-			session = cli->smb1.session;
-		}
+	auth->user_name = talloc_strdup(auth, cli->user_name);
+	auth->domain = talloc_strdup(auth, cli->domain);
+	auth->user_session_key = data_blob_talloc(auth,
+		cli->user_session_key.data,
+		cli->user_session_key.length);
 
-		status = smbXcli_session_application_key(session, auth,
-						&auth->transport_session_key);
-		if (!NT_STATUS_IS_OK(status)) {
-			auth->transport_session_key = data_blob_null;
-		}
+	if ((auth->user_name == NULL) || (auth->domain == NULL)) {
+		TALLOC_FREE(result);
+		return NT_STATUS_NO_MEMORY;
 	}
 
 	status = rpc_pipe_bind(result, auth);
 	if (!NT_STATUS_IS_OK(status)) {
 		int lvl = 0;
-		if (ndr_syntax_id_equal(&table->syntax_id,
+		if (ndr_syntax_id_equal(interface,
 					&ndr_table_dssetup.syntax_id)) {
 			/* non AD domains just don't have this pipe, avoid
 			 * level 0 statement in that case - gd */
@@ -3113,7 +2882,7 @@ NTSTATUS cli_rpc_pipe_open_noauth_transport(struct cli_state *cli,
 		}
 		DEBUG(lvl, ("cli_rpc_pipe_open_noauth: rpc_pipe_bind for pipe "
 			    "%s failed with error %s\n",
-			    table->name,
+			    get_pipe_name_from_syntax(talloc_tos(), interface),
 			    nt_errstr(status) ));
 		TALLOC_FREE(result);
 		return status;
@@ -3121,8 +2890,8 @@ NTSTATUS cli_rpc_pipe_open_noauth_transport(struct cli_state *cli,
 
 	DEBUG(10,("cli_rpc_pipe_open_noauth: opened pipe %s to machine "
 		  "%s and bound anonymously.\n",
-		  table->name,
-		  result->desthost));
+		  get_pipe_name_from_syntax(talloc_tos(), interface),
+		  cli->desthost));
 
 	*presult = result;
 	return NT_STATUS_OK;
@@ -3132,60 +2901,57 @@ NTSTATUS cli_rpc_pipe_open_noauth_transport(struct cli_state *cli,
  ****************************************************************************/
 
 NTSTATUS cli_rpc_pipe_open_noauth(struct cli_state *cli,
-				  const struct ndr_interface_table *table,
+				  const struct ndr_syntax_id *interface,
 				  struct rpc_pipe_client **presult)
 {
 	return cli_rpc_pipe_open_noauth_transport(cli, NCACN_NP,
-						  table, presult);
+						  interface, presult);
 }
 
 /****************************************************************************
- Open a named pipe to an SMB server and bind using the mech specified
-
- This routine references the creds pointer that is passed in
+ Open a named pipe to an SMB server and bind using NTLMSSP or SPNEGO NTLMSSP
  ****************************************************************************/
 
-NTSTATUS cli_rpc_pipe_open_with_creds(struct cli_state *cli,
-				      const struct ndr_interface_table *table,
-				      enum dcerpc_transport_t transport,
-				      enum dcerpc_AuthType auth_type,
-				      enum dcerpc_AuthLevel auth_level,
-				      const char *server,
-				      struct cli_credentials *creds,
-				      struct rpc_pipe_client **presult)
+NTSTATUS cli_rpc_pipe_open_ntlmssp(struct cli_state *cli,
+				   const struct ndr_syntax_id *interface,
+				   enum dcerpc_transport_t transport,
+				   enum dcerpc_AuthLevel auth_level,
+				   const char *domain,
+				   const char *username,
+				   const char *password,
+				   struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
 	struct pipe_auth_data *auth = NULL;
-	const char *target_service = table->authservices->names[0];
-
+	enum dcerpc_AuthType auth_type = DCERPC_AUTH_TYPE_NTLMSSP;
 	NTSTATUS status;
 
-	status = cli_rpc_pipe_open(cli, transport, table, &result);
+	status = cli_rpc_pipe_open(cli, transport, interface, &result);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
 
-	status = rpccli_generic_bind_data_from_creds(result,
-						     auth_type, auth_level,
-						     server, target_service,
-						     creds,
-						     &auth);
+	status = rpccli_ntlmssp_bind_data(result,
+					  auth_type, auth_level,
+					  domain, username, password,
+					  &auth);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("rpccli_generic_bind_data returned %s\n",
+		DEBUG(0, ("rpccli_ntlmssp_bind_data returned %s\n",
 			  nt_errstr(status)));
 		goto err;
 	}
 
 	status = rpc_pipe_bind(result, auth);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("cli_rpc_pipe_open_generic_auth: cli_rpc_pipe_bind failed with error %s\n",
+		DEBUG(0, ("cli_rpc_pipe_open_ntlmssp_internal: cli_rpc_pipe_bind failed with error %s\n",
 			nt_errstr(status) ));
 		goto err;
 	}
 
-	DEBUG(10,("cli_rpc_pipe_open_generic_auth: opened pipe %s to "
-		"machine %s and bound as user %s.\n", table->name,
-		  result->desthost, cli_credentials_get_unparsed_name(creds, talloc_tos())));
+	DEBUG(10,("cli_rpc_pipe_open_ntlmssp_internal: opened pipe %s to "
+		"machine %s and bound NTLMSSP as user %s\\%s.\n",
+		  get_pipe_name_from_syntax(talloc_tos(), interface),
+		  cli->desthost, domain, username ));
 
 	*presult = result;
 	return NT_STATUS_OK;
@@ -3197,160 +2963,301 @@ NTSTATUS cli_rpc_pipe_open_with_creds(struct cli_state *cli,
 }
 
 /****************************************************************************
- Open a named pipe to an SMB server and bind using the mech specified
+ External interface.
+ Open a named pipe to an SMB server and bind using schannel (bind type 68)
+ using session_key. sign and seal.
 
- This routine steals the creds pointer that is passed in
+ The *pdc will be stolen onto this new pipe
  ****************************************************************************/
 
-NTSTATUS cli_rpc_pipe_open_generic_auth(struct cli_state *cli,
-					const struct ndr_interface_table *table,
+NTSTATUS cli_rpc_pipe_open_schannel_with_key(struct cli_state *cli,
+					     const struct ndr_syntax_id *interface,
+					     enum dcerpc_transport_t transport,
+					     enum dcerpc_AuthLevel auth_level,
+					     const char *domain,
+					     struct netlogon_creds_CredentialState **pdc,
+					     struct rpc_pipe_client **presult)
+{
+	struct rpc_pipe_client *result;
+	struct pipe_auth_data *auth;
+	NTSTATUS status;
+
+	status = cli_rpc_pipe_open(cli, transport, interface, &result);
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
+	}
+
+	status = rpccli_schannel_bind_data(result, domain, auth_level,
+					   *pdc, &auth);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("rpccli_schannel_bind_data returned %s\n",
+			  nt_errstr(status)));
+		TALLOC_FREE(result);
+		return status;
+	}
+
+	status = rpc_pipe_bind(result, auth);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("cli_rpc_pipe_open_schannel_with_key: "
+			  "cli_rpc_pipe_bind failed with error %s\n",
+			  nt_errstr(status) ));
+		TALLOC_FREE(result);
+		return status;
+	}
+
+	/*
+	 * The credentials on a new netlogon pipe are the ones we are passed
+	 * in - copy them over
+	 */
+	result->dc = netlogon_creds_copy(result, *pdc);
+	if (result->dc == NULL) {
+		TALLOC_FREE(result);
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	DEBUG(10,("cli_rpc_pipe_open_schannel_with_key: opened pipe %s to machine %s "
+		  "for domain %s and bound using schannel.\n",
+		  get_pipe_name_from_syntax(talloc_tos(), interface),
+		  cli->desthost, domain ));
+
+	*presult = result;
+	return NT_STATUS_OK;
+}
+
+/****************************************************************************
+ Open a named pipe to an SMB server and bind using krb5 (bind type 16).
+ The idea is this can be called with service_princ, username and password all
+ NULL so long as the caller has a TGT.
+ ****************************************************************************/
+
+NTSTATUS cli_rpc_pipe_open_krb5(struct cli_state *cli,
+				const struct ndr_syntax_id *interface,
+				enum dcerpc_transport_t transport,
+				enum dcerpc_AuthLevel auth_level,
+				const char *server,
+				const char *username,
+				const char *password,
+				struct rpc_pipe_client **presult)
+{
+	struct rpc_pipe_client *result;
+	struct pipe_auth_data *auth;
+	struct gse_context *gse_ctx;
+	NTSTATUS status;
+
+	status = cli_rpc_pipe_open(cli, transport, interface, &result);
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
+	}
+
+	auth = talloc(result, struct pipe_auth_data);
+	if (auth == NULL) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+	auth->auth_type = DCERPC_AUTH_TYPE_KRB5;
+	auth->auth_level = auth_level;
+
+	if (!username) {
+		username = "";
+	}
+	auth->user_name = talloc_strdup(auth, username);
+	if (!auth->user_name) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+
+	/* Fixme, should we fetch/set the Realm ? */
+	auth->domain = talloc_strdup(auth, "");
+	if (!auth->domain) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+
+	status = gse_init_client(auth,
+				 (auth_level == DCERPC_AUTH_LEVEL_INTEGRITY),
+				 (auth_level == DCERPC_AUTH_LEVEL_PRIVACY),
+				 NULL, server, "cifs", username, password,
+				 GSS_C_DCE_STYLE, &gse_ctx);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("gse_init_client returned %s\n",
+			  nt_errstr(status)));
+		goto err_out;
+	}
+	auth->auth_ctx = gse_ctx;
+
+	status = rpc_pipe_bind(result, auth);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("cli_rpc_pipe_bind failed with error %s\n",
+			  nt_errstr(status)));
+		goto err_out;
+	}
+
+	*presult = result;
+	return NT_STATUS_OK;
+
+err_out:
+	TALLOC_FREE(result);
+	return status;
+}
+
+NTSTATUS cli_rpc_pipe_open_spnego_krb5(struct cli_state *cli,
+					const struct ndr_syntax_id *interface,
 					enum dcerpc_transport_t transport,
-					enum credentials_use_kerberos use_kerberos,
-					enum dcerpc_AuthType auth_type,
 					enum dcerpc_AuthLevel auth_level,
 					const char *server,
-					const char *domain,
 					const char *username,
 					const char *password,
 					struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
-	struct pipe_auth_data *auth = NULL;
-	const char *target_service = table->authservices->names[0];
-	
+	struct pipe_auth_data *auth;
+	struct spnego_context *spnego_ctx;
 	NTSTATUS status;
 
-	status = cli_rpc_pipe_open(cli, transport, table, &result);
+	status = cli_rpc_pipe_open(cli, transport, interface, &result);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
 
-	status = rpccli_generic_bind_data(result,
-					  auth_type, auth_level,
-					  server, target_service,
-					  domain, username, password, 
-					  CRED_AUTO_USE_KERBEROS,
-					  NULL,
-					  &auth);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("rpccli_generic_bind_data returned %s\n",
-			  nt_errstr(status)));
-		goto err;
+	auth = talloc(result, struct pipe_auth_data);
+	if (auth == NULL) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
 	}
+	auth->auth_type = DCERPC_AUTH_TYPE_SPNEGO;
+	auth->auth_level = auth_level;
+
+	if (!username) {
+		username = "";
+	}
+	auth->user_name = talloc_strdup(auth, username);
+	if (!auth->user_name) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+
+	/* Fixme, should we fetch/set the Realm ? */
+	auth->domain = talloc_strdup(auth, "");
+	if (!auth->domain) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+
+	status = spnego_gssapi_init_client(auth,
+					   (auth->auth_level ==
+						DCERPC_AUTH_LEVEL_INTEGRITY),
+					   (auth->auth_level ==
+						DCERPC_AUTH_LEVEL_PRIVACY),
+					   true,
+					   NULL, server, "cifs",
+					   username, password,
+					   &spnego_ctx);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("spnego_init_client returned %s\n",
+			  nt_errstr(status)));
+		goto err_out;
+	}
+	auth->auth_ctx = spnego_ctx;
 
 	status = rpc_pipe_bind(result, auth);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("cli_rpc_pipe_open_generic_auth: cli_rpc_pipe_bind failed with error %s\n",
-			nt_errstr(status) ));
-		goto err;
+		DEBUG(0, ("cli_rpc_pipe_bind failed with error %s\n",
+			  nt_errstr(status)));
+		goto err_out;
 	}
-
-	DEBUG(10,("cli_rpc_pipe_open_generic_auth: opened pipe %s to "
-		"machine %s and bound as user %s\\%s.\n", table->name,
-		  result->desthost, domain, username));
 
 	*presult = result;
 	return NT_STATUS_OK;
 
-  err:
-
+err_out:
 	TALLOC_FREE(result);
 	return status;
 }
 
-NTSTATUS cli_rpc_pipe_open_schannel_with_creds(struct cli_state *cli,
-					       const struct ndr_interface_table *table,
-					       enum dcerpc_transport_t transport,
-					       struct cli_credentials *cli_creds,
-					       struct netlogon_creds_cli_context *netlogon_creds,
-					       struct rpc_pipe_client **_rpccli)
+NTSTATUS cli_rpc_pipe_open_spnego_ntlmssp(struct cli_state *cli,
+					  const struct ndr_syntax_id *interface,
+					  enum dcerpc_transport_t transport,
+					  enum dcerpc_AuthLevel auth_level,
+					  const char *domain,
+					  const char *username,
+					  const char *password,
+					  struct rpc_pipe_client **presult)
 {
-	struct rpc_pipe_client *rpccli;
-	struct pipe_auth_data *rpcauth;
-	const char *target_service = table->authservices->names[0];
-	struct netlogon_creds_CredentialState *ncreds = NULL;
-	enum dcerpc_AuthLevel auth_level;
+	struct rpc_pipe_client *result;
+	struct pipe_auth_data *auth;
+	struct spnego_context *spnego_ctx;
 	NTSTATUS status;
-	int rpc_pipe_bind_dbglvl = 0;
 
-	status = cli_rpc_pipe_open(cli, transport, table, &rpccli);
+	status = cli_rpc_pipe_open(cli, transport, interface, &result);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
 	}
 
-	status = netlogon_creds_cli_lock(netlogon_creds, rpccli, &ncreds);
+	auth = talloc(result, struct pipe_auth_data);
+	if (auth == NULL) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+	auth->auth_type = DCERPC_AUTH_TYPE_SPNEGO;
+	auth->auth_level = auth_level;
+
+	if (!username) {
+		username = "";
+	}
+	auth->user_name = talloc_strdup(auth, username);
+	if (!auth->user_name) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+
+	if (!domain) {
+		domain = "";
+	}
+	auth->domain = talloc_strdup(auth, domain);
+	if (!auth->domain) {
+		status = NT_STATUS_NO_MEMORY;
+		goto err_out;
+	}
+
+	status = spnego_ntlmssp_init_client(auth,
+					    (auth->auth_level ==
+						DCERPC_AUTH_LEVEL_INTEGRITY),
+					    (auth->auth_level ==
+						DCERPC_AUTH_LEVEL_PRIVACY),
+					    true,
+					    domain, username, password,
+					    &spnego_ctx);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("netlogon_creds_cli_get returned %s\n",
+		DEBUG(0, ("spnego_init_client returned %s\n",
 			  nt_errstr(status)));
-		TALLOC_FREE(rpccli);
-		return status;
+		goto err_out;
 	}
+	auth->auth_ctx = spnego_ctx;
 
-	auth_level = netlogon_creds_cli_auth_level(netlogon_creds);
-
-	cli_credentials_set_netlogon_creds(cli_creds, ncreds);
-
-	status = rpccli_generic_bind_data_from_creds(rpccli,
-						     DCERPC_AUTH_TYPE_SCHANNEL,
-						     auth_level,
-						     rpccli->desthost,
-						     target_service,
-						     cli_creds,
-						     &rpcauth);
+	status = rpc_pipe_bind(result, auth);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("rpccli_generic_bind_data_from_creds returned %s\n",
+		DEBUG(0, ("cli_rpc_pipe_bind failed with error %s\n",
 			  nt_errstr(status)));
-		TALLOC_FREE(rpccli);
-		return status;
+		goto err_out;
 	}
 
-	status = rpc_pipe_bind(rpccli, rpcauth);
-	cli_credentials_set_netlogon_creds(cli_creds, NULL);
-	if (NT_STATUS_EQUAL(status, NT_STATUS_NETWORK_ACCESS_DENIED)) {
-		rpc_pipe_bind_dbglvl = 1;
-		netlogon_creds_cli_delete(netlogon_creds, &ncreds);
-	}
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(rpc_pipe_bind_dbglvl,
-		      ("%s: rpc_pipe_bind failed with error %s\n",
-		       __func__, nt_errstr(status)));
-		TALLOC_FREE(rpccli);
-		return status;
-	}
-
-	TALLOC_FREE(ncreds);
-
-	if (!ndr_syntax_id_equal(&table->syntax_id, &ndr_table_netlogon.syntax_id)) {
-		goto done;
-	}
-
-	status = netlogon_creds_cli_check(netlogon_creds,
-					  rpccli->binding_handle);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("netlogon_creds_cli_check failed with %s\n",
-			  nt_errstr(status)));
-		TALLOC_FREE(rpccli);
-		return status;
-	}
-
-
-done:
-	DEBUG(10,("%s: opened pipe %s to machine %s "
-		  "for domain %s and bound using schannel.\n",
-		  __func__, table->name,
-		  rpccli->desthost, cli_credentials_get_domain(cli_creds)));
-
-	*_rpccli = rpccli;
+	*presult = result;
 	return NT_STATUS_OK;
+
+err_out:
+	TALLOC_FREE(result);
+	return status;
 }
 
 NTSTATUS cli_get_session_key(TALLOC_CTX *mem_ctx,
 			     struct rpc_pipe_client *cli,
 			     DATA_BLOB *session_key)
 {
-	NTSTATUS status;
-	struct pipe_auth_data *a;
-	struct gensec_security *gensec_security;
+	struct pipe_auth_data *a = cli->auth;
+	struct schannel_state *schannel_auth;
+	struct auth_ntlmssp_state *ntlmssp_ctx;
+	struct spnego_context *spnego_ctx;
+	struct gse_context *gse_ctx;
 	DATA_BLOB sk = data_blob_null;
 	bool make_dup = false;
 
@@ -3358,25 +3265,42 @@ NTSTATUS cli_get_session_key(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
-	a = cli->auth;
-
-	if (a == NULL) {
+	if (!cli->auth) {
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
 	switch (cli->auth->auth_type) {
+	case DCERPC_AUTH_TYPE_SCHANNEL:
+		schannel_auth = talloc_get_type_abort(a->auth_ctx,
+						      struct schannel_state);
+		sk = data_blob_const(schannel_auth->creds->session_key, 16);
+		make_dup = true;
+		break;
+	case DCERPC_AUTH_TYPE_SPNEGO:
+		spnego_ctx = talloc_get_type_abort(a->auth_ctx,
+						   struct spnego_context);
+		sk = spnego_get_session_key(mem_ctx, spnego_ctx);
+		make_dup = false;
+		break;
+	case DCERPC_AUTH_TYPE_NTLMSSP:
+		ntlmssp_ctx = talloc_get_type_abort(a->auth_ctx,
+						    struct auth_ntlmssp_state);
+		sk = auth_ntlmssp_get_session_key(ntlmssp_ctx);
+		make_dup = true;
+		break;
+	case DCERPC_AUTH_TYPE_KRB5:
+		gse_ctx = talloc_get_type_abort(a->auth_ctx,
+						struct gse_context);
+		sk = gse_get_session_key(mem_ctx, gse_ctx);
+		make_dup = false;
+		break;
+	case DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM:
 	case DCERPC_AUTH_TYPE_NONE:
-		sk = data_blob_const(a->transport_session_key.data,
-				     a->transport_session_key.length);
+		sk = data_blob_const(a->user_session_key.data,
+				     a->user_session_key.length);
 		make_dup = true;
 		break;
 	default:
-		gensec_security = a->auth_ctx;
-		status = gensec_session_key(gensec_security, mem_ctx, &sk);
-		if (!NT_STATUS_IS_OK(status)) {
-			return status;
-		}
-		make_dup = false;
 		break;
 	}
 
@@ -3385,7 +3309,7 @@ NTSTATUS cli_get_session_key(TALLOC_CTX *mem_ctx,
 	}
 
 	if (make_dup) {
-		*session_key = data_blob_dup_talloc(mem_ctx, sk);
+		*session_key = data_blob_dup_talloc(mem_ctx, &sk);
 	} else {
 		*session_key = sk;
 	}

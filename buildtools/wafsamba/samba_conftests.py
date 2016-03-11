@@ -1,75 +1,9 @@
 # a set of config tests that use the samba_autoconf functions
 # to test for commonly needed configuration options
 
-import os, shutil, re
-import Build, Configure, Utils
+import os, Build, shutil, Utils, re
 from Configure import conf
-import config_c
 from samba_utils import *
-
-
-def add_option(self, *k, **kw):
-    '''syntax help: provide the "match" attribute to opt.add_option() so that folders can be added to specific config tests'''
-    match = kw.get('match', [])
-    if match:
-        del kw['match']
-    opt = self.parser.add_option(*k, **kw)
-    opt.match = match
-    return opt
-Options.Handler.add_option = add_option
-
-@conf
-def check(self, *k, **kw):
-    '''Override the waf defaults to inject --with-directory options'''
-
-    if not 'env' in kw:
-        kw['env'] = self.env.copy()
-
-    # match the configuration test with speficic options, for example:
-    # --with-libiconv -> Options.options.iconv_open -> "Checking for library iconv"
-    additional_dirs = []
-    if 'msg' in kw:
-        msg = kw['msg']
-        for x in Options.Handler.parser.parser.option_list:
-             if getattr(x, 'match', None) and msg in x.match:
-                 d = getattr(Options.options, x.dest, '')
-                 if d:
-                     additional_dirs.append(d)
-
-    # we add the additional dirs twice: once for the test data, and again if the compilation test suceeds below
-    def add_options_dir(dirs, env):
-        for x in dirs:
-             if not x in env.CPPPATH:
-                 env.CPPPATH = [os.path.join(x, 'include')] + env.CPPPATH
-             if not x in env.LIBPATH:
-                 env.LIBPATH = [os.path.join(x, 'lib')] + env.LIBPATH
-
-    add_options_dir(additional_dirs, kw['env'])
-
-    self.validate_c(kw)
-    self.check_message_1(kw['msg'])
-    ret = None
-    try:
-        ret = self.run_c_code(*k, **kw)
-    except Configure.ConfigurationError, e:
-        self.check_message_2(kw['errmsg'], 'YELLOW')
-        if 'mandatory' in kw and kw['mandatory']:
-            if Logs.verbose > 1:
-                raise
-            else:
-                self.fatal('the configuration failed (see %r)' % self.log.name)
-    else:
-        kw['success'] = ret
-        self.check_message_2(self.ret_msg(kw['okmsg'], kw))
-
-        # success! keep the CPPPATH/LIBPATH
-        add_options_dir(additional_dirs, self.env)
-
-    self.post_check(*k, **kw)
-    if not kw.get('execute', False):
-        return ret == 0
-    return ret
-
 
 @conf
 def CHECK_ICONV(conf, define='HAVE_NATIVE_ICONV'):
@@ -84,43 +18,17 @@ def CHECK_ICONV(conf, define='HAVE_NATIVE_ICONV'):
 @conf
 def CHECK_LARGEFILE(conf, define='HAVE_LARGEFILE'):
     '''see what we need for largefile support'''
-    getconf_cflags = conf.CHECK_COMMAND(['getconf', 'LFS_CFLAGS']);
-    if getconf_cflags is not False:
-        if (conf.CHECK_CODE('return !(sizeof(off_t) >= 8)',
-                            define='WORKING_GETCONF_LFS_CFLAGS',
-                            execute=True,
-                            cflags=getconf_cflags,
-                            msg='Checking getconf large file support flags work')):
-            conf.ADD_CFLAGS(getconf_cflags)
-            getconf_cflags_list=TO_LIST(getconf_cflags)
-            for flag in getconf_cflags_list:
-                if flag[:2] == "-D":
-                    flag_split = flag[2:].split('=')
-                    if len(flag_split) == 1:
-                        conf.DEFINE(flag_split[0], '1')
-                    else:
-                        conf.DEFINE(flag_split[0], flag_split[1])
-
     if conf.CHECK_CODE('return !(sizeof(off_t) >= 8)',
                        define,
                        execute=True,
-                       msg='Checking for large file support without additional flags'):
+                       msg='Checking for large file support'):
         return True
-
     if conf.CHECK_CODE('return !(sizeof(off_t) >= 8)',
                        define,
                        execute=True,
                        cflags='-D_FILE_OFFSET_BITS=64',
                        msg='Checking for -D_FILE_OFFSET_BITS=64'):
         conf.DEFINE('_FILE_OFFSET_BITS', 64)
-        return True
-
-    if conf.CHECK_CODE('return !(sizeof(off_t) >= 8)',
-                       define,
-                       execute=True,
-                       cflags='-D_LARGE_FILES',
-                       msg='Checking for -D_LARGE_FILES'):
-        conf.DEFINE('_LARGE_FILES', 1)
         return True
     return False
 
@@ -387,7 +295,7 @@ def CHECK_PERL_MANPAGE(conf, msg=None, section=None):
     dest.write("""
 use ExtUtils::MakeMaker;
 WriteMakefile(
-    'NAME'    => 'WafTest',
+    'NAME'	=> 'WafTest',
     'EXE_FILES' => [ 'WafTest' ]
 );
 """)
@@ -504,86 +412,3 @@ def CHECK_XSLTPROC_MANPAGES(conf):
                              msg='Checking for stylesheet %s' % s,
                              define='XSLTPROC_MANPAGES', on_target=False,
                              boolean=True)
-    if not conf.CONFIG_SET('XSLTPROC_MANPAGES'):
-        print "A local copy of the docbook.xsl wasn't found on your system" \
-              " consider installing package like docbook-xsl"
-
-#
-# Determine the standard libpath for the used compiler,
-# so we can later use that to filter out these standard
-# library paths when some tools like cups-config or
-# python-config report standard lib paths with their
-# ldflags (-L...)
-#
-@conf
-def CHECK_STANDARD_LIBPATH(conf):
-    # at least gcc and clang support this:
-    try:
-        cmd = conf.env.CC + ['-print-search-dirs']
-        out = Utils.cmd_output(cmd).split('\n')
-    except ValueError:
-        # option not supported by compiler - use a standard list of directories
-        dirlist = [ '/usr/lib', '/usr/lib64' ]
-    except:
-        raise Utils.WafError('Unexpected error running "%s"' % (cmd))
-    else:
-        dirlist = []
-        for line in out:
-            line = line.strip()
-            if line.startswith("libraries: ="):
-                dirliststr = line[len("libraries: ="):]
-                dirlist = [ os.path.normpath(x) for x in dirliststr.split(':') ]
-                break
-
-    conf.env.STANDARD_LIBPATH = dirlist
-
-
-waf_config_c_parse_flags = config_c.parse_flags;
-def samba_config_c_parse_flags(line1, uselib, env):
-    #
-    # We do a special treatment of the rpath components
-    # in the linkflags line, because currently the upstream
-    # parse_flags function is incomplete with respect to
-    # treatment of the rpath. The remainder of the linkflags
-    # line is later passed to the original funcion.
-    #
-    lst1 = shlex.split(line1)
-    lst2 = []
-    while lst1:
-        x = lst1.pop(0)
-
-        #
-        # NOTE on special treatment of -Wl,-R and -Wl,-rpath:
-        #
-        # It is important to not put a library provided RPATH
-        # into the LINKFLAGS but in the RPATH instead, since
-        # the provided LINKFLAGS get prepended to our own internal
-        # RPATH later, and hence can potentially lead to linking
-        # in too old versions of our internal libs.
-        #
-        # We do this filtering here on our own because of some
-        # bugs in the real parse_flags() function.
-        #
-        if x == '-Wl,-rpath' or x == '-Wl,-R':
-            x = lst1.pop(0)
-            if x.startswith('-Wl,'):
-                rpath = x[4:]
-            else:
-                rpath = x
-        elif x.startswith('-Wl,-R,'):
-            rpath = x[7:]
-        elif x.startswith('-Wl,-R'):
-            rpath = x[6:]
-        elif x.startswith('-Wl,-rpath,'):
-            rpath = x[11:]
-        else:
-            lst2.append(x)
-            continue
-
-        env.append_value('RPATH_' + uselib, rpath)
-
-    line2 = ' '.join(lst2)
-    waf_config_c_parse_flags(line2, uselib, env)
-
-    return
-config_c.parse_flags = samba_config_c_parse_flags

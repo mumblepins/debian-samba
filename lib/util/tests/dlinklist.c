@@ -21,7 +21,6 @@
 
 #include "includes.h"
 #include "torture/torture.h"
-#include "torture/local/proto.h"
 #include "lib/util/dlinklist.h"
 
 struct listel {

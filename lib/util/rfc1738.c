@@ -50,7 +50,7 @@
 
 #include "includes.h"
 
-#include "lib/util/samba_util.h"
+#include "util.h"
 
 /*
  *  RFC 1738 defines that these characters should be escaped, as well

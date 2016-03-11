@@ -22,7 +22,11 @@
 #define _LIBCLI_LDAP_MESSAGE_H_
 
 #include "../libcli/ldap/ldap_errors.h"
+#if _SAMBA_BUILD_ == 3
+#include "lib/ldb_compat.h"
+#else
 #include <ldb.h>
+#endif
 
 enum ldap_request_tag {
 	LDAP_TAG_BindRequest = 0,
@@ -104,7 +108,7 @@ struct ldap_SearchRequest {
 	uint32_t sizelimit;
 	bool attributesonly;
 	struct ldb_parse_tree *tree;
-	size_t num_attributes;
+	int num_attributes;
 	const char * const *attributes;
 };
 
@@ -228,7 +232,7 @@ bool asn1_read_OctetString_talloc(TALLOC_CTX *mem_ctx,
 				  struct asn1_data *data,
 				  const char **result);
 
-bool ldap_decode_attribs_bare(TALLOC_CTX *mem_ctx, struct asn1_data *data,
+void ldap_decode_attribs_bare(TALLOC_CTX *mem_ctx, struct asn1_data *data,
 			      struct ldb_message_element **attributes,
 			      int *num_attributes);
 

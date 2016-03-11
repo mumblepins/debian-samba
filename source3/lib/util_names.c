@@ -6,7 +6,7 @@
    Copyright (C) Simo Sorce 2001
    Copyright (C) Jim McDonough <jmcd@us.ibm.com> 2003
    Copyright (C) James Peach 2006
-   Copyright (C) Andrew Bartlett 2010-2011
+   Copyright (C) Andrew Bartlett 2010
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -24,138 +24,45 @@
 
 #include "includes.h"
 
+static char *smb_myname;
+static char *smb_myworkgroup;
+
 /***********************************************************************
- Definitions for all names.
+ Allocate and set myname. Ensure upper case.
 ***********************************************************************/
 
-static int smb_num_netbios_names;
-static char **smb_my_netbios_names;
-
-static void free_netbios_names_array(void)
+bool set_global_myname(const char *myname)
 {
-	int i;
-
-	for (i = 0; i < smb_num_netbios_names; i++)
-		SAFE_FREE(smb_my_netbios_names[i]);
-
-	SAFE_FREE(smb_my_netbios_names);
-	smb_num_netbios_names = 0;
-}
-
-static bool allocate_my_netbios_names_array(size_t number)
-{
-	free_netbios_names_array();
-
-	smb_num_netbios_names = number + 1;
-	smb_my_netbios_names = SMB_MALLOC_ARRAY( char *, smb_num_netbios_names );
-
-	if (!smb_my_netbios_names)
+	SAFE_FREE(smb_myname);
+	smb_myname = SMB_STRDUP(myname);
+	if (!smb_myname)
 		return False;
-
-	memset(smb_my_netbios_names, '\0', sizeof(char *) * smb_num_netbios_names);
+	strupper_m(smb_myname);
 	return True;
 }
 
-static bool set_my_netbios_names(const char *name, int i)
+const char *global_myname(void)
 {
-	SAFE_FREE(smb_my_netbios_names[i]);
-
-	/*
-	 * Don't include space for terminating '\0' in strndup,
-	 * it is automatically added. This screws up if the name
-	 * is greater than MAX_NETBIOSNAME_LEN-1 in the unix
-	 * charset, but less than or equal to MAX_NETBIOSNAME_LEN-1
-	 * in the DOS charset, but this is so old we have to live
-	 * with that.
-	 */
-	smb_my_netbios_names[i] = SMB_STRNDUP(name, MAX_NETBIOSNAME_LEN-1);
-	if (!smb_my_netbios_names[i])
-		return False;
-	return strupper_m(smb_my_netbios_names[i]);
+	return smb_myname;
 }
 
 /***********************************************************************
- Free memory allocated to global objects
+ Allocate and set myworkgroup. Ensure upper case.
 ***********************************************************************/
 
-void gfree_names(void)
+bool set_global_myworkgroup(const char *myworkgroup)
 {
-	free_netbios_names_array();
-	free_local_machine_name();
-}
-
-const char *my_netbios_names(int i)
-{
-	return smb_my_netbios_names[i];
-}
-
-bool set_netbios_aliases(const char **str_array)
-{
-	size_t namecount;
-
-	/* Work out the max number of netbios aliases that we have */
-	for( namecount=0; str_array && (str_array[namecount] != NULL); namecount++ )
-		;
-
-	if ( lp_netbios_name() && *lp_netbios_name())
-		namecount++;
-
-	/* Allocate space for the netbios aliases */
-	if (!allocate_my_netbios_names_array(namecount))
+	SAFE_FREE(smb_myworkgroup);
+	smb_myworkgroup = SMB_STRDUP(myworkgroup);
+	if (!smb_myworkgroup)
 		return False;
-
-	/* Use the global_myname string first */
-	namecount=0;
-	if ( lp_netbios_name() && *lp_netbios_name()) {
-		set_my_netbios_names( lp_netbios_name(), namecount );
-		namecount++;
-	}
-
-	if (str_array) {
-		size_t i;
-		for ( i = 0; str_array[i] != NULL; i++) {
-			size_t n;
-			bool duplicate = False;
-
-			/* Look for duplicates */
-			for( n=0; n<namecount; n++ ) {
-				if( strequal( str_array[i], my_netbios_names(n) ) ) {
-					duplicate = True;
-					break;
-				}
-			}
-			if (!duplicate) {
-				if (!set_my_netbios_names(str_array[i], namecount))
-					return False;
-				namecount++;
-			}
-		}
-	}
+	strupper_m(smb_myworkgroup);
 	return True;
 }
 
-/****************************************************************************
-  Common name initialization code.
-****************************************************************************/
-
-bool init_names(void)
+const char *lp_workgroup(void)
 {
-	int n;
-
-	if (!set_netbios_aliases(lp_netbios_aliases())) {
-		DEBUG( 0, ( "init_names: malloc fail.\n" ) );
-		return False;
-	}
-
-	set_local_machine_name(lp_netbios_name(),false);
-
-	DEBUG( 5, ("Netbios name list:-\n") );
-	for( n=0; my_netbios_names(n); n++ ) {
-		DEBUGADD( 5, ("my_netbios_names[%d]=\"%s\"\n",
-					n, my_netbios_names(n) ) );
-	}
-
-	return( True );
+	return smb_myworkgroup;
 }
 
 /******************************************************************
@@ -168,6 +75,11 @@ const char *get_global_sam_name(void)
 	if (IS_DC) {
 		return lp_workgroup();
 	}
-	return lp_netbios_name();
+	return global_myname();
 }
 
+void gfree_netbios_names(void)
+{
+	SAFE_FREE( smb_myname );
+	SAFE_FREE( smb_myworkgroup );
+}

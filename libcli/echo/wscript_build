@@ -2,6 +2,6 @@
 
 bld.SAMBA_SUBSYSTEM('LIBCLI_ECHO',
         source='echo.c',
-        deps='LIBTSOCKET tevent-util');
+        deps='LIBTSOCKET UTIL_TEVENT');
 
 bld.RECURSE('tests')

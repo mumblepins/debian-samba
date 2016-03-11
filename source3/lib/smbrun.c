@@ -18,7 +18,6 @@
 */
 
 #include "includes.h"
-#include "system/filesys.h"
 
 /* need to move this from here!! need some sleep ... */
 struct current_user current_user;
@@ -32,7 +31,6 @@ static int setup_out_fd(void)
 	int fd;
 	TALLOC_CTX *ctx = talloc_stackframe();
 	char *path = NULL;
-	mode_t mask;
 
 	path = talloc_asprintf(ctx,
 				"%s/smb.XXXXXX",
@@ -44,9 +42,7 @@ static int setup_out_fd(void)
 	}
 
 	/* now create the file */
-	mask = umask(S_IRWXO | S_IRWXG);
 	fd = mkstemp(path);
-	umask(mask);
 
 	if (fd == -1) {
 		DEBUG(0,("setup_out_fd: Failed to create file %s. (%s)\n",
@@ -73,7 +69,6 @@ static int smbrun_internal(const char *cmd, int *outfd, bool sanitize)
 	pid_t pid;
 	uid_t uid = current_user.ut.uid;
 	gid_t gid = current_user.ut.gid;
-	void (*saved_handler)(int);
 
 	/*
 	 * Lose any elevated privileges.
@@ -95,11 +90,11 @@ static int smbrun_internal(const char *cmd, int *outfd, bool sanitize)
 	 * SIGCLD signals as it also eats the exit status code. JRA.
 	 */
 
-	saved_handler = CatchChildLeaveStatus();
+	CatchChildLeaveStatus();
                                    	
-	if ((pid=fork()) < 0) {
+	if ((pid=sys_fork()) < 0) {
 		DEBUG(0,("smbrun: fork failed with error %s\n", strerror(errno) ));
-		(void)CatchSignal(SIGCLD, saved_handler);
+		CatchChild(); 
 		if (outfd) {
 			close(*outfd);
 			*outfd = -1;
@@ -124,7 +119,7 @@ static int smbrun_internal(const char *cmd, int *outfd, bool sanitize)
 			break;
 		}
 
-		(void)CatchSignal(SIGCLD, saved_handler);
+		CatchChild(); 
 
 		if (wpid != pid) {
 			DEBUG(2,("waitpid(%d) : %s\n",(int)pid,strerror(errno)));
@@ -137,7 +132,7 @@ static int smbrun_internal(const char *cmd, int *outfd, bool sanitize)
 
 		/* Reset the seek pointer. */
 		if (outfd) {
-			lseek(*outfd, 0, SEEK_SET);
+			sys_lseek(*outfd, 0, SEEK_SET);
 		}
 
 #if defined(WIFEXITED) && defined(WEXITSTATUS)
@@ -149,7 +144,7 @@ static int smbrun_internal(const char *cmd, int *outfd, bool sanitize)
 		return status;
 	}
 	
-	(void)CatchChild();
+	CatchChild(); 
 	
 	/* we are in the child. we exec /bin/sh to do the work for us. we
 	   don't directly exec the command we want because it may be a
@@ -238,7 +233,6 @@ int smbrunsecret(const char *cmd, const char *secret)
 	uid_t uid = current_user.ut.uid;
 	gid_t gid = current_user.ut.gid;
 	int ifd[2];
-	void (*saved_handler)(int);
 	
 	/*
 	 * Lose any elevated privileges.
@@ -259,11 +253,11 @@ int smbrunsecret(const char *cmd, const char *secret)
 	 * SIGCLD signals as it also eats the exit status code. JRA.
 	 */
 
-	saved_handler = CatchChildLeaveStatus();
+	CatchChildLeaveStatus();
                                    	
-	if ((pid=fork()) < 0) {
+	if ((pid=sys_fork()) < 0) {
 		DEBUG(0, ("smbrunsecret: fork failed with error %s\n", strerror(errno)));
-		(void)CatchSignal(SIGCLD, saved_handler);
+		CatchChild(); 
 		return errno;
     	}
 
@@ -295,7 +289,7 @@ int smbrunsecret(const char *cmd, const char *secret)
 			break;
 		}
 
-		(void)CatchSignal(SIGCLD, saved_handler);
+		CatchChild(); 
 
 		if (wpid != pid) {
 			DEBUG(2, ("waitpid(%d) : %s\n", (int)pid, strerror(errno)));
@@ -311,7 +305,7 @@ int smbrunsecret(const char *cmd, const char *secret)
 		return status;
 	}
 	
-	(void)CatchChild();
+	CatchChild(); 
 	
 	/* we are in the child. we exec /bin/sh to do the work for us. we
 	   don't directly exec the command we want because it may be a

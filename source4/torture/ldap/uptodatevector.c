@@ -26,7 +26,6 @@
 #include "dsdb/samdb/samdb.h"
 
 #include "torture/torture.h"
-#include "torture/ldap/proto.h"
 
 #include "librpc/gen_ndr/ndr_drsblobs.h"
 

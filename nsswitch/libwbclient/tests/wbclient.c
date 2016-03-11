@@ -28,88 +28,37 @@
 #include "lib/util/util_net.h"
 #include "lib/util/charset/charset.h"
 #include "libcli/auth/libcli_auth.h"
-#include "lib/param/param.h"
-#include "lib/util/samba_util.h"
+#include "source4/param/param.h"
+#include "lib/util/util.h"
 #include "lib/crypto/arcfour.h"
-#include "auth/credentials/credentials.h"
-#include "lib/cmdline/popt_common.h"
 
 #define WBC_ERROR_EQUAL(x,y) (x == y)
 
-#define torture_assert_wbc_equal(torture_ctx, got, expected, cmt, cmt_arg)	\
+#define torture_assert_wbc_equal(torture_ctx, got, expected, cmt) \
 	do { wbcErr __got = got, __expected = expected; \
 	if (!WBC_ERROR_EQUAL(__got, __expected)) { \
-		torture_result(torture_ctx, TORTURE_FAIL, __location__": "#got" was %s, expected %s: " cmt, wbcErrorString(__got), wbcErrorString(__expected), cmt_arg); \
+		torture_result(torture_ctx, TORTURE_FAIL, __location__": "#got" was %s, expected %s: %s", wbcErrorString(__got), wbcErrorString(__expected), cmt); \
 		return false; \
 	} \
 	} while (0)
 
-#define torture_assert_wbc_ok(torture_ctx,expr,cmt,cmt_arg)			\
-	torture_assert_wbc_equal(torture_ctx,expr,WBC_ERR_SUCCESS,cmt,cmt_arg)
+#define torture_assert_wbc_ok(torture_ctx,expr,cmt) \
+		torture_assert_wbc_equal(torture_ctx,expr,WBC_ERR_SUCCESS,cmt)
 
 static bool test_wbc_ping(struct torture_context *tctx)
 {
 	torture_assert_wbc_ok(tctx, wbcPing(),
-		"%s", "wbcPing failed");
+		"wbcPing failed");
 
 	return true;
 }
 
 static bool test_wbc_pingdc(struct torture_context *tctx)
 {
-	struct wbcInterfaceDetails *details;
-
-	torture_assert_wbc_equal(tctx, wbcPingDc("random_string", NULL), WBC_ERR_DOMAIN_NOT_FOUND,
-				 "%s", "wbcPingDc failed");
+	torture_assert_wbc_equal(tctx, wbcPingDc("random_string", NULL), WBC_ERR_NOT_IMPLEMENTED,
+		"wbcPingDc failed");
 	torture_assert_wbc_ok(tctx, wbcPingDc(NULL, NULL),
-		"%s", "wbcPingDc failed");
-
-	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
-	torture_assert(tctx, details,
-		       "wbcInterfaceDetails returned NULL pointer");
-	torture_assert(tctx, details->netbios_domain,
-		       "wbcInterfaceDetails returned NULL netbios_domain");
-
-	torture_assert_wbc_ok(tctx, wbcPingDc(details->netbios_domain, NULL),
-		"wbcPingDc(%s) failed", details->netbios_domain);
-
-	torture_assert_wbc_ok(tctx, wbcPingDc("BUILTIN", NULL),
-		"%s", "wbcPingDc(BUILTIN) failed");
-
-	wbcFreeMemory(details);
-	return true;
-}
-
-static bool test_wbc_pingdc2(struct torture_context *tctx)
-{
-	struct wbcInterfaceDetails *details;
-	char *name = NULL;
-
-	torture_assert_wbc_equal(tctx, wbcPingDc2("random_string", NULL, &name),
-				 WBC_ERR_DOMAIN_NOT_FOUND, "%s",
-				 "wbcPingDc2 failed");
-	torture_assert_wbc_ok(tctx, wbcPingDc2(NULL, NULL, &name), "%s",
-			      "wbcPingDc2 failed");
-
-	wbcFreeMemory(name);
-
-	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
-	torture_assert(tctx, details,
-		       "wbcInterfaceDetails returned NULL pointer");
-	torture_assert(tctx, details->netbios_domain,
-		       "wbcInterfaceDetails returned NULL netbios_domain");
-
-	torture_assert_wbc_ok(tctx, wbcPingDc2(details->netbios_domain, NULL, &name),
-		"wbcPingDc2(%s) failed", details->netbios_domain);
-	wbcFreeMemory(name);
-
-	torture_assert_wbc_ok(tctx, wbcPingDc2("BUILTIN", NULL, &name),
-		"%s", "wbcPingDc2(BUILTIN) failed");
-	wbcFreeMemory(name);
-
-	wbcFreeMemory(details);
+		"wbcPingDc failed");
 
 	return true;
 }
@@ -119,7 +68,7 @@ static bool test_wbc_library_details(struct torture_context *tctx)
 	struct wbcLibraryDetails *details;
 
 	torture_assert_wbc_ok(tctx, wbcLibraryDetails(&details),
-		"%s", "wbcLibraryDetails failed");
+		"wbcLibraryDetails failed");
 	torture_assert(tctx, details,
 		"wbcLibraryDetails returned NULL pointer");
 
@@ -133,9 +82,9 @@ static bool test_wbc_interface_details(struct torture_context *tctx)
 	struct wbcInterfaceDetails *details;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 	torture_assert(tctx, details,
-		       "wbcInterfaceDetails returned NULL pointer");
+		"wbcInterfaceDetails returned NULL pointer");
 
 	wbcFreeMemory(details);
 
@@ -163,7 +112,7 @@ static bool test_wbc_sidtypestring(struct torture_context *tctx)
 	torture_assert_str_equal(tctx, wbcSidTypeString(WBC_SID_NAME_UNKNOWN),
 				 "SID_UNKNOWN", "SID_UNKNOWN failed");
 	torture_assert_str_equal(tctx, wbcSidTypeString(WBC_SID_NAME_COMPUTER),
-				 "SID_COMPUTER",  "SID_COMPUTER failed");
+				 "SID_COMPUTER", "SID_COMPUTER failed");
 	return true;
 }
 
@@ -174,9 +123,9 @@ static bool test_wbc_sidtostring(struct torture_context *tctx)
 	char *sid_string2;
 
 	torture_assert_wbc_ok(tctx, wbcStringToSid(sid_string, &sid),
-			      "wbcStringToSid of %s failed", sid_string);
+		"wbcStringToSid failed");
 	torture_assert_wbc_ok(tctx, wbcSidToString(&sid, &sid_string2),
-			      "wbcSidToString of %s failed", sid_string);
+		"wbcSidToString failed");
 	torture_assert_str_equal(tctx, sid_string, sid_string2,
 		"sid strings differ");
 	wbcFreeMemory(sid_string2);
@@ -191,11 +140,11 @@ static bool test_wbc_guidtostring(struct torture_context *tctx)
 	char *guid_string2;
 
 	torture_assert_wbc_ok(tctx, wbcStringToGuid(guid_string, &guid),
-			      "wbcStringToGuid of %s failed", guid_string);
+		"wbcStringToGuid failed");
 	torture_assert_wbc_ok(tctx, wbcGuidToString(&guid, &guid_string2),
-			      "wbcGuidToString of %s failed", guid_string);
+		"wbcGuidToString failed");
 	torture_assert_str_equal(tctx, guid_string, guid_string2,
-				 "guid strings differ");
+		"guid strings differ");
 	wbcFreeMemory(guid_string2);
 
 	return true;
@@ -207,10 +156,10 @@ static bool test_wbc_domain_info(struct torture_context *tctx)
 	struct wbcInterfaceDetails *details;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 	torture_assert_wbc_ok(
 		tctx, wbcDomainInfo(details->netbios_domain, &info),
-		"%s", "wbcDomainInfo failed");
+		"wbcDomainInfo failed");
 	wbcFreeMemory(details);
 
 	torture_assert(tctx, info,
@@ -229,13 +178,13 @@ static bool test_wbc_users(struct torture_context *tctx)
 	struct wbcInterfaceDetails *details;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 
 	domain_name = talloc_strdup(tctx, details->netbios_domain);
 	wbcFreeMemory(details);
 
 	torture_assert_wbc_ok(tctx, wbcListUsers(domain_name, &num_users, &users),
-		"%s", "wbcListUsers failed");
+		"wbcListUsers failed");
 	torture_assert(tctx, !(num_users > 0 && !users),
 		"wbcListUsers returned invalid results");
 
@@ -245,32 +194,29 @@ static bool test_wbc_users(struct torture_context *tctx)
 		enum wbcSidType name_type;
 		char *domain;
 		char *name;
-		char *sid_string;
 		uint32_t num_sids;
 
 		torture_assert_wbc_ok(tctx, wbcLookupName(domain_name, users[i], &sid, &name_type),
-				      "wbcLookupName of %s failed", users[i]);
+			"wbcLookupName failed");
 		torture_assert_int_equal(tctx, name_type, WBC_SID_NAME_USER,
-					 "wbcLookupName expected WBC_SID_NAME_USER");
-		wbcSidToString(&sid, &sid_string);
+			"wbcLookupName expected WBC_SID_NAME_USER");
 		torture_assert_wbc_ok(tctx, wbcLookupSid(&sid, &domain, &name, &name_type),
-				      "wbcLookupSid of %s failed", sid_string);
+			"wbcLookupSid failed");
 		torture_assert_int_equal(tctx, name_type, WBC_SID_NAME_USER,
-					 "wbcLookupSid of expected WBC_SID_NAME_USER");
+			"wbcLookupSid expected WBC_SID_NAME_USER");
 		torture_assert(tctx, name,
 			"wbcLookupSid returned no name");
 		wbcFreeMemory(domain);
 		wbcFreeMemory(name);
 		torture_assert_wbc_ok(tctx, wbcLookupUserSids(&sid, true, &num_sids, &sids),
-			"wbcLookupUserSids of %s failed", sid_string);
+			"wbcLookupUserSids failed");
 		torture_assert_wbc_ok(
 			tctx, wbcGetDisplayName(&sid, &domain, &name,
 						&name_type),
-			"wbcGetDisplayName of %s failed", sid_string);
+			"wbcGetDisplayName failed");
 		wbcFreeMemory(domain);
 		wbcFreeMemory(name);
 		wbcFreeMemory(sids);
-		wbcFreeMemory(sid_string);
 	}
 	wbcFreeMemory(users);
 
@@ -286,15 +232,15 @@ static bool test_wbc_groups(struct torture_context *tctx)
 	struct wbcInterfaceDetails *details;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-			      "%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 
 	domain_name = talloc_strdup(tctx, details->netbios_domain);
 	wbcFreeMemory(details);
 
 	torture_assert_wbc_ok(tctx, wbcListGroups(domain_name, &num_groups, &groups),
-			      "wbcListGroups in %s failed", domain_name);
+		"wbcListGroups failed");
 	torture_assert(tctx, !(num_groups > 0 && !groups),
-		       "wbcListGroups returned invalid results");
+		"wbcListGroups returned invalid results");
 
 	for (i=0; i < MIN(num_groups,100); i++) {
 
@@ -302,14 +248,11 @@ static bool test_wbc_groups(struct torture_context *tctx)
 		enum wbcSidType name_type;
 		char *domain;
 		char *name;
-		char *sid_string;
 
 		torture_assert_wbc_ok(tctx, wbcLookupName(domain_name, groups[i], &sid, &name_type),
-				      "wbcLookupName for %s failed", domain_name);
-		wbcSidToString(&sid, &sid_string);
+			"wbcLookupName failed");
 		torture_assert_wbc_ok(tctx, wbcLookupSid(&sid, &domain, &name, &name_type),
-				      "wbcLookupSid of %s failed", sid_string);
-		wbcFreeMemory(sid_string);
+			"wbcLookupSid failed");
 		torture_assert(tctx, name,
 			"wbcLookupSid returned no name");
 	}
@@ -325,7 +268,7 @@ static bool test_wbc_trusts(struct torture_context *tctx)
 	int i;
 
 	torture_assert_wbc_ok(tctx, wbcListTrusts(&domains, &num_domains),
-			      "%s", "wbcListTrusts failed");
+		"wbcListTrusts failed");
 	torture_assert(tctx, !(num_domains > 0 && !domains),
 		"wbcListTrusts returned invalid results");
 
@@ -339,7 +282,7 @@ static bool test_wbc_trusts(struct torture_context *tctx)
 		char *name;
 		*/
 		torture_assert_wbc_ok(tctx, wbcCheckTrustCredentials(domains[i].short_name, &error),
-				      "%s", "wbcCheckTrustCredentials failed");
+			"wbcCheckTrustCredentials failed");
 		/*
 		torture_assert_wbc_ok(tctx, wbcLookupName(domains[i].short_name, NULL, &sid, &name_type),
 			"wbcLookupName failed");
@@ -365,13 +308,13 @@ static bool test_wbc_lookupdc(struct torture_context *tctx)
 	struct wbcDomainControllerInfo *dc_info;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 
 	domain_name = talloc_strdup(tctx, details->netbios_domain);
 	wbcFreeMemory(details);
 
 	torture_assert_wbc_ok(tctx, wbcLookupDomainController(domain_name, 0, &dc_info),
-			      "wbcLookupDomainController for %s failed", domain_name);
+		"wbcLookupDomainController failed");
 	wbcFreeMemory(dc_info);
 
 	return true;
@@ -384,13 +327,13 @@ static bool test_wbc_lookupdcex(struct torture_context *tctx)
 	struct wbcDomainControllerInfoEx *dc_info;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-		"%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 
 	domain_name = talloc_strdup(tctx, details->netbios_domain);
 	wbcFreeMemory(details);
 
 	torture_assert_wbc_ok(tctx, wbcLookupDomainControllerEx(domain_name, NULL, NULL, 0, &dc_info),
-		"wbcLookupDomainControllerEx for %s failed", domain_name);
+		"wbcLookupDomainControllerEx failed");
 	wbcFreeMemory(dc_info);
 
 	return true;
@@ -407,9 +350,9 @@ static bool test_wbc_resolve_winsbyname(struct torture_context *tctx)
 	ret = wbcResolveWinsByName(name, &ip);
 
 	if (is_ipaddress(name)) {
-		torture_assert_wbc_equal(tctx, ret, WBC_ERR_DOMAIN_NOT_FOUND, "wbcResolveWinsByName of %s failed", name);
+		torture_assert_wbc_equal(tctx, ret, WBC_ERR_DOMAIN_NOT_FOUND, "wbcResolveWinsByName failed");
 	} else {
-		torture_assert_wbc_ok(tctx, ret, "wbcResolveWinsByName for %s failed", name);
+		torture_assert_wbc_ok(tctx, ret, "wbcResolveWinsByName failed");
 	}
 
 	return true;
@@ -425,7 +368,7 @@ static bool test_wbc_resolve_winsbyip(struct torture_context *tctx)
 
 	ret = wbcResolveWinsByIP(ip, &name);
 
-	torture_assert_wbc_ok(tctx, ret, "wbcResolveWinsByIP for %s failed", ip);
+	torture_assert_wbc_ok(tctx, ret, "wbcResolveWinsByIP failed");
 
 	wbcFreeMemory(name);
 
@@ -444,7 +387,7 @@ static bool test_wbc_lookup_rids(struct torture_context *tctx)
 
 	ret = wbcLookupRids(&builtin, 2, rids, &domain_name, &names,
 			    &types);
-	torture_assert_wbc_ok(tctx, ret, "%s", "wbcLookupRids for 544 and 545 failed");
+	torture_assert_wbc_ok(tctx, ret, "wbcLookupRids failed");
 
 	torture_assert_str_equal(
 		tctx, names[0], "Administrators",
@@ -452,7 +395,7 @@ static bool test_wbc_lookup_rids(struct torture_context *tctx)
 	torture_assert_str_equal(
 		tctx, names[1], "Users", "S-1-5-32-545 not mapped to 'Users'");
 
-	wbcFreeMemory(discard_const_p(char ,domain_name));
+	wbcFreeMemory((char *)domain_name);
 	wbcFreeMemory(names);
 	wbcFreeMemory(types);
 
@@ -470,10 +413,10 @@ static bool test_wbc_get_sidaliases(struct torture_context *tctx)
 	wbcErr ret;
 
 	torture_assert_wbc_ok(tctx, wbcInterfaceDetails(&details),
-			      "%s", "wbcInterfaceDetails failed");
+		"wbcInterfaceDetails failed");
 	torture_assert_wbc_ok(
 		tctx, wbcDomainInfo(details->netbios_domain, &info),
-		"wbcDomainInfo of %s failed", details->netbios_domain);
+		"wbcDomainInfo failed");
 	wbcFreeMemory(details);
 
 	sids[0] = info->sid;
@@ -484,10 +427,10 @@ static bool test_wbc_get_sidaliases(struct torture_context *tctx)
 
 	torture_assert_wbc_ok(
 		tctx, wbcStringToSid("S-1-5-32", &builtin),
-		"wbcStringToSid of %s failed", "S-1-5-32");
+		"wbcStringToSid failed");
 
 	ret = wbcGetSidAliases(&builtin, sids, 2, &rids, &num_rids);
-	torture_assert_wbc_ok(tctx, ret, "%s", "wbcGetSidAliases failed");
+	torture_assert_wbc_ok(tctx, ret, "wbcGetSidAliases failed");
 
 	wbcFreeMemory(rids);
 
@@ -502,19 +445,18 @@ static bool test_wbc_authenticate_user_int(struct torture_context *tctx,
 	struct wbcAuthErrorInfo *error = NULL;
 	wbcErr ret;
 
-	ret = wbcAuthenticateUser(cli_credentials_get_username(cmdline_credentials), correct_password);
+	ret = wbcAuthenticateUser(getenv("USERNAME"), correct_password);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcAuthenticateUser of %s failed",
-				 cli_credentials_get_username(cmdline_credentials));
+				 "wbcAuthenticateUser failed");
 
 	ZERO_STRUCT(params);
-	params.account_name		= cli_credentials_get_username(cmdline_credentials);
+	params.account_name		= getenv("USERNAME");
 	params.level			= WBC_AUTH_USER_LEVEL_PLAIN;
 	params.password.plaintext	= correct_password;
 
 	ret = wbcAuthenticateUserEx(&params, &info, &error);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcAuthenticateUserEx of %s failed", params.account_name);
+				 "wbcAuthenticateUserEx failed");
 	wbcFreeMemory(info);
 	info = NULL;
 
@@ -524,8 +466,8 @@ static bool test_wbc_authenticate_user_int(struct torture_context *tctx,
 	params.password.plaintext       = "wrong";
 	ret = wbcAuthenticateUserEx(&params, &info, &error);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_AUTH_ERROR,
-				 "wbcAuthenticateUserEx for %s succeeded where it "
-				 "should have failed", params.account_name);
+				 "wbcAuthenticateUserEx succeeded where it "
+				 "should have failed");
 	wbcFreeMemory(info);
 	info = NULL;
 
@@ -537,14 +479,14 @@ static bool test_wbc_authenticate_user_int(struct torture_context *tctx,
 
 static bool test_wbc_authenticate_user(struct torture_context *tctx)
 {
-	return test_wbc_authenticate_user_int(tctx, cli_credentials_get_password(cmdline_credentials));
+	return test_wbc_authenticate_user_int(tctx, getenv("PASSWORD"));
 }
 
 static bool test_wbc_change_password(struct torture_context *tctx)
 {
 	wbcErr ret;
-	const char *oldpass = cli_credentials_get_password(cmdline_credentials);
-	const char *newpass = "Koo8irei%$";
+	const char *oldpass = getenv("PASSWORD");
+	const char *newpass = "Koo8irei";
 
 	struct samr_CryptPassword new_nt_password;
 	struct samr_CryptPassword new_lm_password;
@@ -608,23 +550,23 @@ static bool test_wbc_change_password(struct torture_context *tctx)
 	params.new_password.response.nt_data = new_nt_password.data;
 
 	params.level = WBC_CHANGE_PASSWORD_LEVEL_RESPONSE;
-	params.account_name = cli_credentials_get_username(cmdline_credentials);
-	params.domain_name = cli_credentials_get_domain(cmdline_credentials);
+	params.account_name = getenv("USERNAME");
+	params.domain_name = "SAMBA-TEST";
 
 	ret = wbcChangeUserPasswordEx(&params, NULL, NULL, NULL);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcChangeUserPassword for %s failed", params.account_name);
+				 "wbcChangeUserPassword failed");
 
-	if (!test_wbc_authenticate_user_int(tctx, newpass)) {
+	if (!test_wbc_authenticate_user_int(tctx, "Koo8irei")) {
 		return false;
 	}
 
-	ret = wbcChangeUserPassword(cli_credentials_get_username(cmdline_credentials), newpass,
-				    cli_credentials_get_password(cmdline_credentials));
+	ret = wbcChangeUserPassword(getenv("USERNAME"), "Koo8irei",
+				    getenv("PASSWORD"));
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcChangeUserPassword for %s failed", params.account_name);
+				 "wbcChangeUserPassword failed");
 
-	return test_wbc_authenticate_user_int(tctx, cli_credentials_get_password(cmdline_credentials));
+	return test_wbc_authenticate_user_int(tctx, getenv("PASSWORD"));
 }
 
 static bool test_wbc_logon_user(struct torture_context *tctx)
@@ -643,20 +585,20 @@ static bool test_wbc_logon_user(struct torture_context *tctx)
 
 	ret = wbcLogonUser(&params, &info, &error, &policy);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_INVALID_PARAM,
-				 "%s", "wbcLogonUser succeeded for NULL where it should "
+				 "wbcLogonUser succeeded where it should "
 				 "have failed");
 
-	params.username = cli_credentials_get_username(cmdline_credentials);
-	params.password = cli_credentials_get_password(cmdline_credentials);
+	params.username = getenv("USERNAME");
+	params.password = getenv("PASSWORD");
 
 	ret = wbcAddNamedBlob(&params.num_blobs, &params.blobs,
 			      "foo", 0, discard_const_p(uint8_t, "bar"), 4);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "%s", "wbcAddNamedBlob failed");
+				 "wbcAddNamedBlob failed");
 
 	ret = wbcLogonUser(&params, &info, &error, &policy);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcLogonUser for %s failed", params.username);
+				 "wbcLogonUser failed");
 	wbcFreeMemory(info); info = NULL;
 	wbcFreeMemory(error); error = NULL;
 	wbcFreeMemory(policy); policy = NULL;
@@ -665,8 +607,8 @@ static bool test_wbc_logon_user(struct torture_context *tctx)
 
 	ret = wbcLogonUser(&params, &info, &error, &policy);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_AUTH_ERROR,
-				 "wbcLogonUser for %s should have failed with "
-				 "WBC_ERR_AUTH_ERROR", params.username);
+				 "wbcLogonUser should have failed with "
+				 "WBC_ERR_AUTH_ERROR");
 	wbcFreeMemory(info); info = NULL;
 	wbcFreeMemory(error); error = NULL;
 	wbcFreeMemory(policy); policy = NULL;
@@ -676,12 +618,12 @@ static bool test_wbc_logon_user(struct torture_context *tctx)
 			      discard_const_p(uint8_t, "S-1-2-3-4"),
 			      strlen("S-1-2-3-4")+1);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "%s", "wbcAddNamedBlob failed");
-	params.password = cli_credentials_get_password(cmdline_credentials);
+				 "wbcAddNamedBlob failed");
+	params.password = getenv("PASSWORD");
 	ret = wbcLogonUser(&params, &info, &error, &policy);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_AUTH_ERROR,
-				 "wbcLogonUser for %s should have failed with "
-				 "WBC_ERR_AUTH_ERROR", params.username);
+				 "wbcLogonUser should have failed with "
+				 "WBC_ERR_AUTH_ERROR");
 	wbcFreeMemory(info); info = NULL;
 	wbcFreeMemory(error); error = NULL;
 	wbcFreeMemory(policy); policy = NULL;
@@ -690,28 +632,28 @@ static bool test_wbc_logon_user(struct torture_context *tctx)
 
 	ret = wbcInterfaceDetails(&iface);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "%s", "wbcInterfaceDetails failed");
+				 "wbcInterfaceDetails failed");
 
-	ret = wbcLookupName(iface->netbios_domain, cli_credentials_get_username(cmdline_credentials), &sid,
+	ret = wbcLookupName(iface->netbios_domain, getenv("USERNAME"), &sid,
 			    &sidtype);
 	wbcFreeMemory(iface);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcLookupName for %s failed", cli_credentials_get_username(cmdline_credentials));
+				 "wbcLookupName failed");
 
 	ret = wbcSidToString(&sid, &sidstr);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "%s", "wbcSidToString failed");
+				 "wbcSidToString failed");
 
 	ret = wbcAddNamedBlob(&params.num_blobs, &params.blobs,
 			      "membership_of", 0,
 			      (uint8_t *)sidstr, strlen(sidstr)+1);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "%s", "wbcAddNamedBlob failed");
+				 "wbcAddNamedBlob failed");
 	wbcFreeMemory(sidstr);
-	params.password = cli_credentials_get_password(cmdline_credentials);
+	params.password = getenv("PASSWORD");
 	ret = wbcLogonUser(&params, &info, &error, &policy);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcLogonUser for %s failed", params.username);
+				 "wbcLogonUser failed");
 	wbcFreeMemory(info); info = NULL;
 	wbcFreeMemory(error); error = NULL;
 	wbcFreeMemory(policy); policy = NULL;
@@ -727,9 +669,9 @@ static bool test_wbc_getgroups(struct torture_context *tctx)
 	uint32_t num_groups;
 	gid_t *groups;
 
-	ret = wbcGetGroups(cli_credentials_get_username(cmdline_credentials), &num_groups, &groups);
+	ret = wbcGetGroups(getenv("USERNAME"), &num_groups, &groups);
 	torture_assert_wbc_equal(tctx, ret, WBC_ERR_SUCCESS,
-				 "wbcGetGroups for %s failed", cli_credentials_get_username(cmdline_credentials));
+				 "wbcGetGroups failed");
 	wbcFreeMemory(groups);
 	return true;
 }
@@ -740,7 +682,6 @@ struct torture_suite *torture_wbclient(void)
 
 	torture_suite_add_simple_test(suite, "wbcPing", test_wbc_ping);
 	torture_suite_add_simple_test(suite, "wbcPingDc", test_wbc_pingdc);
-	torture_suite_add_simple_test(suite, "wbcPingDc2", test_wbc_pingdc2);
 	torture_suite_add_simple_test(suite, "wbcLibraryDetails", test_wbc_library_details);
 	torture_suite_add_simple_test(suite, "wbcInterfaceDetails", test_wbc_interface_details);
 	torture_suite_add_simple_test(suite, "wbcSidTypeString", test_wbc_sidtypestring);

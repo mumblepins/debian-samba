@@ -96,13 +96,14 @@ static bool fetch_map_from_gencache(TALLOC_CTX *ctx,
 	if (key == NULL) {
 		return false;
 	}
-	found = gencache_get(key, ctx, &value, NULL);
+	found = gencache_get(key, &value, NULL);
 	TALLOC_FREE(key);
 	if (!found) {
 		return false;
 	}
 	TALLOC_FREE(*p_user_out);
-	*p_user_out = value;
+	*p_user_out = talloc_strdup(ctx, value);
+	SAFE_FREE(value);
 	if (!*p_user_out) {
 		return false;
 	}
@@ -163,9 +164,7 @@ bool user_in_netgroup(TALLOC_CTX *ctx, const char *user, const char *ngname)
 	if (!lowercase_user) {
 		return false;
 	}
-	if (!strlower_m(lowercase_user)) {
-		return false;
-	}
+	strlower_m(lowercase_user);
 
 	if (strcmp(user,lowercase_user) == 0) {
 		/* user name was already lower case! */
@@ -188,7 +187,7 @@ bool user_in_netgroup(TALLOC_CTX *ctx, const char *user, const char *ngname)
  and netgroup lists.
 ****************************************************************************/
 
-bool user_in_list(TALLOC_CTX *ctx, const char *user, const char * const *list)
+bool user_in_list(TALLOC_CTX *ctx, const char *user,const char **list)
 {
 	if (!list || !*list)
 		return False;
@@ -268,11 +267,11 @@ bool user_in_list(TALLOC_CTX *ctx, const char *user, const char * const *list)
 bool map_username(TALLOC_CTX *ctx, const char *user_in, char **p_user_out)
 {
 	XFILE *f;
-	char *mapfile = lp_username_map(talloc_tos());
+	char *mapfile = lp_username_map();
 	char *s;
 	char buf[512];
 	bool mapped_user = False;
-	char *cmd = lp_username_map_script(talloc_tos());
+	char *cmd = lp_username_map_script();
 
 	*p_user_out = NULL;
 
@@ -399,7 +398,7 @@ bool map_username(TALLOC_CTX *ctx, const char *user_in, char **p_user_out)
 		}
 
 		if (strchr_m(dosname,'*') ||
-		    user_in_list(ctx, user_in, (const char * const *)dosuserlist)) {
+		    user_in_list(ctx, user_in, (const char **)dosuserlist)) {
 			DEBUG(3,("Mapped user %s to %s\n",user_in,unixname));
 			mapped_user = True;
 
@@ -426,16 +425,12 @@ bool map_username(TALLOC_CTX *ctx, const char *user_in, char **p_user_out)
 	x_fclose(f);
 
 	/*
-	 * If we didn't successfully map a user in the loop above,
-	 * setup the last_from and last_to as an optimization so
+	 * Setup the last_from and last_to as an optimization so
 	 * that we don't scan the file again for the same user.
 	 */
-	if (!mapped_user) {
-		DEBUG(8, ("The user '%s' has no mapping. "
-			  "Skip it next time.\n", user_in));
-		set_last_from_to(user_in, user_in);
-		store_map_in_gencache(ctx, user_in, user_in);
-	}
+
+	set_last_from_to(user_in, user_in);
+	store_map_in_gencache(ctx, user_in, user_in);
 
 	return mapped_user;
 }

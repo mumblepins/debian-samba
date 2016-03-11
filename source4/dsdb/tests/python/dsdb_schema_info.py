@@ -30,7 +30,8 @@ import time
 import random
 
 sys.path.insert(0, "bin/python")
-import samba.tests
+import samba
+samba.ensure_external_module("testtools", "testtools")
 
 from ldb import SCOPE_BASE, LdbError
 

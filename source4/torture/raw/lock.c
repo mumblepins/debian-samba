@@ -29,7 +29,6 @@
 #include "libcli/smb_composite/smb_composite.h"
 #include "lib/cmdline/popt_common.h"
 #include "param/param.h"
-#include "torture/raw/proto.h"
 
 #define CHECK_STATUS(status, correct) do { \
 	if (!NT_STATUS_EQUAL(status, correct)) { \
@@ -103,7 +102,9 @@ static bool test_lock(struct torture_context *tctx, struct smbcli_state *cli)
 	if (!TARGET_SUPPORTS_SMBLOCK(tctx))
 		torture_skip(tctx, "Target does not support the SMBlock PDU");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing RAW_LOCK_LOCK\n");
 	io.generic.level = RAW_LOCK_LOCK;
@@ -235,7 +236,9 @@ static bool test_lockx(struct torture_context *tctx, struct smbcli_state *cli)
 	int fnum;
 	const char *fname = BASEDIR "\\test.txt";
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing RAW_LOCK_LOCKX\n");
 	io.generic.level = RAW_LOCK_LOCKX;
@@ -415,7 +418,9 @@ static bool test_pidhigh(struct torture_context *tctx,
 	const char *fname = BASEDIR "\\test.txt";
 	uint8_t c = 1;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing high pid\n");
 	io.generic.level = RAW_LOCK_LOCKX;
@@ -504,7 +509,9 @@ static bool test_async(struct torture_context *tctx,
 	struct smbcli_request *req, *req2;
 	struct smbcli_session_options options;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	lpcfg_smbcli_session_options(tctx->lp_ctx, &options);
 
@@ -773,19 +780,8 @@ static bool test_async(struct torture_context *tctx,
 	status = smb_raw_lock(cli->tree, &io);
 	CHECK_STATUS(status, NT_STATUS_LOCK_NOT_GRANTED);
 
-	{
-		/*
-		 * Make the test block on the second lock
-		 * request. This is to regression-test 64c0367.
-		 */
-		uint64_t tmp = lock[1].offset;
-		lock[1].offset = lock[0].offset;
-		lock[0].offset = tmp;
-	}
-
 	t = time_mono(NULL);
 	io.lockx.in.timeout = 10000;
-	io.lockx.in.lock_cnt = 2;
 	req = smb_raw_lock_send(cli->tree, &io);
 	torture_assert(tctx,(req != NULL), talloc_asprintf(tctx,
 		       "Failed to setup timed lock (%s)\n", __location__));
@@ -801,15 +797,6 @@ static bool test_async(struct torture_context *tctx,
 
 	torture_assert(tctx,!(time_mono(NULL) > t+2), talloc_asprintf(tctx,
 		       "lock cancel by close was not immediate (%s)\n", __location__));
-
-	{
-		/*
-		 * Undo the change for 64c0367
-		 */
-		uint64_t tmp = lock[1].offset;
-		lock[1].offset = lock[0].offset;
-		lock[0].offset = tmp;
-	}
 
 	torture_comment(tctx, "create a new sessions\n");
 	session = smbcli_session_init(cli->transport, tctx, false, options);
@@ -827,7 +814,7 @@ static bool test_async(struct torture_context *tctx,
 	host  = torture_setting_string(tctx, "host", NULL);
 	tree = smbcli_tree_init(session, tctx, false);
 	tcon.generic.level = RAW_TCON_TCONX;
-	tcon.tconx.in.flags = TCONX_FLAG_EXTENDED_RESPONSE;
+	tcon.tconx.in.flags = 0;
 	tcon.tconx.in.password = data_blob(NULL, 0);
 	tcon.tconx.in.path = talloc_asprintf(tctx, "\\\\%s\\%s", host, share);
 	tcon.tconx.in.device = "A:";
@@ -1011,7 +998,9 @@ static bool test_errorcode(struct torture_context *tctx,
 	int delay;
 	uint16_t deny_mode = 0;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing LOCK_NOT_GRANTED vs. FILE_LOCK_CONFLICT\n");
 
@@ -1496,7 +1485,9 @@ static bool test_changetype(struct torture_context *tctx,
 	uint8_t c = 0;
 	const char *fname = BASEDIR "\\test.txt";
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing LOCKING_ANDX_CHANGE_LOCKTYPE\n");
 	io.generic.level = RAW_LOCK_LOCKX;
@@ -1595,7 +1586,9 @@ static bool test_zerobytelocks(struct torture_context *tctx, struct smbcli_state
 
 	torture_comment(tctx, "Testing zero length byte range locks:\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	io.generic.level = RAW_LOCK_LOCKX;
 
@@ -1685,7 +1678,9 @@ static bool test_unlock(struct torture_context *tctx, struct smbcli_state *cli)
 
 	torture_comment(tctx, "Testing LOCKX unlock:\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	fnum1 = smbcli_open(cli->tree, fname, O_RDWR|O_CREAT, DENY_NONE);
 	torture_assert(tctx,(fnum1 != -1), talloc_asprintf(tctx,
@@ -1867,7 +1862,9 @@ static bool test_multiple_unlock(struct torture_context *tctx, struct smbcli_sta
 
 	torture_comment(tctx, "Testing LOCKX multiple unlock:\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	fnum1 = smbcli_open(cli->tree, fname, O_RDWR|O_CREAT, DENY_NONE);
 	torture_assert(tctx,(fnum1 != -1), talloc_asprintf(tctx,
@@ -2042,10 +2039,13 @@ static bool test_stacking(struct torture_context *tctx, struct smbcli_state *cli
 	int fnum1;
 	const char *fname = BASEDIR "\\stacking.txt";
 	struct smb_lock_entry lock1;
+	struct smb_lock_entry lock2;
 
 	torture_comment(tctx, "Testing stacking:\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	io.generic.level = RAW_LOCK_LOCKX;
 
@@ -2061,6 +2061,9 @@ static bool test_stacking(struct torture_context *tctx, struct smbcli_state *cli
 	lock1.pid = cli->session->pid;
 	lock1.offset = 0;
 	lock1.count = 10;
+	lock2.pid = cli->session->pid - 1;
+	lock2.offset = 0;
+	lock2.count = 10;
 
 	/**
 	 * Try to take a shared lock, then stack an exclusive.
@@ -2129,7 +2132,9 @@ static bool test_zerobyteread(struct torture_context *tctx,
 	struct smb_lock_entry lock1;
 	uint8_t c = 1;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	io.generic.level = RAW_LOCK_LOCKX;
 
@@ -2262,235 +2267,6 @@ done:
 	smbcli_deltree(cli->tree, BASEDIR);
 	return ret;
 }
-/*
-  test multi Locking&X operation
-*/
-static bool test_multilock(struct torture_context *tctx,
-					   struct smbcli_state *cli)
-{
-	union smb_lock io;
-	struct smb_lock_entry lock[2];
-	NTSTATUS status;
-	bool ret = true;
-	int fnum;
-	const char *fname = BASEDIR "\\multilock_test.txt";
-	time_t t;
-	struct smbcli_request *req;
-	struct smbcli_session_options options;
-
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
-
-	lpcfg_smbcli_session_options(tctx->lp_ctx, &options);
-
-	torture_comment(tctx, "Testing LOCKING_ANDX multi-lock\n");
-	io.generic.level = RAW_LOCK_LOCKX;
-
-	/* Create the test file. */
-	fnum = smbcli_open(cli->tree, fname, O_RDWR|O_CREAT, DENY_NONE);
-	torture_assert(tctx,(fnum != -1), talloc_asprintf(tctx,
-		       "Failed to create %s - %s\n",
-		       fname, smbcli_errstr(cli->tree)));
-
-	/*
-	 * Lock regions 100->109, 120->129 as
-	 * two separate write locks in one request.
-	 */
-	io.lockx.level = RAW_LOCK_LOCKX;
-	io.lockx.in.file.fnum = fnum;
-	io.lockx.in.mode = LOCKING_ANDX_LARGE_FILES;
-	io.lockx.in.timeout = 0;
-	io.lockx.in.ulock_cnt = 0;
-	io.lockx.in.lock_cnt = 2;
-	io.lockx.in.mode = LOCKING_ANDX_EXCLUSIVE_LOCK;
-	lock[0].pid = cli->session->pid;
-	lock[0].offset = 100;
-	lock[0].count = 10;
-	lock[1].pid = cli->session->pid;
-	lock[1].offset = 120;
-	lock[1].count = 10;
-	io.lockx.in.locks = &lock[0];
-	status = smb_raw_lock(cli->tree, &io);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/*
-	 * Now request the same locks on a different
-	 * context as blocking locks with infinite timeout.
-	 */
-
-	io.lockx.in.timeout = 20000;
-	lock[0].pid = cli->session->pid+1;
-	lock[1].pid = cli->session->pid+1;
-	req = smb_raw_lock_send(cli->tree, &io);
-	torture_assert(tctx,(req != NULL), talloc_asprintf(tctx,
-		       "Failed to setup timed locks (%s)\n", __location__));
-
-	/* Unlock lock[0] */
-	io.lockx.in.timeout = 0;
-	io.lockx.in.ulock_cnt = 1;
-	io.lockx.in.lock_cnt = 0;
-	io.lockx.in.locks = &lock[0];
-	lock[0].pid = cli->session->pid;
-	status = smb_raw_lock(cli->tree, &io);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/* Start the clock. */
-	t = time_mono(NULL);
-
-	/* Unlock lock[1] */
-	io.lockx.in.timeout = 0;
-	io.lockx.in.ulock_cnt = 1;
-	io.lockx.in.lock_cnt = 0;
-	io.lockx.in.locks = &lock[1];
-	lock[1].pid = cli->session->pid;
-	status = smb_raw_lock(cli->tree, &io);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/* receive the successful blocked lock requests */
-	status = smbcli_request_simple_recv(req);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/* Fail if this took more than 2 seconds. */
-	torture_assert(tctx,!(time_mono(NULL) > t+2), talloc_asprintf(tctx,
-		       "Blocking locks were not granted immediately (%s)\n",
-		       __location__));
-done:
-	smb_raw_exit(cli->session);
-	smbcli_deltree(cli->tree, BASEDIR);
-	return ret;
-}
-
-/*
-  test multi2 Locking&X operation
-  This test is designed to show that
-  lock precedence on the server is based
-  on the order received, not on the ability
-  to grant. For example:
-
-  A blocked lock request containing 2 locks
-  will be satified before a subsequent blocked
-  lock request over one of the same regions,
-  even if that region is then unlocked. E.g.
-
-  (a) lock 100->109, 120->129 (granted)
-  (b) lock 100->109, 120-129 (blocks)
-  (c) lock 100->109          (blocks)
-  (d) unlock 100->109
-
-  lock (c) will not be granted as lock (b)
-  will take precedence.
-*/
-static bool test_multilock2(struct torture_context *tctx,
-					   struct smbcli_state *cli)
-{
-	union smb_lock io;
-	struct smb_lock_entry lock[2];
-	NTSTATUS status;
-	bool ret = true;
-	int fnum;
-	const char *fname = BASEDIR "\\multilock2_test.txt";
-	time_t t;
-	struct smbcli_request *req;
-	struct smbcli_request *req2;
-	struct smbcli_session_options options;
-
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
-
-	lpcfg_smbcli_session_options(tctx->lp_ctx, &options);
-
-	torture_comment(tctx, "Testing LOCKING_ANDX multi-lock 2\n");
-	io.generic.level = RAW_LOCK_LOCKX;
-
-	/* Create the test file. */
-	fnum = smbcli_open(cli->tree, fname, O_RDWR|O_CREAT, DENY_NONE);
-	torture_assert(tctx,(fnum != -1), talloc_asprintf(tctx,
-		       "Failed to create %s - %s\n",
-		       fname, smbcli_errstr(cli->tree)));
-
-	/*
-	 * Lock regions 100->109, 120->129 as
-	 * two separate write locks in one request.
-	 */
-	io.lockx.level = RAW_LOCK_LOCKX;
-	io.lockx.in.file.fnum = fnum;
-	io.lockx.in.mode = LOCKING_ANDX_LARGE_FILES;
-	io.lockx.in.timeout = 0;
-	io.lockx.in.ulock_cnt = 0;
-	io.lockx.in.lock_cnt = 2;
-	io.lockx.in.mode = LOCKING_ANDX_EXCLUSIVE_LOCK;
-	lock[0].pid = cli->session->pid;
-	lock[0].offset = 100;
-	lock[0].count = 10;
-	lock[1].pid = cli->session->pid;
-	lock[1].offset = 120;
-	lock[1].count = 10;
-	io.lockx.in.locks = &lock[0];
-	status = smb_raw_lock(cli->tree, &io);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/*
-	 * Now request the same locks on a different
-	 * context as blocking locks.
-	 */
-
-	io.lockx.in.timeout = 20000;
-	lock[0].pid = cli->session->pid+1;
-	lock[1].pid = cli->session->pid+1;
-	req = smb_raw_lock_send(cli->tree, &io);
-	torture_assert(tctx,(req != NULL), talloc_asprintf(tctx,
-		       "Failed to setup timed locks (%s)\n", __location__));
-
-	/*
-	 * Request the first lock again on a separate context.
-	 * Wait 2 seconds. This should time out (the previous
-	 * multi-lock request should take precedence).
-	 */
-
-	io.lockx.in.timeout = 2000;
-	lock[0].pid = cli->session->pid+2;
-	io.lockx.in.lock_cnt = 1;
-	req2 = smb_raw_lock_send(cli->tree, &io);
-	torture_assert(tctx,(req != NULL), talloc_asprintf(tctx,
-		       "Failed to setup timed locks (%s)\n", __location__));
-
-	/* Unlock lock[0] */
-	io.lockx.in.timeout = 0;
-	io.lockx.in.ulock_cnt = 1;
-	io.lockx.in.lock_cnt = 0;
-	io.lockx.in.locks = &lock[0];
-	lock[0].pid = cli->session->pid;
-	status = smb_raw_lock(cli->tree, &io);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/* Did the second lock complete (should time out) ? */
-	status = smbcli_request_simple_recv(req2);
-	CHECK_STATUS(status, NT_STATUS_FILE_LOCK_CONFLICT);
-
-	/* Start the clock. */
-	t = time_mono(NULL);
-
-	/* Unlock lock[1] */
-	io.lockx.in.timeout = 0;
-	io.lockx.in.ulock_cnt = 1;
-	io.lockx.in.lock_cnt = 0;
-	io.lockx.in.locks = &lock[1];
-	lock[1].pid = cli->session->pid;
-	status = smb_raw_lock(cli->tree, &io);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/* receive the successful blocked lock requests */
-	status = smbcli_request_simple_recv(req);
-	CHECK_STATUS(status, NT_STATUS_OK);
-
-	/* Fail if this took more than 2 seconds. */
-	torture_assert(tctx,!(time_mono(NULL) > t+2), talloc_asprintf(tctx,
-		       "Blocking locks were not granted immediately (%s)\n",
-		       __location__));
-done:
-	smb_raw_exit(cli->session);
-	smbcli_deltree(cli->tree, BASEDIR);
-	return ret;
-}
-
 
 /*
    basic testing of lock calls
@@ -2512,8 +2288,6 @@ struct torture_suite *torture_raw_lock(TALLOC_CTX *mem_ctx)
 	    test_multiple_unlock);
 	torture_suite_add_1smb_test(suite, "zerobytelocks", test_zerobytelocks);
 	torture_suite_add_1smb_test(suite, "zerobyteread", test_zerobyteread);
-	torture_suite_add_1smb_test(suite, "multilock", test_multilock);
-	torture_suite_add_1smb_test(suite, "multilock2", test_multilock2);
 
 	return suite;
 }

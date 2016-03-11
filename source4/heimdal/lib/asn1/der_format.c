@@ -108,7 +108,7 @@ int
 der_print_heim_oid (const heim_oid *oid, char delim, char **str)
 {
     struct rk_strpool *p = NULL;
-    size_t i;
+    int i;
 
     if (oid->length == 0)
 	return EINVAL;

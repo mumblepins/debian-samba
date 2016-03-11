@@ -903,7 +903,6 @@ static void r_do_late_release_demand_handler(struct tevent_req *subreq)
 	TALLOC_FREE(subreq);
 
 	/* don't care about the result */
-	(void)status;
 	talloc_free(state);
 }
 
@@ -1101,7 +1100,6 @@ static void r_do_release_demand_handler(struct tevent_req *subreq)
 	TALLOC_FREE(subreq);
 
 	/* don't care about the result */
-	(void)status;
 	talloc_free(state);
 }
 

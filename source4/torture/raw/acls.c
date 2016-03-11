@@ -28,7 +28,6 @@
 #include "libcli/security/security.h"
 #include "torture/util.h"
 #include "librpc/gen_ndr/ndr_security.h"
-#include "torture/raw/proto.h"
 
 #define BASEDIR "\\testsd"
 
@@ -1843,13 +1842,6 @@ done:
 	smbcli_rmdir(cli->tree, dname);
 	smb_raw_exit(cli->session);
 	smbcli_deltree(cli->tree, BASEDIR);
-
-	if (!ret) {
-		torture_result(tctx,
-			TORTURE_FAIL, "(%s) test_inheritance\n",
-			__location__);
-	}
-
 	return ret;
 }
 
@@ -1873,7 +1865,7 @@ static bool test_inheritance_flags(struct torture_context *tctx,
 		uint32_t parent_get_ace_inherit;
 		uint32_t child_get_sd_type;
 		uint32_t child_get_ace_inherit;
-	} tflags[16] = {{0}}; /* 2^4 */
+	} tflags[16]; /* 2^4 */
 
 	for (i = 0; i < 15; i++) {
 		torture_comment(tctx, "i=%d:", i);
@@ -1931,8 +1923,6 @@ static bool test_inheritance_flags(struct torture_context *tctx,
 		return false;
 
 	torture_comment(tctx, "TESTING ACL INHERITANCE FLAGS\n");
-
-	ZERO_STRUCT(io);
 
 	io.generic.level = RAW_OPEN_NTCREATEX;
 	io.ntcreatex.in.root_fid.fnum = 0;
@@ -2080,13 +2070,6 @@ done:
 	smbcli_close(cli->tree, fnum);
 	smb_raw_exit(cli->session);
 	smbcli_deltree(cli->tree, BASEDIR);
-
-	if (!ret) {
-		torture_result(tctx,
-			TORTURE_FAIL, "(%s) test_inheritance_flags\n",
-			__location__);
-	}
-
 	return ret;
 }
 
@@ -2217,14 +2200,13 @@ static bool test_inheritance_dynamic(struct torture_context *tctx,
 	smbcli_unlink(cli->tree, fname1);
 
 done:
-	if (sd_orig != NULL) {
-		torture_comment(tctx, "put back original sd\n");
-		set.set_secdesc.level = RAW_SFILEINFO_SEC_DESC;
-		set.set_secdesc.in.file.fnum = fnum;
-		set.set_secdesc.in.secinfo_flags = SECINFO_DACL;
-		set.set_secdesc.in.sd = sd_orig;
-		status = smb_raw_setfileinfo(cli->tree, &set);
-	}
+	torture_comment(tctx, "put back original sd\n");
+	set.set_secdesc.level = RAW_SFILEINFO_SEC_DESC;
+	set.set_secdesc.in.file.fnum = fnum;
+	set.set_secdesc.in.secinfo_flags = SECINFO_DACL;
+	set.set_secdesc.in.sd = sd_orig;
+	status = smb_raw_setfileinfo(cli->tree, &set);
+
 	smbcli_close(cli->tree, fnum);
 	smbcli_rmdir(cli->tree, dname);
 	smb_raw_exit(cli->session);
@@ -2260,8 +2242,6 @@ done:
 	} \
 	CHECK_STATUS_FOR_BIT_ACTION(status, bits, do {} while (0)); \
 } while (0)
-
-#if 0
 
 /* test what access mask is needed for getting and setting security_descriptors
   Test copied to smb2/acls.c for SMB2. */
@@ -2452,7 +2432,6 @@ done:
 	return ret;
 }
 
-#endif
 
 /* 
    basic testing of security descriptor calls
@@ -2470,12 +2449,11 @@ struct torture_suite *torture_raw_acls(TALLOC_CTX *mem_ctx)
 	torture_suite_add_1smb_test(suite, "owner", test_owner_bits);
 	torture_suite_add_1smb_test(suite, "inheritance", test_inheritance);
 
-	torture_suite_add_1smb_test(suite, "INHERITFLAGS", test_inheritance_flags);
+	/* torture_suite_add_1smb_test(suite, "INHERITFLAGS", test_inheritance_flags); */
 	torture_suite_add_1smb_test(suite, "dynamic", test_inheritance_dynamic);
-#if 0
-	/* XXX This test does not work against XP or Vista. */
+	/* XXX This test does not work against XP or Vista.
 	torture_suite_add_1smb_test(suite, "GETSET", test_sd_get_set);
-#endif
+	*/
 
 	return suite;
 }

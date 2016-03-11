@@ -48,7 +48,7 @@ _PUBLIC_ enum ndr_err_code ndr_pull_dnsp_name(struct ndr_pull *ndr, int ndr_flag
 
 	ret = talloc_strdup(ndr->current_mem_ctx, "");
 	if (!ret) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_name");
+		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp");
 	}
 	total_len = 1;
 
@@ -61,7 +61,7 @@ _PUBLIC_ enum ndr_err_code ndr_pull_dnsp_name(struct ndr_pull *ndr, int ndr_flag
 		}
 		ret = talloc_realloc(ndr->current_mem_ctx, ret, char, newlen);
 		if (!ret) {
-			return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_name");
+			return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp");
 		}
 		NDR_CHECK(ndr_pull_bytes(ndr, (uint8_t *)&ret[total_len-1], sublen));
 		if (i != count-1) {
@@ -72,10 +72,10 @@ _PUBLIC_ enum ndr_err_code ndr_pull_dnsp_name(struct ndr_pull *ndr, int ndr_flag
 	}
 	NDR_CHECK(ndr_pull_uint8(ndr, ndr_flags, &termination));
 	if (termination != 0) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_name - not NUL terminated");
+		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp - not NUL terminated");
 	}
 	if (ndr->offset > raw_offset + len) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_name - overrun by %u bytes",
+		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp - overrun by %u bytes",
 				      ndr->offset - (raw_offset + len));
 	}
 	/* there could be additional pad bytes */
@@ -135,19 +135,22 @@ _PUBLIC_ void ndr_print_dnsp_string(struct ndr_print *ndr, const char *name,
 _PUBLIC_ enum ndr_err_code ndr_pull_dnsp_string(struct ndr_pull *ndr, int ndr_flags, const char **string)
 {
 	uint8_t len;
+	uint32_t total_len;
 	char *ret;
 
 	NDR_CHECK(ndr_pull_uint8(ndr, ndr_flags, &len));
 
 	ret = talloc_strdup(ndr->current_mem_ctx, "");
 	if (!ret) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_string");
+		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp");
 	}
-	ret = talloc_zero_array(ndr->current_mem_ctx, char, len + 1);
+	total_len = 1;
+	ret = talloc_zero_array(ndr->current_mem_ctx, char, len+1);
 	if (!ret) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_string");
+		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp");
 	}
-	NDR_CHECK(ndr_pull_bytes(ndr, (uint8_t *)ret, len));
+	NDR_CHECK(ndr_pull_bytes(ndr, (uint8_t *)&ret[total_len-1], len));
+	total_len = len;
 
 	(*string) = ret;
 	NDR_PULL_ALIGN(ndr, 1);
@@ -157,92 +160,14 @@ _PUBLIC_ enum ndr_err_code ndr_pull_dnsp_string(struct ndr_pull *ndr, int ndr_fl
 enum ndr_err_code ndr_push_dnsp_string(struct ndr_push *ndr, int ndr_flags, const char *string)
 {
 	int total_len;
-	total_len = strlen(string);
+	total_len = strlen(string) + 1;
 	if (total_len > 255) {
 		return ndr_push_error(ndr, NDR_ERR_BUFSIZE,
 				      "dns_name of length %d larger than 255", total_len);
 	}
 	NDR_CHECK(ndr_push_uint8(ndr, ndr_flags, (uint8_t)total_len));
-	NDR_CHECK(ndr_push_bytes(ndr, (const uint8_t *)string, total_len));
+	NDR_CHECK(ndr_push_bytes(ndr, (const uint8_t *)string, total_len - 1));
+	NDR_PUSH_ALIGN(ndr, 1);
 
-	return NDR_ERR_SUCCESS;
-}
-
-/*
- * print a dnsp_string_list
- */
-_PUBLIC_ void ndr_print_dnsp_string_list(struct ndr_print *ndr, const char *name,
-					 const struct dnsp_string_list *list)
-{
-	uint32_t i;
-
-	ndr->no_newline = true;
-	for (i=0; i<ndr->depth; i++) {
-		ndr->print(ndr, "    ");
-	}
-	ndr->print(ndr, "%-25s:", name);
-	for (i=0; i<list->count; i++) {
-		ndr->print(ndr, " \"%s\"", list->str[i]);
-	}
-	ndr->print(ndr, "\n");
-	ndr->no_newline = false;
-}
-
-/*
- * pull a dnsp_string_list
- */
-_PUBLIC_ enum ndr_err_code ndr_pull_dnsp_string_list(struct ndr_pull *ndr, int ndr_flags, struct dnsp_string_list *list)
-{
-	list->count = 0;
-	list->str = talloc_array(ndr->current_mem_ctx, const char *,
-				 list->count);
-	if (! list->str) {
-		return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_string_list");
-	}
-
-	while (ndr->offset < ndr->data_size) {
-		list->str = talloc_realloc(ndr->current_mem_ctx, list->str,
-					   const char *, list->count+1);
-		if (! list->str) {
-			return ndr_pull_error(ndr, NDR_ERR_ALLOC, "Failed to pull dnsp_string_list");
-		}
-		NDR_CHECK(ndr_pull_dnsp_string(ndr, ndr_flags, &list->str[list->count]));
-		list->count++;
-	}
-
-	return NDR_ERR_SUCCESS;
-}
-
-enum ndr_err_code ndr_push_dnsp_string_list(struct ndr_push *ndr, int ndr_flags, const struct dnsp_string_list *list)
-{
-	uint8_t i;
-
-	for (i=0; i<list->count; i++) {
-		NDR_CHECK(ndr_push_dnsp_string(ndr, ndr_flags, list->str[i]));
-	}
-	return NDR_ERR_SUCCESS;
-}
-
-enum ndr_err_code ndr_dnsp_string_list_copy(TALLOC_CTX *mem_ctx,
-					    const struct dnsp_string_list *src,
-					    struct dnsp_string_list *dst)
-{
-	size_t i;
-
-	dst->count = 0;
-	dst->str = talloc_zero_array(mem_ctx, const char *, src->count);
-	if (dst->str == NULL) {
-		return NDR_ERR_ALLOC;
-	}
-
-	for (i = 0; i < src->count; i++) {
-		dst->str[i] = talloc_strdup(dst->str, src->str[i]);
-		if (dst->str[i] == NULL) {
-			TALLOC_FREE(dst->str);
-			return NDR_ERR_ALLOC;
-		}
-	}
-
-	dst->count = src->count;
 	return NDR_ERR_SUCCESS;
 }

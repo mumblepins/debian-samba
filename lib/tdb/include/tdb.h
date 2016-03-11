@@ -31,7 +31,6 @@ extern "C" {
 #endif
 
 #include <signal.h>
-#include <stdbool.h>
 
 /**
  * @defgroup tdb The tdb API
@@ -81,9 +80,6 @@ extern "C" {
 #define TDB_ALLOW_NESTING 512 /** Allow transactions to nest */
 #define TDB_DISALLOW_NESTING 1024 /** Disallow transactions to nest */
 #define TDB_INCOMPATIBLE_HASH 2048 /** Better hashing: can't be opened by tdb < 1.2.6. */
-#define TDB_MUTEX_LOCKING 4096 /** optimized locking using robust mutexes if supported,
-                                   only with tdb >= 1.3.0 and TDB_CLEAR_IF_FIRST
-                                   after checking tdb_runtime_check_for_robust_mutexes() */
 
 /** The tdb error codes */
 enum TDB_ERROR {TDB_SUCCESS=0, TDB_ERR_CORRUPT, TDB_ERR_IO, TDB_ERR_LOCK, 
@@ -136,7 +132,7 @@ struct tdb_logging_context {
  * @param[in]  tdb_flags The flags to use to open the db:\n\n
  *                         TDB_CLEAR_IF_FIRST - Clear database if we are the
  *                                              only one with it open\n
- *                         TDB_INTERNAL - Don't use a file, instead store the
+ *                         TDB_INTERNAL - Don't use a file, instaed store the
  *                                        data in memory. The filename is
  *                                        ignored in this case.\n
  *                         TDB_NOLOCK - Don't do any locking\n
@@ -147,11 +143,6 @@ struct tdb_logging_context {
  *                                        default 5.\n
  *                         TDB_ALLOW_NESTING - Allow transactions to nest.\n
  *                         TDB_DISALLOW_NESTING - Disallow transactions to nest.\n
- *                         TDB_INCOMPATIBLE_HASH - Better hashing: can't be opened by tdb < 1.2.6.\n
- *                         TDB_MUTEX_LOCKING - Optimized locking using robust mutexes if supported,
- *                                             can't be opened by tdb < 1.3.0.
- *                                             Only valid in combination with TDB_CLEAR_IF_FIRST
- *                                             after checking tdb_runtime_check_for_robust_mutexes()\n
  *
  * @param[in]  open_flags Flags for the open(2) function.
  *
@@ -177,7 +168,7 @@ struct tdb_context *tdb_open(const char *name, int hash_size, int tdb_flags,
  * @param[in]  tdb_flags The flags to use to open the db:\n\n
  *                         TDB_CLEAR_IF_FIRST - Clear database if we are the
  *                                              only one with it open\n
- *                         TDB_INTERNAL - Don't use a file, instead store the
+ *                         TDB_INTERNAL - Don't use a file, instaed store the
  *                                        data in memory. The filename is
  *                                        ignored in this case.\n
  *                         TDB_NOLOCK - Don't do any locking\n
@@ -188,11 +179,6 @@ struct tdb_context *tdb_open(const char *name, int hash_size, int tdb_flags,
  *                                        default 5.\n
  *                         TDB_ALLOW_NESTING - Allow transactions to nest.\n
  *                         TDB_DISALLOW_NESTING - Disallow transactions to nest.\n
- *                         TDB_INCOMPATIBLE_HASH - Better hashing: can't be opened by tdb < 1.2.6.\n
- *                         TDB_MUTEX_LOCKING - Optimized locking using robust mutexes if supported,
- *                                             can't be opened by tdb < 1.3.0.
- *                                             Only valid in combination with TDB_CLEAR_IF_FIRST
- *                                             after checking tdb_runtime_check_for_robust_mutexes()\n
  *
  * @param[in]  open_flags Flags for the open(2) function.
  *
@@ -226,12 +212,9 @@ void tdb_set_max_dead(struct tdb_context *tdb, int max_dead);
  * This can be used after a fork to ensure that we have an independent seek
  * pointer from our parent and to re-establish locks.
  *
- * @param[in]  tdb      The database to reopen. It will be free'd on error!
+ * @param[in]  tdb      The database to reopen.
  *
  * @return              0 on success, -1 on error.
- *
- * @note Don't call tdb_error() after this function cause the tdb context will
- *       be freed on error.
  */
 int tdb_reopen(struct tdb_context *tdb);
 
@@ -378,12 +361,9 @@ int tdb_append(struct tdb_context *tdb, TDB_DATA key, TDB_DATA new_dbuf);
 /**
  * @brief Close a database.
  *
- * @param[in]  tdb      The database to close. The context will be free'd.
+ * @param[in]  tdb      The database to close.
  *
  * @return              0 for success, -1 on error.
- *
- * @note Don't call tdb_error() after this function cause the tdb context will
- *       be freed on error.
  */
 int tdb_close(struct tdb_context *tdb);
 
@@ -416,7 +396,7 @@ TDB_DATA tdb_nextkey(struct tdb_context *tdb, TDB_DATA key);
 /**
  * @brief Traverse the entire database.
  *
- * While traversing the function fn(tdb, key, data, state) is called on each
+ * While travering the function fn(tdb, key, data, state) is called on each
  * element. If fn is NULL then it is not called. A non-zero return value from
  * fn() indicates that the traversal should stop. Traversal callbacks may not
  * start transactions.
@@ -791,7 +771,7 @@ void tdb_enable_seqnum(struct tdb_context *tdb);
  * @brief Increment the tdb sequence number.
  *
  * This only works if the tdb has been opened using the TDB_SEQNUM flag or
- * enabled using tdb_enable_seqnum().
+ * enabled useing tdb_enable_seqnum().
  *
  * @param[in]  tdb      The database to increment the sequence number.
  *
@@ -834,49 +814,6 @@ int tdb_check(struct tdb_context *tdb,
 	      int (*check) (TDB_DATA key, TDB_DATA data, void *private_data),
 	      void *private_data);
 
-/**
- * @brief Dump all possible records in a corrupt database.
- *
- * This is the only way to get data out of a database where tdb_check() fails.
- * It will call walk() with anything which looks like a database record; this
- * may well include invalid, incomplete or duplicate records.
- *
- * @param[in]  tdb      The database to check.
- *
- * @param[in]  walk     The walk function to use.
- *
- * @param[in]  private_data the private data to pass to the walk function.
- *
- * @return              0 on success, -1 on error with error code set.
- *
- * @see tdb_error()
- * @see tdb_errorstr()
- */
-int tdb_rescue(struct tdb_context *tdb,
-	       void (*walk) (TDB_DATA key, TDB_DATA data, void *private_data),
-	       void *private_data);
-
-/**
- * @brief Check if support for TDB_MUTEX_LOCKING is available at runtime.
- *
- * On some systems the API for pthread_mutexattr_setrobust() is not available.
- * On other systems there are some bugs in the interaction between glibc and
- * the linux kernel.
- *
- * This function provides a runtime check if robust mutexes are really
- * available.
- *
- * This needs to be called and return true before TDB_MUTEX_LOCKING
- * can be used at runtime.
- *
- * @note This calls fork(), but the SIGCHILD handling should be transparent.
- *
- * @return              true if supported, false otherwise.
- *
- * @see TDB_MUTEX_LOCKING
- */
-bool tdb_runtime_check_for_robust_mutexes(void);
-
 /* @} ******************************************************************/
 
 /* Low level locking functions: use with care */
@@ -884,7 +821,6 @@ int tdb_chainlock(struct tdb_context *tdb, TDB_DATA key);
 int tdb_chainlock_nonblock(struct tdb_context *tdb, TDB_DATA key);
 int tdb_chainunlock(struct tdb_context *tdb, TDB_DATA key);
 int tdb_chainlock_read(struct tdb_context *tdb, TDB_DATA key);
-int tdb_chainlock_read_nonblock(struct tdb_context *tdb, TDB_DATA key);
 int tdb_chainunlock_read(struct tdb_context *tdb, TDB_DATA key);
 int tdb_chainlock_mark(struct tdb_context *tdb, TDB_DATA key);
 int tdb_chainlock_unmark(struct tdb_context *tdb, TDB_DATA key);

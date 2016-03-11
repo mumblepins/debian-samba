@@ -25,18 +25,21 @@ typedef char fstring[FSTRING_LEN];
 
 #define WINBINDD_SOCKET_NAME "pipe"            /* Name of PF_UNIX socket */
 
-/* We let the build environment set the public winbindd socket
- * location. Therefore we no longer set
- *
- * #define WINBINDD_SOCKET_DIR "/tmp/.winbindd"
- *
- * A number of different distributions set different paths, and so it
- * needs to come from configure in Samba.  External users of this header will
- * need to know where the path is on their system by some other
- * mechanism.
+/* Let the build environment override the public winbindd socket location. This
+ * is needed for launchd support -- jpeach.
  */
+#ifndef WINBINDD_SOCKET_DIR
+#define WINBINDD_SOCKET_DIR  "/tmp/.winbindd"  /* Name of PF_UNIX dir */
+#endif
 
-#define WINBINDD_PRIV_SOCKET_SUBDIR "winbindd_privileged" /* name of subdirectory of lp_lock_directory() to hold the 'privileged' pipe */
+/*
+ * when compiled with socket_wrapper support
+ * the location of the WINBINDD_SOCKET_DIR
+ * can be overwritten via an environment variable
+ */
+#define WINBINDD_SOCKET_DIR_ENVVAR "WINBINDD_SOCKET_DIR"
+
+#define WINBINDD_PRIV_SOCKET_SUBDIR "winbindd_privileged" /* name of subdirectory of lp_lockdir() to hold the 'privileged' pipe */
 #define WINBINDD_DOMAIN_ENV  "WINBINDD_DOMAIN" /* Environment variables */
 #define WINBINDD_DONT_ENV    "_NO_WINBINDD"
 #define WINBINDD_LOCATOR_KDC_ADDRESS "WINBINDD_LOCATOR_KDC_ADDRESS"
@@ -202,25 +205,26 @@ typedef struct winbindd_gr {
 	uint32_t gr_mem_ofs;   /* offset to group membership */
 } WINBINDD_GR;
 
-/* Request flags */
+/* PAM specific request flags */
 #define WBFLAG_PAM_INFO3_NDR		0x00000001
 #define WBFLAG_PAM_INFO3_TEXT		0x00000002
 #define WBFLAG_PAM_USER_SESSION_KEY	0x00000004
 #define WBFLAG_PAM_LMKEY		0x00000008
 #define WBFLAG_PAM_CONTACT_TRUSTDOM	0x00000010
-#define WBFLAG_QUERY_ONLY		0x00000020	/* not used */
-#define WBFLAG_PAM_AUTH_PAC		0x00000040
 #define WBFLAG_PAM_UNIX_NAME		0x00000080
 #define WBFLAG_PAM_AFS_TOKEN		0x00000100
 #define WBFLAG_PAM_NT_STATUS_SQUASH	0x00000200
-/* This is a flag that can only be sent from parent to child */
-#define WBFLAG_IS_PRIVILEGED		0x00000400	/* not used */
-/* Flag to say this is a winbindd internal send - don't recurse. */
-#define WBFLAG_RECURSE			0x00000800
 #define WBFLAG_PAM_KRB5			0x00001000
 #define WBFLAG_PAM_FALLBACK_AFTER_KRB5	0x00002000
 #define WBFLAG_PAM_CACHED_LOGIN		0x00004000
 #define WBFLAG_PAM_GET_PWD_POLICY	0x00008000
+
+/* generic request flags */
+#define WBFLAG_QUERY_ONLY		0x00000020	/* not used */
+/* This is a flag that can only be sent from parent to child */
+#define WBFLAG_IS_PRIVILEGED		0x00000400	/* not used */
+/* Flag to say this is a winbindd internal send - don't recurse. */
+#define WBFLAG_RECURSE			0x00000800
 /* Flag to tell winbind the NTLMv2 blob is too big for the struct and is in the
  * extra_data field */
 #define WBFLAG_BIG_NTLMV2_BLOB		0x00010000
@@ -486,7 +490,6 @@ struct winbindd_response {
 		struct {
 			uint8_t session_key[16];
 			uint32_t auth_blob_len; /* blob in extra_data */
-			uint8_t new_spnego;
 		} ccache_ntlm_auth;
 		struct {
 			fstring dc_unc;

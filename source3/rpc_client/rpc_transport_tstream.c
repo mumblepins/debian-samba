@@ -21,7 +21,7 @@
 #include "../lib/util/tevent_ntstatus.h"
 #include "rpc_client/rpc_transport.h"
 #include "lib/tsocket/tsocket.h"
-#include "libcli/smb/tstream_smbXcli_np.h"
+#include "libsmb/cli_np_tstream.h"
 #include "cli_pipe.h"
 
 #undef DBGC_CLASS
@@ -49,7 +49,7 @@ static bool rpc_tstream_is_connected(void *priv)
 		return false;
 	}
 
-	if (!tstream_is_smbXcli_np(transp->stream)) {
+	if (!tstream_is_cli_np(transp->stream)) {
 		return true;
 	}
 
@@ -73,9 +73,9 @@ static unsigned int rpc_tstream_set_timeout(void *priv, unsigned int timeout)
 		return 0;
 	}
 
-	if (tstream_is_smbXcli_np(transp->stream)) {
+	if (tstream_is_cli_np(transp->stream)) {
 		transp->timeout = timeout;
-		return tstream_smbXcli_np_set_timeout(transp->stream, timeout);
+		return tstream_cli_np_set_timeout(transp->stream, timeout);
 	}
 
 	orig_timeout = transp->timeout;
@@ -171,7 +171,7 @@ struct rpc_tstream_read_state {
 static void rpc_tstream_read_done(struct tevent_req *subreq);
 
 static struct tevent_req *rpc_tstream_read_send(TALLOC_CTX *mem_ctx,
-					     struct tevent_context *ev,
+					     struct event_context *ev,
 					     uint8_t *data, size_t size,
 					     void *priv)
 {
@@ -186,11 +186,7 @@ static struct tevent_req *rpc_tstream_read_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 	if (!rpc_tstream_is_connected(transp)) {
-		NTSTATUS status = NT_STATUS_CONNECTION_DISCONNECTED;
-		if (tstream_is_smbXcli_np(transp->stream)) {
-			status = NT_STATUS_PIPE_DISCONNECTED;
-		}
-		tevent_req_nterror(req, status);
+		tevent_req_nterror(req, NT_STATUS_CONNECTION_INVALID);
 		return tevent_req_post(req, ev);
 	}
 	state->transp = transp;
@@ -206,7 +202,7 @@ static struct tevent_req *rpc_tstream_read_send(TALLOC_CTX *mem_ctx,
 		return tevent_req_post(req, ev);
 	}
 
-	endtime = timeval_current_ofs_msec(transp->timeout);
+	endtime = timeval_current_ofs(0, transp->timeout * 1000);
 	if (!tevent_req_set_endtime(subreq, ev, endtime)) {
 		goto fail;
 	}
@@ -250,7 +246,7 @@ static NTSTATUS rpc_tstream_read_recv(struct tevent_req *req, ssize_t *size)
 }
 
 struct rpc_tstream_write_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct rpc_tstream_state *transp;
 	struct iovec iov;
 	ssize_t nwritten;
@@ -259,7 +255,7 @@ struct rpc_tstream_write_state {
 static void rpc_tstream_write_done(struct tevent_req *subreq);
 
 static struct tevent_req *rpc_tstream_write_send(TALLOC_CTX *mem_ctx,
-					      struct tevent_context *ev,
+					      struct event_context *ev,
 					      const uint8_t *data, size_t size,
 					      void *priv)
 {
@@ -274,11 +270,7 @@ static struct tevent_req *rpc_tstream_write_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 	if (!rpc_tstream_is_connected(transp)) {
-		NTSTATUS status = NT_STATUS_CONNECTION_DISCONNECTED;
-		if (tstream_is_smbXcli_np(transp->stream)) {
-			status = NT_STATUS_PIPE_DISCONNECTED;
-		}
-		tevent_req_nterror(req, status);
+		tevent_req_nterror(req, NT_STATUS_CONNECTION_INVALID);
 		return tevent_req_post(req, ev);
 	}
 	state->ev = ev;
@@ -294,7 +286,7 @@ static struct tevent_req *rpc_tstream_write_send(TALLOC_CTX *mem_ctx,
 		goto fail;
 	}
 
-	endtime = timeval_current_ofs_msec(transp->timeout);
+	endtime = timeval_current_ofs(0, transp->timeout * 1000);
 	if (!tevent_req_set_endtime(subreq, ev, endtime)) {
 		goto fail;
 	}
@@ -356,7 +348,7 @@ static int rpc_tstream_trans_next_vector(struct tstream_context *stream,
 
 static struct tevent_req *rpc_tstream_trans_send(TALLOC_CTX *mem_ctx,
 						 struct tevent_context *ev,
-						 const uint8_t *data, size_t data_len,
+						 uint8_t *data, size_t data_len,
 						 uint32_t max_rdata_len,
 						 void *priv)
 {
@@ -365,7 +357,6 @@ static struct tevent_req *rpc_tstream_trans_send(TALLOC_CTX *mem_ctx,
 	struct tevent_req *req, *subreq;
 	struct rpc_tstream_trans_state *state;
 	struct timeval endtime;
-	bool use_trans = false;
 
 	req = tevent_req_create(mem_ctx, &state,
 				struct rpc_tstream_trans_state);
@@ -374,11 +365,7 @@ static struct tevent_req *rpc_tstream_trans_send(TALLOC_CTX *mem_ctx,
 	}
 
 	if (!rpc_tstream_is_connected(transp)) {
-		NTSTATUS status = NT_STATUS_CONNECTION_DISCONNECTED;
-		if (tstream_is_smbXcli_np(transp->stream)) {
-			status = NT_STATUS_PIPE_DISCONNECTED;
-		}
-		tevent_req_nterror(req, status);
+		tevent_req_nterror(req, NT_STATUS_CONNECTION_INVALID);
 		return tevent_req_post(req, ev);
 	}
 	state->ev = ev;
@@ -387,21 +374,7 @@ static struct tevent_req *rpc_tstream_trans_send(TALLOC_CTX *mem_ctx,
 	state->req.iov_base = discard_const_p(void *, data);
 	state->max_rdata_len = max_rdata_len;
 
-	endtime = timeval_current_ofs_msec(transp->timeout);
-
-	if (tstream_is_smbXcli_np(transp->stream)) {
-		use_trans = true;
-	}
-	if (tevent_queue_length(transp->write_queue) > 0) {
-		use_trans = false;
-	}
-	if (tevent_queue_length(transp->read_queue) > 0) {
-		use_trans = false;
-	}
-
-	if (use_trans) {
-		tstream_smbXcli_np_use_trans(transp->stream);
-	}
+	endtime = timeval_current_ofs(0, transp->timeout * 1000);
 
 	subreq = tstream_writev_queue_send(state, ev,
 					   transp->stream,
@@ -414,6 +387,10 @@ static struct tevent_req *rpc_tstream_trans_send(TALLOC_CTX *mem_ctx,
 		return tevent_req_post(req, ev);
 	}
 	tevent_req_set_callback(subreq, rpc_tstream_trans_writev, req);
+
+	if (tstream_is_cli_np(transp->stream)) {
+		tstream_cli_np_use_trans(transp->stream);
+	}
 
 	subreq = tstream_readv_pdu_queue_send(state, ev,
 					      transp->stream,
@@ -568,7 +545,7 @@ NTSTATUS rpc_transport_tstream_init(TALLOC_CTX *mem_ctx,
 	state->stream = talloc_move(state, stream);
 	state->timeout = 10000; /* 10 seconds. */
 
-	if (tstream_is_smbXcli_np(state->stream)) {
+	if (tstream_is_cli_np(state->stream)) {
 		result->trans_send = rpc_tstream_trans_send;
 		result->trans_recv = rpc_tstream_trans_recv;
 	} else {
@@ -584,4 +561,23 @@ NTSTATUS rpc_transport_tstream_init(TALLOC_CTX *mem_ctx,
 
 	*presult = result;
 	return NT_STATUS_OK;
+}
+
+struct cli_state *rpc_pipe_np_smb_conn(struct rpc_pipe_client *p)
+{
+	struct rpc_tstream_state *transp =
+		talloc_get_type_abort(p->transport->priv,
+		struct rpc_tstream_state);
+	bool ok;
+
+	ok = rpccli_is_connected(p);
+	if (!ok) {
+		return NULL;
+	}
+
+	if (!tstream_is_cli_np(transp->stream)) {
+		return NULL;
+	}
+
+	return tstream_cli_np_get_cli_state(transp->stream);
 }

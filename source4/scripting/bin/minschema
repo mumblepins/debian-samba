@@ -5,6 +5,7 @@
 
 import base64
 import optparse
+import os
 import sys
 
 # Find right directory when running from source tree

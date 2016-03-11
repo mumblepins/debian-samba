@@ -54,7 +54,7 @@ NTSTATUS dcerpc_lsa_open_policy(struct dcerpc_binding_handle *h,
 				NTSTATUS *result);
 NTSTATUS rpccli_lsa_open_policy(struct rpc_pipe_client *cli,
 				TALLOC_CTX *mem_ctx,
-				bool sec_qos, uint32_t des_access,
+				bool sec_qos, uint32 des_access,
 				struct policy_handle *pol);
 
 /**
@@ -83,7 +83,7 @@ NTSTATUS dcerpc_lsa_open_policy2(struct dcerpc_binding_handle *h,
 				 NTSTATUS *result);
 NTSTATUS rpccli_lsa_open_policy2(struct rpc_pipe_client *cli,
 				 TALLOC_CTX *mem_ctx, bool sec_qos,
-				 uint32_t des_access, struct policy_handle *pol);
+				 uint32 des_access, struct policy_handle *pol);
 
 /**
  * @brief Look up the names that correspond to an array of sids.
@@ -125,16 +125,7 @@ NTSTATUS rpccli_lsa_lookup_sids(struct rpc_pipe_client *cli,
 				char ***pdomains,
 				char ***pnames,
 				enum lsa_SidType **ptypes);
-NTSTATUS dcerpc_lsa_lookup_sids_generic(struct dcerpc_binding_handle *h,
-					TALLOC_CTX *mem_ctx,
-					struct policy_handle *pol,
-					int num_sids,
-					const struct dom_sid *sids,
-					char ***pdomains,
-					char ***pnames,
-					enum lsa_SidType **ptypes,
-					bool use_lookupsids3,
-					NTSTATUS *presult);
+
 /**
  * @brief Look up the names that correspond to an array of sids.
  *
@@ -167,6 +158,15 @@ NTSTATUS dcerpc_lsa_lookup_sids3(struct dcerpc_binding_handle *h,
 				 char ***pnames,
 				 enum lsa_SidType **ptypes,
 				 NTSTATUS *result);
+NTSTATUS rpccli_lsa_lookup_sids3(struct rpc_pipe_client *cli,
+				 TALLOC_CTX *mem_ctx,
+				 struct policy_handle *pol,
+				 int num_sids,
+				 const struct dom_sid *sids,
+				 char ***pdomains,
+				 char ***pnames,
+				 enum lsa_SidType **ptypes);
+
 NTSTATUS dcerpc_lsa_lookup_names(struct dcerpc_binding_handle *h,
 				 TALLOC_CTX *mem_ctx,
 				 struct policy_handle *pol,
@@ -196,17 +196,14 @@ NTSTATUS dcerpc_lsa_lookup_names4(struct dcerpc_binding_handle *h,
 				  struct dom_sid **sids,
 				  enum lsa_SidType **types,
 				  NTSTATUS *result);
-NTSTATUS dcerpc_lsa_lookup_names_generic(struct dcerpc_binding_handle *h,
-					 TALLOC_CTX *mem_ctx,
-					 struct policy_handle *pol,
-					 uint32_t num_names,
-					 const char **names,
-					 const char ***dom_names,
-					 enum lsa_LookupNamesLevel level,
-					 struct dom_sid **sids,
-					 enum lsa_SidType **types,
-					 bool use_lookupnames4,
-					 NTSTATUS *presult);
+NTSTATUS rpccli_lsa_lookup_names4(struct rpc_pipe_client *cli,
+				  TALLOC_CTX *mem_ctx,
+				  struct policy_handle *pol, int num_names,
+				  const char **names,
+				  const char ***dom_names,
+				  int level,
+				  struct dom_sid **sids,
+				  enum lsa_SidType **types);
 
 bool fetch_domain_sid( char *domain, char *remote_machine, struct dom_sid *psid);
 

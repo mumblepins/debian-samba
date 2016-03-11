@@ -79,17 +79,6 @@ static void copy_trans_params_and_data(char *outbuf, int align,
 		memcpy(copy_into, &rdata[data_offset], data_len);
 }
 
-NTSTATUS nt_status_np_pipe(NTSTATUS status)
-{
-	if (NT_STATUS_EQUAL(status, NT_STATUS_CONNECTION_DISCONNECTED)) {
-		status = NT_STATUS_PIPE_DISCONNECTED;
-	} else if (NT_STATUS_EQUAL(status, NT_STATUS_CONNECTION_RESET)) {
-		status = NT_STATUS_PIPE_BROKEN;
-	}
-
-	return status;
-}
-
 /****************************************************************************
  Send a trans reply.
  ****************************************************************************/
@@ -107,16 +96,14 @@ void send_trans_reply(connection_struct *conn,
 
 	int ldata  = rdata  ? rdata_len : 0;
 	int lparam = rparam ? rparam_len : 0;
-	struct smbXsrv_connection *xconn = req->xconn;
-	int max_send = xconn->smb1.sessions.max_send;
-	/* HACK: make sure we send at least 128 byte in one go */
-	int hdr_overhead = SMB_BUFFER_SIZE_MIN - 128;
+	struct smbd_server_connection *sconn = req->sconn;
+	int max_send = sconn->smb1.sessions.max_send;
 
 	if (buffer_too_large)
 		DEBUG(5,("send_trans_reply: buffer %d too large\n", ldata ));
 
-	this_lparam = MIN(lparam,max_send - hdr_overhead);
-	this_ldata  = MIN(ldata,max_send - (hdr_overhead+this_lparam));
+	this_lparam = MIN(lparam,max_send - 500); /* hack */
+	this_ldata  = MIN(ldata,max_send - (500+this_lparam));
 
 	align = ((this_lparam)%4);
 
@@ -151,7 +138,7 @@ void send_trans_reply(connection_struct *conn,
 	}
 
 	show_msg((char *)req->outbuf);
-	if (!srv_send_smb(xconn, (char *)req->outbuf,
+	if (!srv_send_smb(sconn, (char *)req->outbuf,
 			  true, req->seqnum+1,
 			  IS_CONN_ENCRYPTED(conn), &req->pcd)) {
 		exit_server_cleanly("send_trans_reply: srv_send_smb failed.");
@@ -165,9 +152,9 @@ void send_trans_reply(connection_struct *conn,
 	while (tot_data_sent < ldata || tot_param_sent < lparam)
 	{
 		this_lparam = MIN(lparam-tot_param_sent,
-				  max_send - hdr_overhead);
+				  max_send - 500); /* hack */
 		this_ldata  = MIN(ldata -tot_data_sent,
-				  max_send - (hdr_overhead+this_lparam));
+				  max_send - (500+this_lparam));
 
 		if(this_lparam < 0)
 			this_lparam = 0;
@@ -211,7 +198,7 @@ void send_trans_reply(connection_struct *conn,
 		}
 
 		show_msg((char *)req->outbuf);
-		if (!srv_send_smb(xconn, (char *)req->outbuf,
+		if (!srv_send_smb(sconn, (char *)req->outbuf,
 				  true, req->seqnum+1,
 				  IS_CONN_ENCRYPTED(conn), &req->pcd))
 			exit_server_cleanly("send_trans_reply: srv_send_smb "
@@ -281,7 +268,7 @@ static void api_dcerpc_cmd(connection_struct *conn, struct smb_request *req,
 	state->num_data = length;
 	state->max_read = max_read;
 
-	subreq = np_write_send(state, req->sconn->ev_ctx, state->handle,
+	subreq = np_write_send(state, smbd_event_context(), state->handle,
 			       state->data, length);
 	if (subreq == NULL) {
 		TALLOC_FREE(state);
@@ -303,34 +290,22 @@ static void api_dcerpc_cmd_write_done(struct tevent_req *subreq)
 
 	status = np_write_recv(subreq, &nwritten);
 	TALLOC_FREE(subreq);
-	if (!NT_STATUS_IS_OK(status)) {
-		NTSTATUS old = status;
-		status = nt_status_np_pipe(old);
-
-		DEBUG(10, ("Could not write to pipe: %s%s%s\n",
-			   nt_errstr(old),
-			   NT_STATUS_EQUAL(old, status)?"":" => ",
-			   NT_STATUS_EQUAL(old, status)?"":nt_errstr(status)));
-		reply_nterror(req, status);
-		goto send;
-	}
-	if (nwritten != state->num_data) {
-		status = NT_STATUS_PIPE_NOT_AVAILABLE;
-		DEBUG(10, ("Could not write to pipe: (%d/%d) => %s\n",
-			   (int)state->num_data,
-			   (int)nwritten, nt_errstr(status)));
-		reply_nterror(req, status);
+	if (!NT_STATUS_IS_OK(status) || (nwritten != state->num_data)) {
+		DEBUG(10, ("Could not write to pipe: %s (%d/%d)\n",
+			   nt_errstr(status), (int)state->num_data,
+			   (int)nwritten));
+		reply_nterror(req, NT_STATUS_PIPE_NOT_AVAILABLE);
 		goto send;
 	}
 
-	state->data = talloc_realloc(state, state->data, uint8_t,
+	state->data = TALLOC_REALLOC_ARRAY(state, state->data, uint8_t,
 					   state->max_read);
 	if (state->data == NULL) {
 		reply_nterror(req, NT_STATUS_NO_MEMORY);
 		goto send;
 	}
 
-	subreq = np_read_send(state, req->sconn->ev_ctx,
+	subreq = np_read_send(req->conn, smbd_event_context(),
 			      state->handle, state->data, state->max_read);
 	if (subreq == NULL) {
 		reply_nterror(req, NT_STATUS_NO_MEMORY);
@@ -341,7 +316,7 @@ static void api_dcerpc_cmd_write_done(struct tevent_req *subreq)
 
  send:
 	if (!srv_send_smb(
-		    req->xconn, (char *)req->outbuf,
+		    req->sconn, (char *)req->outbuf,
 		    true, req->seqnum+1,
 		    IS_CONN_ENCRYPTED(req->conn) || req->encrypted,
 		    &req->pcd)) {
@@ -365,16 +340,11 @@ static void api_dcerpc_cmd_read_done(struct tevent_req *subreq)
 	TALLOC_FREE(subreq);
 
 	if (!NT_STATUS_IS_OK(status)) {
-		NTSTATUS old = status;
-		status = nt_status_np_pipe(old);
-
-		DEBUG(10, ("Could not read from to pipe: %s%s%s\n",
-			   nt_errstr(old),
-			   NT_STATUS_EQUAL(old, status)?"":" => ",
-			   NT_STATUS_EQUAL(old, status)?"":nt_errstr(status)));
+		DEBUG(10, ("Could not read from to pipe: %s\n",
+			   nt_errstr(status)));
 		reply_nterror(req, status);
 
-		if (!srv_send_smb(req->xconn, (char *)req->outbuf,
+		if (!srv_send_smb(req->sconn, (char *)req->outbuf,
 				  true, req->seqnum+1,
 				  IS_CONN_ENCRYPTED(req->conn)
 				  ||req->encrypted, &req->pcd)) {
@@ -451,9 +421,9 @@ static void api_no_reply(connection_struct *conn, struct smb_request *req)
  Handle remote api calls delivered to a named pipe already opened.
  ****************************************************************************/
 
-static void api_fd_reply(connection_struct *conn, uint64_t vuid,
+static void api_fd_reply(connection_struct *conn, uint16 vuid,
 			 struct smb_request *req,
-			 uint16_t *setup, uint8_t *data, char *params,
+			 uint16 *setup, uint8_t *data, char *params,
 			 int suwcnt, int tdscnt, int tpscnt,
 			 int mdrcnt, int mprcnt)
 {
@@ -495,9 +465,8 @@ static void api_fd_reply(connection_struct *conn, uint64_t vuid,
 	}
 
 	if (vuid != fsp->vuid) {
-		DEBUG(1, ("Got pipe request (pnum %x) using invalid VUID %llu, "
-			  "expected %llu\n", pnum, (unsigned long long)vuid,
-			  (unsigned long long)fsp->vuid));
+		DEBUG(1, ("Got pipe request (pnum %x) using invalid VUID %d, "
+			  "expected %d\n", pnum, vuid, fsp->vuid));
 		reply_nterror(req, NT_STATUS_INVALID_HANDLE);
 		return;
 	}
@@ -532,9 +501,9 @@ static void api_fd_reply(connection_struct *conn, uint64_t vuid,
  Handle named pipe commands.
 ****************************************************************************/
 
-static void named_pipe(connection_struct *conn, uint64_t vuid,
+static void named_pipe(connection_struct *conn, uint16 vuid,
 		       struct smb_request *req,
-		       const char *name, uint16_t *setup,
+		       const char *name, uint16 *setup,
 		       char *data, char *params,
 		       int suwcnt, int tdscnt,int tpscnt,
 		       int msrcnt, int mdrcnt, int mprcnt)
@@ -633,30 +602,8 @@ static void handle_trans(connection_struct *conn, struct smb_request *req,
 		   state->max_param_return);
 
 	if (state->close_on_completion) {
-		struct smbXsrv_tcon *tcon;
-		NTSTATUS status;
-
-		tcon = conn->tcon;
+		close_cnum(conn,state->vuid);
 		req->conn = NULL;
-		conn = NULL;
-
-		/*
-		 * TODO: cancel all outstanding requests on the tcon
-		 */
-		status = smbXsrv_tcon_disconnect(tcon, state->vuid);
-		if (!NT_STATUS_IS_OK(status)) {
-			DEBUG(0, ("handle_trans: "
-				  "smbXsrv_tcon_disconnect() failed: %s\n",
-				  nt_errstr(status)));
-			/*
-			 * If we hit this case, there is something completely
-			 * wrong, so we better disconnect the transport connection.
-			 */
-			exit_server(__location__ ": smbXsrv_tcon_disconnect failed");
-			return;
-		}
-
-		TALLOC_FREE(tcon);
 	}
 
 	return;
@@ -698,7 +645,7 @@ void reply_trans(struct smb_request *req)
 		return;
 	}
 
-	if ((state = talloc(conn, struct trans_state)) == NULL) {
+	if ((state = TALLOC_P(conn, struct trans_state)) == NULL) {
 		DEBUG(0, ("talloc failed\n"));
 		reply_nterror(req, NT_STATUS_NO_MEMORY);
 		END_PROFILE(SMBtrans);
@@ -795,11 +742,11 @@ void reply_trans(struct smb_request *req)
 			goto bad_param;
 		}
 
-		if((state->setup = talloc_array(
-			    state, uint16_t, state->setup_count)) == NULL) {
+		if((state->setup = TALLOC_ARRAY(
+			    state, uint16, state->setup_count)) == NULL) {
 			DEBUG(0,("reply_trans: setup malloc fail for %u "
 				 "bytes !\n", (unsigned int)
-				 (state->setup_count * sizeof(uint16_t))));
+				 (state->setup_count * sizeof(uint16))));
 			SAFE_FREE(state->data);
 			SAFE_FREE(state->param);
 			TALLOC_FREE(state);
@@ -861,7 +808,7 @@ void reply_transs(struct smb_request *req)
 
 	START_PROFILE(SMBtranss);
 
-	show_msg((const char *)req->inbuf);
+	show_msg((char *)req->inbuf);
 
 	if (req->wct < 8) {
 		reply_nterror(req, NT_STATUS_INVALID_PARAMETER);

@@ -220,7 +220,7 @@ static NTSTATUS dcerpc_spoolss_bind(struct dcesrv_call_state *dce_call, const st
 	struct ntptr_context *ntptr;
 
 	status = ntptr_init_context(dce_call->context, dce_call->conn->event_ctx, dce_call->conn->dce_ctx->lp_ctx,
-				    "simple_ldb", &ntptr);
+				    lpcfg_ntptr_providor(dce_call->conn->dce_ctx->lp_ctx), &ntptr);
 	NT_STATUS_NOT_OK_RETURN(status);
 
 	dce_call->context->private_data = ntptr;
@@ -269,8 +269,9 @@ static WERROR dcesrv_spoolss_OpenPrinter(struct dcesrv_call_state *dce_call, TAL
 	r2->in.datatype		= r->in.datatype;
 	r2->in.devmode_ctr	= r->in.devmode_ctr;
 	r2->in.access_mask	= r->in.access_mask;
-	r2->in.userlevel_ctr.level	= 1;
-	r2->in.userlevel_ctr.user_info.level1 = NULL;
+	r2->in.level		= 1;
+	r2->in.userlevel.level1	= NULL;
+
 	r2->out.handle		= r->out.handle;
 
 	/* TODO: we should take care about async replies here,
@@ -1156,7 +1157,6 @@ static WERROR dcesrv_spoolss_RemoteFindFirstPrinterChangeNotifyEx(struct dcesrv_
 		       struct spoolss_RemoteFindFirstPrinterChangeNotifyEx *r)
 {
 	struct dcerpc_pipe *p;
-	char *binding_string;
 	struct dcerpc_binding *binding;
 	NTSTATUS status;
 	struct spoolss_ReplyOpenPrinter rop;
@@ -1172,20 +1172,12 @@ static WERROR dcesrv_spoolss_RemoteFindFirstPrinterChangeNotifyEx(struct dcesrv_
 	 *       and the torture suite passing
 	 */
 
-	if (strncmp(r->in.local_machine, "\\\\", 2)) {
+	binding = talloc_zero(mem_ctx, struct dcerpc_binding);
+
+	binding->transport = NCACN_NP; 
+	if (strncmp(r->in.local_machine, "\\\\", 2))
 		return WERR_INVALID_COMPUTERNAME;
-	}
-
-	binding_string = talloc_asprintf(mem_ctx, "ncacn_np:%s",
-					 r->in.local_machine+2);
-	if (binding_string == NULL) {
-		return WERR_NOMEM;
-	}
-
-	status = dcerpc_parse_binding(mem_ctx, binding_string, &binding);
-	if (!NT_STATUS_IS_OK(status)) {
-		return ntstatus_to_werror(status);
-	}
+	binding->host = r->in.local_machine+2;
 
 	creds = cli_credentials_init_anon(mem_ctx); /* FIXME: Use machine credentials instead ? */
 
@@ -1601,10 +1593,10 @@ static WERROR dcesrv_spoolss_60(struct dcesrv_call_state *dce_call, TALLOC_CTX *
 
 
 /*
-  spoolss_RpcSendRecvBidiData
+  spoolss_61
 */
-static WERROR dcesrv_spoolss_RpcSendRecvBidiData(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
-		       struct spoolss_RpcSendRecvBidiData *r)
+static WERROR dcesrv_spoolss_61(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
+		       struct spoolss_61 *r)
 {
 	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
 }
@@ -1730,43 +1722,6 @@ static WERROR dcesrv_spoolss_6d(struct dcesrv_call_state *dce_call, TALLOC_CTX *
 }
 
 
-/*
-  spoolss_RpcGetJobNamedPropertyValue
-*/
-static WERROR dcesrv_spoolss_RpcGetJobNamedPropertyValue(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
-		       struct spoolss_RpcGetJobNamedPropertyValue *r)
-{
-	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
-}
-
-
-/*
-  spoolss_RpcSetJobNamedProperty
-*/
-static WERROR dcesrv_spoolss_RpcSetJobNamedProperty(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
-		       struct spoolss_RpcSetJobNamedProperty *r)
-{
-	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
-}
-
-
-/*
-  spoolss_RpcDeleteJobNamedProperty
-*/
-static WERROR dcesrv_spoolss_RpcDeleteJobNamedProperty(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
-		       struct spoolss_RpcDeleteJobNamedProperty *r)
-{
-	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
-}
-
-/*
-  spoolss_RpcEnumJobNamedProperties
-*/
-static WERROR dcesrv_spoolss_RpcEnumJobNamedProperties(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx,
-		       struct spoolss_RpcEnumJobNamedProperties *r)
-{
-	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR);
-}
 
 /* include the generated boilerplate */
 #include "librpc/gen_ndr/ndr_spoolss_s.c"

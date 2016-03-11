@@ -8,15 +8,15 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+   
    Converted to store WINS data in a tdb. Dec 2005. JRA.
 */
 
@@ -75,19 +75,19 @@ static void wins_delete_all_1b_in_memory_records(void)
 }
 
 /****************************************************************************
- Convert a wins.tdb record to a struct name_record. Add in our lp_netbios_scope().
+ Convert a wins.tdb record to a struct name_record. Add in our global_scope().
 *****************************************************************************/
 
 static struct name_record *wins_record_to_name_record(TDB_DATA key, TDB_DATA data)
 {
 	struct name_record *namerec = NULL;
-	uint16_t nb_flags;
+	uint16 nb_flags;
 	unsigned char nr_src;
-	uint32_t death_time, refresh_time;
-	uint32_t id_low, id_high;
-	uint32_t saddr;
-	uint32_t wins_flags;
-	uint32_t num_ips;
+	uint32 death_time, refresh_time;
+	uint32 id_low, id_high;
+	uint32 saddr;
+	uint32 wins_flags;
+	uint32 num_ips;
 	size_t len;
 	int i;
 
@@ -128,12 +128,12 @@ static struct name_record *wins_record_to_name_record(TDB_DATA key, TDB_DATA dat
 	push_ascii_nstring(namerec->name.name, (const char *)key.dptr);
 	namerec->name.name_type = key.dptr[sizeof(unstring)];
 	/* Add the scope. */
-	push_ascii(namerec->name.scope, lp_netbios_scope(), 64, STR_TERMINATE);
+	push_ascii(namerec->name.scope, global_scope(), 64, STR_TERMINATE);
 
         /* We're using a byte-by-byte compare, so we must be sure that
          * unused space doesn't have garbage in it.
          */
-
+                                                                                                                               
         for( i = strlen( namerec->name.name ); i < sizeof( namerec->name.name ); i++ ) {
                 namerec->name.name[i] = '\0';
         }
@@ -146,7 +146,9 @@ static struct name_record *wins_record_to_name_record(TDB_DATA key, TDB_DATA dat
 	namerec->data.death_time = (time_t)death_time;
 	namerec->data.refresh_time = (time_t)refresh_time;
 	namerec->data.id = id_low;
+#if defined(HAVE_LONGLONG)
 	namerec->data.id |= ((uint64_t)id_high << 32);
+#endif
 	namerec->data.wins_ip.s_addr = saddr;
 	namerec->data.wins_flags = wins_flags,
 	namerec->data.num_ips = num_ips;
@@ -167,15 +169,19 @@ static TDB_DATA name_record_to_wins_record(const struct name_record *namerec)
 	TDB_DATA data;
 	size_t len = 0;
 	int i;
-	uint32_t id_low = (namerec->data.id & 0xFFFFFFFF);
-	uint32_t id_high = (namerec->data.id >> 32) & 0xFFFFFFFF;
+	uint32 id_low = (namerec->data.id & 0xFFFFFFFF);
+#if defined(HAVE_LONGLONG)
+	uint32 id_high = (namerec->data.id >> 32) & 0xFFFFFFFF;
+#else
+	uint32 id_high = 0;
+#endif
 
 	ZERO_STRUCT(data);
 
 	len = (2 + 1 + (7*4)); /* "wbddddddd" */
 	len += (namerec->data.num_ips * 4);
 
-	data.dptr = (uint8_t *)SMB_MALLOC(len);
+	data.dptr = (uint8 *)SMB_MALLOC(len);
 	if (!data.dptr) {
 		return data;
 	}
@@ -184,13 +190,13 @@ static TDB_DATA name_record_to_wins_record(const struct name_record *namerec)
 	len = tdb_pack(data.dptr, data.dsize, "wbddddddd",
                         namerec->data.nb_flags,
                         (unsigned char)namerec->data.source,
-                        (uint32_t)namerec->data.death_time,
-                        (uint32_t)namerec->data.refresh_time,
+                        (uint32)namerec->data.death_time,
+                        (uint32)namerec->data.refresh_time,
                         id_low,
                         id_high,
-                        (uint32_t)namerec->data.wins_ip.s_addr,
-                        (uint32_t)namerec->data.wins_flags,
-                        (uint32_t)namerec->data.num_ips );
+                        (uint32)namerec->data.wins_ip.s_addr,
+                        (uint32)namerec->data.wins_flags,
+                        (uint32)namerec->data.num_ips );
 
 	for (i = 0; i < namerec->data.num_ips; i++) {
 		SIVAL(data.dptr, len + (i*4), namerec->data.ip[i].s_addr);
@@ -211,9 +217,9 @@ static TDB_DATA name_to_key(const struct nmb_name *nmbname)
 	memset(keydata, '\0', sizeof(keydata));
 
 	pull_ascii_nstring(keydata, sizeof(unstring), nmbname->name);
-	(void)strupper_m(keydata);
+	strupper_m(keydata);
 	keydata[sizeof(unstring)] = nmbname->name_type;
-	key.dptr = (uint8_t *)keydata;
+	key.dptr = (uint8 *)keydata;
 	key.dsize = sizeof(keydata);
 
 	return key;
@@ -270,7 +276,7 @@ struct name_record *find_name_on_wins_subnet(const struct nmb_name *nmbname, boo
 			break;
 		}
 	}
-
+	
 	DLIST_ADD(wins_server_subnet->namelist, namerec);
 	return namerec;
 }
@@ -439,9 +445,9 @@ static void get_global_id_and_update(uint64_t *current_id, bool update)
 	static uint64_t general_id = 1;
 
 	DEBUG(5,("get_global_id_and_update: updating version ID: %d\n", (int)general_id));
-
+	
 	*current_id = general_id;
-
+	
 	if (update) {
 		general_id++;
 	}
@@ -455,7 +461,7 @@ static void get_global_id_and_update(uint64_t *current_id, bool update)
 static void wins_hook(const char *operation, struct name_record *namerec, int ttl)
 {
 	char *command = NULL;
-	char *cmd = lp_wins_hook(talloc_tos());
+	char *cmd = lp_wins_hook();
 	char *p, *namestr;
 	int i;
 	TALLOC_CTX *ctx = talloc_tos();
@@ -472,7 +478,7 @@ static void wins_hook(const char *operation, struct name_record *namerec, int tt
 			return;
 		}
 	}
-
+	
 	/* Use the name without the nametype (and scope) appended */
 
 	namestr = nmb_namestr(&namerec->name);
@@ -594,22 +600,14 @@ bool initialise_wins(void)
 	time_t time_now = time(NULL);
 	XFILE *fp;
 	char line[1024];
-	char *db_path;
-	char *list_path;
 
 	if(!lp_we_are_a_wins_server()) {
 		return True;
 	}
 
-	db_path = state_path("wins.tdb");
-	if (db_path == NULL) {
-		return false;
-	}
-
 	/* Open the wins.tdb. */
-	wins_tdb = tdb_open_log(db_path, 0, TDB_DEFAULT|TDB_CLEAR_IF_FIRST|TDB_INCOMPATIBLE_HASH,
+	wins_tdb = tdb_open_log(state_path("wins.tdb"), 0, TDB_DEFAULT|TDB_CLEAR_IF_FIRST|TDB_INCOMPATIBLE_HASH,
 			O_CREAT|O_RDWR, 0600);
-	TALLOC_FREE(db_path);
 	if (!wins_tdb) {
 		DEBUG(0,("initialise_wins: failed to open wins.tdb. Error was %s\n",
 			strerror(errno) ));
@@ -620,15 +618,7 @@ bool initialise_wins(void)
 
 	add_samba_names_to_subnet(wins_server_subnet);
 
-	list_path = state_path(WINS_LIST);
-	if (list_path == NULL) {
-		tdb_close(wins_tdb);
-		return false;
-	}
-
-	fp = x_fopen(list_path, O_RDONLY, 0);
-	TALLOC_FREE(list_path);
-	if (fp == NULL) {
+	if((fp = x_fopen(state_path(WINS_LIST),O_RDONLY,0)) == NULL) {
 		DEBUG(2,("initialise_wins: Can't open wins database file %s. Error was %s\n",
 			WINS_LIST, strerror(errno) ));
 		return True;
@@ -862,7 +852,7 @@ void wins_process_name_refresh_request( struct subnet_record *subrec,
 	struct nmb_packet *nmb = &p->packet.nmb;
 	struct nmb_name *question = &nmb->question.question_name;
 	bool bcast = nmb->header.nm_flags.bcast;
-	uint16_t nb_flags = get_nb_flags(nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(nmb->additional->rdata);
 	bool group = (nb_flags & NB_GROUP) ? True : False;
 	struct name_record *namerec = NULL;
 	int ttl = get_ttl_from_packet(nmb);
@@ -1048,7 +1038,7 @@ static void wins_register_query_success(struct subnet_record *subrec,
 	DEBUG(3,("wins_register_query_success: Original client at IP %s still wants the \
 name %s. Rejecting registration request.\n", inet_ntoa(ip), nmb_namestr(question_name) ));
 
-	send_wins_name_registration_response(ACT_ERR, 0, orig_reg_packet);
+	send_wins_name_registration_response(RFS_ERR, 0, orig_reg_packet);
 
 	orig_reg_packet->locked = False;
 	free_packet(orig_reg_packet);
@@ -1169,7 +1159,7 @@ void wins_process_name_registration_request(struct subnet_record *subrec,
 	struct nmb_packet *nmb = &p->packet.nmb;
 	struct nmb_name *question = &nmb->question.question_name;
 	bool bcast = nmb->header.nm_flags.bcast;
-	uint16_t nb_flags = get_nb_flags(nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(nmb->additional->rdata);
 	int ttl = get_ttl_from_packet(nmb);
 	struct name_record *namerec = NULL;
 	struct in_addr from_ip;
@@ -1619,7 +1609,7 @@ void wins_process_multihomed_name_registration_request( struct subnet_record *su
 	struct nmb_packet *nmb = &p->packet.nmb;
 	struct nmb_name *question = &nmb->question.question_name;
 	bool bcast = nmb->header.nm_flags.bcast;
-	uint16_t nb_flags = get_nb_flags(nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(nmb->additional->rdata);
 	int ttl = get_ttl_from_packet(nmb);
 	struct name_record *namerec = NULL;
 	struct in_addr from_ip;
@@ -1684,7 +1674,7 @@ to register name %s from IP %s.", nmb_namestr(question), inet_ntoa(p->ip) ));
 		remove_name_from_namelist(subrec, namerec);
 		namerec = NULL;
 	}
-
+  
 	/*
 	 * Deal with the case where the name found was a dns entry.
 	 * Remove it as we now have a NetBIOS client registering the
@@ -1777,7 +1767,7 @@ is one of our (WINS server) names. Denying registration.\n", nmb_namestr(questio
 			update_wins_owner(namerec, our_fake_ip);
 			update_wins_flag(namerec, WINS_ACTIVE);
 		}
-
+    
 		wins_hook("refresh", namerec, ttl);
 		send_wins_name_registration_response(0, ttl, p);
 		return;
@@ -1887,10 +1877,10 @@ void fetch_all_active_wins_1b_names(void)
 /***********************************************************************
  Deal with the special name query for *<1b>.
 ***********************************************************************/
-
-static void process_wins_dmb_query_request(struct subnet_record *subrec,
+   
+static void process_wins_dmb_query_request(struct subnet_record *subrec,  
                                            struct packet_struct *p)
-{
+{  
 	struct name_record *namerec = NULL;
 	char *prdata;
 	int num_ips;
@@ -2102,7 +2092,7 @@ void wins_process_name_query_request(struct subnet_record *subrec,
 	 * Name not found in WINS - try a dns query if it's a 0x20 name.
 	 */
 
-	if(lp_wins_dns_proxy() && ((question->name_type == 0x20) || question->name_type == 0)) {
+	if(lp_dns_proxy() && ((question->name_type == 0x20) || question->name_type == 0)) {
 		DEBUG(3,("wins_process_name_query: name query for name %s not found - doing dns lookup.\n",
 				nmb_namestr(question) ));
 
@@ -2147,7 +2137,7 @@ void wins_process_name_release_request(struct subnet_record *subrec,
 	struct nmb_packet *nmb = &p->packet.nmb;
 	struct nmb_name *question = &nmb->question.question_name;
 	bool bcast = nmb->header.nm_flags.bcast;
-	uint16_t nb_flags = get_nb_flags(nmb->additional->rdata);
+	uint16 nb_flags = get_nb_flags(nmb->additional->rdata);
 	struct name_record *namerec = NULL;
 	struct in_addr from_ip;
 	bool releasing_group_name = (nb_flags & NB_GROUP) ? True : False;
@@ -2166,10 +2156,10 @@ received for name %s from IP %s on subnet %s. Error - should not be sent to WINS
 			nmb_namestr(question), inet_ntoa(from_ip), subrec->subnet_name));
 		return;
 	}
-
+  
 	DEBUG(3,("wins_process_name_release_request: %s name release for name %s \
 IP %s\n", releasing_group_name ? "Group" : "Unique", nmb_namestr(question), inet_ntoa(from_ip) ));
-
+    
 	/*
 	 * Deal with policy regarding 0x1d names.
 	 */
@@ -2184,7 +2174,7 @@ to release name %s from IP %s.", nmb_namestr(question), inet_ntoa(p->ip) ));
 	/*
 	 * See if the name already exists.
 	 */
-
+    
 	namerec = find_name_on_subnet(subrec, question, FIND_ANY_NAME);
 
 	if( (namerec == NULL) || ((namerec != NULL) && (namerec->data.source != REGISTER_NAME)) ) {
@@ -2480,7 +2470,7 @@ void wins_write_database(time_t t, bool background)
 	/* We will do the writing in a child process to ensure that the parent doesn't block while this is done */
 	if (background) {
 		CatchChild();
-		if (fork()) {
+		if (sys_fork()) {
 			return;
 		}
 		if (tdb_reopen(wins_tdb)) {
@@ -2497,7 +2487,7 @@ void wins_write_database(time_t t, bool background)
 	/* This is safe as the 0 length means "don't expand". */
 	all_string_sub(fname,"//", "/", 0);
 
-	if (asprintf(&fnamenew, "%s.%u", fname, (unsigned int)getpid()) < 0) {
+	if (asprintf(&fnamenew, "%s.%u", fname, (unsigned int)sys_getpid()) < 0) {
 		goto err_exit;
 	}
 
@@ -2551,10 +2541,10 @@ void nmbd_wins_new_entry(struct messaging_context *msg,
 	if (buf==NULL) {
 		return;
 	}
-
+	
 	/* Record should use UNIX codepage. Ensure this is so in the wrepld code. JRA. */
 	record=(WINS_RECORD *)buf;
-
+	
 	make_nmb_name(&question, record->name, record->type);
 
 	namerec = find_name_on_subnet(wins_server_subnet, &question, FIND_ANY_NAME);
@@ -2602,7 +2592,7 @@ void nmbd_wins_new_entry(struct messaging_context *msg,
 						get_global_id_and_update(&namerec->data.id, True);
 					else
 						overwrite=True;
-
+				
 				} else {
 				/* the 2 records have different IP address */
 					if (namerec->data.wins_flags&WINS_ACTIVE) {
@@ -2617,7 +2607,7 @@ void nmbd_wins_new_entry(struct messaging_context *msg,
 
 			}
 		}
-
+		
 		/* the replica is a standard group */
 		if (record->wins_flags&WINS_NGROUP || record->wins_flags&WINS_SGROUP) {
 			/* if the database record is unique and active force a name release */
@@ -2625,9 +2615,9 @@ void nmbd_wins_new_entry(struct messaging_context *msg,
 				/* send a release name to the unique node */
 				;
 			overwrite=True;
-
+		
 		}
-
+	
 		/* the replica is a special group */
 		if (record->wins_flags&WINS_SGROUP && namerec->data.wins_flags&WINS_SGROUP) {
 			if (namerec->data.wins_flags&WINS_ACTIVE) {
@@ -2638,11 +2628,11 @@ void nmbd_wins_new_entry(struct messaging_context *msg,
 				overwrite=True;
 			}
 		}
-
+		
 		/* the replica is a multihomed host */
-
+		
 		/* I'm giving up on multi homed. Too much complex to understand */
-
+		
 		if (record->wins_flags&WINS_MHOMED) {
 			if (! (namerec->data.wins_flags&WINS_ACTIVE)) {
 				if ( !(namerec->data.wins_flags&WINS_RELEASED) && !(namerec->data.wins_flags&WINS_NGROUP))
@@ -2651,19 +2641,19 @@ void nmbd_wins_new_entry(struct messaging_context *msg,
 			else {
 				if (ip_equal_v4(record->wins_ip, namerec->data.wins_ip))
 					overwrite=True;
-
+				
 				if (ip_equal_v4(namerec->data.wins_ip, our_fake_ip))
 					if (namerec->data.wins_flags&WINS_UNIQUE)
 						get_global_id_and_update(&namerec->data.id, True);
-
+				
 			}
-
+			
 			if (record->wins_flags&WINS_ACTIVE && namerec->data.wins_flags&WINS_ACTIVE)
 				if (namerec->data.wins_flags&WINS_UNIQUE ||
 				    namerec->data.wins_flags&WINS_MHOMED)
 					if (ip_equal_v4(record->wins_ip, namerec->data.wins_ip))
 						overwrite=True;
-
+				
 		}
 
 		if (overwrite == False)

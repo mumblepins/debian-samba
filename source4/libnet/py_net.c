@@ -1,7 +1,6 @@
 /*
    Unix SMB/CIFS implementation.
    Samba utility functions
-
    Copyright (C) Jelmer Vernooij <jelmer@samba.org> 2008-2010
    Copyright (C) Kamen Mazdrashki <kamen.mazdrashki@postpath.com> 2009
 
@@ -21,8 +20,8 @@
 
 #include <Python.h>
 #include "includes.h"
+#include <ldb.h>
 #include <pyldb.h>
-#include <pytalloc.h>
 #include "libnet.h"
 #include "auth/credentials/pycredentials.h"
 #include "libcli/security/security.h"
@@ -30,32 +29,30 @@
 #include "param/pyparam.h"
 #include "auth/gensec/gensec.h"
 #include "librpc/rpc/pyrpc_util.h"
-#include "libcli/resolve/resolve.h"
 #include "libcli/finddc.h"
-#include "dsdb/samdb/samdb.h"
-#include "py_net.h"
-#include "librpc/rpc/pyrpc_util.h"
+#include "libcli/resolve/resolve.h"
 
 void initnet(void);
 
-static PyObject *py_net_join_member(py_net_Object *self, PyObject *args, PyObject *kwargs)
+typedef struct {
+	PyObject_HEAD
+	TALLOC_CTX *mem_ctx;
+	struct libnet_context *libnet_ctx;
+	struct tevent_context *ev;
+} py_net_Object;
+
+static PyObject *py_net_join(py_net_Object *self, PyObject *args, PyObject *kwargs)
 {
-	struct libnet_Join_member r;
-	int _level = 0;
+	struct libnet_Join r;
 	NTSTATUS status;
 	PyObject *result;
 	TALLOC_CTX *mem_ctx;
-	const char *kwnames[] = { "domain_name", "netbios_name", "level", "machinepass", NULL };
+	const char *kwnames[] = { "domain_name", "netbios_name", "join_type", "level", NULL };
 
-	ZERO_STRUCT(r);
-
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ssi|z:Join", discard_const_p(char *, kwnames),
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ssii:Join", discard_const_p(char *, kwnames), 
 					 &r.in.domain_name, &r.in.netbios_name, 
-					 &_level,
-					 &r.in.account_pass)) {
+					 &r.in.join_type, &r.in.level))
 		return NULL;
-	}
-	r.in.level = _level;
 
 	mem_ctx = talloc_new(self->mem_ctx);
 	if (mem_ctx == NULL) {
@@ -63,7 +60,7 @@ static PyObject *py_net_join_member(py_net_Object *self, PyObject *args, PyObjec
 		return NULL;
 	}
 
-	status = libnet_Join_member(self->libnet_ctx, mem_ctx, &r);
+	status = libnet_Join(self->libnet_ctx, mem_ctx, &r);
 	if (NT_STATUS_IS_ERR(status)) {
 		PyErr_SetString(PyExc_RuntimeError, r.out.error_string?r.out.error_string:nt_errstr(status));
 		talloc_free(mem_ctx);
@@ -79,76 +76,23 @@ static PyObject *py_net_join_member(py_net_Object *self, PyObject *args, PyObjec
 	return result;
 }
 
-static const char py_net_join_member_doc[] = "join_member(domain_name, netbios_name, level) -> (join_password, domain_sid, domain_name)\n\n" \
+static const char py_net_join_doc[] = "join(domain_name, netbios_name, join_type, level) -> (join_password, domain_sid, domain_name)\n\n" \
 "Join the domain with the specified name.";
-
-static PyObject *py_net_change_password(py_net_Object *self, PyObject *args, PyObject *kwargs)
-{
-	union libnet_ChangePassword r;
-	NTSTATUS status;
-	TALLOC_CTX *mem_ctx;
-	struct tevent_context *ev;
-	const char *kwnames[] = { "newpassword", NULL };
-
-	ZERO_STRUCT(r);
-
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s:change_password",
-					discard_const_p(char *, kwnames),
-					&r.generic.in.newpassword)) {
-		return NULL;
-	}
-
-	r.generic.level = LIBNET_CHANGE_PASSWORD_GENERIC;
-	r.generic.in.account_name = cli_credentials_get_username(self->libnet_ctx->cred);
-	r.generic.in.domain_name = cli_credentials_get_domain(self->libnet_ctx->cred);
-	r.generic.in.oldpassword = cli_credentials_get_password(self->libnet_ctx->cred);
-
-	/* FIXME: we really need to get a context from the caller or we may end
-	 * up with 2 event contexts */
-	ev = s4_event_context_init(NULL);
-
-	mem_ctx = talloc_new(ev);
-	if (mem_ctx == NULL) {
-		PyErr_NoMemory();
-		return NULL;
-	}
-
-	status = libnet_ChangePassword(self->libnet_ctx, mem_ctx, &r);
-	if (NT_STATUS_IS_ERR(status)) {
-		PyErr_SetString(PyExc_RuntimeError,
-				r.generic.out.error_string?r.generic.out.error_string:nt_errstr(status));
-		talloc_free(mem_ctx);
-		return NULL;
-	}
-
-	talloc_free(mem_ctx);
-
-	Py_RETURN_NONE;
-}
-
-static const char py_net_change_password_doc[] = "change_password(newpassword) -> True\n\n" \
-"Change password for a user. You must supply credential with enough rights to do this.\n\n" \
-"Sample usage is:\n" \
-"net.change_password(newpassword=<new_password>)\n";
-
 
 static PyObject *py_net_set_password(py_net_Object *self, PyObject *args, PyObject *kwargs)
 {
 	union libnet_SetPassword r;
 	NTSTATUS status;
+	PyObject *py_creds;
 	TALLOC_CTX *mem_ctx;
 	struct tevent_context *ev;
-	const char *kwnames[] = { "account_name", "domain_name", "newpassword", NULL };
-
-	ZERO_STRUCT(r);
+	const char *kwnames[] = { "account_name", "domain_name", "newpassword", "credentials", NULL };
 
 	r.generic.level = LIBNET_SET_PASSWORD_GENERIC;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "sss:set_password",
-					discard_const_p(char *, kwnames),
-					 &r.generic.in.account_name,
-					 &r.generic.in.domain_name,
-					 &r.generic.in.newpassword)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "sssO:set_password", discard_const_p(char *, kwnames),
+					 &r.generic.in.account_name, &r.generic.in.domain_name,
+					 &r.generic.in.newpassword, &py_creds)) {
 		return NULL;
 	}
 
@@ -178,8 +122,44 @@ static PyObject *py_net_set_password(py_net_Object *self, PyObject *args, PyObje
 static const char py_net_set_password_doc[] = "set_password(account_name, domain_name, newpassword) -> True\n\n" \
 "Set password for a user. You must supply credential with enough rights to do this.\n\n" \
 "Sample usage is:\n" \
-"net.set_password(account_name=account_name, domain_name=domain_name, newpassword=new_pass)\n";
+"net.set_password(account_name=<account_name>,\n" \
+"                domain_name=domain_name,\n" \
+"                newpassword=new_pass)\n";
 
+
+static PyObject *py_net_export_keytab(py_net_Object *self, PyObject *args, PyObject *kwargs)
+{
+	struct libnet_export_keytab r;
+	TALLOC_CTX *mem_ctx;
+	const char *kwnames[] = { "keytab", NULL };
+	NTSTATUS status;
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s:export_keytab", discard_const_p(char *, kwnames),
+					 &r.in.keytab_name)) {
+		return NULL;
+	}
+
+	mem_ctx = talloc_new(self->mem_ctx);
+	if (mem_ctx == NULL) {
+		PyErr_NoMemory();
+		return NULL;
+	}
+
+	status = libnet_export_keytab(self->libnet_ctx, mem_ctx, &r);
+	if (NT_STATUS_IS_ERR(status)) {
+		PyErr_SetString(PyExc_RuntimeError,
+				r.out.error_string?r.out.error_string:nt_errstr(status));
+		talloc_free(mem_ctx);
+		return NULL;
+	}
+
+	talloc_free(mem_ctx);
+
+	Py_RETURN_NONE;
+}
+
+static const char py_net_export_keytab_doc[] = "export_keytab(keytab, name)\n\n"
+"Export the DC keytab to a keytab file.";
 
 static PyObject *py_net_time(py_net_Object *self, PyObject *args, PyObject *kwargs)
 {
@@ -305,7 +285,7 @@ static PyObject *py_dom_sid_FromSid(struct dom_sid *sid)
 	if (dom_sid_Type == NULL)
 		return NULL;
 
-	return pytalloc_reference((PyTypeObject *)dom_sid_Type, sid);
+	return py_talloc_reference((PyTypeObject *)dom_sid_Type, sid);
 }
 
 static PyObject *py_net_vampire(py_net_Object *self, PyObject *args, PyObject *kwargs)
@@ -315,8 +295,6 @@ static PyObject *py_net_vampire(py_net_Object *self, PyObject *args, PyObject *k
 	TALLOC_CTX *mem_ctx;
 	PyObject *ret;
 	struct libnet_Vampire r;
-
-	ZERO_STRUCT(r);
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s|z", discard_const_p(char *, kwnames),
 	                                 &r.in.domain_name, &r.in.targetdir)) {
@@ -363,17 +341,16 @@ struct replicate_state {
  */
 static PyObject *py_net_replicate_init(py_net_Object *self, PyObject *args, PyObject *kwargs)
 {
-	const char *kwnames[] = { "samdb", "lp", "drspipe", "invocation_id", NULL };
-	PyObject *py_ldb, *py_lp, *py_drspipe, *py_invocation_id;
+	const char *kwnames[] = { "samdb", "lp", "drspipe", NULL };
+	PyObject *py_ldb, *py_lp, *py_drspipe;
 	struct ldb_context *samdb;
 	struct loadparm_context *lp;
 	struct replicate_state *s;
 	NTSTATUS status;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOOO",
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO",
 					 discard_const_p(char *, kwnames),
-	                                 &py_ldb, &py_lp, &py_drspipe,
-					 &py_invocation_id)) {
+	                                 &py_ldb, &py_lp, &py_drspipe)) {
 		return NULL;
 	}
 
@@ -387,18 +364,12 @@ static PyObject *py_net_replicate_init(py_net_Object *self, PyObject *args, PyOb
 		return NULL;
 	}
 
-	samdb = pyldb_Ldb_AsLdbContext(py_ldb);
+	samdb = PyLdb_AsLdbContext(py_ldb);
 	if (samdb == NULL) {
 		PyErr_SetString(PyExc_TypeError, "Expected ldb object");
 		talloc_free(s);
 		return NULL;
 	}
-	if (!py_check_dcerpc_type(py_invocation_id, "samba.dcerpc.misc", "GUID")) {
-		
-		talloc_free(s);
-		return NULL;
-	}
-	s->dest_dsa.invocation_id = *pytalloc_get_type(py_invocation_id, struct GUID);
 
 	s->drs_pipe = (dcerpc_InterfaceObject *)(py_drspipe);
 
@@ -410,7 +381,6 @@ static PyObject *py_net_replicate_init(py_net_Object *self, PyObject *args, PyOb
 	}
 
 	status = gensec_session_key(s->drs_pipe->pipe->conn->security_state.generic_state,
-				    s,
 				    &s->gensec_skey);
 	if (!NT_STATUS_IS_OK(status)) {
 		PyErr_Format(PyExc_RuntimeError, "Unable to get session key from drspipe: %s",
@@ -419,17 +389,14 @@ static PyObject *py_net_replicate_init(py_net_Object *self, PyObject *args, PyOb
 		return NULL;
 	}
 
-	s->forest.dns_name = samdb_dn_to_dns_domain(s, ldb_get_root_basedn(samdb));
-	s->forest.root_dn_str = ldb_dn_get_linearized(ldb_get_root_basedn(samdb));
-	s->forest.config_dn_str = ldb_dn_get_linearized(ldb_get_config_basedn(samdb));
-	s->forest.schema_dn_str = ldb_dn_get_linearized(ldb_get_schema_basedn(samdb));
+	s->forest.dns_name = lpcfg_dnsdomain(lp);
 
 	s->chunk.gensec_skey = &s->gensec_skey;
 	s->chunk.partition = &s->partition;
 	s->chunk.forest = &s->forest;
 	s->chunk.dest_dsa = &s->dest_dsa;
 
-	return pytalloc_CObject_FromTallocPtr(s);
+	return PyCObject_FromTallocPtr(s);
 }
 
 
@@ -438,20 +405,16 @@ static PyObject *py_net_replicate_init(py_net_Object *self, PyObject *args, PyOb
  */
 static PyObject *py_net_replicate_chunk(py_net_Object *self, PyObject *args, PyObject *kwargs)
 {
-	const char *kwnames[] = { "state", "level", "ctr",
-				  "schema", "req_level", "req",
-				  NULL };
-	PyObject *py_state, *py_ctr, *py_schema = Py_None, *py_req = Py_None;
+	const char *kwnames[] = { "state", "level", "ctr", "schema", NULL };
+	PyObject *py_state, *py_ctr, *py_schema;
 	struct replicate_state *s;
 	unsigned level;
-	unsigned req_level = 0;
 	NTSTATUS (*chunk_handler)(void *private_data, const struct libnet_BecomeDC_StoreChunk *c);
 	NTSTATUS status;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OIO|OIO",
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OIO|O",
 					 discard_const_p(char *, kwnames),
-	                                 &py_state, &level, &py_ctr,
-					 &py_schema, &req_level, &py_req)) {
+	                                 &py_state, &level, &py_ctr, &py_schema)) {
 		return NULL;
 	}
 
@@ -466,7 +429,7 @@ static PyObject *py_net_replicate_chunk(py_net_Object *self, PyObject *args, PyO
 		if (!py_check_dcerpc_type(py_ctr, "samba.dcerpc.drsuapi", "DsGetNCChangesCtr1")) {
 			return NULL;
 		}
-		s->chunk.ctr1                         = pytalloc_get_ptr(py_ctr);
+		s->chunk.ctr1                         = py_talloc_get_ptr(py_ctr);
 		s->partition.nc                       = *s->chunk.ctr1->naming_context;
 		s->partition.more_data                = s->chunk.ctr1->more_data;
 		s->partition.source_dsa_guid          = s->chunk.ctr1->source_dsa_guid;
@@ -477,7 +440,7 @@ static PyObject *py_net_replicate_chunk(py_net_Object *self, PyObject *args, PyO
 		if (!py_check_dcerpc_type(py_ctr, "samba.dcerpc.drsuapi", "DsGetNCChangesCtr6")) {
 			return NULL;
 		}
-		s->chunk.ctr6                         = pytalloc_get_ptr(py_ctr);
+		s->chunk.ctr6                         = py_talloc_get_ptr(py_ctr);
 		s->partition.nc                       = *s->chunk.ctr6->naming_context;
 		s->partition.more_data                = s->chunk.ctr6->more_data;
 		s->partition.source_dsa_guid          = s->chunk.ctr6->source_dsa_guid;
@@ -488,41 +451,6 @@ static PyObject *py_net_replicate_chunk(py_net_Object *self, PyObject *args, PyO
 		PyErr_Format(PyExc_TypeError, "Bad level %u in replicate_chunk", level);
 		return NULL;
 	}
-
-	s->chunk.req5 = NULL;
-	s->chunk.req8 = NULL;
-	s->chunk.req10 = NULL;
-	if (py_req) {
-		switch (req_level) {
-		case 0:
-			break;
-		case 5:
-			if (!py_check_dcerpc_type(py_req, "samba.dcerpc.drsuapi", "DsGetNCChangesRequest5")) {
-				return NULL;
-			}
-
-			s->chunk.req5 = pytalloc_get_ptr(py_req);
-			break;
-		case 8:
-			if (!py_check_dcerpc_type(py_req, "samba.dcerpc.drsuapi", "DsGetNCChangesRequest8")) {
-				return NULL;
-			}
-
-			s->chunk.req8 = pytalloc_get_ptr(py_req);
-			break;
-		case 10:
-			if (!py_check_dcerpc_type(py_req, "samba.dcerpc.drsuapi", "DsGetNCChangesRequest10")) {
-				return NULL;
-			}
-
-			s->chunk.req10 = pytalloc_get_ptr(py_req);
-			break;
-		default:
-			PyErr_Format(PyExc_TypeError, "Bad req_level %u in replicate_chunk", req_level);
-			return NULL;
-		}
-	}
-	s->chunk.req_level = req_level;
 
 	chunk_handler = libnet_vampire_cb_store_chunk;
 	if (py_schema) {
@@ -550,31 +478,23 @@ static PyObject *py_net_replicate_chunk(py_net_Object *self, PyObject *args, PyO
 /*
   find a DC given a domain name and server type
  */
-static PyObject *py_net_finddc(py_net_Object *self, PyObject *args, PyObject *kwargs)
+static PyObject *py_net_finddc(py_net_Object *self, PyObject *args)
 {
-	const char *domain = NULL, *address = NULL;
+	const char *domain_name;
 	unsigned server_type;
 	NTSTATUS status;
 	struct finddcs *io;
 	TALLOC_CTX *mem_ctx;
 	PyObject *ret;
-	const char * const kwnames[] = { "flags", "domain", "address", NULL };
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "I|zz",
-					 discard_const_p(char *, kwnames),
-					 &server_type, &domain, &address)) {
+	if (!PyArg_ParseTuple(args, "sI", &domain_name, &server_type)) {
 		return NULL;
 	}
 
 	mem_ctx = talloc_new(self->mem_ctx);
 
 	io = talloc_zero(mem_ctx, struct finddcs);
-	if (domain != NULL) {
-		io->in.domain_name = domain;
-	}
-	if (address != NULL) {
-		io->in.server_address = address;
-	}
+	io->in.domain_name = domain_name;
 	io->in.minimum_dc_flags = server_type;
 
 	status = finddcs_cldap(io, io,
@@ -602,20 +522,20 @@ static const char py_net_replicate_init_doc[] = "replicate_init(samdb, lp, drspi
 static const char py_net_replicate_chunk_doc[] = "replicate_chunk(state, level, ctr, schema)\n"
 					 "Process replication for one chunk";
 
-static const char py_net_finddc_doc[] = "finddc(flags=server_type, domain=None, address=None)\n"
-					 "Find a DC with the specified 'server_type' bits. The 'domain' and/or 'address' have to be used as additional search criteria. Returns the whole netlogon struct";
+static const char py_net_finddc_doc[] = "finddc(domain, server_type)\n"
+					 "find a DC with the specified server_type bits. Return the DNS name";
 
 static PyMethodDef net_obj_methods[] = {
-	{"join_member", (PyCFunction)py_net_join_member, METH_VARARGS|METH_KEYWORDS, py_net_join_member_doc},
-	{"change_password", (PyCFunction)py_net_change_password, METH_VARARGS|METH_KEYWORDS, py_net_change_password_doc},
+	{"join", (PyCFunction)py_net_join, METH_VARARGS|METH_KEYWORDS, py_net_join_doc},
 	{"set_password", (PyCFunction)py_net_set_password, METH_VARARGS|METH_KEYWORDS, py_net_set_password_doc},
+	{"export_keytab", (PyCFunction)py_net_export_keytab, METH_VARARGS|METH_KEYWORDS, py_net_export_keytab_doc},
 	{"time", (PyCFunction)py_net_time, METH_VARARGS|METH_KEYWORDS, py_net_time_doc},
 	{"create_user", (PyCFunction)py_net_user_create, METH_VARARGS|METH_KEYWORDS, py_net_create_user_doc},
 	{"delete_user", (PyCFunction)py_net_user_delete, METH_VARARGS|METH_KEYWORDS, py_net_delete_user_doc},
 	{"vampire", (PyCFunction)py_net_vampire, METH_VARARGS|METH_KEYWORDS, py_net_vampire_doc},
 	{"replicate_init", (PyCFunction)py_net_replicate_init, METH_VARARGS|METH_KEYWORDS, py_net_replicate_init_doc},
 	{"replicate_chunk", (PyCFunction)py_net_replicate_chunk, METH_VARARGS|METH_KEYWORDS, py_net_replicate_chunk_doc},
-	{"finddc", (PyCFunction)py_net_finddc, METH_KEYWORDS, py_net_finddc_doc},
+	{"finddc", (PyCFunction)py_net_finddc, METH_VARARGS, py_net_finddc_doc},
 	{ NULL }
 };
 

@@ -29,82 +29,40 @@ struct ndr_pull_test_data {
 	DATA_BLOB data_context;
 	size_t struct_size;
 	ndr_pull_flags_fn_t pull_fn;
-	ndr_push_flags_fn_t push_fn;
 	int ndr_flags;
-	int flags;
 };
 
-static enum ndr_err_code torture_ndr_push_struct_blob_flags(DATA_BLOB *blob, TALLOC_CTX *mem_ctx, uint32_t flags, uint32_t ndr_flags, const void *p, ndr_push_flags_fn_t fn)
-{
-	struct ndr_push *ndr;
-	ndr = ndr_push_init_ctx(mem_ctx);
-	NDR_ERR_HAVE_NO_MEMORY(ndr);
-
-	ndr->flags |= ndr_flags;
-
-	NDR_CHECK(fn(ndr, flags, p));
-
-	*blob = ndr_push_blob(ndr);
-	talloc_steal(mem_ctx, blob->data);
-	talloc_free(ndr);
-
-	return NDR_ERR_SUCCESS;
-}
-
-static bool wrap_ndr_pullpush_test(struct torture_context *tctx,
-				   struct torture_tcase *tcase,
-				   struct torture_test *test)
+static bool wrap_ndr_pull_test(struct torture_context *tctx,
+			       struct torture_tcase *tcase,
+			       struct torture_test *test)
 {
 	bool (*check_fn) (struct torture_context *ctx, void *data) = test->fn;
 	const struct ndr_pull_test_data *data = (const struct ndr_pull_test_data *)test->data;
+	void *ds = talloc_zero_size(tctx, data->struct_size);
 	struct ndr_pull *ndr = ndr_pull_init_blob(&(data->data), tctx);
-	void *ds = talloc_zero_size(ndr, data->struct_size);
-	bool ret;
-	uint32_t highest_ofs;
-
-	ndr->flags |= data->flags;
 
 	ndr->flags |= LIBNDR_FLAG_REF_ALLOC;
 
 	torture_assert_ndr_success(tctx, data->pull_fn(ndr, data->ndr_flags, ds),
 				   "pulling");
 
-	if (ndr->offset > ndr->relative_highest_offset) {
-		highest_ofs = ndr->offset;
-	} else {
-		highest_ofs = ndr->relative_highest_offset;
-	}
-
-	torture_assert(tctx, highest_ofs == ndr->data_size,
+	torture_assert(tctx, ndr->offset == ndr->data_size,
 				   talloc_asprintf(tctx,
-					   "%d unread bytes", ndr->data_size - highest_ofs));
+					   "%d unread bytes", ndr->data_size - ndr->offset));
 
-	if (check_fn != NULL) {
-		ret = check_fn(tctx, ds);
-	} else {
-		ret = true;
-	}
-
-	if (data->push_fn != NULL) {
-		DATA_BLOB outblob;
-		torture_assert_ndr_success(tctx, torture_ndr_push_struct_blob_flags(&outblob, ndr, data->ndr_flags, ndr->flags, ds, data->push_fn), "pushing");
-		torture_assert_data_blob_equal(tctx, outblob, data->data, "ndr push compare");
-	}
-
-	talloc_free(ndr);
-	return ret;
+	if (check_fn != NULL)
+		return check_fn(tctx, ds);
+	else
+		return true;
 }
 
-_PUBLIC_ struct torture_test *_torture_suite_add_ndr_pullpush_test(
-	struct torture_suite *suite,
-	const char *name,
-	ndr_pull_flags_fn_t pull_fn,
-	ndr_push_flags_fn_t push_fn,
-	DATA_BLOB db,
-	size_t struct_size,
-	int ndr_flags,
-	int flags,
-	bool (*check_fn) (struct torture_context *ctx, void *data))
+_PUBLIC_ struct torture_test *_torture_suite_add_ndr_pull_test(
+					struct torture_suite *suite,
+					const char *name, ndr_pull_flags_fn_t pull_fn,
+					DATA_BLOB db,
+					size_t struct_size,
+					int ndr_flags,
+					bool (*check_fn) (struct torture_context *ctx, void *data))
 {
 	struct torture_test *test;
 	struct torture_tcase *tcase;
@@ -116,16 +74,12 @@ _PUBLIC_ struct torture_test *_torture_suite_add_ndr_pullpush_test(
 
 	test->name = talloc_strdup(test, name);
 	test->description = NULL;
-	test->run = wrap_ndr_pullpush_test;
-
+	test->run = wrap_ndr_pull_test;
 	data = talloc(test, struct ndr_pull_test_data);
 	data->data = db;
 	data->ndr_flags = ndr_flags;
-	data->flags = flags;
 	data->struct_size = struct_size;
 	data->pull_fn = pull_fn;
-	data->push_fn = push_fn;
-
 	test->data = data;
 	test->fn = check_fn;
 	test->dangerous = false;
@@ -135,7 +89,6 @@ _PUBLIC_ struct torture_test *_torture_suite_add_ndr_pullpush_test(
 	return test;
 }
 
-
 static bool wrap_ndr_inout_pull_test(struct torture_context *tctx,
 				     struct torture_tcase *tcase,
 				     struct torture_test *test)
@@ -144,7 +97,6 @@ static bool wrap_ndr_inout_pull_test(struct torture_context *tctx,
 	const struct ndr_pull_test_data *data = (const struct ndr_pull_test_data *)test->data;
 	void *ds = talloc_zero_size(tctx, data->struct_size);
 	struct ndr_pull *ndr;
-	uint32_t highest_ofs;
 
 	/* handle NDR_IN context */
 
@@ -157,14 +109,8 @@ static bool wrap_ndr_inout_pull_test(struct torture_context *tctx,
 		data->pull_fn(ndr, NDR_IN, ds),
 		"ndr pull of context failed");
 
-	if (ndr->offset > ndr->relative_highest_offset) {
-		highest_ofs = ndr->offset;
-	} else {
-		highest_ofs = ndr->relative_highest_offset;
-	}
-
-	torture_assert(tctx, highest_ofs == ndr->data_size,
-		talloc_asprintf(tctx, "%d unread bytes", ndr->data_size - highest_ofs));
+	torture_assert(tctx, ndr->offset == ndr->data_size,
+		talloc_asprintf(tctx, "%d unread bytes", ndr->data_size - ndr->offset));
 
 	talloc_free(ndr);
 
@@ -179,14 +125,8 @@ static bool wrap_ndr_inout_pull_test(struct torture_context *tctx,
 		data->pull_fn(ndr, NDR_OUT, ds),
 		"ndr pull failed");
 
-	if (ndr->offset > ndr->relative_highest_offset) {
-		highest_ofs = ndr->offset;
-	} else {
-		highest_ofs = ndr->relative_highest_offset;
-	}
-
-	torture_assert(tctx, highest_ofs == ndr->data_size,
-		talloc_asprintf(tctx, "%d unread bytes", ndr->data_size - highest_ofs));
+	torture_assert(tctx, ndr->offset == ndr->data_size,
+		talloc_asprintf(tctx, "%d unread bytes", ndr->data_size - ndr->offset));
 
 	talloc_free(ndr);
 
@@ -410,14 +350,11 @@ struct torture_suite *torture_local_ndr(TALLOC_CTX *mem_ctx)
 	torture_suite_add_suite(suite, ndr_netlogon_suite(suite));
 	torture_suite_add_suite(suite, ndr_drsuapi_suite(suite));
 	torture_suite_add_suite(suite, ndr_spoolss_suite(suite));
-	torture_suite_add_suite(suite, ndr_ntprinting_suite(suite));
 	torture_suite_add_suite(suite, ndr_samr_suite(suite));
 	torture_suite_add_suite(suite, ndr_drsblobs_suite(suite));
 	torture_suite_add_suite(suite, ndr_nbt_suite(suite));
 	torture_suite_add_suite(suite, ndr_ntlmssp_suite(suite));
 	torture_suite_add_suite(suite, ndr_backupkey_suite(suite));
-	torture_suite_add_suite(suite, ndr_witness_suite(suite));
-	torture_suite_add_suite(suite, ndr_string_suite(suite));
 
 	torture_suite_add_simple_test(suite, "string terminator",
 				      test_check_string_terminator);

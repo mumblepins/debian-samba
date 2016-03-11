@@ -31,9 +31,6 @@
 #include "../libcli/security/security.h"
 #include "passdb.h"
 #include "libsmb/libsmb.h"
-#include "auth/gensec/gensec.h"
-#include "../libcli/smb/smbXcli_base.h"
-#include "messages.h"
 
 enum pipe_auth_type_spnego {
 	PIPE_AUTH_TYPE_SPNEGO_NONE = 0,
@@ -49,10 +46,7 @@ static enum dcerpc_AuthLevel pipe_default_auth_level = DCERPC_AUTH_LEVEL_NONE;
 static unsigned int timeout = 0;
 static enum dcerpc_transport_t default_transport = NCACN_NP;
 
-struct messaging_context *rpcclient_msg_ctx;
 struct user_auth_info *rpcclient_auth_info;
-struct cli_state *rpcclient_cli_state;
-struct netlogon_creds_cli_context *rpcclient_netlogon_creds;
 
 /* List to hold groups of commands.
  *
@@ -171,7 +165,7 @@ static void fetch_machine_sid(struct cli_state *cli)
 		goto error;
 	}
 
-	result = cli_rpc_pipe_open_noauth(cli, &ndr_table_lsarpc,
+	result = cli_rpc_pipe_open_noauth(cli, &ndr_table_lsarpc.syntax_id,
 					  &lsapipe);
 	if (!NT_STATUS_IS_OK(result)) {
 		fprintf(stderr, "could not initialise lsa pipe. Error was %s\n", nt_errstr(result) );
@@ -215,7 +209,7 @@ static void fetch_machine_sid(struct cli_state *cli)
 		TALLOC_FREE(lsapipe);
 	}
 
-	fprintf(stderr, "could not obtain sid from server\n");
+	fprintf(stderr, "could not obtain sid for domain %s\n", cli->domain);
 
 	if (!NT_STATUS_IS_OK(result)) {
 		fprintf(stderr, "error: %s\n", nt_errstr(result));
@@ -246,7 +240,7 @@ static NTSTATUS cmd_listcommands(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ct
 	{
 		tmp_set = tmp->cmd_set;
 
-		if (!strcasecmp_m(argv[1], tmp_set->name))
+		if (!StrCaseCmp(argv[1], tmp_set->name))
 		{
 			printf("Available commands on the %s pipe:\n\n", tmp_set->name);
 
@@ -487,6 +481,8 @@ static NTSTATUS cmd_seal(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
 static NTSTATUS cmd_timeout(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
 			    int argc, const char **argv)
 {
+	struct cmd_list *tmp;
+
 	if (argc > 2) {
 		printf("Usage: %s timeout\n", argv[0]);
 		return NT_STATUS_OK;
@@ -494,6 +490,19 @@ static NTSTATUS cmd_timeout(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
 
 	if (argc == 2) {
 		timeout = atoi(argv[1]);
+
+		for (tmp = cmd_list; tmp; tmp = tmp->next) {
+
+			struct cmd_set *tmp_set;
+
+			for (tmp_set = tmp->cmd_set; tmp_set->name; tmp_set++) {
+				if (tmp_set->rpc_pipe == NULL) {
+					continue;
+				}
+
+				rpccli_set_timeout(tmp_set->rpc_pipe, timeout);
+			}
+		}
 	}
 
 	printf("timeout is %d\n", timeout);
@@ -609,9 +618,6 @@ extern struct cmd_set ntsvcs_commands[];
 extern struct cmd_set drsuapi_commands[];
 extern struct cmd_set eventlog_commands[];
 extern struct cmd_set winreg_commands[];
-extern struct cmd_set fss_commands[];
-extern struct cmd_set witness_commands[];
-extern struct cmd_set clusapi_commands[];
 
 static struct cmd_set *rpcclient_command_list[] = {
 	rpcclient_commands,
@@ -631,9 +637,6 @@ static struct cmd_set *rpcclient_command_list[] = {
 	drsuapi_commands,
 	eventlog_commands,
 	winreg_commands,
-	fss_commands,
-	witness_commands,
-	clusapi_commands,
 	NULL
 };
 
@@ -662,7 +665,7 @@ static NTSTATUS do_cmd(struct cli_state *cli,
 		       struct user_auth_info *auth_info,
 		       struct cmd_set *cmd_entry,
 		       struct dcerpc_binding *binding,
-		       int argc, const char **argv)
+		       int argc, char **argv)
 {
 	NTSTATUS ntresult;
 	WERROR wresult;
@@ -671,137 +674,132 @@ static NTSTATUS do_cmd(struct cli_state *cli,
 
 	/* Create mem_ctx */
 
-	if (!(mem_ctx = talloc_stackframe())) {
+	if (!(mem_ctx = talloc_init("do_cmd"))) {
 		DEBUG(0, ("talloc_init() failed\n"));
 		return NT_STATUS_NO_MEMORY;
 	}
 
 	/* Open pipe */
 
-	if ((cmd_entry->table != NULL) && (cmd_entry->rpc_pipe == NULL)) {
-		enum credentials_use_kerberos use_kerberos = CRED_AUTO_USE_KERBEROS;
+	if ((cmd_entry->interface != NULL) && (cmd_entry->rpc_pipe == NULL)) {
 		switch (pipe_default_auth_type) {
 		case DCERPC_AUTH_TYPE_NONE:
 			ntresult = cli_rpc_pipe_open_noauth_transport(
 				cli, default_transport,
-				cmd_entry->table,
+				cmd_entry->interface,
 				&cmd_entry->rpc_pipe);
 			break;
 		case DCERPC_AUTH_TYPE_SPNEGO:
 			switch (pipe_default_auth_spnego_type) {
 			case PIPE_AUTH_TYPE_SPNEGO_NTLMSSP:
-				use_kerberos = CRED_DONT_USE_KERBEROS;
+				ntresult = cli_rpc_pipe_open_spnego_ntlmssp(
+						cli, cmd_entry->interface,
+						default_transport,
+						pipe_default_auth_level,
+						get_cmdline_auth_info_domain(auth_info),
+						get_cmdline_auth_info_username(auth_info),
+						get_cmdline_auth_info_password(auth_info),
+						&cmd_entry->rpc_pipe);
 				break;
 			case PIPE_AUTH_TYPE_SPNEGO_KRB5:
-				use_kerberos = CRED_MUST_USE_KERBEROS;
+				ntresult = cli_rpc_pipe_open_spnego_krb5(
+						cli, cmd_entry->interface,
+						default_transport,
+						pipe_default_auth_level,
+						cli->desthost,
+						NULL, NULL,
+						&cmd_entry->rpc_pipe);
 				break;
-			case PIPE_AUTH_TYPE_SPNEGO_NONE:
-				use_kerberos = CRED_AUTO_USE_KERBEROS;
-				break;
+			default:
+				ntresult = NT_STATUS_INTERNAL_ERROR;
 			}
-			/* Fall through */
+			break;
 		case DCERPC_AUTH_TYPE_NTLMSSP:
-		case DCERPC_AUTH_TYPE_KRB5:
-			ntresult = cli_rpc_pipe_open_generic_auth(
-				cli, cmd_entry->table,
+			ntresult = cli_rpc_pipe_open_ntlmssp(
+				cli, cmd_entry->interface,
 				default_transport,
-				use_kerberos,
-				pipe_default_auth_type,
 				pipe_default_auth_level,
-				smbXcli_conn_remote_name(cli->conn),
 				get_cmdline_auth_info_domain(auth_info),
 				get_cmdline_auth_info_username(auth_info),
 				get_cmdline_auth_info_password(auth_info),
 				&cmd_entry->rpc_pipe);
 			break;
 		case DCERPC_AUTH_TYPE_SCHANNEL:
-			TALLOC_FREE(rpcclient_netlogon_creds);
 			ntresult = cli_rpc_pipe_open_schannel(
-				cli, rpcclient_msg_ctx,
-				cmd_entry->table,
+				cli, cmd_entry->interface,
 				default_transport,
+				pipe_default_auth_level,
 				get_cmdline_auth_info_domain(auth_info),
-				&cmd_entry->rpc_pipe,
-				talloc_autofree_context(),
-				&rpcclient_netlogon_creds);
+				&cmd_entry->rpc_pipe);
+			break;
+		case DCERPC_AUTH_TYPE_KRB5:
+			ntresult = cli_rpc_pipe_open_krb5(
+				cli, cmd_entry->interface,
+				default_transport,
+				pipe_default_auth_level,
+				cli->desthost,
+				NULL, NULL,
+				&cmd_entry->rpc_pipe);
 			break;
 		default:
 			DEBUG(0, ("Could not initialise %s. Invalid "
 				  "auth type %u\n",
-				  cmd_entry->table->name,
+				  get_pipe_name_from_syntax(
+					  talloc_tos(),
+					  cmd_entry->interface),
 				  pipe_default_auth_type ));
-			talloc_free(mem_ctx);
 			return NT_STATUS_UNSUCCESSFUL;
 		}
 		if (!NT_STATUS_IS_OK(ntresult)) {
 			DEBUG(0, ("Could not initialise %s. Error was %s\n",
-				  cmd_entry->table->name,
+				  get_pipe_name_from_syntax(
+					  talloc_tos(), cmd_entry->interface),
 				  nt_errstr(ntresult) ));
-			talloc_free(mem_ctx);
 			return ntresult;
 		}
 
-		if (rpcclient_netlogon_creds == NULL && cmd_entry->use_netlogon_creds) {
-			const char *dc_name = cmd_entry->rpc_pipe->desthost;
-			const char *domain = get_cmdline_auth_info_domain(auth_info);
-			struct cli_credentials *creds = NULL;
+		if (ndr_syntax_id_equal(cmd_entry->interface,
+					&ndr_table_netlogon.syntax_id)) {
+			uint32_t neg_flags = NETLOGON_NEG_AUTH2_ADS_FLAGS;
+			enum netr_SchannelType sec_channel_type;
+			uchar trust_password[16];
+			const char *machine_account;
 
-			ntresult = pdb_get_trust_credentials(domain, NULL,
-							     mem_ctx, &creds);
-			if (!NT_STATUS_IS_OK(ntresult)) {
-				DEBUG(0, ("Failed to fetch trust credentials for "
-					  "%s to connect to %s: %s\n",
-					  domain, cmd_entry->table->name,
-					  nt_errstr(ntresult)));
-				TALLOC_FREE(cmd_entry->rpc_pipe);
-				talloc_free(mem_ctx);
-				return ntresult;
+			if (!get_trust_pw_hash(get_cmdline_auth_info_domain(auth_info),
+					       trust_password, &machine_account,
+					       &sec_channel_type))
+			{
+				return NT_STATUS_CANT_ACCESS_DOMAIN_INFO;
 			}
 
-			ntresult = rpccli_create_netlogon_creds_with_creds(creds,
-							dc_name,
-							rpcclient_msg_ctx,
-							talloc_autofree_context(),
-							&rpcclient_netlogon_creds);
-			if (!NT_STATUS_IS_OK(ntresult)) {
-				DEBUG(0, ("Could not initialise credentials for %s.\n",
-					  cmd_entry->table->name));
-				TALLOC_FREE(cmd_entry->rpc_pipe);
-				TALLOC_FREE(mem_ctx);
-				return ntresult;
-			}
+			ntresult = rpccli_netlogon_setup_creds(cmd_entry->rpc_pipe,
+						cli->desthost,   /* server name */
+						get_cmdline_auth_info_domain(auth_info),  /* domain */
+						global_myname(), /* client name */
+						machine_account, /* machine account name */
+						trust_password,
+						sec_channel_type,
+						&neg_flags);
 
-			ntresult = rpccli_setup_netlogon_creds_with_creds(cli,
-							NCACN_NP,
-							rpcclient_netlogon_creds,
-							false, /* force_reauth */
-							creds);
-			TALLOC_FREE(creds);
 			if (!NT_STATUS_IS_OK(ntresult)) {
 				DEBUG(0, ("Could not initialise credentials for %s.\n",
-					  cmd_entry->table->name));
-				TALLOC_FREE(cmd_entry->rpc_pipe);
-				TALLOC_FREE(rpcclient_netlogon_creds);
-				TALLOC_FREE(mem_ctx);
+					  get_pipe_name_from_syntax(
+						  talloc_tos(),
+						  cmd_entry->interface)));
 				return ntresult;
 			}
 		}
-	}
-
-	/* Set timeout for new connections */
-	if (cmd_entry->rpc_pipe) {
-		rpccli_set_timeout(cmd_entry->rpc_pipe, timeout);
 	}
 
 	/* Run command */
 
 	if ( cmd_entry->returntype == RPC_RTYPE_NTSTATUS ) {
-		ntresult = cmd_entry->ntfn(cmd_entry->rpc_pipe, mem_ctx, argc, argv);
+		ntresult = cmd_entry->ntfn(cmd_entry->rpc_pipe, mem_ctx, argc, (const char **) argv);
 		if (!NT_STATUS_IS_OK(ntresult)) {
 			printf("result was %s\n", nt_errstr(ntresult));
 		}
 	} else {
-		wresult = cmd_entry->wfn(cmd_entry->rpc_pipe, mem_ctx, argc, argv);
+		wresult = cmd_entry->wfn(cmd_entry->rpc_pipe, mem_ctx, argc, (const char **) argv);
 		/* print out the DOS error */
 		if (!W_ERROR_IS_OK(wresult)) {
 			printf( "result was %s\n", win_errstr(wresult));
@@ -811,7 +809,7 @@ static NTSTATUS do_cmd(struct cli_state *cli,
 
 	/* Cleanup */
 
-	talloc_free(mem_ctx);
+	talloc_destroy(mem_ctx);
 
 	return ntresult;
 }
@@ -831,9 +829,9 @@ static NTSTATUS process_cmd(struct user_auth_info *auth_info,
 	NTSTATUS result = NT_STATUS_OK;
 	int ret;
 	int argc;
-	const char **argv = NULL;
+	char **argv = NULL;
 
-	if ((ret = poptParseArgvString(cmd, &argc, &argv)) != 0) {
+	if ((ret = poptParseArgvString(cmd, &argc, (const char ***) &argv)) != 0) {
 		fprintf(stderr, "rpcclient: %s\n", poptStrerror(ret));
 		return NT_STATUS_UNSUCCESSFUL;
 	}
@@ -885,7 +883,6 @@ out_free:
 
  int main(int argc, char *argv[])
 {
-	const char **const_argv = discard_const_p(const char *, argv);
 	int 			opt;
 	static char		*cmdstr = NULL;
 	const char *server;
@@ -895,15 +892,13 @@ out_free:
 	struct sockaddr_storage server_ss;
 	NTSTATUS 		nt_status;
 	static int		opt_port = 0;
+	fstring new_workgroup;
 	int result = 0;
 	TALLOC_CTX *frame = talloc_stackframe();
 	uint32_t flags = 0;
 	struct dcerpc_binding *binding = NULL;
-	enum dcerpc_transport_t transport;
-	uint32_t bflags = 0;
 	const char *binding_string = NULL;
 	char *user, *domain, *q;
-	const char *host;
 
 	/* make sure the vars that get altered (4th field) are in
 	   a fixed location or certain compilers complain */
@@ -919,7 +914,7 @@ out_free:
 		POPT_TABLEEND
 	};
 
-	smb_init_locale();
+	load_case_tables();
 
 	zero_sockaddr(&server_ss);
 
@@ -928,7 +923,6 @@ out_free:
 	/* the following functions are part of the Samba debugging
 	   facilities.  See lib/debug.c */
 	setup_logging("rpcclient", DEBUG_STDOUT);
-	lp_set_cmdline("log level", "0");
 
 	rpcclient_auth_info = user_auth_info_init(frame);
 	if (rpcclient_auth_info == NULL) {
@@ -938,7 +932,7 @@ out_free:
 
 	/* Parse options */
 
-	pc = poptGetContext("rpcclient", argc, const_argv,
+	pc = poptGetContext("rpcclient", argc, (const char **) argv,
 			    long_options, 0);
 
 	if (argc == 1) {
@@ -973,23 +967,29 @@ out_free:
 	}
 
 	poptFreeContext(pc);
-	popt_burn_cmdline_password(argc, argv);
+
+	load_interfaces();
 
 	if (!init_names()) {
 		result = 1;
 		goto done;
 	}
 
+	/* save the workgroup...
+
+	   FIXME!! do we need to do this for other options as well
+	   (or maybe a generic way to keep lp_load() from overwriting
+	   everything)?  */
+
+	fstrcpy( new_workgroup, lp_workgroup() );
+
 	/* Load smb.conf file */
 
-	if (!lp_load_global(get_dyn_CONFIGFILE()))
+	if (!lp_load(get_dyn_CONFIGFILE(),True,False,False,True))
 		fprintf(stderr, "Can't load %s\n", get_dyn_CONFIGFILE());
 
-	/* We must load interfaces after we load the smb.conf */
-	load_interfaces();
-
-	rpcclient_msg_ctx = messaging_init(talloc_autofree_context(),
-			samba_tevent_context_init(talloc_autofree_context()));
+	if ( strlen(new_workgroup) != 0 )
+		set_global_myworkgroup( new_workgroup );
 
 	/*
 	 * Get password
@@ -1027,53 +1027,46 @@ out_free:
 		}
 	}
 
-	transport = dcerpc_binding_get_transport(binding);
-
-	if (transport == NCA_UNKNOWN) {
-		nt_status = dcerpc_binding_set_transport(binding, NCACN_NP);
-		if (!NT_STATUS_IS_OK(nt_status)) {
-			result = -1;
-			goto done;
-		}
+	if (binding->transport == NCA_UNKNOWN) {
+		binding->transport = NCACN_NP;
 	}
 
-	host = dcerpc_binding_get_string_option(binding, "host");
-
-	bflags = dcerpc_binding_get_flags(binding);
-	if (bflags & DCERPC_CONNECT) {
-		pipe_default_auth_level = DCERPC_AUTH_LEVEL_CONNECT;
-		pipe_default_auth_type = DCERPC_AUTH_TYPE_NTLMSSP;
-	}
-	if (bflags & DCERPC_SIGN) {
+	if (binding->flags & DCERPC_SIGN) {
 		pipe_default_auth_level = DCERPC_AUTH_LEVEL_INTEGRITY;
 		pipe_default_auth_type = DCERPC_AUTH_TYPE_NTLMSSP;
 	}
-	if (bflags & DCERPC_SEAL) {
+	if (binding->flags & DCERPC_SEAL) {
 		pipe_default_auth_level = DCERPC_AUTH_LEVEL_PRIVACY;
 		pipe_default_auth_type = DCERPC_AUTH_TYPE_NTLMSSP;
 	}
-	if (bflags & DCERPC_AUTH_SPNEGO) {
+	if (binding->flags & DCERPC_AUTH_SPNEGO) {
 		pipe_default_auth_type = DCERPC_AUTH_TYPE_SPNEGO;
 		pipe_default_auth_spnego_type = PIPE_AUTH_TYPE_SPNEGO_NTLMSSP;
 	}
-	if (bflags & DCERPC_AUTH_NTLM) {
+	if (binding->flags & DCERPC_AUTH_NTLM) {
+		/* If neither Integrity or Privacy are requested then
+		 * Use just Connect level */
+		if (pipe_default_auth_level == DCERPC_AUTH_LEVEL_NONE) {
+			pipe_default_auth_level = DCERPC_AUTH_LEVEL_CONNECT;
+		}
+
 		if (pipe_default_auth_type == DCERPC_AUTH_TYPE_SPNEGO) {
 			pipe_default_auth_spnego_type = PIPE_AUTH_TYPE_SPNEGO_NTLMSSP;
 		} else {
 			pipe_default_auth_type = DCERPC_AUTH_TYPE_NTLMSSP;
 		}
 	}
-	if (bflags & DCERPC_AUTH_KRB5) {
+	if (binding->flags & DCERPC_AUTH_KRB5) {
+		/* If neither Integrity or Privacy are requested then
+		 * Use just Connect level */
+		if (pipe_default_auth_level == DCERPC_AUTH_LEVEL_NONE) {
+			pipe_default_auth_level = DCERPC_AUTH_LEVEL_CONNECT;
+		}
+
 		if (pipe_default_auth_type == DCERPC_AUTH_TYPE_SPNEGO) {
 			pipe_default_auth_spnego_type = PIPE_AUTH_TYPE_SPNEGO_KRB5;
 		} else {
 			pipe_default_auth_type = DCERPC_AUTH_TYPE_KRB5;
-		}
-	}
-	if (pipe_default_auth_type != DCERPC_AUTH_TYPE_NONE) {
-		/* If nothing is requested then default to integrity */
-		if (pipe_default_auth_level == DCERPC_AUTH_LEVEL_NONE) {
-			pipe_default_auth_level = DCERPC_AUTH_LEVEL_INTEGRITY;
 		}
 	}
 
@@ -1097,7 +1090,8 @@ out_free:
 		set_cmdline_auth_info_username(rpcclient_auth_info, q+1);
 	}
 
-	nt_status = cli_full_connection(&cli, lp_netbios_name(), host,
+
+	nt_status = cli_full_connection(&cli, global_myname(), binding->host,
 					opt_ipaddr ? &server_ss : NULL, opt_port,
 					"IPC$", "IPC",
 					get_cmdline_auth_info_username(rpcclient_auth_info),
@@ -1129,10 +1123,8 @@ out_free:
 #endif
 
 	/* Load command lists */
-	rpcclient_cli_state = cli;
 
-	timeout = 10000;
-	cli_set_timeout(cli, timeout);
+	timeout = cli_set_timeout(cli, 10000);
 
 	cmd_set = rpcclient_command_list;
 
@@ -1142,7 +1134,7 @@ out_free:
 		cmd_set++;
 	}
 
-	default_transport = dcerpc_binding_get_transport(binding);
+	default_transport = binding->transport;
 
 	fetch_machine_sid(cli);
 
@@ -1179,7 +1171,6 @@ out_free:
 	}
 
 done:
-	rpcclient_cli_state = NULL;
 	if (cli != NULL) {
 		cli_shutdown(cli);
 	}

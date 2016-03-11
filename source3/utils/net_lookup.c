@@ -19,7 +19,7 @@
 #include "includes.h"
 #include "utils/net.h"
 #include "libads/sitename_cache.h"
-#include "../lib/addns/dnsquery.h"
+#include "libads/dns.h"
 #include "../librpc/gen_ndr/ndr_netlogon.h"
 #include "smb_krb5.h"
 #include "../libcli/security/security.h"
@@ -112,30 +112,29 @@ static int net_lookup_ldap(struct net_context *c, int argc, const char **argv)
 	else
 		domain = c->opt_target_workgroup;
 
+	sitename = sitename_fetch(domain);
+
 	if ( (ctx = talloc_init("net_lookup_ldap")) == NULL ) {
 		d_fprintf(stderr,"net_lookup_ldap: talloc_init() %s!\n",
 			  _("failed"));
+		SAFE_FREE(sitename);
 		return -1;
 	}
 
-	sitename = sitename_fetch(ctx, domain);
-
 	DEBUG(9, ("Lookup up ldap for domain %s\n", domain));
 
-	status = ads_dns_query_dcs(ctx,
-				   domain,
-				   sitename,
-				   &dcs,
-				   &numdcs);
+	status = ads_dns_query_dcs( ctx, domain, sitename, &dcs, &numdcs );
 	if ( NT_STATUS_IS_OK(status) && numdcs ) {
 		print_ldap_srvlist(dcs, numdcs);
 		TALLOC_FREE( ctx );
+		SAFE_FREE(sitename);
 		return 0;
 	}
 
      	DEBUG(9, ("Looking up PDC for domain %s\n", domain));
 	if (!get_pdc_ip(domain, &ss)) {
 		TALLOC_FREE( ctx );
+		SAFE_FREE(sitename);
 		return -1;
 	}
 
@@ -147,6 +146,7 @@ static int net_lookup_ldap(struct net_context *c, int argc, const char **argv)
 
 	if (ret) {
 		TALLOC_FREE( ctx );
+		SAFE_FREE(sitename);
 		return -1;
 	}
 
@@ -154,24 +154,23 @@ static int net_lookup_ldap(struct net_context *c, int argc, const char **argv)
 	domain = strchr(h_name, '.');
 	if (!domain) {
 		TALLOC_FREE( ctx );
+		SAFE_FREE(sitename);
 		return -1;
 	}
 	domain++;
 
 	DEBUG(9, ("Looking up ldap for domain %s\n", domain));
 
-	status = ads_dns_query_dcs(ctx,
-				   domain,
-				   sitename,
-				   &dcs,
-				   &numdcs);
+	status = ads_dns_query_dcs( ctx, domain, sitename, &dcs, &numdcs );
 	if ( NT_STATUS_IS_OK(status) && numdcs ) {
 		print_ldap_srvlist(dcs, numdcs);
 		TALLOC_FREE( ctx );
+		SAFE_FREE(sitename);
 		return 0;
 	}
 
 	TALLOC_FREE( ctx );
+	SAFE_FREE(sitename);
 
 	return -1;
 #endif
@@ -209,14 +208,14 @@ static int net_lookup_dc(struct net_context *c, int argc, const char **argv)
 	}
 	d_printf("%s\n", pdc_str);
 
-	sitename = sitename_fetch(talloc_tos(), domain);
+	sitename = sitename_fetch(domain);
 	if (!NT_STATUS_IS_OK(get_sorted_dc_list(domain, sitename,
 					&ip_list, &count, sec_ads))) {
 		SAFE_FREE(pdc_str);
-		TALLOC_FREE(sitename);
+		SAFE_FREE(sitename);
 		return 0;
 	}
-	TALLOC_FREE(sitename);
+	SAFE_FREE(sitename);
 	for (i=0;i<count;i++) {
 		print_sockaddr(addr, sizeof(addr), &ip_list[i].ss);
 		if (!strequal(pdc_str, addr))
@@ -277,11 +276,10 @@ static int net_lookup_kdc(struct net_context *c, int argc, const char **argv)
 #ifdef HAVE_KRB5
 	krb5_error_code rc;
 	krb5_context ctx;
-	struct ip_service *kdcs;
-	const char *realm;
-	int num_kdcs = 0;
-	int i;
-	NTSTATUS status;
+	struct sockaddr_in *addrs;
+	int num_kdcs,i;
+	krb5_data realm;
+	char **realms;
 
 	initialize_krb5_error_table();
 	rc = krb5_init_context(&ctx);
@@ -291,37 +289,34 @@ static int net_lookup_kdc(struct net_context *c, int argc, const char **argv)
 		return -1;
 	}
 
-	if (argc > 0) {
-		realm = argv[0];
+	if (argc>0) {
+                realm.data = CONST_DISCARD(char *, argv[0]);
+		realm.length = strlen(argv[0]);
 	} else if (lp_realm() && *lp_realm()) {
-		realm = lp_realm();
+		realm.data = lp_realm();
+		realm.length = strlen((const char *)realm.data);
 	} else {
-		char **realms;
-
 		rc = krb5_get_host_realm(ctx, NULL, &realms);
 		if (rc) {
 			DEBUG(1,("krb5_gethost_realm failed (%s)\n",
 				 error_message(rc)));
 			return -1;
 		}
-		realm = (const char *) *realms;
+		realm.data = (char *) *realms;
+		realm.length = strlen((const char *)realm.data);
 	}
 
-	status = get_kdc_list(realm, NULL, &kdcs, &num_kdcs);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1,("get_kdc_list failed (%s)\n", nt_errstr(status)));
+	rc = smb_krb5_locate_kdc(ctx, &realm, (struct sockaddr **)(void *)&addrs, &num_kdcs, 0);
+	if (rc) {
+		DEBUG(1, ("smb_krb5_locate_kdc failed (%s)\n", error_message(rc)));
 		return -1;
 	}
-
-	for (i = 0; i < num_kdcs; i++) {
-		char addr[INET6_ADDRSTRLEN];
-
-		print_sockaddr(addr, sizeof(addr), &kdcs[i].ss);
-
-		d_printf("%s:%u\n", addr, kdcs[i].port);
-	}
-
+	for (i=0;i<num_kdcs;i++)
+		if (addrs[i].sin_family == AF_INET)
+			d_printf("%s:%hd\n", inet_ntoa(addrs[i].sin_addr),
+				 ntohs(addrs[i].sin_port));
 	return 0;
+
 #endif
 	DEBUG(1, ("No kerberos support\n"));
 	return -1;
@@ -462,7 +457,7 @@ int net_lookup(struct net_context *c, int argc, const char **argv)
 		return net_lookup_usage(c, argc, argv);
 	}
 	for (i=0; table[i].funcname; i++) {
-		if (strcasecmp_m(argv[0], table[i].funcname) == 0)
+		if (StrCaseCmp(argv[0], table[i].funcname) == 0)
 			return table[i].fn(c, argc-1, argv+1);
 	}
 

@@ -50,12 +50,10 @@ kdc_openlog(krb5_context context,
 	    krb5_addlog_dest(context, config->logf, *p);
 	krb5_config_free_strings(s);
     }else {
-	char *ss;
-	if (asprintf(&ss, "0-1/FILE:%s/%s", hdb_db_dir(context),
-	    KDC_LOG_FILE) < 0)
-	    err(1, NULL);
-	krb5_addlog_dest(context, config->logf, ss);
-	free(ss);
+	char *s;
+	asprintf(&s, "0-1/FILE:%s/%s", hdb_db_dir(context), KDC_LOG_FILE);
+	krb5_addlog_dest(context, config->logf, s);
+	free(s);
     }
     krb5_set_warn_dest(context, config->logf);
 }

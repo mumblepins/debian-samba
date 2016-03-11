@@ -44,11 +44,23 @@ static NTSTATUS idmap_pdb_unixids_to_sids(struct idmap_domain *dom, struct id_ma
 	int i;
 
 	for (i = 0; ids[i]; i++) {
+
 		/* unmapped by default */
 		ids[i]->status = ID_UNMAPPED;
 
-		if (pdb_id_to_sid(&ids[i]->xid, ids[i]->sid)) {
-			ids[i]->status = ID_MAPPED;
+		switch (ids[i]->xid.type) {
+		case ID_TYPE_UID:
+			if (pdb_uid_to_sid((uid_t)ids[i]->xid.id, ids[i]->sid)) {
+				ids[i]->status = ID_MAPPED;
+			}
+			break;
+		case ID_TYPE_GID:
+			if (pdb_gid_to_sid((gid_t)ids[i]->xid.id, ids[i]->sid)) {
+				ids[i]->status = ID_MAPPED;
+			}
+			break;
+		default: /* ?? */
+			ids[i]->status = ID_UNKNOWN;
 		}
 	}
 
@@ -64,8 +76,30 @@ static NTSTATUS idmap_pdb_sids_to_unixids(struct idmap_domain *dom, struct id_ma
 	int i;
 
 	for (i = 0; ids[i]; i++) {
-		if (pdb_sid_to_id(ids[i]->sid, &ids[i]->xid)) {
-			ids[i]->status = ID_MAPPED;
+		enum lsa_SidType type;
+		union unid_t id;
+
+		if (pdb_sid_to_id(ids[i]->sid, &id, &type)) {
+			switch (type) {
+			case SID_NAME_USER:
+				ids[i]->xid.id = id.uid;
+				ids[i]->xid.type = ID_TYPE_UID;
+				ids[i]->status = ID_MAPPED;
+				break;
+
+			case SID_NAME_DOM_GRP:
+			case SID_NAME_ALIAS:
+			case SID_NAME_WKN_GRP:
+				ids[i]->xid.id = id.gid;
+				ids[i]->xid.type = ID_TYPE_GID;
+				ids[i]->status = ID_MAPPED;
+				break;
+
+			default: /* ?? */
+				/* make sure it is marked as unmapped */
+				ids[i]->status = ID_UNKNOWN;
+				break;
+			}
 		} else {
 			/* Query Failed */
 			ids[i]->status = ID_UNMAPPED;

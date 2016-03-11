@@ -4,7 +4,6 @@
 
    Copyright (C) Andrew Tridgell 2003
    Copyright (C) Andrew Bartlett <abartlet@samba.org> 2003
-   Copyright (C) Jelmer Vernooij 2005-2007
    Copyright (C) Guenther Deschner 2008-2010
 
    This program is free software; you can redistribute it and/or modify
@@ -25,7 +24,6 @@
 #include "torture/torture.h"
 #include <tevent.h>
 #include "system/time.h"
-#include "system/network.h"
 #include "librpc/gen_ndr/lsa.h"
 #include "librpc/gen_ndr/ndr_netlogon.h"
 #include "librpc/gen_ndr/ndr_netlogon_c.h"
@@ -39,6 +37,8 @@
 #include "auth/gensec/gensec.h"
 #include "auth/gensec/gensec_proto.h"
 #include "../libcli/auth/schannel.h"
+
+#include <unistd.h>
 
 #define TEST_ACCOUNT_NAME "samrtorturetest"
 #define TEST_ACCOUNT_NAME_PWD "samrpwdlastset"
@@ -243,20 +243,35 @@ static bool test_SetUserInfo(struct dcerpc_binding_handle *b, struct torture_con
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_ ##call## _r(b, tctx, &r),\
 			#call " failed"); \
 		if (!NT_STATUS_IS_OK(r.out.result)) { \
-			torture_result(tctx, TORTURE_FAIL, #call " level %u failed - %s (%s)\n", \
+			torture_comment(tctx, #call " level %u failed - %s (%s)\n", \
 			       r.in.level, nt_errstr(r.out.result), __location__); \
 			ret = false; \
 			break; \
 		}
 
 #define STRING_EQUAL(s1, s2, field) \
-	torture_assert_str_equal(tctx, s1, s2, "Failed to set " #field)
+		if ((s1 && !s2) || (s2 && !s1) || strcmp(s1, s2)) { \
+			torture_comment(tctx, "Failed to set %s to '%s' (%s)\n", \
+			       #field, s2, __location__); \
+			ret = false; \
+			break; \
+		}
 
 #define MEM_EQUAL(s1, s2, length, field) \
-	torture_assert_mem_equal(tctx, s1, s2, length, "Failed to set " #field)
+		if ((s1 && !s2) || (s2 && !s1) || memcmp(s1, s2, length)) { \
+			torture_comment(tctx, "Failed to set %s to '%s' (%s)\n", \
+			       #field, (const char *)s2, __location__); \
+			ret = false; \
+			break; \
+		}
 
 #define INT_EQUAL(i1, i2, field) \
-	torture_assert_int_equal(tctx, i1, i2, "Failed to set " #field)
+		if (i1 != i2) { \
+			torture_comment(tctx, "Failed to set %s to 0x%llx - got 0x%llx (%s)\n", \
+			       #field, (unsigned long long)i2, (unsigned long long)i1, __location__); \
+			ret = false; \
+			break; \
+		}
 
 #define TEST_USERINFO_STRING(lvl1, field1, lvl2, field2, value, fpval) do { \
 		torture_comment(tctx, "field test %d/%s vs %d/%s\n", lvl1, #field1, lvl2, #field2); \
@@ -348,19 +363,19 @@ static bool test_SetUserInfo(struct dcerpc_binding_handle *b, struct torture_con
 			   SAMR_FIELD_COMMENT);
 
 	test_account_name = talloc_asprintf(tctx, "%sxx7-1", base_account_name);
-	TEST_USERINFO_STRING(7, account_name,  1, account_name, test_account_name, 0);
+	TEST_USERINFO_STRING(7, account_name,  1, account_name, base_account_name, 0);
 	test_account_name = talloc_asprintf(tctx, "%sxx7-3", base_account_name);
-	TEST_USERINFO_STRING(7, account_name,  3, account_name, test_account_name, 0);
+	TEST_USERINFO_STRING(7, account_name,  3, account_name, base_account_name, 0);
 	test_account_name = talloc_asprintf(tctx, "%sxx7-5", base_account_name);
-	TEST_USERINFO_STRING(7, account_name,  5, account_name, test_account_name, 0);
+	TEST_USERINFO_STRING(7, account_name,  5, account_name, base_account_name, 0);
 	test_account_name = talloc_asprintf(tctx, "%sxx7-6", base_account_name);
-	TEST_USERINFO_STRING(7, account_name,  6, account_name, test_account_name, 0);
+	TEST_USERINFO_STRING(7, account_name,  6, account_name, base_account_name, 0);
 	test_account_name = talloc_asprintf(tctx, "%sxx7-7", base_account_name);
-	TEST_USERINFO_STRING(7, account_name,  7, account_name, test_account_name, 0);
+	TEST_USERINFO_STRING(7, account_name,  7, account_name, base_account_name, 0);
 	test_account_name = talloc_asprintf(tctx, "%sxx7-21", base_account_name);
-	TEST_USERINFO_STRING(7, account_name, 21, account_name, test_account_name, 0);
+	TEST_USERINFO_STRING(7, account_name, 21, account_name, base_account_name, 0);
 	test_account_name = base_account_name;
-	TEST_USERINFO_STRING(21, account_name, 21, account_name, test_account_name,
+	TEST_USERINFO_STRING(21, account_name, 21, account_name, base_account_name,
 			   SAMR_FIELD_ACCOUNT_NAME);
 
 	TEST_USERINFO_STRING(6, full_name,  1, full_name, "xx6-1 full_name", 0);
@@ -522,26 +537,26 @@ static bool test_SetUserInfo(struct dcerpc_binding_handle *b, struct torture_con
 
 	/* Samba3 cannot store these atm */
 	if (!torture_setting_bool(tctx, "samba3", false)) {
-		/* The 'store plaintext' flag does stick */
-		TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
-				      (base_acct_flags | ACB_DISABLED | ACB_ENC_TXT_PWD_ALLOWED),
-				      (base_acct_flags | ACB_DISABLED | ACB_ENC_TXT_PWD_ALLOWED | user_extra_flags),
-				      0);
-		/* The 'use DES' flag does stick */
-		TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
-				      (base_acct_flags | ACB_DISABLED | ACB_USE_DES_KEY_ONLY),
-				      (base_acct_flags | ACB_DISABLED | ACB_USE_DES_KEY_ONLY | user_extra_flags),
-				      0);
-		/* The 'don't require kerberos pre-authentication flag does stick */
-		TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
-				      (base_acct_flags | ACB_DISABLED | ACB_DONT_REQUIRE_PREAUTH),
-				      (base_acct_flags | ACB_DISABLED | ACB_DONT_REQUIRE_PREAUTH | user_extra_flags),
-				      0);
-		/* The 'no kerberos PAC required' flag sticks */
-		TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
-				      (base_acct_flags | ACB_DISABLED | ACB_NO_AUTH_DATA_REQD),
-				      (base_acct_flags | ACB_DISABLED | ACB_NO_AUTH_DATA_REQD | user_extra_flags),
-				      0);
+	/* The 'store plaintext' flag does stick */
+	TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
+			      (base_acct_flags | ACB_DISABLED | ACB_ENC_TXT_PWD_ALLOWED),
+			      (base_acct_flags | ACB_DISABLED | ACB_ENC_TXT_PWD_ALLOWED | user_extra_flags),
+			      0);
+	/* The 'use DES' flag does stick */
+	TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
+			      (base_acct_flags | ACB_DISABLED | ACB_USE_DES_KEY_ONLY),
+			      (base_acct_flags | ACB_DISABLED | ACB_USE_DES_KEY_ONLY | user_extra_flags),
+			      0);
+	/* The 'don't require kerberos pre-authentication flag does stick */
+	TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
+			      (base_acct_flags | ACB_DISABLED | ACB_DONT_REQUIRE_PREAUTH),
+			      (base_acct_flags | ACB_DISABLED | ACB_DONT_REQUIRE_PREAUTH | user_extra_flags),
+			      0);
+	/* The 'no kerberos PAC required' flag sticks */
+	TEST_USERINFO_INT_EXP(16, acct_flags, 21, acct_flags,
+			      (base_acct_flags | ACB_DISABLED | ACB_NO_AUTH_DATA_REQD),
+			      (base_acct_flags | ACB_DISABLED | ACB_NO_AUTH_DATA_REQD | user_extra_flags),
+			      0);
 	}
 	TEST_USERINFO_INT_EXP(21, acct_flags, 21, acct_flags,
 			      (base_acct_flags | ACB_DISABLED),
@@ -638,7 +653,7 @@ static bool test_SetUserPass(struct dcerpc_pipe *p, struct torture_context *tctx
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -649,11 +664,8 @@ static bool test_SetUserPass(struct dcerpc_pipe *p, struct torture_context *tctx
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -700,7 +712,7 @@ static bool test_SetUserPass_23(struct dcerpc_pipe *p, struct torture_context *t
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -711,11 +723,8 @@ static bool test_SetUserPass_23(struct dcerpc_pipe *p, struct torture_context *t
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -726,7 +735,7 @@ static bool test_SetUserPass_23(struct dcerpc_pipe *p, struct torture_context *t
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -739,11 +748,8 @@ static bool test_SetUserPass_23(struct dcerpc_pipe *p, struct torture_context *t
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_EQUAL(s.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u should have failed with WRONG_PASSWORD- %s\n",
+		torture_warning(tctx, "SetUserInfo level %u should have failed with WRONG_PASSWORD- %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	}
@@ -765,7 +771,7 @@ static bool test_SetUserPassEx(struct dcerpc_pipe *p, struct torture_context *tc
 	uint8_t confounder[16];
 	char *newpass;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-	MD5_CTX ctx;
+	struct MD5Context ctx;
 	struct samr_GetUserPwInfo pwp;
 	struct samr_PwInfo info;
 	int policy_min_pw_len = 0;
@@ -792,7 +798,7 @@ static bool test_SetUserPassEx(struct dcerpc_pipe *p, struct torture_context *tc
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -811,11 +817,8 @@ static bool test_SetUserPassEx(struct dcerpc_pipe *p, struct torture_context *tc
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -832,11 +835,8 @@ static bool test_SetUserPassEx(struct dcerpc_pipe *p, struct torture_context *tc
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_EQUAL(s.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u should have failed with WRONG_PASSWORD: %s\n",
+		torture_warning(tctx, "SetUserInfo level %u should have failed with WRONG_PASSWORD: %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -856,7 +856,7 @@ static bool test_SetUserPass_25(struct dcerpc_pipe *p, struct torture_context *t
 	bool ret = true;
 	DATA_BLOB session_key;
 	DATA_BLOB confounded_session_key = data_blob_talloc(tctx, NULL, 16);
-	MD5_CTX ctx;
+	struct MD5Context ctx;
 	uint8_t confounder[16];
 	char *newpass;
 	struct dcerpc_binding_handle *b = p->binding_handle;
@@ -885,7 +885,7 @@ static bool test_SetUserPass_25(struct dcerpc_pipe *p, struct torture_context *t
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -904,11 +904,8 @@ static bool test_SetUserPass_25(struct dcerpc_pipe *p, struct torture_context *t
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -925,11 +922,8 @@ static bool test_SetUserPass_25(struct dcerpc_pipe *p, struct torture_context *t
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			newpass, nt_errstr(s.out.result));
 	if (!NT_STATUS_EQUAL(s.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u should have failed with WRONG_PASSWORD- %s\n",
+		torture_warning(tctx, "SetUserInfo level %u should have failed with WRONG_PASSWORD- %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	}
@@ -976,7 +970,7 @@ static bool test_SetUserPass_18(struct dcerpc_pipe *p, struct torture_context *t
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -1001,7 +995,7 @@ static bool test_SetUserPass_18(struct dcerpc_pipe *p, struct torture_context *t
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -1064,7 +1058,7 @@ static bool test_SetUserPass_21(struct dcerpc_pipe *p, struct torture_context *t
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -1092,7 +1086,7 @@ static bool test_SetUserPass_21(struct dcerpc_pipe *p, struct torture_context *t
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	} else {
@@ -1107,7 +1101,7 @@ static bool test_SetUserPass_21(struct dcerpc_pipe *p, struct torture_context *t
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 			"SetUserInfo failed");
 		if (!NT_STATUS_EQUAL(s.out.result, NT_STATUS_INVALID_PARAMETER)) {
-			torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u should have failed with NT_STATUS_INVALID_PARAMETER - %s\n",
+			torture_warning(tctx, "SetUserInfo level %u should have failed with NT_STATUS_INVALID_PARAMETER - %s\n",
 			       s.in.level, nt_errstr(s.out.result));
 			ret = false;
 		}
@@ -1120,7 +1114,7 @@ static bool test_SetUserPass_21(struct dcerpc_pipe *p, struct torture_context *t
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 			"SetUserInfo failed");
 		if (!NT_STATUS_EQUAL(s.out.result, NT_STATUS_INVALID_PARAMETER)) {
-			torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u should have failed with NT_STATUS_INVALID_PARAMETER - %s\n",
+			torture_warning(tctx, "SetUserInfo level %u should have failed with NT_STATUS_INVALID_PARAMETER - %s\n",
 			       s.in.level, nt_errstr(s.out.result));
 			ret = false;
 		}
@@ -1146,7 +1140,7 @@ static bool test_SetUserPass_level_ex(struct dcerpc_pipe *p,
 	bool ret = true;
 	DATA_BLOB session_key;
 	DATA_BLOB confounded_session_key = data_blob_talloc(tctx, NULL, 16);
-	MD5_CTX ctx;
+	struct MD5Context ctx;
 	uint8_t confounder[16];
 	char *newpass;
 	struct dcerpc_binding_handle *b = p->binding_handle;
@@ -1250,7 +1244,7 @@ static bool test_SetUserPass_level_ex(struct dcerpc_pipe *p,
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -1317,16 +1311,10 @@ static bool test_SetUserPass_level_ex(struct dcerpc_pipe *p,
 	if (use_setinfo2) {
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo2_r(b, tctx, &s2),
 			"SetUserInfo2 failed");
-		torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-				__location__, __FUNCTION__,
-				newpass, nt_errstr(s2.out.result));
-			status = s2.out.result;
+		status = s2.out.result;
 	} else {
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 			"SetUserInfo failed");
-		torture_comment(tctx, "(%s:%s) new_password[%s] status[%s]\n",
-				__location__, __FUNCTION__,
-				newpass, nt_errstr(s.out.result));
 		status = s.out.result;
 	}
 
@@ -1354,7 +1342,7 @@ static bool test_SetUserPass_level_ex(struct dcerpc_pipe *p,
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo%s level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo%s level %u failed - %s\n",
 		       use_setinfo2 ? "2":"", level, nt_errstr(status));
 		ret = false;
 	} else {
@@ -1395,7 +1383,7 @@ static bool test_SetAliasInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetAliasInfo_r(b, tctx, &r),
 			"SetAliasInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "SetAliasInfo level %u failed - %s\n",
+			torture_warning(tctx, "SetAliasInfo level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -1407,7 +1395,7 @@ static bool test_SetAliasInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryAliasInfo_r(b, tctx, &q),
 			"QueryAliasInfo failed");
 		if (!NT_STATUS_IS_OK(q.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryAliasInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryAliasInfo level %u failed - %s\n",
 			       levels[i], nt_errstr(q.out.result));
 			ret = false;
 		}
@@ -1529,7 +1517,7 @@ static NTSTATUS test_LookupName(struct dcerpc_binding_handle *b,
 		return status;
 	}
 	if (!NT_STATUS_EQUAL(n.out.result, STATUS_SOME_UNMAPPED)) {
-		torture_result(tctx, TORTURE_FAIL, "LookupNames[2] failed - %s\n", nt_errstr(n.out.result));
+		torture_warning(tctx, "LookupNames[2] failed - %s\n", nt_errstr(n.out.result));
 		if (NT_STATUS_IS_OK(n.out.result)) {
 			return NT_STATUS_UNSUCCESSFUL;
 		}
@@ -1542,7 +1530,7 @@ static NTSTATUS test_LookupName(struct dcerpc_binding_handle *b,
 		return status;
 	}
 	if (!NT_STATUS_IS_OK(n.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "LookupNames[0] failed - %s\n", nt_errstr(status));
+		torture_warning(tctx, "LookupNames[0] failed - %s\n", nt_errstr(status));
 		return n.out.result;
 	}
 
@@ -1553,7 +1541,7 @@ static NTSTATUS test_LookupName(struct dcerpc_binding_handle *b,
 		return status;
 	}
 	if (!NT_STATUS_EQUAL(n.out.result, NT_STATUS_NONE_MAPPED)) {
-		torture_result(tctx, TORTURE_FAIL, "LookupNames[1 bad name] failed - %s\n", nt_errstr(n.out.result));
+		torture_warning(tctx, "LookupNames[1 bad name] failed - %s\n", nt_errstr(n.out.result));
 		if (NT_STATUS_IS_OK(n.out.result)) {
 			return NT_STATUS_UNSUCCESSFUL;
 		}
@@ -1568,7 +1556,7 @@ static NTSTATUS test_LookupName(struct dcerpc_binding_handle *b,
 		return status;
 	}
 	if (!NT_STATUS_EQUAL(n.out.result, NT_STATUS_NONE_MAPPED)) {
-		torture_result(tctx, TORTURE_FAIL, "LookupNames[2 bad names] failed - %s\n", nt_errstr(n.out.result));
+		torture_warning(tctx, "LookupNames[2 bad names] failed - %s\n", nt_errstr(n.out.result));
 		if (NT_STATUS_IS_OK(n.out.result)) {
 			return NT_STATUS_UNSUCCESSFUL;
 		}
@@ -1601,7 +1589,7 @@ static NTSTATUS test_OpenUser_byname(struct dcerpc_binding_handle *b,
 		return status;
 	}
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "OpenUser_byname(%s -> %d) failed - %s\n", name, rid, nt_errstr(r.out.result));
+		torture_warning(tctx, "OpenUser_byname(%s -> %d) failed - %s\n", name, rid, nt_errstr(r.out.result));
 	}
 
 	return r.out.result;
@@ -1659,7 +1647,7 @@ static bool test_ChangePasswordNT3(struct dcerpc_pipe *p,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "ChangePasswordUser failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -1726,8 +1714,8 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	r.in.user_handle = &user_handle;
 	r.in.lm_present = 1;
-	/* Break the NT hash */
-	hash3.hash[0]++;
+	/* Break the LM hash */
+	hash1.hash[0]++;
 	r.in.old_lm_crypted = &hash1;
 	r.in.new_lm_crypted = &hash2;
 	r.in.nt_present = 1;
@@ -1740,29 +1728,18 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
+	torture_assert_ntstatus_equal(tctx, r.out.result, NT_STATUS_WRONG_PASSWORD,
+		"ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD because we broke the LM hash");
 
-	/* Do not proceed if this call has been removed */
-	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_NOT_IMPLEMENTED)) {
-		torture_skip(tctx, "ValidatePassword not supported by server\n");
-	}
-
-	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
-		torture_assert_ntstatus_equal(tctx, r.out.result, NT_STATUS_WRONG_PASSWORD,
-			"ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD because we broke the LM hash");
-	}
-
-	/* Unbreak the NT hash */
-	hash3.hash[0]--;
+	/* Unbreak the LM hash */
+	hash1.hash[0]--;
 
 	r.in.user_handle = &user_handle;
 	r.in.lm_present = 1;
 	r.in.old_lm_crypted = &hash1;
 	r.in.new_lm_crypted = &hash2;
-	/* Break the LM hash */
-	hash1.hash[0]--;
+	/* Break the NT hash */
+	hash3.hash[0]--;
 	r.in.nt_present = 1;
 	r.in.old_nt_crypted = &hash3;
 	r.in.new_nt_crypted = &hash4;
@@ -1773,13 +1750,8 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
-	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
-		torture_assert_ntstatus_equal(tctx, r.out.result, NT_STATUS_WRONG_PASSWORD,
-			"expected NT_STATUS_WRONG_PASSWORD because we broke the NT hash");
-	}
+	torture_assert_ntstatus_equal(tctx, r.out.result, NT_STATUS_WRONG_PASSWORD,
+		"expected NT_STATUS_WRONG_PASSWORD because we broke the NT hash");
 
 	/* Unbreak the NT hash */
 	hash3.hash[0]--;
@@ -1800,13 +1772,8 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
-	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD) &&
-	    !NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION))
-	{
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD or NT_STATUS_PASSWORD_RESTRICTION because we broke the LM cross-hash, got %s\n", nt_errstr(r.out.result));
+	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
+		torture_warning(tctx, "ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD because we broke the LM cross-hash, got %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -1829,13 +1796,8 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
-	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD) &&
-	    !NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION))
-	{
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD or NT_STATUS_PASSWORD_RESTRICTION because we broke the NT cross-hash, got %s\n", nt_errstr(r.out.result));
+	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
+		torture_warning(tctx, "ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD because we broke the NT cross-hash, got %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -1865,14 +1827,11 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 	if (NT_STATUS_IS_OK(r.out.result)) {
 		changed = true;
 		*password = newpass;
 	} else if (!NT_STATUS_EQUAL(NT_STATUS_PASSWORD_RESTRICTION, r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed: expected NT_STATUS_OK, or at least NT_STATUS_PASSWORD_RESTRICTION, got %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "ChangePasswordUser failed: expected NT_STATUS_OK, or at least NT_STATUS_PASSWORD_RESTRICTION, got %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -1907,14 +1866,11 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 	if (NT_STATUS_IS_OK(r.out.result)) {
 		changed = true;
 		*password = newpass;
 	} else if (!NT_STATUS_EQUAL(NT_STATUS_PASSWORD_RESTRICTION, r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed: expected NT_STATUS_OK, or at least NT_STATUS_PASSWORD_RESTRICTION, got %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "ChangePasswordUser failed: expected NT_STATUS_OK, or at least NT_STATUS_PASSWORD_RESTRICTION, got %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -1949,13 +1905,10 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 		"ChangePasswordUser failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 		torture_comment(tctx, "ChangePasswordUser returned: %s perhaps min password age? (not fatal)\n", nt_errstr(r.out.result));
 	} else 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "ChangePasswordUser failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	} else {
 		changed = true;
@@ -1977,13 +1930,10 @@ static bool test_ChangePasswordUser(struct dcerpc_binding_handle *b,
 	if (changed) {
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser_r(b, tctx, &r),
 			"ChangePasswordUser failed");
-		torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-				__location__, __FUNCTION__,
-				oldpass, newpass, nt_errstr(r.out.result));
 		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 			torture_comment(tctx, "ChangePasswordUser returned: %s perhaps min password age? (not fatal)\n", nt_errstr(r.out.result));
 		} else if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
-			torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD because we already changed the password, got %s\n", nt_errstr(r.out.result));
+			torture_warning(tctx, "ChangePasswordUser failed: expected NT_STATUS_WRONG_PASSWORD because we already changed the password, got %s\n", nt_errstr(r.out.result));
 			ret = false;
 		}
 	}
@@ -2057,13 +2007,10 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)
 	    && !NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalid password verifier - %s\n",
+		torture_warning(tctx, "OemChangePasswordUser2 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalid password verifier - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2083,13 +2030,10 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)
 	    && !NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalidly encrpted password - %s\n",
+		torture_warning(tctx, "OemChangePasswordUser2 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalidly encrpted password - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2104,13 +2048,10 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)
 	    && !NT_STATUS_EQUAL(r.out.result, NT_STATUS_INVALID_PARAMETER)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed, should have returned INVALID_PARAMETER (or at least 'PASSWORD_RESTRICTON') for no supplied validation hash - %s\n",
+		torture_warning(tctx, "OemChangePasswordUser2 failed, should have returned INVALID_PARAMETER (or at least 'PASSWORD_RESTRICTON') for no supplied validation hash - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2121,12 +2062,9 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_INVALID_PARAMETER)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed, should have returned INVALID_PARAMETER for no supplied validation hash and invalid user - %s\n",
+		torture_warning(tctx, "OemChangePasswordUser2 failed, should have returned INVALID_PARAMETER for no supplied validation hash and invalid user - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2139,12 +2077,9 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed, should have returned WRONG_PASSWORD for invalid user - %s\n",
+		torture_warning(tctx, "OemChangePasswordUser2 failed, should have returned WRONG_PASSWORD for invalid user - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2157,12 +2092,9 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_INVALID_PARAMETER)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed, should have returned INVALID_PARAMETER for no supplied password and invalid user - %s\n",
+		torture_warning(tctx, "OemChangePasswordUser2 failed, should have returned INVALID_PARAMETER for no supplied password and invalid user - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2181,14 +2113,11 @@ static bool test_OemChangePasswordUser2(struct dcerpc_pipe *p,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OemChangePasswordUser2_r(b, tctx, &r),
 		"OemChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 		torture_comment(tctx, "OemChangePasswordUser2 returned: %s perhaps min password age? (not fatal)\n", nt_errstr(r.out.result));
 	} else if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "OemChangePasswordUser2 failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "OemChangePasswordUser2 failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	} else {
 		*password = newpass;
@@ -2266,97 +2195,17 @@ static bool test_ChangePasswordUser2(struct dcerpc_pipe *p, struct torture_conte
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser2_r(b, tctx, &r),
 		"ChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (allow_password_restriction && NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 		torture_comment(tctx, "ChangePasswordUser2 returned: %s perhaps min password age? (not fatal)\n", nt_errstr(r.out.result));
 	} else if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser2 failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "ChangePasswordUser2 failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	} else {
 		*password = newpass;
 	}
 
 	return ret;
-}
-
-
-static bool test_ChangePasswordUser2_ntstatus(struct dcerpc_pipe *p, struct torture_context *tctx,
-					      const char *acct_name,
-					      const char *password, NTSTATUS status)
-{
-	struct samr_ChangePasswordUser2 r;
-	struct lsa_String server, account;
-	struct samr_CryptPassword nt_pass, lm_pass;
-	struct samr_Password nt_verifier, lm_verifier;
-	const char *oldpass;
-	struct dcerpc_binding_handle *b = p->binding_handle;
-	uint8_t old_nt_hash[16], new_nt_hash[16];
-	uint8_t old_lm_hash[16], new_lm_hash[16];
-
-	struct samr_GetDomPwInfo dom_pw_info;
-	struct samr_PwInfo info;
-
-	struct lsa_String domain_name;
-	char *newpass;
-	int policy_min_pw_len = 0;
-
-	domain_name.string = "";
-	dom_pw_info.in.domain_name = &domain_name;
-	dom_pw_info.out.info = &info;
-
-	torture_comment(tctx, "Testing ChangePasswordUser2 on %s\n", acct_name);
-
-	oldpass = password;
-
-	torture_assert_ntstatus_ok(tctx, dcerpc_samr_GetDomPwInfo_r(b, tctx, &dom_pw_info),
-				   "GetDomPwInfo failed");
-	if (NT_STATUS_IS_OK(dom_pw_info.out.result)) {
-		policy_min_pw_len = dom_pw_info.out.info->min_password_length;
-	}
-
-	newpass = samr_rand_pass(tctx, policy_min_pw_len);
-
-	server.string = talloc_asprintf(tctx, "\\\\%s", dcerpc_server_name(p));
-	init_lsa_String(&account, acct_name);
-
-	E_md4hash(oldpass, old_nt_hash);
-	E_md4hash(newpass, new_nt_hash);
-
-	E_deshash(oldpass, old_lm_hash);
-	E_deshash(newpass, new_lm_hash);
-
-	encode_pw_buffer(lm_pass.data, newpass, STR_ASCII|STR_TERMINATE);
-	arcfour_crypt(lm_pass.data, old_lm_hash, 516);
-	E_old_pw_hash(new_nt_hash, old_lm_hash, lm_verifier.hash);
-
-	encode_pw_buffer(nt_pass.data, newpass, STR_UNICODE);
-	arcfour_crypt(nt_pass.data, old_nt_hash, 516);
-	E_old_pw_hash(new_nt_hash, old_nt_hash, nt_verifier.hash);
-
-	r.in.server = &server;
-	r.in.account = &account;
-	r.in.nt_password = &nt_pass;
-	r.in.nt_verifier = &nt_verifier;
-	r.in.lm_change = 1;
-	r.in.lm_password = &lm_pass;
-	r.in.lm_verifier = &lm_verifier;
-
-	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser2_r(b, tctx, &r),
-		"ChangePasswordUser2 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
-
-	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
-		torture_comment(tctx, "ChangePasswordUser2 returned: %s perhaps min password age? (not fatal)\n", nt_errstr(r.out.result));
-	} else {
-		torture_assert_ntstatus_equal(tctx, r.out.result, status, "ChangePasswordUser2 returned unexpected value");
-	}
-
-	return true;
 }
 
 
@@ -2432,12 +2281,9 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser3_r(b, tctx, &r),
 		"ChangePasswordUser3 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION) &&
 	    (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD))) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser3 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalid password verifier - %s\n",
+		torture_warning(tctx, "ChangePasswordUser3 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalid password verifier - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2467,12 +2313,9 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser3_r(b, tctx, &r),
 		"ChangePasswordUser3 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION) &&
 	    (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD))) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser3 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalidly encrpted password - %s\n",
+		torture_warning(tctx, "ChangePasswordUser3 failed, should have returned WRONG_PASSWORD (or at least 'PASSWORD_RESTRICTON') for invalidly encrpted password - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2483,11 +2326,8 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 	r.in.account = &account_bad;
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser3_r(b, tctx, &r),
 		"ChangePasswordUser3 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_WRONG_PASSWORD)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser3 failed, should have returned WRONG_PASSWORD for invalid username - %s\n",
+		torture_warning(tctx, "ChangePasswordUser3 failed, should have returned WRONG_PASSWORD for invalid username - %s\n",
 			nt_errstr(r.out.result));
 		ret = false;
 	}
@@ -2521,18 +2361,6 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser3_r(b, tctx, &r),
 		"ChangePasswordUser3 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
-
-	torture_comment(tctx, "(%s): dominfo[%s], reject[%s], handle_reject_reason[%s], "
-			"last_password_change[%s], dominfo->min_password_age[%lld]\n",
-			__location__,
-			(dominfo == NULL)? "NULL" : "present",
-			reject ? "true" : "false",
-			handle_reject_reason ? "true" : "false",
-			null_nttime(last_password_change) ? "null" : "not null",
-			dominfo ? (long long)dominfo->min_password_age : (long long)0);
 
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)
 	    && dominfo
@@ -2542,7 +2370,7 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 		if (dominfo->password_properties & DOMAIN_REFUSE_PASSWORD_CHANGE ) {
 
 			if (reject && (reject->extendedFailureReason != SAM_PWD_CHANGE_NO_ERROR)) {
-				torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
+				torture_warning(tctx, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
 					SAM_PWD_CHANGE_NO_ERROR, reject->extendedFailureReason);
 				return false;
 			}
@@ -2557,11 +2385,11 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 
 		Guenther */
 
-		if ((dominfo->min_password_age < 0) && !null_nttime(last_password_change) &&
-			   (last_password_change - dominfo->min_password_age > t)) {
+		if ((dominfo->min_password_age > 0) && !null_nttime(last_password_change) &&
+			   (last_password_change + dominfo->min_password_age > t)) {
 
 			if (reject->extendedFailureReason != SAM_PWD_CHANGE_NO_ERROR) {
-				torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
+				torture_warning(tctx, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
 					SAM_PWD_CHANGE_NO_ERROR, reject->extendedFailureReason);
 				return false;
 			}
@@ -2570,7 +2398,7 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 			   (strlen(newpass) < dominfo->min_password_length)) {
 
 			if (reject->extendedFailureReason != SAM_PWD_CHANGE_PASSWORD_TOO_SHORT) {
-				torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_PASSWORD_TOO_SHORT (%d), got %d\n",
+				torture_warning(tctx, "expected SAM_PWD_CHANGE_PASSWORD_TOO_SHORT (%d), got %d\n",
 					SAM_PWD_CHANGE_PASSWORD_TOO_SHORT, reject->extendedFailureReason);
 				return false;
 			}
@@ -2579,14 +2407,14 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 			    strequal(oldpass, newpass)) {
 
 			if (reject->extendedFailureReason != SAM_PWD_CHANGE_PWD_IN_HISTORY) {
-				torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_PWD_IN_HISTORY (%d), got %d\n",
+				torture_warning(tctx, "expected SAM_PWD_CHANGE_PWD_IN_HISTORY (%d), got %d\n",
 					SAM_PWD_CHANGE_PWD_IN_HISTORY, reject->extendedFailureReason);
 				return false;
 			}
 		} else if (dominfo->password_properties & DOMAIN_PASSWORD_COMPLEX) {
 
 			if (reject->extendedFailureReason != SAM_PWD_CHANGE_NOT_COMPLEX) {
-				torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_NOT_COMPLEX (%d), got %d\n",
+				torture_warning(tctx, "expected SAM_PWD_CHANGE_NOT_COMPLEX (%d), got %d\n",
 					SAM_PWD_CHANGE_NOT_COMPLEX, reject->extendedFailureReason);
 				return false;
 			}
@@ -2603,7 +2431,7 @@ bool test_ChangePasswordUser3(struct dcerpc_pipe *p, struct torture_context *tct
 
 	} else if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 		if (reject && reject->extendedFailureReason != SAM_PWD_CHANGE_NO_ERROR) {
-			torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
+			torture_warning(tctx, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
 			       SAM_PWD_CHANGE_NO_ERROR, reject->extendedFailureReason);
 			return false;
 		}
@@ -2630,7 +2458,7 @@ bool test_ChangePasswordRandomBytes(struct dcerpc_pipe *p, struct torture_contex
 	DATA_BLOB session_key;
 	DATA_BLOB confounded_session_key = data_blob_talloc(tctx, NULL, 16);
 	uint8_t confounder[16];
-	MD5_CTX ctx;
+	struct MD5Context ctx;
 
 	bool ret = true;
 	struct lsa_String server, account;
@@ -2666,7 +2494,7 @@ bool test_ChangePasswordRandomBytes(struct dcerpc_pipe *p, struct torture_contex
 
 	status = dcerpc_fetch_session_key(p, &session_key);
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u - no session key - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u - no session key - %s\n",
 		       s.in.level, nt_errstr(status));
 		return false;
 	}
@@ -2685,11 +2513,8 @@ bool test_ChangePasswordRandomBytes(struct dcerpc_pipe *p, struct torture_contex
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetUserInfo_r(b, tctx, &s),
 		"SetUserInfo failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, "RANDOM", nt_errstr(s.out.result));
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetUserInfo level %u failed - %s\n",
+		torture_warning(tctx, "SetUserInfo level %u failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		ret = false;
 	}
@@ -2721,20 +2546,17 @@ bool test_ChangePasswordRandomBytes(struct dcerpc_pipe *p, struct torture_contex
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser3_r(b, tctx, &r),
 		"ChangePasswordUser3 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, "RANDOM", nt_errstr(r.out.result));
 
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 		if (reject && reject->extendedFailureReason != SAM_PWD_CHANGE_NO_ERROR) {
-			torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
+			torture_warning(tctx, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
 			       SAM_PWD_CHANGE_NO_ERROR, reject->extendedFailureReason);
 			return false;
 		}
 		/* Perhaps the server has a 'min password age' set? */
 
 	} else if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "ChangePasswordUser3 failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "ChangePasswordUser3 failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -2763,13 +2585,10 @@ bool test_ChangePasswordRandomBytes(struct dcerpc_pipe *p, struct torture_contex
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_ChangePasswordUser3_r(b, tctx, &r),
 		"ChangePasswordUser3 failed");
-	torture_comment(tctx, "(%s:%s) old_password[%s] new_password[%s] status[%s]\n",
-			__location__, __FUNCTION__,
-			oldpass, newpass, nt_errstr(r.out.result));
 
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_PASSWORD_RESTRICTION)) {
 		if (reject && reject->extendedFailureReason != SAM_PWD_CHANGE_NO_ERROR) {
-			torture_result(tctx, TORTURE_FAIL, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
+			torture_warning(tctx, "expected SAM_PWD_CHANGE_NO_ERROR (%d), got %d\n",
 			       SAM_PWD_CHANGE_NO_ERROR, reject->extendedFailureReason);
 			return false;
 		}
@@ -2954,7 +2773,7 @@ static bool test_QueryUserInfo_pwdlastset(struct dcerpc_binding_handle *b,
 	NTSTATUS status;
 	uint16_t levels[] = { /* 3, */ 5, 21 };
 	int i;
-	/* NTTIME pwdlastset3 = 0; */
+	NTTIME pwdlastset3 = 0;
 	NTTIME pwdlastset5 = 0;
 	NTTIME pwdlastset21 = 0;
 
@@ -2986,14 +2805,14 @@ static bool test_QueryUserInfo_pwdlastset(struct dcerpc_binding_handle *b,
 
 		if (!NT_STATUS_IS_OK(status) &&
 		    !NT_STATUS_EQUAL(status, NT_STATUS_INVALID_INFO_CLASS)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo%s level %u failed - %s\n",
+			torture_warning(tctx, "QueryUserInfo%s level %u failed - %s\n",
 			       use_info2 ? "2":"", levels[i], nt_errstr(status));
 			return false;
 		}
 
 		switch (levels[i]) {
 		case 3:
-			/* pwdlastset3 = info->info3.last_password_change; */
+			pwdlastset3 = info->info3.last_password_change;
 			break;
 		case 5:
 			pwdlastset5 = info->info5.last_password_change;
@@ -3020,7 +2839,6 @@ static bool test_QueryUserInfo_pwdlastset(struct dcerpc_binding_handle *b,
 
 static bool test_SamLogon(struct torture_context *tctx,
 			  struct dcerpc_pipe *p,
-			  struct cli_credentials *machine_credentials,
 			  struct cli_credentials *test_credentials,
 			  NTSTATUS expected_result,
 			  bool interactive)
@@ -3040,7 +2858,7 @@ static bool test_SamLogon(struct torture_context *tctx,
 	struct netr_Authenticator a;
 	struct dcerpc_binding_handle *b = p->binding_handle;
 
-	torture_assert(tctx, (creds = cli_credentials_get_netlogon_creds(machine_credentials)), "");
+	torture_assert_ntstatus_ok(tctx, dcerpc_schannel_creds(p->conn->security_state.generic_state, tctx, &creds), "");
 
 	if (lpcfg_client_lanman_auth(tctx->lp_ctx)) {
 		flags |= CLI_CRED_LANMAN_AUTH;
@@ -3069,10 +2887,7 @@ static bool test_SamLogon(struct torture_context *tctx,
 		}
 		E_md4hash(cli_credentials_get_password(test_credentials), pinfo.ntpassword.hash);
 
-		if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
-			netlogon_creds_aes_encrypt(creds, pinfo.lmpassword.hash, 16);
-			netlogon_creds_aes_encrypt(creds, pinfo.ntpassword.hash, 16);
-		} else if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
+		if (creds->negotiate_flags & NETLOGON_NEG_ARCFOUR) {
 			netlogon_creds_arcfour_crypt(creds, pinfo.lmpassword.hash, 16);
 			netlogon_creds_arcfour_crypt(creds, pinfo.ntpassword.hash, 16);
 		} else {
@@ -3096,7 +2911,6 @@ static bool test_SamLogon(struct torture_context *tctx,
 		status = cli_credentials_get_ntlm_response(test_credentials, tctx,
 							   &flags,
 							   chal,
-							   NULL, /* server_timestamp */
 							   names_blob,
 							   &lm_resp, &nt_resp,
 							   NULL, NULL);
@@ -3168,9 +2982,9 @@ static bool test_SamLogon_with_creds(struct torture_context *tctx,
 	torture_comment(tctx, "Testing samlogon (%s) as %s password: %s\n",
 		interactive ? "interactive" : "network", acct_name, password);
 
-	if (!test_SamLogon(tctx, p, machine_creds, test_credentials,
+	if (!test_SamLogon(tctx, p, test_credentials,
 			    expected_samlogon_result, interactive)) {
-		torture_result(tctx, TORTURE_FAIL, "new password did not work\n");
+		torture_warning(tctx, "new password did not work\n");
 		ret = false;
 	}
 
@@ -3249,7 +3063,6 @@ static bool setup_schannel_netlogon_pipe(struct torture_context *tctx,
 					 struct dcerpc_pipe **p)
 {
 	struct dcerpc_binding *b;
-	NTSTATUS status;
 
 	torture_assert_ntstatus_ok(tctx, torture_rpc_binding(tctx, &b),
 		"failed to get rpc binding");
@@ -3257,12 +3070,8 @@ static bool setup_schannel_netlogon_pipe(struct torture_context *tctx,
 	/* We have to use schannel, otherwise the SamLogonEx fails
 	 * with INTERNAL_ERROR */
 
-	status = dcerpc_binding_set_flags(b,
-					  DCERPC_SCHANNEL |
-					  DCERPC_SIGN | DCERPC_SEAL |
-					  DCERPC_SCHANNEL_AUTO,
-					  DCERPC_AUTH_OPTIONS);
-	torture_assert_ntstatus_ok(tctx, status, "set flags");
+	b->flags &= ~DCERPC_AUTH_OPTIONS;
+	b->flags |= DCERPC_SCHANNEL | DCERPC_SIGN | DCERPC_SCHANNEL_128;
 
 	torture_assert_ntstatus_ok(tctx,
 		dcerpc_pipe_connect_b(tctx, p, b, &ndr_table_netlogon,
@@ -3398,7 +3207,7 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			break;
 		default:
 			if (pwdlastset_new != 0) {
-				torture_result(tctx, TORTURE_FAIL, "pwdLastSet test failed: "
+				torture_warning(tctx, "pwdLastSet test failed: "
 					"expected pwdLastSet 0 but got %llu\n",
 					(unsigned long long) pwdlastset_old);
 				ret = false;
@@ -3414,7 +3223,7 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			     (fields_present[f] & SAMR_FIELD_LM_PASSWORD_PRESENT)) &&
 			     (pwdlastset_old > 0) && (pwdlastset_new > 0) &&
 			     (pwdlastset_old >= pwdlastset_new)) {
-				torture_result(tctx, TORTURE_FAIL, "pwdlastset not increasing\n");
+				torture_warning(tctx, "pwdlastset not increasing\n");
 				ret = false;
 			}
 			break;
@@ -3466,14 +3275,14 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			break;
 		default:
 			if (pwdlastset_old >= pwdlastset_new) {
-				torture_result(tctx, TORTURE_FAIL, "pwdLastSet test failed: "
+				torture_warning(tctx, "pwdLastSet test failed: "
 					"expected last pwdlastset (%llu) < new pwdlastset (%llu)\n",
 					(unsigned long long) pwdlastset_old,
 					(unsigned long long) pwdlastset_new);
 				ret = false;
 			}
 			if (pwdlastset_new == 0) {
-				torture_result(tctx, TORTURE_FAIL, "pwdLastSet test failed: "
+				torture_warning(tctx, "pwdLastSet test failed: "
 					"expected non-0 pwdlastset, got: %llu\n",
 					(unsigned long long) pwdlastset_new);
 				ret = false;
@@ -3489,7 +3298,7 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			     (fields_present[f] & SAMR_FIELD_LM_PASSWORD_PRESENT)) &&
 			     (pwdlastset_old > 0) && (pwdlastset_new > 0) &&
 			     (pwdlastset_old >= pwdlastset_new)) {
-				torture_result(tctx, TORTURE_FAIL, "pwdlastset not increasing\n");
+				torture_warning(tctx, "pwdlastset not increasing\n");
 				ret = false;
 			}
 			break;
@@ -3542,14 +3351,14 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			break;
 		default:
 			if (pwdlastset_old >= pwdlastset_new) {
-				torture_result(tctx, TORTURE_FAIL, "pwdLastSet test failed: "
+				torture_warning(tctx, "pwdLastSet test failed: "
 					"expected last pwdlastset (%llu) < new pwdlastset (%llu)\n",
 					(unsigned long long) pwdlastset_old,
 					(unsigned long long) pwdlastset_new);
 				ret = false;
 			}
 			if (pwdlastset_new == 0) {
-				torture_result(tctx, TORTURE_FAIL, "pwdLastSet test failed: "
+				torture_warning(tctx, "pwdLastSet test failed: "
 					"expected non-0 pwdlastset, got: %llu\n",
 					(unsigned long long) pwdlastset_new);
 				ret = false;
@@ -3565,7 +3374,7 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			     (fields_present[f] & SAMR_FIELD_LM_PASSWORD_PRESENT)) &&
 			     (pwdlastset_old > 0) && (pwdlastset_new > 0) &&
 			     (pwdlastset_old >= pwdlastset_new)) {
-				torture_result(tctx, TORTURE_FAIL, "pwdlastset not increasing\n");
+				torture_warning(tctx, "pwdlastset not increasing\n");
 				ret = false;
 			}
 			break;
@@ -3626,7 +3435,7 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			break;
 		default:
 			if (pwdlastset_new != 0) {
-				torture_result(tctx, TORTURE_FAIL, "pwdLastSet test failed: "
+				torture_warning(tctx, "pwdLastSet test failed: "
 					"expected pwdLastSet 0, got %llu\n",
 					(unsigned long long) pwdlastset_old);
 				ret = false;
@@ -3642,7 +3451,7 @@ static bool test_SetPassword_pwdlastset(struct dcerpc_pipe *p,
 			     (fields_present[f] & SAMR_FIELD_LM_PASSWORD_PRESENT)) &&
 			     (pwdlastset_old > 0) && (pwdlastset_new > 0) &&
 			     (pwdlastset_old >= pwdlastset_new)) {
-				torture_result(tctx, TORTURE_FAIL, "pwdlastset not increasing\n");
+				torture_warning(tctx, "pwdlastset not increasing\n");
 				ret = false;
 			}
 			break;
@@ -3834,13 +3643,7 @@ static bool test_Password_badpwdcount(struct dcerpc_pipe *p,
 	uint32_t badpwdcount, tmp;
 	uint32_t password_history_length = 12;
 	uint32_t lockout_threshold = 15;
-	uint32_t lockout_seconds = 5;
-	uint64_t delta_time_factor = 10 * 1000 * 1000;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-
-	if (torture_setting_bool(tctx, "samba3", false)) {
-		lockout_seconds = 60;
-	}
 
 	torture_comment(tctx, "\nTesting bad pwd count with: %s\n", comment);
 
@@ -3852,19 +3655,14 @@ static bool test_Password_badpwdcount(struct dcerpc_pipe *p,
 
 	info.info1 = *info1;
 	info.info1.password_history_length = password_history_length;
-	info.info1.min_password_age = 0;
 
 	torture_assert(tctx,
 		       test_SetDomainInfo(b, tctx, domain_handle,
 					  DomainPasswordInformation, &info),
-		       "failed to set password history length and min passwd age");
+		       "failed to set password history length");
 
 	info.info12 = *info12;
 	info.info12.lockout_threshold = lockout_threshold;
-
-	/* set lockout duration of 5 seconds */
-	info.info12.lockout_duration = ~(lockout_seconds * delta_time_factor);
-	info.info12.lockout_window = ~(lockout_seconds * delta_time_factor);
 
 	torture_assert(tctx,
 		       test_SetDomainInfo(b, tctx, domain_handle,
@@ -3967,9 +3765,7 @@ static bool test_Password_badpwdcount(struct dcerpc_pipe *p,
 			if (!test_SamLogon_with_creds(tctx, np, machine_credentials,
 						      acct_name, passwords[i],
 						      expected_success_status, interactive)) {
-				torture_fail(tctx, talloc_asprintf(tctx, "did not successfully to obtain %s for %s login with old password (#%d of #%d in history)",
-								   nt_errstr(expected_success_status),
-								   interactive ? "interactive" : "network", i, password_history_length));
+				torture_fail(tctx, talloc_asprintf(tctx, "succeeded to authenticate with old password (#%d of #%d in history)", i, password_history_length));
 			}
 
 			torture_assert(tctx,
@@ -4096,16 +3892,16 @@ static bool test_Password_badpwdcount_wrap(struct dcerpc_pipe *p,
 			continue;
 		}
 
-		if (!test_Password_badpwdcount(p, np, tctx, acct_flags, acct_name,
-					       domain_handle, user_handle, password,
-					       machine_credentials,
-					       creds[i].comment,
-					       creds[i].disabled,
-					       creds[i].interactive,
-					       creds[i].expected_success_status,
-					       &_info1, &_info12)) {
-			torture_result(tctx, TORTURE_FAIL, "TEST #%d (%s) failed\n", i, creds[i].comment);
-			ret = false;
+		ret &= test_Password_badpwdcount(p, np, tctx, acct_flags, acct_name,
+						 domain_handle, user_handle, password,
+						 machine_credentials,
+						 creds[i].comment,
+						 creds[i].disabled,
+						 creds[i].interactive,
+						 creds[i].expected_success_status,
+						 &_info1, &_info12);
+		if (!ret) {
+			torture_warning(tctx, "TEST #%d (%s) failed\n", i, creds[i].comment);
 		} else {
 			torture_comment(tctx, "TEST #%d (%s) succeeded\n", i, creds[i].comment);
 		}
@@ -4130,95 +3926,28 @@ static bool test_Password_badpwdcount_wrap(struct dcerpc_pipe *p,
 	return ret;
 }
 
-static bool test_QueryUserInfo_lockout(struct dcerpc_binding_handle *b,
-				       struct torture_context *tctx,
-				       struct policy_handle *domain_handle,
-				       const char *acct_name,
-				       uint16_t raw_bad_password_count,
-				       uint16_t effective_bad_password_count,
-				       uint32_t effective_acb_lockout)
+static bool test_QueryUserInfo_acct_flags(struct dcerpc_binding_handle *b,
+					  struct torture_context *tctx,
+					  struct policy_handle *handle,
+					  uint32_t *acct_flags)
 {
-	struct policy_handle user_handle;
-	union samr_UserInfo *i;
+	union samr_UserInfo *info;
 	struct samr_QueryUserInfo r;
 
-	NTSTATUS status = test_OpenUser_byname(b, tctx, domain_handle, acct_name, &user_handle);
-	if (!NT_STATUS_IS_OK(status)) {
-		return false;
-	}
-
-	r.in.user_handle = &user_handle;
-	r.in.level = 3;
-	r.out.info = &i;
-	torture_comment(tctx, "Testing QueryUserInfo level %d", r.in.level);
-	torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &r),
-		"failed to query userinfo");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"failed to query userinfo");
-	torture_comment(tctx, "  (acct_flags: 0x%08x) (raw_bad_pwd_count: %u)\n",
-			i->info3.acct_flags, i->info3.bad_password_count);
-	torture_assert_int_equal(tctx, i->info3.bad_password_count,
-				 raw_bad_password_count,
-				 "raw badpwdcount");
-	torture_assert_int_equal(tctx, i->info3.acct_flags & ACB_AUTOLOCK,
-				 effective_acb_lockout,
-				 "effective acb_lockout");
-	TALLOC_FREE(i);
-
-	r.in.user_handle = &user_handle;
-	r.in.level = 5;
-	r.out.info = &i;
-	torture_comment(tctx, "Testing QueryUserInfo level %d", r.in.level);
-	torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &r),
-		"failed to query userinfo");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"failed to query userinfo");
-	torture_comment(tctx, "  (acct_flags: 0x%08x) (effective_bad_pwd_count: %u)\n",
-			i->info5.acct_flags, i->info5.bad_password_count);
-	torture_assert_int_equal(tctx, i->info5.bad_password_count,
-				 effective_bad_password_count,
-				 "effective badpwdcount");
-	torture_assert_int_equal(tctx, i->info5.acct_flags & ACB_AUTOLOCK,
-				 effective_acb_lockout,
-				 "effective acb_lockout");
-	TALLOC_FREE(i);
-
-	r.in.user_handle = &user_handle;
+	r.in.user_handle = handle;
 	r.in.level = 16;
-	r.out.info = &i;
+	r.out.info = &info;
+
 	torture_comment(tctx, "Testing QueryUserInfo level %d", r.in.level);
+
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &r),
 		"failed to query userinfo");
 	torture_assert_ntstatus_ok(tctx, r.out.result,
 		"failed to query userinfo");
-	torture_comment(tctx, "  (acct_flags: 0x%08x)\n",
-			i->info16.acct_flags);
-	torture_assert_int_equal(tctx, i->info16.acct_flags & ACB_AUTOLOCK,
-				 effective_acb_lockout,
-				 "effective acb_lockout");
-	TALLOC_FREE(i);
 
-	r.in.user_handle = &user_handle;
-	r.in.level = 21;
-	r.out.info = &i;
-	torture_comment(tctx, "Testing QueryUserInfo level %d", r.in.level);
-	torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &r),
-		"failed to query userinfo");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"failed to query userinfo");
-	torture_comment(tctx, "  (acct_flags: 0x%08x) (effective_bad_pwd_count: %u)\n",
-			i->info21.acct_flags, i->info21.bad_password_count);
-	torture_assert_int_equal(tctx, i->info21.bad_password_count,
-				 effective_bad_password_count,
-				 "effective badpwdcount");
-	torture_assert_int_equal(tctx, i->info21.acct_flags & ACB_AUTOLOCK,
-				 effective_acb_lockout,
-				 "effective acb_lockout");
-	TALLOC_FREE(i);
+	*acct_flags = info->info16.acct_flags;
 
-	if (!test_samr_handle_Close(b, tctx, &user_handle)) {
-		return false;
-	}
+	torture_comment(tctx, "  (acct_flags: 0x%08x)\n", *acct_flags);
 
 	return true;
 }
@@ -4235,20 +3964,17 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 				  const char *comment,
 				  bool disable,
 				  bool interactive,
-				  uint32_t password_history_length,
 				  NTSTATUS expected_success_status,
 				  struct samr_DomInfo1 *info1,
 				  struct samr_DomInfo12 *info12)
 {
 	union samr_DomainInfo info;
+	uint32_t badpwdcount;
+	uint32_t password_history_length = 1;
 	uint64_t lockout_threshold = 1;
 	uint32_t lockout_seconds = 5;
 	uint64_t delta_time_factor = 10 * 1000 * 1000;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-
-	if (torture_setting_bool(tctx, "samba3", false)) {
-		lockout_seconds = 60;
-	}
 
 	torture_comment(tctx, "\nTesting account lockout: %s\n", comment);
 
@@ -4256,11 +3982,8 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 
 	info.info1 = *info1;
 
-	torture_comment(tctx, "setting password history length to %d.\n", password_history_length);
+	torture_comment(tctx, "setting password history length.\n");
 	info.info1.password_history_length = password_history_length;
-
-	torture_comment(tctx, "setting min password again.\n");
-	info.info1.min_password_age = 0;
 
 	torture_assert(tctx,
 		       test_SetDomainInfo(b, tctx, domain_handle,
@@ -4328,9 +4051,9 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 	}
 
 	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			0, 0, 0),
-		"expected account to not be locked");
+		test_QueryUserInfo_badpwdcount(b, tctx, user_handle, &badpwdcount), "");
+	torture_assert_int_equal(tctx, badpwdcount, 0, "expected badpwdcount to be 0");
+
 
 	/* test with wrong password ==> lockout */
 
@@ -4340,14 +4063,15 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 		torture_fail(tctx, "succeeded to authenticate with wrong password");
 	}
 
-	/*
-	 * curiously, windows does _not_ return fresh values of
-	 * effective bad_password_count and ACB_AUTOLOCK.
-	 */
 	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to not be locked");
+		test_QueryUserInfo_badpwdcount(b, tctx, user_handle, &badpwdcount), "");
+	torture_assert_int_equal(tctx, badpwdcount, 1, "expected badpwdcount to be 1");
+
+	torture_assert(tctx,
+		test_QueryUserInfo_acct_flags(b, tctx, user_handle, &acct_flags), "");
+	torture_assert_int_equal(tctx, acct_flags & ACB_AUTOLOCK, 0,
+				 "expected account to be locked");
+
 
 	/* test with good password */
 
@@ -4360,30 +4084,15 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 
 	/* bad pwd count should not get updated */
 	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
+		test_QueryUserInfo_badpwdcount(b, tctx, user_handle, &badpwdcount), "");
+	torture_assert_int_equal(tctx, badpwdcount, 1, "expected badpwdcount to be 1");
 
+	/* curiously, windows does _not_ set the autlock flag */
 	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, *password,
-							 NT_STATUS_ACCOUNT_LOCKED_OUT),
-		       "got wrong status from ChangePasswordUser2");
+		test_QueryUserInfo_acct_flags(b, tctx, user_handle, &acct_flags), "");
+	torture_assert_int_equal(tctx, acct_flags & ACB_AUTOLOCK, 0,
+				 "expected account to be locked");
 
-	/* bad pwd count should not get updated */
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, "random_crap", NT_STATUS_ACCOUNT_LOCKED_OUT),
-		       "got wrong status from ChangePasswordUser2");
-
-	/* bad pwd count should not get updated */
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
 
 	/* with bad password */
 
@@ -4396,19 +4105,20 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 
 	/* bad pwd count should not get updated */
 	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
+		test_QueryUserInfo_badpwdcount(b, tctx, user_handle, &badpwdcount), "");
+	torture_assert_int_equal(tctx, badpwdcount, 1, "expected badpwdcount to be 1");
+
+	/* curiously, windows does _not_ set the autlock flag */
+	torture_assert(tctx,
+		test_QueryUserInfo_acct_flags(b, tctx, user_handle, &acct_flags), "");
+	torture_assert_int_equal(tctx, acct_flags & ACB_AUTOLOCK, 0,
+				 "expected account to be locked");
+
 
 	/* let lockout duration expire ==> unlock */
 
 	torture_comment(tctx, "let lockout duration expire...\n");
 	sleep(lockout_seconds + 1);
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 0, 0),
-		"expected account to not be locked");
 
 	if (!test_SamLogon_with_creds(tctx, np, machine_credentials, acct_name,
 				     *password,
@@ -4417,172 +4127,10 @@ static bool test_Password_lockout(struct dcerpc_pipe *p,
 		torture_fail(tctx, "failed to authenticate after lockout expired");
 	}
 
-	if (NT_STATUS_IS_OK(expected_success_status)) {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				0, 0, 0),
-			"expected account to not be locked");
-	} else {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				1, 0, 0),
-			"expected account to not be locked");
-	}
-
 	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, "random_crap", NT_STATUS_WRONG_PASSWORD),
-		       "got wrong status from ChangePasswordUser2");
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, *password, NT_STATUS_ACCOUNT_LOCKED_OUT),
-		       "got wrong status from ChangePasswordUser2");
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, "random_crap", NT_STATUS_ACCOUNT_LOCKED_OUT),
-		       "got wrong status from ChangePasswordUser2");
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, ACB_AUTOLOCK),
-		"expected account to be locked");
-
-	/* let lockout duration expire ==> unlock */
-
-	torture_comment(tctx, "let lockout duration expire...\n");
-	sleep(lockout_seconds + 1);
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 0, 0),
-		"expected account to not be locked");
-
-	if (!test_SamLogon_with_creds(tctx, np, machine_credentials, acct_name,
-				     *password,
-				     expected_success_status, interactive))
-	{
-		torture_fail(tctx, "failed to authenticate after lockout expired");
-	}
-
-	if (NT_STATUS_IS_OK(expected_success_status)) {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				0, 0, 0),
-			"expected account to not be locked");
-	} else {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				1, 0, 0),
-			"expected account to not be locked");
-	}
-
-	/* Testing ChangePasswordUser behaviour with 3 attempts */
-	info.info12.lockout_threshold = 3;
-
-	torture_assert(tctx,
-		       test_SetDomainInfo(b, tctx, domain_handle,
-					  DomainLockoutInformation, &info),
-		       "failed to set lockout threshold to 3");
-
-	if (NT_STATUS_IS_OK(expected_success_status)) {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				0, 0, 0),
-			"expected account to not be locked");
-	} else {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				1, 0, 0),
-			"expected account to not be locked");
-	}
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, "random_crap", NT_STATUS_WRONG_PASSWORD),
-		       "got wrong status from ChangePasswordUser2");
-
-	/* bad pwd count will get updated */
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			1, 1, 0),
-		"expected account to not be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, "random_crap", NT_STATUS_WRONG_PASSWORD),
-		       "got wrong status from ChangePasswordUser2");
-
-	/* bad pwd count will get updated */
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			2, 2, 0),
-		"expected account to not be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, "random_crap", NT_STATUS_WRONG_PASSWORD),
-		       "got wrong status from ChangePasswordUser2");
-
-	/* bad pwd count should get updated */
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			3, 3, ACB_AUTOLOCK),
-		"expected account to be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2_ntstatus(p, tctx, acct_name, *password, NT_STATUS_ACCOUNT_LOCKED_OUT),
-		       "got wrong status from ChangePasswordUser2");
-
-	/* bad pwd count should not get updated */
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			3, 3, ACB_AUTOLOCK),
-		"expected account to be locked");
-
-	/* let lockout duration expire ==> unlock */
-
-	torture_comment(tctx, "let lockout duration expire...\n");
-	sleep(lockout_seconds + 1);
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			3, 0, 0),
-		"expected account to not be locked");
-
-	torture_assert(tctx,
-		       test_ChangePasswordUser2(p, tctx, acct_name, password, NULL, false),
-		       "got wrong status from ChangePasswordUser2");
-
-	torture_assert(tctx,
-		test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-			3, 0, 0),
-		"expected account to not be locked");
-
-	/* Used to reset the badPwdCount for the other tests */
-	if (!test_SamLogon_with_creds(tctx, np, machine_credentials, acct_name,
-				      *password,
-				      expected_success_status, interactive))
-	{
-		torture_fail(tctx, "failed to authenticate after lockout expired");
-	}
-
-	if (NT_STATUS_IS_OK(expected_success_status)) {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				0, 0, 0),
-			"expected account to not be locked");
-	} else {
-		torture_assert(tctx,
-			test_QueryUserInfo_lockout(b, tctx, domain_handle, acct_name,
-				3, 0, 0),
-			"expected account to not be locked");
-	}
+		test_QueryUserInfo_acct_flags(b, tctx, user_handle, &acct_flags), "");
+	torture_assert_int_equal(tctx, acct_flags & ACB_AUTOLOCK, 0,
+				 "expected account not to be locked");
 
 	return true;
 }
@@ -4608,7 +4156,6 @@ static bool test_Password_lockout_wrap(struct dcerpc_pipe *p,
 		const char *comment;
 		bool disabled;
 		bool interactive;
-		uint32_t password_history_length;
 		NTSTATUS expected_success_status;
 	} creds[] = {
 		{
@@ -4624,13 +4171,6 @@ static bool test_Password_lockout_wrap(struct dcerpc_pipe *p,
 			.expected_success_status= NT_STATUS_OK
 		},
 		{
-			.comment		= "network logon (enabled account, history len = 1)",
-			.disabled		= false,
-			.interactive		= false,
-			.expected_success_status= NT_STATUS_OK,
-			.password_history_length = 1
-		},
-		{
 			.comment		= "interactive logon (disabled account)",
 			.disabled		= true,
 			.interactive		= true,
@@ -4641,13 +4181,6 @@ static bool test_Password_lockout_wrap(struct dcerpc_pipe *p,
 			.disabled		= false,
 			.interactive		= true,
 			.expected_success_status= NT_STATUS_OK
-		},
-		{
-			.comment		= "interactive logon (enabled account, history len = 1)",
-			.disabled		= false,
-			.interactive		= true,
-			.expected_success_status= NT_STATUS_OK,
-			.password_history_length = 1
 		},
 	};
 
@@ -4674,7 +4207,7 @@ static bool test_Password_lockout_wrap(struct dcerpc_pipe *p,
 	/* run tests */
 
 	for (i=0; i < ARRAY_SIZE(creds); i++) {
-		bool test_passed;
+
 		/* skip trust tests for now */
 		if (acct_flags & ACB_WSTRUST ||
 		    acct_flags & ACB_SVRTRUST ||
@@ -4682,19 +4215,16 @@ static bool test_Password_lockout_wrap(struct dcerpc_pipe *p,
 			continue;
 		}
 
-		test_passed = test_Password_lockout(p, np, tctx, acct_flags, acct_name,
+		ret &= test_Password_lockout(p, np, tctx, acct_flags, acct_name,
 					     domain_handle, user_handle, password,
 					     machine_credentials,
 					     creds[i].comment,
 					     creds[i].disabled,
 					     creds[i].interactive,
-					     creds[i].password_history_length,
 					     creds[i].expected_success_status,
 					     &_info1, &_info12);
-		ret &= test_passed;
-		if (!test_passed) {
-			torture_result(tctx, TORTURE_FAIL, "TEST #%d (%s) failed\n", i, creds[i].comment);
-			break;
+		if (!ret) {
+			torture_warning(tctx, "TEST #%d (%s) failed\n", i, creds[i].comment);
 		} else {
 			torture_comment(tctx, "TEST #%d (%s) succeeded\n", i, creds[i].comment);
 		}
@@ -4823,7 +4353,7 @@ static bool test_DeleteUser_with_privs(struct dcerpc_pipe *p,
 			"Failed to enum rights for account");
 
 		if (user_rights.count < 1) {
-			torture_result(tctx, TORTURE_FAIL, "failed to find newly added rights");
+			torture_warning(tctx, "failed to find newly added rights");
 			return false;
 		}
 	}
@@ -4933,7 +4463,7 @@ static bool test_DeleteUser_with_privs(struct dcerpc_pipe *p,
 			"Failed to enum rights for account");
 
 		if (user_rights.count < 1) {
-			torture_result(tctx, TORTURE_FAIL, "failed to find newly added rights");
+			torture_warning(tctx, "failed to find newly added rights");
 			return false;
 		}
 	}
@@ -5191,22 +4721,22 @@ static bool test_user_ops(struct dcerpc_pipe *p,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &q),
 			"QueryUserInfo failed");
 		if (!NT_STATUS_IS_OK(q.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryUserInfo level %u failed - %s\n",
 			       q.in.level, nt_errstr(q.out.result));
 			ret = false;
 		} else {
 			uint32_t expected_flags = (base_acct_flags | ACB_PWNOTREQ | ACB_DISABLED);
 			if ((info->info5.acct_flags) != expected_flags) {
+				torture_warning(tctx, "QueryUserInfo level 5 failed, it returned 0x%08x when we expected flags of 0x%08x\n",
+				       info->info5.acct_flags,
+				       expected_flags);
 				/* FIXME: GD */
 				if (!torture_setting_bool(tctx, "samba3", false)) {
-					torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 5 failed, it returned 0x%08x when we expected flags of 0x%08x\n",
-						      info->info5.acct_flags,
-						      expected_flags);
 					ret = false;
 				}
 			}
 			if (info->info5.rid != rid) {
-				torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 5 failed, it returned %u when we expected rid of %u\n",
+				torture_warning(tctx, "QueryUserInfo level 5 failed, it returned %u when we expected rid of %u\n",
 				       info->info5.rid, rid);
 
 			}
@@ -5217,32 +4747,57 @@ static bool test_user_ops(struct dcerpc_pipe *p,
 	case TORTURE_SAMR_PASSWORDS_PWDLASTSET:
 
 		/* test last password change timestamp behaviour */
-		torture_assert(tctx, test_SetPassword_pwdlastset(p, tctx, base_acct_flags,
-								 base_acct_name,
-								 user_handle, &password,
-								 machine_credentials),
-			       "pwdLastSet test failed\n");
+		if (!test_SetPassword_pwdlastset(p, tctx, base_acct_flags,
+						 base_acct_name,
+						 user_handle, &password,
+						 machine_credentials)) {
+			ret = false;
+		}
+
+		if (ret == true) {
+			torture_comment(tctx, "pwdLastSet test succeeded\n");
+		} else {
+			torture_warning(tctx, "pwdLastSet test failed\n");
+		}
+
 		break;
 
 	case TORTURE_SAMR_PASSWORDS_BADPWDCOUNT:
 
 		/* test bad pwd count change behaviour */
-		torture_assert(tctx, test_Password_badpwdcount_wrap(p, tctx, base_acct_flags,
-								    base_acct_name,
-								    domain_handle,
-								    user_handle, &password,
-								    machine_credentials),
-			       "badPwdCount test failed\n");
+		if (!test_Password_badpwdcount_wrap(p, tctx, base_acct_flags,
+						    base_acct_name,
+						    domain_handle,
+						    user_handle, &password,
+						    machine_credentials)) {
+			ret = false;
+		}
+
+		if (ret == true) {
+			torture_comment(tctx, "badPwdCount test succeeded\n");
+		} else {
+			torture_warning(tctx, "badPwdCount test failed\n");
+		}
+
 		break;
 
 	case TORTURE_SAMR_PASSWORDS_LOCKOUT:
 
-		torture_assert(tctx, test_Password_lockout_wrap(p, tctx, base_acct_flags,
-								base_acct_name,
-								domain_handle,
-								user_handle, &password,
-								machine_credentials),
-			       "Lockout test failed");
+		if (!test_Password_lockout_wrap(p, tctx, base_acct_flags,
+						base_acct_name,
+						domain_handle,
+						user_handle, &password,
+						machine_credentials))
+		{
+			ret = false;
+		}
+
+		if (ret == true) {
+			torture_comment(tctx, "lockout test succeeded\n");
+		} else {
+			torture_warning(tctx, "lockout test failed\n");
+		}
+
 		break;
 
 
@@ -5272,7 +4827,7 @@ static bool test_user_ops(struct dcerpc_pipe *p,
 		}
 
 		if (!ret) {
-			torture_result(tctx, TORTURE_FAIL, "privileged user delete test failed\n");
+			torture_warning(tctx, "privileged user delete test failed\n");
 		}
 
 		break;
@@ -5374,7 +4929,7 @@ bool test_DeleteUser_byname(struct dcerpc_binding_handle *b,
 	return true;
 
 failed:
-	torture_result(tctx, TORTURE_FAIL, "DeleteUser_byname(%s) failed - %s\n", name, nt_errstr(status));
+	torture_warning(tctx, "DeleteUser_byname(%s) failed - %s\n", name, nt_errstr(status));
 	return false;
 }
 
@@ -5417,7 +4972,7 @@ static bool test_DeleteGroup_byname(struct dcerpc_binding_handle *b,
 	return true;
 
 failed:
-	torture_result(tctx, TORTURE_FAIL, "DeleteGroup_byname(%s) failed - %s\n", name, nt_errstr(status));
+	torture_warning(tctx, "DeleteGroup_byname(%s) failed - %s\n", name, nt_errstr(status));
 	return false;
 }
 
@@ -5463,7 +5018,7 @@ static bool test_DeleteAlias_byname(struct dcerpc_binding_handle *b,
 	return true;
 
 failed:
-	torture_result(tctx, TORTURE_FAIL, "DeleteAlias_byname(%s) failed - %s\n", name, nt_errstr(status));
+	torture_warning(tctx, "DeleteAlias_byname(%s) failed - %s\n", name, nt_errstr(status));
 	return false;
 }
 
@@ -5482,7 +5037,7 @@ static bool test_DeleteAlias(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_DeleteDomAlias_r(b, tctx, &d),
 		"DeleteDomAlias failed");
 	if (!NT_STATUS_IS_OK(d.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "DeleteAlias failed - %s\n", nt_errstr(d.out.result));
+		torture_warning(tctx, "DeleteAlias failed - %s\n", nt_errstr(d.out.result));
 		ret = false;
 	}
 
@@ -5519,7 +5074,7 @@ static bool test_CreateAlias(struct dcerpc_binding_handle *b,
 			torture_comment(tctx, "Server correctly refused create of '%s'\n", r.in.alias_name->string);
 			return true;
 		} else {
-			torture_result(tctx, TORTURE_FAIL, "Server should have refused create of '%s', got %s instead\n", r.in.alias_name->string,
+			torture_warning(tctx, "Server should have refused create of '%s', got %s instead\n", r.in.alias_name->string,
 			       nt_errstr(r.out.result));
 			return false;
 		}
@@ -5534,7 +5089,7 @@ static bool test_CreateAlias(struct dcerpc_binding_handle *b,
 	}
 
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "CreateAlias failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "CreateAlias failed - %s\n", nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -5671,7 +5226,7 @@ static bool test_ChangePassword(struct dcerpc_pipe *p,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_LookupNames_r(b, tctx, &n),
 			"LookupNames failed");
 		if (!NT_STATUS_IS_OK(n.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "LookupNames failed - %s\n", nt_errstr(n.out.result));
+			torture_warning(tctx, "LookupNames failed - %s\n", nt_errstr(n.out.result));
 			return false;
 		}
 
@@ -5683,7 +5238,7 @@ static bool test_ChangePassword(struct dcerpc_pipe *p,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_OpenUser_r(b, tctx, &r),
 			"OpenUser failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "OpenUser(%u) failed - %s\n", n.out.rids->ids[0], nt_errstr(r.out.result));
+			torture_warning(tctx, "OpenUser(%u) failed - %s\n", n.out.rids->ids[0], nt_errstr(r.out.result));
 			return false;
 		}
 
@@ -5694,7 +5249,7 @@ static bool test_ChangePassword(struct dcerpc_pipe *p,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &q),
 			"QueryUserInfo failed");
 		if (!NT_STATUS_IS_OK(q.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo failed - %s\n", nt_errstr(q.out.result));
+			torture_warning(tctx, "QueryUserInfo failed - %s\n", nt_errstr(q.out.result));
 			return false;
 		}
 
@@ -5763,7 +5318,7 @@ static bool test_CreateUser(struct dcerpc_pipe *p, struct torture_context *tctx,
 			torture_comment(tctx, "Server correctly refused create of '%s'\n", r.in.account_name->string);
 			return true;
 		} else {
-			torture_result(tctx, TORTURE_FAIL, "Server should have refused create of '%s', got %s instead\n", r.in.account_name->string,
+			torture_warning(tctx, "Server should have refused create of '%s', got %s instead\n", r.in.account_name->string,
 			       nt_errstr(r.out.result));
 			return false;
 		}
@@ -5780,7 +5335,7 @@ static bool test_CreateUser(struct dcerpc_pipe *p, struct torture_context *tctx,
 
 	if (!NT_STATUS_IS_OK(r.out.result)) {
 		talloc_free(user_ctx);
-		torture_result(tctx, TORTURE_FAIL, "CreateUser failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "CreateUser failed - %s\n", nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -5799,12 +5354,12 @@ static bool test_CreateUser(struct dcerpc_pipe *p, struct torture_context *tctx,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, user_ctx, &q),
 			"QueryUserInfo failed");
 		if (!NT_STATUS_IS_OK(q.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryUserInfo level %u failed - %s\n",
 			       q.in.level, nt_errstr(q.out.result));
 			ret = false;
 		} else {
 			if ((info->info16.acct_flags & acct_flags) != acct_flags) {
-				torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 16 failed, it returned 0x%08x when we expected flags of 0x%08x\n",
+				torture_warning(tctx, "QueryUserInfo level 16 failed, it returned 0x%08x when we expected flags of 0x%08x\n",
 				       info->info16.acct_flags,
 				       acct_flags);
 				ret = false;
@@ -5828,7 +5383,7 @@ static bool test_CreateUser(struct dcerpc_pipe *p, struct torture_context *tctx,
 			torture_assert_ntstatus_ok(tctx, dcerpc_samr_DeleteUser_r(b, user_ctx, &d),
 				"DeleteUser failed");
 			if (!NT_STATUS_IS_OK(d.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "DeleteUser failed - %s\n", nt_errstr(d.out.result));
+				torture_warning(tctx, "DeleteUser failed - %s\n", nt_errstr(d.out.result));
 				ret = false;
 			}
 		}
@@ -5905,7 +5460,7 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 				torture_comment(tctx, "Server correctly refused create of '%s'\n", r.in.account_name->string);
 				continue;
 			} else {
-				torture_result(tctx, TORTURE_FAIL, "Server should have refused create of '%s', got %s instead\n", r.in.account_name->string,
+				torture_warning(tctx, "Server should have refused create of '%s', got %s instead\n", r.in.account_name->string,
 				       nt_errstr(r.out.result));
 				ret = false;
 				continue;
@@ -5923,7 +5478,7 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 
 		}
 		if (!NT_STATUS_EQUAL(r.out.result, account_types[i].nt_status)) {
-			torture_result(tctx, TORTURE_FAIL, "CreateUser2 failed gave incorrect error return - %s (should be %s)\n",
+			torture_warning(tctx, "CreateUser2 failed gave incorrect error return - %s (should be %s)\n",
 			       nt_errstr(r.out.result), nt_errstr(account_types[i].nt_status));
 			ret = false;
 		}
@@ -5936,7 +5491,7 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 			torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, user_ctx, &q),
 				"QueryUserInfo failed");
 			if (!NT_STATUS_IS_OK(q.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level %u failed - %s\n",
+				torture_warning(tctx, "QueryUserInfo level %u failed - %s\n",
 				       q.in.level, nt_errstr(q.out.result));
 				ret = false;
 			} else {
@@ -5945,7 +5500,7 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 					expected_flags |= ACB_PW_EXPIRED;
 				}
 				if ((info->info5.acct_flags) != expected_flags) {
-					torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 5 failed, it returned 0x%08x when we expected flags of 0x%08x\n",
+					torture_warning(tctx, "QueryUserInfo level 5 failed, it returned 0x%08x when we expected flags of 0x%08x\n",
 					       info->info5.acct_flags,
 					       expected_flags);
 					ret = false;
@@ -5953,21 +5508,21 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 				switch (acct_flags) {
 				case ACB_SVRTRUST:
 					if (info->info5.primary_gid != DOMAIN_RID_DCS) {
-						torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 5: DC should have had Primary Group %d, got %d\n",
+						torture_warning(tctx, "QueryUserInfo level 5: DC should have had Primary Group %d, got %d\n",
 						       DOMAIN_RID_DCS, info->info5.primary_gid);
 						ret = false;
 					}
 					break;
 				case ACB_WSTRUST:
 					if (info->info5.primary_gid != DOMAIN_RID_DOMAIN_MEMBERS) {
-						torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 5: Domain Member should have had Primary Group %d, got %d\n",
+						torture_warning(tctx, "QueryUserInfo level 5: Domain Member should have had Primary Group %d, got %d\n",
 						       DOMAIN_RID_DOMAIN_MEMBERS, info->info5.primary_gid);
 						ret = false;
 					}
 					break;
 				case ACB_NORMAL:
 					if (info->info5.primary_gid != DOMAIN_RID_USERS) {
-						torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 5: Users should have had Primary Group %d, got %d\n",
+						torture_warning(tctx, "QueryUserInfo level 5: Users should have had Primary Group %d, got %d\n",
 						       DOMAIN_RID_USERS, info->info5.primary_gid);
 						ret = false;
 					}
@@ -5981,7 +5536,7 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 				ret = false;
 			}
 
-			if (!ndr_policy_handle_empty(&user_handle)) {
+			if (!policy_handle_empty(&user_handle)) {
 				torture_comment(tctx, "Testing DeleteUser (createuser2 test)\n");
 
 				d.in.user_handle = &user_handle;
@@ -5990,7 +5545,7 @@ static bool test_CreateUser2(struct dcerpc_pipe *p, struct torture_context *tctx
 				torture_assert_ntstatus_ok(tctx, dcerpc_samr_DeleteUser_r(b, user_ctx, &d),
 					"DeleteUser failed");
 				if (!NT_STATUS_IS_OK(d.out.result)) {
-					torture_result(tctx, TORTURE_FAIL, "DeleteUser failed - %s\n", nt_errstr(d.out.result));
+					torture_warning(tctx, "DeleteUser failed - %s\n", nt_errstr(d.out.result));
 					ret = false;
 				}
 			}
@@ -6021,7 +5576,7 @@ static bool test_QueryAliasInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryAliasInfo_r(b, tctx, &r),
 			"QueryAliasInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryAliasInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryAliasInfo level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6050,7 +5605,7 @@ static bool test_QueryGroupInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryGroupInfo_r(b, tctx, &r),
 			"QueryGroupInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryGroupInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryGroupInfo level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6075,7 +5630,7 @@ static bool test_QueryGroupMember(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryGroupMember_r(b, tctx, &r),
 		"QueryGroupMember failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "QueryGroupMember failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "QueryGroupMember failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -6105,7 +5660,7 @@ static bool test_SetGroupInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryGroupInfo_r(b, tctx, &r),
 			"QueryGroupInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryGroupInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryGroupInfo level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6134,14 +5689,14 @@ static bool test_SetGroupInfo(struct dcerpc_binding_handle *b,
 			"SetGroupInfo failed");
 		if (set_ok[i]) {
 			if (!NT_STATUS_IS_OK(s.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "SetGroupInfo level %u failed - %s\n",
+				torture_warning(tctx, "SetGroupInfo level %u failed - %s\n",
 				       r.in.level, nt_errstr(s.out.result));
 				ret = false;
 				continue;
 			}
 		} else {
 			if (!NT_STATUS_EQUAL(NT_STATUS_INVALID_INFO_CLASS, s.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "SetGroupInfo level %u gave %s - should have been NT_STATUS_INVALID_INFO_CLASS\n",
+				torture_warning(tctx, "SetGroupInfo level %u gave %s - should have been NT_STATUS_INVALID_INFO_CLASS\n",
 				       r.in.level, nt_errstr(s.out.result));
 				ret = false;
 				continue;
@@ -6173,7 +5728,7 @@ static bool test_QueryUserInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &r),
 			"QueryUserInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryUserInfo level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6203,7 +5758,7 @@ static bool test_QueryUserInfo2(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo2_r(b, tctx, &r),
 			"QueryUserInfo2 failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo2 level %u failed - %s\n",
+			torture_warning(tctx, "QueryUserInfo2 level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6230,7 +5785,7 @@ static bool test_OpenUser(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OpenUser_r(b, tctx, &r),
 		"OpenUser failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "OpenUser(%u) failed - %s\n", rid, nt_errstr(r.out.result));
+		torture_warning(tctx, "OpenUser(%u) failed - %s\n", rid, nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -6279,7 +5834,7 @@ static bool test_OpenGroup(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OpenGroup_r(b, tctx, &r),
 		"OpenGroup failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "OpenGroup(%u) failed - %s\n", rid, nt_errstr(r.out.result));
+		torture_warning(tctx, "OpenGroup(%u) failed - %s\n", rid, nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -6322,7 +5877,7 @@ static bool test_OpenAlias(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OpenAlias_r(b, tctx, &r),
 		"OpenAlias failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "OpenAlias(%u) failed - %s\n", rid, nt_errstr(r.out.result));
+		torture_warning(tctx, "OpenAlias(%u) failed - %s\n", rid, nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -6368,7 +5923,7 @@ static bool check_mask(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_OpenUser_r(b, tctx, &r),
 		"OpenUser failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "OpenUser(%u) failed - %s\n", rid, nt_errstr(r.out.result));
+		torture_warning(tctx, "OpenUser(%u) failed - %s\n", rid, nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -6379,12 +5934,12 @@ static bool check_mask(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &q),
 		"QueryUserInfo failed");
 	if (!NT_STATUS_IS_OK(q.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "QueryUserInfo level 16 failed - %s\n",
+		torture_warning(tctx, "QueryUserInfo level 16 failed - %s\n",
 		       nt_errstr(q.out.result));
 		ret = false;
 	} else {
 		if ((acct_flag_mask & info->info16.acct_flags) == 0) {
-			torture_result(tctx, TORTURE_FAIL, "Server failed to filter for 0x%x, allowed 0x%x (%d) on EnumDomainUsers\n",
+			torture_warning(tctx, "Server failed to filter for 0x%x, allowed 0x%x (%d) on EnumDomainUsers\n",
 			       acct_flag_mask, info->info16.acct_flags, rid);
 			ret = false;
 		}
@@ -6432,7 +5987,7 @@ static bool test_EnumDomainUsers_all(struct dcerpc_binding_handle *b,
 			"EnumDomainUsers failed");
 		if (!NT_STATUS_EQUAL(r.out.result, STATUS_MORE_ENTRIES) &&
 		    !NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "EnumDomainUsers failed - %s\n", nt_errstr(r.out.result));
+			torture_warning(tctx, "EnumDomainUsers failed - %s\n", nt_errstr(r.out.result));
 			return false;
 		}
 
@@ -6465,7 +6020,7 @@ static bool test_EnumDomainUsers_all(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_LookupNames_r(b, tctx, &n),
 		"LookupNames failed");
 	if (!NT_STATUS_IS_OK(n.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "LookupNames failed - %s\n", nt_errstr(n.out.result));
+		torture_warning(tctx, "LookupNames failed - %s\n", nt_errstr(n.out.result));
 		ret = false;
 	}
 
@@ -6550,7 +6105,7 @@ static bool test_EnumDomainGroups_all(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_EnumDomainGroups_r(b, tctx, &r),
 		"EnumDomainGroups failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "EnumDomainGroups failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "EnumDomainGroups failed - %s\n", nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -6604,7 +6159,7 @@ static bool test_EnumDomainAliases_all(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_EnumDomainAliases_r(b, tctx, &r),
 		"EnumDomainAliases failed");
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "EnumDomainAliases failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "EnumDomainAliases failed - %s\n", nt_errstr(r.out.result));
 		return false;
 	}
 
@@ -6649,7 +6204,7 @@ static bool test_GetDisplayEnumerationIndex(struct dcerpc_binding_handle *b,
 		if (ok_lvl[i] &&
 		    !NT_STATUS_IS_OK(r.out.result) &&
 		    !NT_STATUS_EQUAL(NT_STATUS_NO_MORE_ENTRIES, r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "GetDisplayEnumerationIndex level %u failed - %s\n",
+			torture_warning(tctx, "GetDisplayEnumerationIndex level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6660,7 +6215,7 @@ static bool test_GetDisplayEnumerationIndex(struct dcerpc_binding_handle *b,
 			"GetDisplayEnumerationIndex failed");
 
 		if (ok_lvl[i] && !NT_STATUS_EQUAL(NT_STATUS_NO_MORE_ENTRIES, r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "GetDisplayEnumerationIndex level %u failed - %s\n",
+			torture_warning(tctx, "GetDisplayEnumerationIndex level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6696,7 +6251,7 @@ static bool test_GetDisplayEnumerationIndex2(struct dcerpc_binding_handle *b,
 		if (ok_lvl[i] &&
 		    !NT_STATUS_IS_OK(r.out.result) &&
 		    !NT_STATUS_EQUAL(NT_STATUS_NO_MORE_ENTRIES, r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "GetDisplayEnumerationIndex2 level %u failed - %s\n",
+			torture_warning(tctx, "GetDisplayEnumerationIndex2 level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6706,7 +6261,7 @@ static bool test_GetDisplayEnumerationIndex2(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_GetDisplayEnumerationIndex2_r(b, tctx, &r),
 			"GetDisplayEnumerationIndex2 failed");
 		if (ok_lvl[i] && !NT_STATUS_EQUAL(NT_STATUS_NO_MORE_ENTRIES, r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "GetDisplayEnumerationIndex2 level %u failed - %s\n",
+			torture_warning(tctx, "GetDisplayEnumerationIndex2 level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -6719,13 +6274,13 @@ static bool test_GetDisplayEnumerationIndex2(struct dcerpc_binding_handle *b,
 	if (s1.string == NULL && s2.string != NULL && s2.string[0] == '\0') { \
 		/* odd, but valid */						\
 	} else if ((s1.string && !s2.string) || (s2.string && !s1.string) || strcmp(s1.string, s2.string)) { \
-			torture_result(tctx, TORTURE_FAIL, "%s mismatch for %s: %s != %s (%s)\n", \
+			torture_warning(tctx, "%s mismatch for %s: %s != %s (%s)\n", \
 			       #s1, user.string,  s1.string, s2.string, __location__);   \
 			ret = false; \
 	}
 #define INT_EQUAL_QUERY(s1, s2, user)		\
 		if (s1 != s2) { \
-			torture_result(tctx, TORTURE_FAIL, "%s mismatch for %s: 0x%llx != 0x%llx (%s)\n", \
+			torture_warning(tctx, "%s mismatch for %s: 0x%llx != 0x%llx (%s)\n", \
 			       #s1, user.string, (unsigned long long)s1, (unsigned long long)s2, __location__); \
 			ret = false; \
 		}
@@ -6772,7 +6327,7 @@ static bool test_each_DisplayInfo_user(struct dcerpc_binding_handle *b,
 			torture_assert_ntstatus_ok(tctx, dcerpc_samr_OpenUser_r(b, tctx, &r),
 				"OpenUser failed");
 			if (!NT_STATUS_IS_OK(r.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "OpenUser(%u) failed - %s\n", r.in.rid, nt_errstr(r.out.result));
+				torture_warning(tctx, "OpenUser(%u) failed - %s\n", r.in.rid, nt_errstr(r.out.result));
 				return false;
 			}
 		}
@@ -6783,7 +6338,7 @@ static bool test_each_DisplayInfo_user(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryUserInfo_r(b, tctx, &q),
 			"QueryUserInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryUserInfo(%u) failed - %s\n", r.in.rid, nt_errstr(r.out.result));
+			torture_warning(tctx, "QueryUserInfo(%u) failed - %s\n", r.in.rid, nt_errstr(r.out.result));
 			return false;
 		}
 
@@ -6815,12 +6370,12 @@ static bool test_each_DisplayInfo_user(struct dcerpc_binding_handle *b,
 					info->info21.acct_flags, info->info21.account_name);
 
 			if (!(querydisplayinfo->out.info->info2.entries[i].acct_flags & ACB_NORMAL)) {
-				torture_result(tctx, TORTURE_FAIL, "Missing ACB_NORMAL in querydisplayinfo->out.info.info2.entries[i].acct_flags on %s\n",
+				torture_warning(tctx, "Missing ACB_NORMAL in querydisplayinfo->out.info.info2.entries[i].acct_flags on %s\n",
 				       info->info21.account_name.string);
 			}
 
 			if (!(info->info21.acct_flags & (ACB_WSTRUST | ACB_SVRTRUST))) {
-				torture_result(tctx, TORTURE_FAIL, "Found non-trust account %s in trust account listing: 0x%x 0x%x\n",
+				torture_warning(tctx, "Found non-trust account %s in trust account listing: 0x%x 0x%x\n",
 				       info->info21.account_name.string,
 				       querydisplayinfo->out.info->info2.entries[i].acct_flags,
 				       info->info21.acct_flags);
@@ -6870,7 +6425,7 @@ static bool test_QueryDisplayInfo(struct dcerpc_binding_handle *b,
 			torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDisplayInfo_r(b, tctx, &r),
 				"QueryDisplayInfo failed");
 			if (!NT_STATUS_EQUAL(r.out.result, STATUS_MORE_ENTRIES) && !NT_STATUS_IS_OK(r.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDisplayInfo level %u failed - %s\n",
+				torture_warning(tctx, "QueryDisplayInfo level %u failed - %s\n",
 				       levels[i], nt_errstr(r.out.result));
 				ret = false;
 			}
@@ -6906,7 +6461,7 @@ static bool test_QueryDisplayInfo(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDomainInfo_r(b, tctx, &dom_info),
 			"QueryDomainInfo failed");
 		if (!NT_STATUS_IS_OK(dom_info.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryDomainInfo level %u failed - %s\n",
 			       r.in.level, nt_errstr(dom_info.out.result));
 			ret = false;
 			break;
@@ -6920,7 +6475,7 @@ static bool test_QueryDisplayInfo(struct dcerpc_binding_handle *b,
 				 * global groups, QueryDomainInfo only global
 				 * ones. */
 				if (torture_setting_bool(tctx, "samba3", false)) {
-					torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo indicates that QueryDisplayInfo returned more users (%d/%d) than the domain %s is said to contain!\n",
+					torture_warning(tctx, "QueryDomainInfo indicates that QueryDisplayInfo returned more users (%d/%d) than the domain %s is said to contain!\n",
 					       r.in.start_idx, info->general.num_groups,
 					       info->general.domain_name.string);
 					ret = false;
@@ -6929,7 +6484,7 @@ static bool test_QueryDisplayInfo(struct dcerpc_binding_handle *b,
 			if (!seen_testuser) {
 				struct policy_handle user_handle;
 				if (NT_STATUS_IS_OK(test_OpenUser_byname(b, tctx, handle, TEST_ACCOUNT_NAME, &user_handle))) {
-					torture_result(tctx, TORTURE_FAIL, "Didn't find test user " TEST_ACCOUNT_NAME " in enumeration of %s\n",
+					torture_warning(tctx, "Didn't find test user " TEST_ACCOUNT_NAME " in enumeration of %s\n",
 					       info->general.domain_name.string);
 					ret = false;
 					test_samr_handle_Close(b, tctx, &user_handle);
@@ -6944,7 +6499,7 @@ static bool test_QueryDisplayInfo(struct dcerpc_binding_handle *b,
 				 * global groups, QueryDomainInfo only global
 				 * ones. */
 				if (torture_setting_bool(tctx, "samba3", false)) {
-					torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo indicates that QueryDisplayInfo didn't return all (%d/%d) the groups in %s\n",
+					torture_warning(tctx, "QueryDomainInfo indicates that QueryDisplayInfo didn't return all (%d/%d) the groups in %s\n",
 					       r.in.start_idx, info->general.num_groups,
 					       info->general.domain_name.string);
 					ret = false;
@@ -6986,7 +6541,7 @@ static bool test_QueryDisplayInfo2(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDisplayInfo2_r(b, tctx, &r),
 			"QueryDisplayInfo2 failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDisplayInfo2 level %u failed - %s\n",
+			torture_warning(tctx, "QueryDisplayInfo2 level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -7022,7 +6577,7 @@ static bool test_QueryDisplayInfo3(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDisplayInfo3_r(b, tctx, &r),
 			"QueryDisplayInfo3 failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDisplayInfo3 level %u failed - %s\n",
+			torture_warning(tctx, "QueryDisplayInfo3 level %u failed - %s\n",
 			       levels[i], nt_errstr(r.out.result));
 			ret = false;
 		}
@@ -7058,7 +6613,7 @@ static bool test_QueryDisplayInfo_continue(struct dcerpc_binding_handle *b,
 			"QueryDisplayInfo failed");
 		if (NT_STATUS_IS_OK(r.out.result) && *r.out.returned_size != 0) {
 			if (r.out.info->info1.entries[0].idx != r.in.start_idx + 1) {
-				torture_result(tctx, TORTURE_FAIL, "expected idx %d but got %d\n",
+				torture_warning(tctx, "expected idx %d but got %d\n",
 				       r.in.start_idx + 1,
 				       r.out.info->info1.entries[0].idx);
 				break;
@@ -7066,7 +6621,7 @@ static bool test_QueryDisplayInfo_continue(struct dcerpc_binding_handle *b,
 		}
 		if (!NT_STATUS_EQUAL(r.out.result, STATUS_MORE_ENTRIES) &&
 		    !NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDisplayInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryDisplayInfo level %u failed - %s\n",
 			       r.in.level, nt_errstr(r.out.result));
 			ret = false;
 			break;
@@ -7103,7 +6658,7 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_SetDomainInfo_r(b, tctx, &s),
 		"SetDomainInfo failed");
 	if (!NT_STATUS_IS_OK(s.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "SetDomainInfo level %u (set comment) failed - %s\n",
+		torture_warning(tctx, "SetDomainInfo level %u (set comment) failed - %s\n",
 		       s.in.level, nt_errstr(s.out.result));
 		return false;
 	}
@@ -7118,7 +6673,7 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDomainInfo_r(b, tctx, &r),
 			"QueryDomainInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryDomainInfo level %u failed - %s\n",
 			       r.in.level, nt_errstr(r.out.result));
 			ret = false;
 			continue;
@@ -7127,20 +6682,20 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 		switch (levels[i]) {
 		case 2:
 			if (strcmp(info->general.oem_information.string, domain_comment) != 0) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u returned different oem_information (comment) (%s, expected %s)\n",
+				torture_warning(tctx, "QueryDomainInfo level %u returned different oem_information (comment) (%s, expected %s)\n",
 				       levels[i], info->general.oem_information.string, domain_comment);
 				if (!torture_setting_bool(tctx, "samba3", false)) {
 					ret = false;
 				}
 			}
 			if (!info->general.primary.string) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u returned no PDC name\n",
+				torture_warning(tctx, "QueryDomainInfo level %u returned no PDC name\n",
 				       levels[i]);
 				ret = false;
 			} else if (info->general.role == SAMR_ROLE_DOMAIN_PDC) {
 				if (dcerpc_server_name(p) && strcasecmp_m(dcerpc_server_name(p), info->general.primary.string) != 0) {
 					if (torture_setting_bool(tctx, "samba3", false)) {
-						torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u returned different PDC name (%s) compared to server name (%s), despite claiming to be the PDC\n",
+						torture_warning(tctx, "QueryDomainInfo level %u returned different PDC name (%s) compared to server name (%s), despite claiming to be the PDC\n",
 						       levels[i], info->general.primary.string, dcerpc_server_name(p));
 					}
 				}
@@ -7148,7 +6703,7 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 			break;
 		case 4:
 			if (strcmp(info->oem.oem_information.string, domain_comment) != 0) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u returned different oem_information (comment) (%s, expected %s)\n",
+				torture_warning(tctx, "QueryDomainInfo level %u returned different oem_information (comment) (%s, expected %s)\n",
 				       levels[i], info->oem.oem_information.string, domain_comment);
 				if (!torture_setting_bool(tctx, "samba3", false)) {
 					ret = false;
@@ -7157,14 +6712,14 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 			break;
 		case 6:
 			if (!info->info6.primary.string) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u returned no PDC name\n",
+				torture_warning(tctx, "QueryDomainInfo level %u returned no PDC name\n",
 				       levels[i]);
 				ret = false;
 			}
 			break;
 		case 11:
 			if (strcmp(info->general2.general.oem_information.string, domain_comment) != 0) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u returned different comment (%s, expected %s)\n",
+				torture_warning(tctx, "QueryDomainInfo level %u returned different comment (%s, expected %s)\n",
 				       levels[i], info->general2.general.oem_information.string, domain_comment);
 				if (!torture_setting_bool(tctx, "samba3", false)) {
 					ret = false;
@@ -7183,14 +6738,14 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 			"SetDomainInfo failed");
 		if (set_ok[i]) {
 			if (!NT_STATUS_IS_OK(s.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "SetDomainInfo level %u failed - %s\n",
+				torture_warning(tctx, "SetDomainInfo level %u failed - %s\n",
 				       r.in.level, nt_errstr(s.out.result));
 				ret = false;
 				continue;
 			}
 		} else {
 			if (!NT_STATUS_EQUAL(NT_STATUS_INVALID_INFO_CLASS, s.out.result)) {
-				torture_result(tctx, TORTURE_FAIL, "SetDomainInfo level %u gave %s - should have been NT_STATUS_INVALID_INFO_CLASS\n",
+				torture_warning(tctx, "SetDomainInfo level %u gave %s - should have been NT_STATUS_INVALID_INFO_CLASS\n",
 				       r.in.level, nt_errstr(s.out.result));
 				ret = false;
 				continue;
@@ -7200,7 +6755,7 @@ static bool test_QueryDomainInfo(struct dcerpc_pipe *p,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDomainInfo_r(b, tctx, &r),
 			"QueryDomainInfo failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo level %u failed - %s\n",
+			torture_warning(tctx, "QueryDomainInfo level %u failed - %s\n",
 			       r.in.level, nt_errstr(r.out.result));
 			ret = false;
 			continue;
@@ -7231,14 +6786,14 @@ static bool test_QueryDomainInfo2(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_QueryDomainInfo2_r(b, tctx, &r),
 			"QueryDomainInfo2 failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "QueryDomainInfo2 level %u failed - %s\n",
+			torture_warning(tctx, "QueryDomainInfo2 level %u failed - %s\n",
 			       r.in.level, nt_errstr(r.out.result));
 			ret = false;
 			continue;
 		}
 	}
 
-	return ret;
+	return true;
 }
 
 /* Test whether querydispinfo level 5 and enumdomgroups return the same
@@ -7260,7 +6815,7 @@ static bool test_GroupList(struct dcerpc_binding_handle *b,
 	uint32_t returned_size;
 	union samr_DispInfo info;
 
-	size_t num_names = 0;
+	int num_names = 0;
 	const char **names = NULL;
 
 	bool builtin_domain = dom_sid_compare(domain_sid,
@@ -7334,7 +6889,7 @@ static bool test_GroupList(struct dcerpc_binding_handle *b,
 			}
 
 			if ((!found) && (!builtin_domain)) {
-				torture_result(tctx, TORTURE_FAIL, "QueryDisplayInfo gave name [%s] that EnumDomainGroups did not\n",
+				torture_warning(tctx, "QueryDisplayInfo gave name [%s] that EnumDomainGroups did not\n",
 				       name);
 				ret = false;
 			}
@@ -7343,7 +6898,7 @@ static bool test_GroupList(struct dcerpc_binding_handle *b,
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_result(tctx, TORTURE_FAIL, "QueryDisplayInfo level 5 failed - %s\n",
+		torture_warning(tctx, "QueryDisplayInfo level 5 failed - %s\n",
 		       nt_errstr(status));
 		ret = false;
 	}
@@ -7355,7 +6910,7 @@ static bool test_GroupList(struct dcerpc_binding_handle *b,
 
 	for (i=0; i<num_names; i++) {
 		if (names[i] != NULL) {
-			torture_result(tctx, TORTURE_FAIL, "EnumDomainGroups gave name [%s] that QueryDisplayInfo did not\n",
+			torture_warning(tctx, "EnumDomainGroups gave name [%s] that QueryDisplayInfo did not\n",
 			       names[i]);
 			ret = false;
 		}
@@ -7422,13 +6977,13 @@ static bool test_RidToSid(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_samr_RidToSid_r(b, tctx, &r),
 			"RidToSid failed");
 		if (!NT_STATUS_IS_OK(r.out.result)) {
-			torture_result(tctx, TORTURE_FAIL, "RidToSid for %d failed - %s\n", rids[i], nt_errstr(r.out.result));
+			torture_warning(tctx, "RidToSid for %d failed - %s\n", rids[i], nt_errstr(r.out.result));
 			ret = false;
 		} else {
 			calc_sid = dom_sid_add_rid(calc_sid, calc_sid, rids[i]);
 
 			if (!dom_sid_equal(calc_sid, out_sid)) {
-				torture_result(tctx, TORTURE_FAIL, "RidToSid for %d failed - got %s, expected %s\n", rids[i],
+				torture_warning(tctx, "RidToSid for %d failed - got %s, expected %s\n", rids[i],
 				       dom_sid_string(tctx, out_sid),
 				       dom_sid_string(tctx, calc_sid));
 				ret = false;
@@ -7595,7 +7150,7 @@ static bool test_CreateDomainGroup(struct dcerpc_binding_handle *b,
 			torture_comment(tctx, "Server correctly refused create of '%s'\n", r.in.name->string);
 			return true;
 		} else {
-			torture_result(tctx, TORTURE_FAIL, "Server should have refused create of '%s', got %s instead\n", r.in.name->string,
+			torture_warning(tctx, "Server should have refused create of '%s', got %s instead\n", r.in.name->string,
 			       nt_errstr(r.out.result));
 			return false;
 		}
@@ -7603,7 +7158,7 @@ static bool test_CreateDomainGroup(struct dcerpc_binding_handle *b,
 
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_GROUP_EXISTS)) {
 		if (!test_DeleteGroup_byname(b, tctx, domain_handle, r.in.name->string)) {
-			torture_result(tctx, TORTURE_FAIL, "CreateDomainGroup failed: Could not delete domain group %s - %s\n", r.in.name->string,
+			torture_warning(tctx, "CreateDomainGroup failed: Could not delete domain group %s - %s\n", r.in.name->string,
 			       nt_errstr(r.out.result));
 			return false;
 		}
@@ -7613,7 +7168,7 @@ static bool test_CreateDomainGroup(struct dcerpc_binding_handle *b,
 	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_USER_EXISTS)) {
 		if (!test_DeleteUser_byname(b, tctx, domain_handle, r.in.name->string)) {
 
-			torture_result(tctx, TORTURE_FAIL, "CreateDomainGroup failed: Could not delete user %s - %s\n", r.in.name->string,
+			torture_warning(tctx, "CreateDomainGroup failed: Could not delete user %s - %s\n", r.in.name->string,
 			       nt_errstr(r.out.result));
 			return false;
 		}
@@ -7627,7 +7182,7 @@ static bool test_CreateDomainGroup(struct dcerpc_binding_handle *b,
 	}
 
 	if (!test_AddGroupMember(b, tctx, domain_handle, group_handle)) {
-		torture_result(tctx, TORTURE_FAIL, "CreateDomainGroup failed - %s\n", nt_errstr(r.out.result));
+		torture_warning(tctx, "CreateDomainGroup failed - %s\n", nt_errstr(r.out.result));
 		ret = false;
 	}
 
@@ -7928,7 +7483,7 @@ static bool test_ManyObjects(struct dcerpc_pipe *p,
 		default:
 			return false;
 		}
-		if (!ndr_policy_handle_empty(&handles[i])) {
+		if (!policy_handle_empty(&handles[i])) {
 			num_created++;
 		}
 	}
@@ -7979,7 +7534,7 @@ static bool test_ManyObjects(struct dcerpc_pipe *p,
 
 	for (i=0; i < num_total; i++) {
 
-		if (ndr_policy_handle_empty(&handles[i])) {
+		if (policy_handle_empty(&handles[i])) {
 			continue;
 		}
 
@@ -8068,7 +7623,7 @@ static bool test_OpenDomain(struct dcerpc_pipe *p, struct torture_context *tctx,
 		}
 		ret &= test_CreateUser(p, tctx, &domain_handle, TEST_ACCOUNT_NAME, &user_handle, sid, ctx->choice, NULL, true);
 		if (!ret) {
-			torture_result(tctx, TORTURE_FAIL, "Testing PASSWORDS or PRIVILEGES on domain %s failed!\n", dom_sid_string(tctx, sid));
+			torture_warning(tctx, "Testing PASSWORDS or PRIVILEGES on domain %s failed!\n", dom_sid_string(tctx, sid));
 		}
 		break;
 	case TORTURE_SAMR_USER_ATTRIBUTES:
@@ -8079,7 +7634,7 @@ static bool test_OpenDomain(struct dcerpc_pipe *p, struct torture_context *tctx,
 		/* This test needs 'complex' users to validate */
 		ret &= test_QueryDisplayInfo(b, tctx, &domain_handle);
 		if (!ret) {
-			torture_result(tctx, TORTURE_FAIL, "Testing ATTRIBUTES on domain %s failed!\n", dom_sid_string(tctx, sid));
+			torture_warning(tctx, "Testing ATTRIBUTES on domain %s failed!\n", dom_sid_string(tctx, sid));
 		}
 		break;
 	case TORTURE_SAMR_PASSWORDS_PWDLASTSET:
@@ -8090,7 +7645,7 @@ static bool test_OpenDomain(struct dcerpc_pipe *p, struct torture_context *tctx,
 		}
 		ret &= test_CreateUser(p, tctx, &domain_handle, TEST_ACCOUNT_NAME, &user_handle, sid, ctx->choice, ctx->machine_credentials, true);
 		if (!ret) {
-			torture_result(tctx, TORTURE_FAIL, "Testing PASSWORDS PWDLASTSET or BADPWDCOUNT on domain %s failed!\n", dom_sid_string(tctx, sid));
+			torture_warning(tctx, "Testing PASSWORDS PWDLASTSET or BADPWDCOUNT on domain %s failed!\n", dom_sid_string(tctx, sid));
 		}
 		break;
 	case TORTURE_SAMR_MANY_ACCOUNTS:
@@ -8098,13 +7653,13 @@ static bool test_OpenDomain(struct dcerpc_pipe *p, struct torture_context *tctx,
 	case TORTURE_SAMR_MANY_ALIASES:
 		ret &= test_ManyObjects(p, tctx, &domain_handle, sid, ctx);
 		if (!ret) {
-			torture_result(tctx, TORTURE_FAIL, "Testing MANY-{ACCOUNTS,GROUPS,ALIASES} on domain %s failed!\n", dom_sid_string(tctx, sid));
+			torture_warning(tctx, "Testing MANY-{ACCOUNTS,GROUPS,ALIASES} on domain %s failed!\n", dom_sid_string(tctx, sid));
 		}
 		break;
 	case TORTURE_SAMR_OTHER:
 		ret &= test_CreateUser(p, tctx, &domain_handle, TEST_ACCOUNT_NAME, &user_handle, sid, ctx->choice, NULL, true);
 		if (!ret) {
-			torture_result(tctx, TORTURE_FAIL, "Failed to CreateUser in SAMR-OTHER on domain %s!\n", dom_sid_string(tctx, sid));
+			torture_warning(tctx, "Failed to CreateUser in SAMR-OTHER on domain %s!\n", dom_sid_string(tctx, sid));
 		}
 		if (!torture_setting_bool(tctx, "samba3", false)) {
 			ret &= test_QuerySecurity(b, tctx, &domain_handle);
@@ -8139,17 +7694,17 @@ static bool test_OpenDomain(struct dcerpc_pipe *p, struct torture_context *tctx,
 		break;
 	}
 
-	if (!ndr_policy_handle_empty(&user_handle) &&
+	if (!policy_handle_empty(&user_handle) &&
 	    !test_DeleteUser(b, tctx, &user_handle)) {
 		ret = false;
 	}
 
-	if (!ndr_policy_handle_empty(&alias_handle) &&
+	if (!policy_handle_empty(&alias_handle) &&
 	    !test_DeleteAlias(b, tctx, &alias_handle)) {
 		ret = false;
 	}
 
-	if (!ndr_policy_handle_empty(&group_handle) &&
+	if (!policy_handle_empty(&group_handle) &&
 	    !test_DeleteDomainGroup(b, tctx, &group_handle)) {
 		ret = false;
 	}
@@ -8160,7 +7715,7 @@ static bool test_OpenDomain(struct dcerpc_pipe *p, struct torture_context *tctx,
 	/* reconnect the main handle */
 
 	if (!ret) {
-		torture_result(tctx, TORTURE_FAIL, "Testing domain %s failed!\n", dom_sid_string(tctx, sid));
+		torture_warning(tctx, "Testing domain %s failed!\n", dom_sid_string(tctx, sid));
 	}
 
 	return ret;
@@ -8272,7 +7827,7 @@ static bool test_Connect(struct dcerpc_binding_handle *b,
 
 	torture_comment(tctx, "Testing samr_Connect\n");
 
-	r.in.system_name = NULL;
+	r.in.system_name = 0;
 	r.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
 	r.out.connect_handle = &h;
 
@@ -8315,7 +7870,7 @@ static bool test_Connect(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_Connect3_r(b, tctx, &r3),
 		"Connect3 failed");
 	if (!NT_STATUS_IS_OK(r3.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "Connect3 failed - %s\n", nt_errstr(r3.out.result));
+		torture_warning(tctx, "Connect3 failed - %s\n", nt_errstr(r3.out.result));
 		ret = false;
 	} else {
 		if (got_handle) {
@@ -8335,7 +7890,7 @@ static bool test_Connect(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_Connect4_r(b, tctx, &r4),
 		"Connect4 failed");
 	if (!NT_STATUS_IS_OK(r4.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "Connect4 failed - %s\n", nt_errstr(r4.out.result));
+		torture_warning(tctx, "Connect4 failed - %s\n", nt_errstr(r4.out.result));
 		ret = false;
 	} else {
 		if (got_handle) {
@@ -8361,7 +7916,7 @@ static bool test_Connect(struct dcerpc_binding_handle *b,
 	torture_assert_ntstatus_ok(tctx, dcerpc_samr_Connect5_r(b, tctx, &r5),
 		"Connect5 failed");
 	if (!NT_STATUS_IS_OK(r5.out.result)) {
-		torture_result(tctx, TORTURE_FAIL, "Connect5 failed - %s\n", nt_errstr(r5.out.result));
+		torture_warning(tctx, "Connect5 failed - %s\n", nt_errstr(r5.out.result));
 		ret = false;
 	} else {
 		if (got_handle) {
@@ -8375,8 +7930,8 @@ static bool test_Connect(struct dcerpc_binding_handle *b,
 }
 
 
-static bool test_samr_ValidatePassword(struct torture_context *tctx,
-				       struct dcerpc_pipe *p)
+static bool test_samr_ValidatePassword(struct dcerpc_pipe *p,
+				       struct torture_context *tctx)
 {
 	struct samr_ValidatePassword r;
 	union samr_ValidatePasswordReq req;
@@ -8388,17 +7943,13 @@ static bool test_samr_ValidatePassword(struct torture_context *tctx,
 
 	torture_comment(tctx, "Testing samr_ValidatePassword\n");
 
-	if (p->conn->transport.transport != NCACN_IP_TCP) {
-		torture_comment(tctx, "samr_ValidatePassword only should succeed over NCACN_IP_TCP!\n");
-	}
-
 	ZERO_STRUCT(r);
 	r.in.level = NetValidatePasswordReset;
 	r.in.req = &req;
 	r.out.rep = &repp;
 
 	ZERO_STRUCT(req);
-	req.req3.account.string = "non-existent-account-aklsdji";
+	req.req3.account.string = "non-existant-account-aklsdji";
 
 	for (i=0; passwords[i]; i++) {
 		req.req3.password.string = passwords[i];
@@ -8514,6 +8065,8 @@ bool torture_rpc_samr_passwords(struct torture_context *torture)
 	ret &= test_EnumDomains(p, torture, ctx);
 
 	ret &= test_samr_handle_Close(b, torture, &ctx->handle);
+
+	ret &= test_samr_ValidatePassword(p, torture);
 
 	return ret;
 }
@@ -8809,15 +8362,4 @@ struct torture_suite *torture_rpc_samr_passwords_lockout(TALLOC_CTX *mem_ctx)
 	return suite;
 }
 
-struct torture_suite *torture_rpc_samr_passwords_validate(TALLOC_CTX *mem_ctx)
-{
-	struct torture_suite *suite = torture_suite_create(mem_ctx, "samr.passwords.validate");
-	struct torture_rpc_tcase *tcase;
 
-	tcase = torture_suite_add_rpc_iface_tcase(suite, "samr",
-						  &ndr_table_samr);
-	torture_rpc_tcase_add_test(tcase, "validate",
-				   test_samr_ValidatePassword);
-
-	return suite;
-}

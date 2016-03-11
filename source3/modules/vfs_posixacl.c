@@ -26,7 +26,7 @@
 
 static bool smb_ace_to_internal(acl_entry_t posix_ace,
 				struct smb_acl_entry *ace);
-static struct smb_acl_t *smb_acl_to_internal(acl_t acl, TALLOC_CTX *mem_ctx);
+static struct smb_acl_t *smb_acl_to_internal(acl_t acl);
 static int smb_acl_set_mode(acl_entry_t entry, SMB_ACL_PERM_T perm);
 static acl_t smb_acl_to_posix(const struct smb_acl_t *acl);
 
@@ -35,8 +35,7 @@ static acl_t smb_acl_to_posix(const struct smb_acl_t *acl);
 
 SMB_ACL_T posixacl_sys_acl_get_file(vfs_handle_struct *handle,
 				    const char *path_p,
-				    SMB_ACL_TYPE_T type,
-				    TALLOC_CTX *mem_ctx)
+				    SMB_ACL_TYPE_T type)
 {
 	struct smb_acl_t *result;
 	acl_type_t acl_type;
@@ -60,13 +59,13 @@ SMB_ACL_T posixacl_sys_acl_get_file(vfs_handle_struct *handle,
 		return NULL;
 	}
 
-	result = smb_acl_to_internal(acl, mem_ctx);
+	result = smb_acl_to_internal(acl);
 	acl_free(acl);
 	return result;
 }
 
 SMB_ACL_T posixacl_sys_acl_get_fd(vfs_handle_struct *handle,
-				  files_struct *fsp, TALLOC_CTX *mem_ctx)
+				  files_struct *fsp)
 {
 	struct smb_acl_t *result;
 	acl_t acl = acl_get_fd(fsp->fh->fd);
@@ -75,7 +74,7 @@ SMB_ACL_T posixacl_sys_acl_get_fd(vfs_handle_struct *handle,
 		return NULL;
 	}
 
-	result = smb_acl_to_internal(acl, mem_ctx);
+	result = smb_acl_to_internal(acl);
 	acl_free(acl);
 	return result;
 }
@@ -167,11 +166,6 @@ static bool smb_ace_to_internal(acl_entry_t posix_ace,
 	case ACL_MASK:
 		ace->a_type = SMB_ACL_MASK;
 		break;
-#ifdef HAVE_ACL_EVERYONE
-	case ACL_EVERYONE:
-		DEBUG(1, ("ACL tag type ACL_EVERYONE. FreeBSD with ZFS? Use 'vfs objects = zfsacl'\n"));
-		return false;
-#endif
 	default:
 		DEBUG(0, ("unknown tag type %d\n", (unsigned int)tag));
 		return False;
@@ -183,7 +177,7 @@ static bool smb_ace_to_internal(acl_entry_t posix_ace,
 			DEBUG(0, ("smb_acl_get_qualifier failed\n"));
 			return False;
 		}
-		ace->info.user.uid = *puid;
+		ace->uid = *puid;
 		acl_free(puid);
 		break;
 	}
@@ -194,7 +188,7 @@ static bool smb_ace_to_internal(acl_entry_t posix_ace,
 			DEBUG(0, ("smb_acl_get_qualifier failed\n"));
 			return False;
 		}
-		ace->info.group.gid = *pgid;
+		ace->gid = *pgid;
 		acl_free(pgid);
 		break;
 	}
@@ -218,29 +212,30 @@ static bool smb_ace_to_internal(acl_entry_t posix_ace,
 	return True;
 }
 
-static struct smb_acl_t *smb_acl_to_internal(acl_t acl, TALLOC_CTX *mem_ctx)
+static struct smb_acl_t *smb_acl_to_internal(acl_t acl)
 {
-	struct smb_acl_t *result = sys_acl_init(mem_ctx);
+	struct smb_acl_t *result = SMB_MALLOC_P(struct smb_acl_t);
 	int entry_id = ACL_FIRST_ENTRY;
 	acl_entry_t e;
 	if (result == NULL) {
 		return NULL;
 	}
+	ZERO_STRUCTP(result);
 	while (acl_get_entry(acl, entry_id, &e) == 1) {
 
 		entry_id = ACL_NEXT_ENTRY;
 
-		result->acl = talloc_realloc(result, result->acl, 
-					     struct smb_acl_entry, result->count+1);
-		if (result->acl == NULL) {
-			TALLOC_FREE(result);
-			DEBUG(0, ("talloc_realloc failed\n"));
+		result = (struct smb_acl_t *)SMB_REALLOC(
+			result, sizeof(struct smb_acl_t) +
+			(sizeof(struct smb_acl_entry) * (result->count+1)));
+		if (result == NULL) {
+			DEBUG(0, ("SMB_REALLOC failed\n"));
 			errno = ENOMEM;
 			return NULL;
 		}
 
 		if (!smb_ace_to_internal(e, &result->acl[result->count])) {
-			TALLOC_FREE(result);
+			SAFE_FREE(result);
 			return NULL;
 		}
 
@@ -329,14 +324,14 @@ static acl_t smb_acl_to_posix(const struct smb_acl_t *acl)
 
 		switch (entry->a_type) {
 		case SMB_ACL_USER:
-			if (acl_set_qualifier(e, &entry->info.user.uid) != 0) {
+			if (acl_set_qualifier(e, &entry->uid) != 0) {
 				DEBUG(1, ("acl_set_qualifiier failed: %s\n",
 					  strerror(errno)));
 				goto fail;
 			}
 			break;
 		case SMB_ACL_GROUP:
-			if (acl_set_qualifier(e, &entry->info.group.gid) != 0) {
+			if (acl_set_qualifier(e, &entry->gid) != 0) {
 				DEBUG(1, ("acl_set_qualifiier failed: %s\n",
 					  strerror(errno)));
 				goto fail;
@@ -352,10 +347,8 @@ static acl_t smb_acl_to_posix(const struct smb_acl_t *acl)
 	}
 
 	if (acl_valid(result) != 0) {
-		char *acl_string = sys_acl_to_text(acl, NULL);
-		DEBUG(0, ("smb_acl_to_posix: ACL %s is invalid for set (%s)\n",
-			  acl_string, strerror(errno)));
-		SAFE_FREE(acl_string);
+		DEBUG(0, ("smb_acl_to_posix: ACL is invalid for set (%s)\n",
+			  strerror(errno)));
 		goto fail;
 	}
 
@@ -371,13 +364,11 @@ static acl_t smb_acl_to_posix(const struct smb_acl_t *acl)
 /* VFS operations structure */
 
 static struct vfs_fn_pointers posixacl_fns = {
-	.sys_acl_get_file_fn = posixacl_sys_acl_get_file,
-	.sys_acl_get_fd_fn = posixacl_sys_acl_get_fd,
-	.sys_acl_blob_get_file_fn = posix_sys_acl_blob_get_file,
-	.sys_acl_blob_get_fd_fn = posix_sys_acl_blob_get_fd,
-	.sys_acl_set_file_fn = posixacl_sys_acl_set_file,
-	.sys_acl_set_fd_fn = posixacl_sys_acl_set_fd,
-	.sys_acl_delete_def_file_fn = posixacl_sys_acl_delete_def_file,
+	.sys_acl_get_file = posixacl_sys_acl_get_file,
+	.sys_acl_get_fd = posixacl_sys_acl_get_fd,
+	.sys_acl_set_file = posixacl_sys_acl_set_file,
+	.sys_acl_set_fd = posixacl_sys_acl_set_fd,
+	.sys_acl_delete_def_file = posixacl_sys_acl_delete_def_file,
 };
 
 NTSTATUS vfs_posixacl_init(void);

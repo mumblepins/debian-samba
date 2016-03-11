@@ -64,11 +64,10 @@ static bool nbt_test_wins_name(struct torture_context *tctx, const char *address
 	struct socket_address *socket_address;
 	struct interface *ifaces;
 	bool low_port = try_low_port;
-	char **l;
 
-	load_interface_list(tctx, tctx->lp_ctx, &ifaces);
+	load_interfaces(tctx, lpcfg_interfaces(tctx->lp_ctx), &ifaces);
 
-	myaddress = talloc_strdup(tctx, iface_list_best_ip(ifaces, address));
+	myaddress = talloc_strdup(tctx, iface_best_ip(ifaces, address));
 
 	socket_address = socket_address_from_strings(tctx, 
 						     nbtsock->sock->backend_name,
@@ -157,7 +156,7 @@ static bool nbt_test_wins_name(struct torture_context *tctx, const char *address
 		 */
 		req = nbt_name_register_send(nbtsock, &name_register);
 		while (true) {
-			tevent_loop_once(nbtsock->event_ctx);
+			event_loop_once(nbtsock->event_ctx);
 			if (req->state != NBT_REQUEST_WAIT) {
 				break;
 			}
@@ -171,7 +170,7 @@ static bool nbt_test_wins_name(struct torture_context *tctx, const char *address
 				req->state = NBT_REQUEST_SEND;
 				DLIST_ADD_END(nbtsock->send_queue, req,
 					      struct nbt_name_request *);
-				TEVENT_FD_WRITEABLE(nbtsock->fde);
+				EVENT_FD_WRITEABLE(nbtsock->fde);
 				break;
 			}
 		}
@@ -193,10 +192,8 @@ static bool nbt_test_wins_name(struct torture_context *tctx, const char *address
 	torture_comment(tctx, "register the name correct address\n");
 	io.in.name = *name;
 	io.in.wins_port = lpcfg_nbt_port(tctx->lp_ctx);
-	l = str_list_make_single(tctx, address);
-	io.in.wins_servers = discard_const_p(const char *, l);
-	l = str_list_make_single(tctx, myaddress);
-	io.in.addresses = discard_const_p(const char *, l);
+	io.in.wins_servers = (const char **)str_list_make_single(tctx, address);
+	io.in.addresses = (const char **)str_list_make_single(tctx, myaddress);
 	io.in.nb_flags = nb_flags;
 	io.in.ttl = 300000;
 	
@@ -272,10 +269,8 @@ static bool nbt_test_wins_name(struct torture_context *tctx, const char *address
 	torture_comment(tctx, "refresh the name\n");
 	refresh.in.name = *name;
 	refresh.in.wins_port = lpcfg_nbt_port(tctx->lp_ctx);
-	l = str_list_make_single(tctx, address);
-	refresh.in.wins_servers = discard_const_p(const char *, l);
-	l = str_list_make_single(tctx, myaddress);
-	refresh.in.addresses = discard_const_p(const char *, l);
+	refresh.in.wins_servers = (const char **)str_list_make_single(tctx, address);
+	refresh.in.addresses = (const char **)str_list_make_single(tctx, myaddress);
 	refresh.in.nb_flags = nb_flags;
 	refresh.in.ttl = 12345;
 	

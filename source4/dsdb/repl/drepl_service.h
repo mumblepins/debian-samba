@@ -52,6 +52,9 @@ struct dreplsrv_out_connection {
 
 	/* the out going connection to the source dsa */
 	struct dreplsrv_drsuapi_connection *drsuapi;
+
+	/* used to force the GC principal name */
+	const char *principal_name;
 };
 
 struct dreplsrv_partition_source_dsa {
@@ -106,8 +109,7 @@ struct dreplsrv_partition {
 	 */
 	struct dreplsrv_partition_source_dsa *notifies;
 
-	bool partial_replica;
-	bool rodc_replica;
+	bool incoming_only;
 };
 
 typedef void (*dreplsrv_extended_callback_t)(struct dreplsrv_service *,
@@ -186,23 +188,6 @@ struct dreplsrv_service {
 		/* here we have a reference to the timed event the schedules the periodic stuff */
 		struct tevent_timer *te;
 	} periodic;
-
-	/* some stuff for running only the pendings ops */
-	struct {
-		/*
-		 * the interval between notify runs
-		 */
-		uint32_t interval;
-
-		/*
-		 * the timestamp for the next event,
-		 * this is the timstamp passed to event_add_timed()
-		 */
-		struct timeval next_event;
-
-		/* here we have a reference to the timed event the schedules the notifies */
-		struct tevent_timer *te;
-	} pending;
 
 	/* some stuff for notify processing */
 	struct {

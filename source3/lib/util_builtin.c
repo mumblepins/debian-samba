@@ -21,7 +21,7 @@
 #include "../libcli/security/security.h"
 
 struct rid_name_map {
-	uint32_t rid;
+	uint32 rid;
 	const char *name;
 };
 
@@ -52,20 +52,12 @@ static const struct rid_name_map builtin_aliases[] = {
 		"Windows Authorization Access Group" },
 	{ BUILTIN_RID_TS_LICENSE_SERVERS,
 		"Terminal Server License Servers" },
-	{ BUILTIN_RID_DISTRIBUTED_COM_USERS,
-		"Distributed COM Users" },
-	{ BUILTIN_RID_CRYPTO_OPERATORS,
-		"Cryptographic Operators" },
-	{ BUILTIN_RID_EVENT_LOG_READERS,
-		"Event Log Readers" },
-	{ BUILTIN_RID_CERT_SERV_DCOM_ACCESS,
-		"Certificate Service DCOM Access" },
 	{  0, NULL}};
 
 /*******************************************************************
  Look up a rid in the BUILTIN domain
  ********************************************************************/
-bool lookup_builtin_rid(TALLOC_CTX *mem_ctx, uint32_t rid, const char **name)
+bool lookup_builtin_rid(TALLOC_CTX *mem_ctx, uint32 rid, const char **name)
 {
 	const struct rid_name_map *aliases = builtin_aliases;
 
@@ -83,7 +75,7 @@ bool lookup_builtin_rid(TALLOC_CTX *mem_ctx, uint32_t rid, const char **name)
 /*******************************************************************
  Look up a name in the BUILTIN domain
  ********************************************************************/
-bool lookup_builtin_name(const char *name, uint32_t *rid)
+bool lookup_builtin_name(const char *name, uint32 *rid)
 {
 	const struct rid_name_map *aliases = builtin_aliases;
 
@@ -128,31 +120,4 @@ bool sid_check_is_in_builtin(const struct dom_sid *sid)
 	sid_split_rid(&dom_sid, NULL);
 
 	return sid_check_is_builtin(&dom_sid);
-}
-
-/********************************************************************
- Check if the SID is one of the well-known builtin SIDs (S-1-5-32-x)
-*********************************************************************/
-
-bool sid_check_is_wellknown_builtin(const struct dom_sid *sid)
-{
-	struct dom_sid dom_sid;
-	const struct rid_name_map *aliases = builtin_aliases;
-	uint32_t rid;
-
-	sid_copy(&dom_sid, sid);
-	sid_split_rid(&dom_sid, &rid);
-
-	if (!sid_check_is_builtin(&dom_sid)) {
-		return false;
-	}
-
-	while (aliases->name != NULL) {
-		if (aliases->rid == rid) {
-			return True;
-		}
-		aliases++;
-	}
-
-	return False;
 }

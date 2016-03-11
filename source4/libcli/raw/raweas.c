@@ -243,12 +243,9 @@ NTSTATUS ea_pull_list_chained(const DATA_BLOB *blob,
 			return NT_STATUS_INVALID_PARAMETER;
 		}
 
-		if (ofs + next_ofs < ofs) {
-			return NT_STATUS_INVALID_PARAMETER;
-		}
-
 		ofs += next_ofs;
-		if (ofs+4 > blob->length || ofs+4 < ofs) {
+
+		if (ofs+4 > blob->length) {
 			return NT_STATUS_INVALID_PARAMETER;
 		}
 		n++;

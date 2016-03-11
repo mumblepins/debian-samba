@@ -24,14 +24,12 @@
 #define _PASSDB_LOOKUP_SID_H_
 
 #include "../librpc/gen_ndr/lsa.h"
-
-struct passwd;
-struct unixid;
+#include "nsswitch/libwbclient/wbclient.h"
 
 #define LOOKUP_NAME_NONE		0x00000000
 #define LOOKUP_NAME_ISOLATED             0x00000001  /* Look up unqualified names */
 #define LOOKUP_NAME_REMOTE               0x00000002  /* Ask others */
-#define LOOKUP_NAME_GROUP                0x00000004  /* This is a NASTY hack for
+#define LOOKUP_NAME_GROUP                0x00000004  /* (unused) This is a NASTY hack for
 							valid users = @foo where foo also
 							exists in as user. */
 #define LOOKUP_NAME_NO_NSS		 0x00000008  /* no NSS calls to avoid
@@ -58,7 +56,7 @@ struct lsa_dom_info {
 };
 
 struct lsa_name_info {
-	uint32_t rid;
+	uint32 rid;
 	enum lsa_SidType type;
 	const char *name;
 	int dom_idx;
@@ -81,15 +79,22 @@ NTSTATUS lookup_sids(TALLOC_CTX *mem_ctx, int num_sids,
 bool lookup_sid(TALLOC_CTX *mem_ctx, const struct dom_sid *sid,
 		const char **ret_domain, const char **ret_name,
 		enum lsa_SidType *ret_type);
+void store_uid_sid_cache(const struct dom_sid *psid, uid_t uid);
+void store_gid_sid_cache(const struct dom_sid *psid, gid_t gid);
 void uid_to_sid(struct dom_sid *psid, uid_t uid);
 void gid_to_sid(struct dom_sid *psid, gid_t gid);
+bool sids_to_unix_ids(const struct dom_sid *sids, uint32_t num_sids,
+		      struct wbcUnixId *ids);
 bool sid_to_uid(const struct dom_sid *psid, uid_t *puid);
 bool sid_to_gid(const struct dom_sid *psid, gid_t *pgid);
-bool sids_to_unixids(const struct dom_sid *sids, uint32_t num_sids,
-		      struct unixid *ids);
 NTSTATUS get_primary_group_sid(TALLOC_CTX *mem_ctx,
 				const char *username,
 				struct passwd **_pwd,
 				struct dom_sid **_group_sid);
+bool delete_uid_cache(uid_t uid);
+bool delete_gid_cache(gid_t gid);
+bool delete_sid_cache(const struct dom_sid* psid);
+void flush_uid_cache(void);
+void flush_gid_cache(void);
 
 #endif /* _PASSDB_LOOKUP_SID_H_ */

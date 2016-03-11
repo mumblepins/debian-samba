@@ -103,9 +103,7 @@ bool lang_tdb_init(const char *lang)
 	struct stat st;
 	static int initialised;
 	time_t loadtime;
-	bool result = false;
-	char *dpath = NULL;
-	char *lpath = NULL;
+	bool result = False;
 
 	/* we only want to init once per process, unless given
 	   an override */
@@ -132,12 +130,8 @@ bool lang_tdb_init(const char *lang)
 	if (!lang) 
 		return True;
 
-	dpath = data_path(talloc_tos(), (const char *)lang);
-	if (dpath == NULL) {
-		goto done;
-	}
-
-	if (asprintf(&msg_path, "%s.msg", dpath) == -1) {
+	if (asprintf(&msg_path, "%s.msg",
+		     data_path((const char *)lang)) == -1) {
 		DEBUG(0, ("asprintf failed\n"));
 		goto done;
 	}
@@ -147,13 +141,8 @@ bool lang_tdb_init(const char *lang)
 			   strerror(errno)));
 		goto done;
 	}
-
-	lpath = lock_path("lang_");
-	if (lpath == NULL) {
-		goto done;
-	}
-
-	if (asprintf(&path, "%s%s.tdb", lpath, lang) == -1) {
+	
+	if (asprintf(&path, "%s%s.tdb", lock_path("lang_"), lang) == -1) {
 		DEBUG(0, ("asprintf failed\n"));
 		goto done;
 	}
@@ -186,8 +175,6 @@ bool lang_tdb_init(const char *lang)
  done:
 	SAFE_FREE(msg_path);
 	SAFE_FREE(path);
-	TALLOC_FREE(lpath);
-	TALLOC_FREE(dpath);
 
 	return result;
 }
@@ -250,7 +237,7 @@ const char *lang_msg(const char *msgid)
 void lang_msg_free(const char *msgstr)
 {
 	if (!tdb) return;
-	free(discard_const_p(void, msgstr));
+	free((void *)msgstr);
 }
 
 /* 

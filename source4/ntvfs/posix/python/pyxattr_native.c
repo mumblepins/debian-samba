@@ -21,9 +21,7 @@
 #include <Python.h>
 #include "includes.h"
 #include "librpc/ndr/libndr.h"
-#include "system/filesys.h"
-
-void initxattr_native(void);
+#include "lib/util/wrap_xattr.h"
 
 static PyObject *py_is_xattr_supported(PyObject *self)
 {
@@ -46,7 +44,7 @@ static PyObject *py_wrap_setxattr(PyObject *self, PyObject *args)
 		return NULL;
 
 	blob.length = blobsize;
-	ret = setxattr(filename, attribute, blob.data, blob.length, 0);
+	ret = wrap_setxattr(filename, attribute, blob.data, blob.length, 0);
 	if( ret < 0 ) {
 		if (errno == ENOTSUP) {
 			PyErr_SetFromErrno(PyExc_IOError);
@@ -68,7 +66,7 @@ static PyObject *py_wrap_getxattr(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "ss", &filename, &attribute))
 		return NULL;
 	mem_ctx = talloc_new(NULL);
-	len = getxattr(filename,attribute,NULL,0);
+	len = wrap_getxattr(filename,attribute,NULL,0);
 	if( len < 0 ) {
 		if (errno == ENOTSUP) {
 			PyErr_SetFromErrno(PyExc_IOError);
@@ -80,7 +78,7 @@ static PyObject *py_wrap_getxattr(PyObject *self, PyObject *args)
 	}
 	/* check length ... */
 	buf = talloc_zero_array(mem_ctx, char, len);
-	len = getxattr(filename, attribute, buf, len);
+	len = wrap_getxattr(filename, attribute, buf, len);
 	if( len < 0 ) {
 		if (errno == ENOTSUP) {
 			PyErr_SetFromErrno(PyExc_IOError);

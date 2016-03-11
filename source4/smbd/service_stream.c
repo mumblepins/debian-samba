@@ -27,7 +27,6 @@
 #include "cluster/cluster.h"
 #include "param/param.h"
 #include "../lib/tsocket/tsocket.h"
-#include "lib/util/util_net.h"
 
 /* the range of ports to try for dcerpc over tcp endpoints */
 #define SERVER_TCP_LOW_PORT  1024
@@ -60,11 +59,7 @@ void stream_terminate_connection(struct stream_connection *srv_conn, const char 
 
 	if (!reason) reason = "unknown reason";
 
-	if (srv_conn->processing) {
-		DEBUG(3,("Terminating connection deferred - '%s'\n", reason));
-	} else {
-		DEBUG(3,("Terminating connection - '%s'\n", reason));
-	}
+	DEBUG(3,("Terminating connection - '%s'\n", reason));
 
 	srv_conn->terminate = reason;
 
@@ -81,7 +76,6 @@ void stream_terminate_connection(struct stream_connection *srv_conn, const char 
 
 	talloc_free(srv_conn->event.fde);
 	srv_conn->event.fde = NULL;
-	imessaging_cleanup(srv_conn->msg_ctx);
 	model_ops->terminate(event_ctx, srv_conn->lp_ctx, reason);
 	talloc_free(srv_conn);
 }
@@ -128,7 +122,7 @@ NTSTATUS stream_new_connection_merge(struct tevent_context *ev,
 				     struct loadparm_context *lp_ctx,
 				     const struct model_ops *model_ops,
 				     const struct stream_server_ops *stream_ops,
-				     struct imessaging_context *msg_ctx,
+				     struct messaging_context *msg_ctx,
 				     void *private_data,
 				     struct stream_connection **_srv_conn)
 {
@@ -179,7 +173,7 @@ static void stream_new_connection(struct tevent_context *ev,
 	srv_conn->event.ctx	= ev;
 	srv_conn->lp_ctx	= lp_ctx;
 
-	if (!socket_check_access(sock, "smbd", lpcfg_hosts_allow(NULL, lpcfg_default_service(lp_ctx)), lpcfg_hosts_deny(NULL, lpcfg_default_service(lp_ctx)))) {
+	if (!socket_check_access(sock, "smbd", lpcfg_hostsallow(NULL, lpcfg_default_service(lp_ctx)), lpcfg_hostsdeny(NULL, lpcfg_default_service(lp_ctx)))) {
 		stream_terminate_connection(srv_conn, "denied by access rules");
 		return;
 	}
@@ -192,11 +186,11 @@ static void stream_new_connection(struct tevent_context *ev,
 	}
 
 	/* setup to receive internal messages on this connection */
-	srv_conn->msg_ctx = imessaging_init(srv_conn,
-					    lp_ctx,
-					    srv_conn->server_id, ev, false);
+	srv_conn->msg_ctx = messaging_init(srv_conn, 
+					   lpcfg_messaging_path(srv_conn, lp_ctx),
+					   srv_conn->server_id, ev);
 	if (!srv_conn->msg_ctx) {
-		stream_terminate_connection(srv_conn, "imessaging_init() failed");
+		stream_terminate_connection(srv_conn, "messaging_init() failed");
 		return;
 	}
 
@@ -215,7 +209,6 @@ static void stream_new_connection(struct tevent_context *ev,
 	{
 		TALLOC_CTX *tmp_ctx;
 		const char *title;
-		struct server_id_buf idbuf;
 
 		tmp_ctx = talloc_new(srv_conn);
 
@@ -223,7 +216,7 @@ static void stream_new_connection(struct tevent_context *ev,
 					stream_socket->ops->name, 
 					tsocket_address_string(srv_conn->remote_address, tmp_ctx),
 					tsocket_address_string(srv_conn->local_address, tmp_ctx),
-					server_id_str_buf(server_id, &idbuf));
+					cluster_id_string(tmp_ctx, server_id));
 		if (title) {
 			stream_connection_set_title(srv_conn, title);
 		}
@@ -278,37 +271,12 @@ NTSTATUS stream_setup_socket(TALLOC_CTX *mem_ctx,
 	struct socket_address *socket_address;
 	struct tevent_fd *fde;
 	int i;
-	struct sockaddr_storage ss;
 
 	stream_socket = talloc_zero(mem_ctx, struct stream_socket);
 	NT_STATUS_HAVE_NO_MEMORY(stream_socket);
 
-	if (strcmp(family, "ip") == 0) {
-		/* we will get the real family from the address itself */
-		if (!interpret_string_addr(&ss, sock_addr, 0)) {
-			talloc_free(stream_socket);
-			return NT_STATUS_INVALID_ADDRESS;
-		}
-
-		socket_address = socket_address_from_sockaddr_storage(stream_socket, &ss, port?*port:0);
-		if (socket_address == NULL) {
-			TALLOC_FREE(stream_socket);
-			return NT_STATUS_NO_MEMORY;
-		}
-
-		status = socket_create(socket_address->family, SOCKET_TYPE_STREAM, &stream_socket->sock, 0);
-		NT_STATUS_NOT_OK_RETURN(status);
-	} else {
-		status = socket_create(family, SOCKET_TYPE_STREAM, &stream_socket->sock, 0);
-		NT_STATUS_NOT_OK_RETURN(status);
-
-		/* this is for non-IP sockets, eg. unix domain sockets */
-		socket_address = socket_address_from_strings(stream_socket,
-							     stream_socket->sock->backend_name,
-							     sock_addr, port?*port:0);
-		NT_STATUS_HAVE_NO_MEMORY(socket_address);
-	}
-
+	status = socket_create(family, SOCKET_TYPE_STREAM, &stream_socket->sock, 0);
+	NT_STATUS_NOT_OK_RETURN(status);
 
 	talloc_steal(stream_socket, stream_socket->sock);
 
@@ -329,19 +297,34 @@ NTSTATUS stream_setup_socket(TALLOC_CTX *mem_ctx,
 	/* Some sockets don't have a port, or are just described from
 	 * the string.  We are indicating this by having port == NULL */
 	if (!port) {
+		socket_address = socket_address_from_strings(stream_socket, 
+							     stream_socket->sock->backend_name,
+							     sock_addr, 0);
+		NT_STATUS_HAVE_NO_MEMORY(socket_address);
 		status = socket_listen(stream_socket->sock, socket_address, SERVER_LISTEN_BACKLOG, 0);
+		talloc_free(socket_address);
+
 	} else if (*port == 0) {
 		for (i=SERVER_TCP_LOW_PORT;i<= SERVER_TCP_HIGH_PORT;i++) {
-			socket_address->port = i;
+			socket_address = socket_address_from_strings(stream_socket, 
+								     stream_socket->sock->backend_name,
+								     sock_addr, i);
+			NT_STATUS_HAVE_NO_MEMORY(socket_address);
 			status = socket_listen(stream_socket->sock, socket_address, 
 					       SERVER_LISTEN_BACKLOG, 0);
+			talloc_free(socket_address);
 			if (NT_STATUS_IS_OK(status)) {
 				*port = i;
 				break;
 			}
 		}
 	} else {
+		socket_address = socket_address_from_strings(stream_socket, 
+							     stream_socket->sock->backend_name,
+							     sock_addr, *port);
+		NT_STATUS_HAVE_NO_MEMORY(socket_address);
 		status = socket_listen(stream_socket->sock, socket_address, SERVER_LISTEN_BACKLOG, 0);
+		talloc_free(socket_address);
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
@@ -378,7 +361,6 @@ NTSTATUS stream_setup_socket(TALLOC_CTX *mem_ctx,
 
 	return NT_STATUS_OK;
 }
-
 
 /*
   setup a connection title 

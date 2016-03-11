@@ -1,7 +1,6 @@
 <samba:parameter name="use sendfile"
                  context="S"
 				 type="boolean"
-                 function="_use_sendfile"
                  xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
     <para>If this parameter is <constant>yes</constant>, and the <constant>sendfile()</constant> 
@@ -14,5 +13,5 @@
     </para>
 </description>
 
-<value type="default">no</value>
+<value type="default">false</value>
 </samba:parameter>

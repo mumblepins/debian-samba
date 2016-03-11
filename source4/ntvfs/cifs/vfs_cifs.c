@@ -34,7 +34,6 @@
 #include "../lib/util/dlinklist.h"
 #include "param/param.h"
 #include "libcli/resolve/resolve.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 struct cvfs_file {
 	struct cvfs_file *prev, *next;
@@ -64,10 +63,8 @@ struct async_info {
 	void *parms;
 };
 
-NTSTATUS ntvfs_cifs_init(void);
-
 #define CHECK_UPSTREAM_OPEN do { \
-	if (!smbXcli_conn_is_connected(p->transport->conn)) { \
+	if (! p->transport->socket->sock) { \
 		req->async_states->state|=NTVFS_ASYNC_STATE_CLOSE; \
 		return NT_STATUS_CONNECTION_DISCONNECTED; \
 	} \
@@ -100,12 +97,10 @@ NTSTATUS ntvfs_cifs_init(void);
 #define CIFS_DOMAIN		"cifs:domain"
 #define CIFS_SHARE		"cifs:share"
 #define CIFS_USE_MACHINE_ACCT	"cifs:use-machine-account"
-#define CIFS_USE_S4U2PROXY	"cifs:use-s4u2proxy"
 #define CIFS_MAP_GENERIC	"cifs:map-generic"
 #define CIFS_MAP_TRANS2		"cifs:map-trans2"
 
 #define CIFS_USE_MACHINE_ACCT_DEFAULT	false
-#define CIFS_USE_S4U2PROXY_DEFAULT	false
 #define CIFS_MAP_GENERIC_DEFAULT	false
 #define CIFS_MAP_TRANS2_DEFAULT		true
 
@@ -153,14 +148,7 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 
 	struct cli_credentials *credentials;
 	bool machine_account;
-	bool s4u2proxy;
 	const char* sharename;
-	TALLOC_CTX *tmp_ctx;
-
-	tmp_ctx = talloc_new(req);
-	if (tmp_ctx == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
 
 	switch (tcon->generic.level) {
 	case RAW_TCON_TCON:
@@ -173,8 +161,7 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 		sharename = tcon->smb2.in.path;
 		break;
 	default:
-		status = NT_STATUS_INVALID_LEVEL;
-		goto out;
+		return NT_STATUS_INVALID_LEVEL;
 	}
 
 	if (strncmp(sharename, "\\\\", 2) == 0) {
@@ -186,39 +173,36 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 
 	/* Here we need to determine which server to connect to.
 	 * For now we use parametric options, type cifs.
+	 * Later we will use security=server and auth_server.c.
 	 */
-	host = share_string_option(tmp_ctx, scfg, CIFS_SERVER, NULL);
-	user = share_string_option(tmp_ctx, scfg, CIFS_USER, NULL);
-	pass = share_string_option(tmp_ctx, scfg, CIFS_PASSWORD, NULL);
-	domain = share_string_option(tmp_ctx, scfg, CIFS_DOMAIN, NULL);
-	remote_share = share_string_option(tmp_ctx, scfg, CIFS_SHARE, NULL);
+	host = share_string_option(scfg, CIFS_SERVER, NULL);
+	user = share_string_option(scfg, CIFS_USER, NULL);
+	pass = share_string_option(scfg, CIFS_PASSWORD, NULL);
+	domain = share_string_option(scfg, CIFS_DOMAIN, NULL);
+	remote_share = share_string_option(scfg, CIFS_SHARE, NULL);
 	if (!remote_share) {
 		remote_share = sharename;
 	}
 
 	machine_account = share_bool_option(scfg, CIFS_USE_MACHINE_ACCT, CIFS_USE_MACHINE_ACCT_DEFAULT);
-	s4u2proxy = share_bool_option(scfg, CIFS_USE_S4U2PROXY, CIFS_USE_S4U2PROXY_DEFAULT);
 
 	p = talloc_zero(ntvfs, struct cvfs_private);
 	if (!p) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
+		return NT_STATUS_NO_MEMORY;
 	}
 
 	ntvfs->private_data = p;
 
 	if (!host) {
 		DEBUG(1,("CIFS backend: You must supply server\n"));
-		status = NT_STATUS_INVALID_PARAMETER;
-		goto out;
+		return NT_STATUS_INVALID_PARAMETER;
 	} 
 	
 	if (user && pass) {
 		DEBUG(5, ("CIFS backend: Using specified password\n"));
 		credentials = cli_credentials_init(p);
 		if (!credentials) {
-			status = NT_STATUS_NO_MEMORY;
-			goto out;
+			return NT_STATUS_NO_MEMORY;
 		}
 		cli_credentials_set_conf(credentials, ntvfs->ctx->lp_ctx);
 		cli_credentials_set_username(credentials, user, CRED_SPECIFIED);
@@ -235,60 +219,14 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 		}
 		status = cli_credentials_set_machine_account(credentials, ntvfs->ctx->lp_ctx);
 		if (!NT_STATUS_IS_OK(status)) {
-			goto out;
+			return status;
 		}
 	} else if (req->session_info->credentials) {
 		DEBUG(5, ("CIFS backend: Using delegated credentials\n"));
 		credentials = req->session_info->credentials;
-	} else if (s4u2proxy) {
-		struct ccache_container *ccc = NULL;
-		const char *err_str = NULL;
-		int ret;
-		char *impersonate_principal;
-		char *self_service;
-		char *target_service;
-
-		impersonate_principal = talloc_asprintf(req, "%s@%s",
-						req->session_info->info->account_name,
-						req->session_info->info->domain_name);
-
-		self_service = talloc_asprintf(req, "cifs/%s",
-					       lpcfg_netbios_name(ntvfs->ctx->lp_ctx));
-
-		target_service = talloc_asprintf(req, "cifs/%s", host);
-
-		DEBUG(5, ("CIFS backend: Using S4U2Proxy credentials\n"));
-
-		credentials = cli_credentials_init(p);
-		cli_credentials_set_conf(credentials, ntvfs->ctx->lp_ctx);
-		if (domain) {
-			cli_credentials_set_domain(credentials, domain, CRED_SPECIFIED);
-		}
-		status = cli_credentials_set_machine_account(credentials, ntvfs->ctx->lp_ctx);
-		if (!NT_STATUS_IS_OK(status)) {
-			goto out;
-		}
-		cli_credentials_invalidate_ccache(credentials, CRED_SPECIFIED);
-		cli_credentials_set_impersonate_principal(credentials,
-							  impersonate_principal,
-							  self_service);
-		cli_credentials_set_target_service(credentials, target_service);
-		ret = cli_credentials_get_ccache(credentials,
-						 ntvfs->ctx->event_ctx,
-						 ntvfs->ctx->lp_ctx,
-						 &ccc,
-						 &err_str);
-		if (ret != 0) {
-			status = NT_STATUS_CROSSREALM_DELEGATION_FAILURE;
-			DEBUG(1,("S4U2Proxy: cli_credentials_get_ccache() gave: ret[%d] str[%s] - %s\n",
-				ret, err_str, nt_errstr(status)));
-			goto out;
-		}
-
 	} else {
 		DEBUG(1,("CIFS backend: NO delegated credentials found: You must supply server, user and password or the client must supply delegated credentials\n"));
-		status = NT_STATUS_INTERNAL_ERROR;
-		goto out;
+		return NT_STATUS_INVALID_PARAMETER;
 	}
 
 	/* connect to the server, using the smbd event context */
@@ -313,9 +251,7 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 					  lpcfg_resolve_context(ntvfs->ctx->lp_ctx),
 					  ntvfs->ctx->event_ctx);
 	status = smb_composite_connect_recv(creq, p);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto out;
-	}
+	NT_STATUS_NOT_OK_RETURN(status);
 
 	p->tree = io.out.tree;
 
@@ -324,15 +260,9 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 	p->ntvfs = ntvfs;
 
 	ntvfs->ctx->fs_type = talloc_strdup(ntvfs->ctx, "NTFS");
-	if (ntvfs->ctx->fs_type == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
+	NT_STATUS_HAVE_NO_MEMORY(ntvfs->ctx->fs_type);
 	ntvfs->ctx->dev_type = talloc_strdup(ntvfs->ctx, "A:");
-	if (ntvfs->ctx->dev_type == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
+	NT_STATUS_HAVE_NO_MEMORY(ntvfs->ctx->dev_type);
 
 	if (tcon->generic.level == RAW_TCON_TCONX) {
 		tcon->tconx.out.fs_type = ntvfs->ctx->fs_type;
@@ -346,11 +276,7 @@ static NTSTATUS cvfs_connect(struct ntvfs_module_context *ntvfs,
 
 	p->map_trans2 = share_bool_option(scfg, CIFS_MAP_TRANS2, CIFS_MAP_TRANS2_DEFAULT);
 
-	status = NT_STATUS_OK;
-
-out:
-	TALLOC_FREE(tmp_ctx);
-	return status;
+	return NT_STATUS_OK;
 }
 
 /*
@@ -1214,38 +1140,38 @@ NTSTATUS ntvfs_cifs_init(void)
 	ops.type = NTVFS_DISK;
 	
 	/* fill in all the operations */
-	ops.connect_fn = cvfs_connect;
-	ops.disconnect_fn = cvfs_disconnect;
-	ops.unlink_fn = cvfs_unlink;
-	ops.chkpath_fn = cvfs_chkpath;
-	ops.qpathinfo_fn = cvfs_qpathinfo;
-	ops.setpathinfo_fn = cvfs_setpathinfo;
-	ops.open_fn = cvfs_open;
-	ops.mkdir_fn = cvfs_mkdir;
-	ops.rmdir_fn = cvfs_rmdir;
-	ops.rename_fn = cvfs_rename;
-	ops.copy_fn = cvfs_copy;
-	ops.ioctl_fn = cvfs_ioctl;
-	ops.read_fn = cvfs_read;
-	ops.write_fn = cvfs_write;
-	ops.seek_fn = cvfs_seek;
-	ops.flush_fn = cvfs_flush;
-	ops.close_fn = cvfs_close;
-	ops.exit_fn = cvfs_exit;
-	ops.lock_fn = cvfs_lock;
-	ops.setfileinfo_fn = cvfs_setfileinfo;
-	ops.qfileinfo_fn = cvfs_qfileinfo;
-	ops.fsinfo_fn = cvfs_fsinfo;
-	ops.lpq_fn = cvfs_lpq;
-	ops.search_first_fn = cvfs_search_first;
-	ops.search_next_fn = cvfs_search_next;
-	ops.search_close_fn = cvfs_search_close;
-	ops.trans_fn = cvfs_trans;
-	ops.logoff_fn = cvfs_logoff;
-	ops.async_setup_fn = cvfs_async_setup;
-	ops.cancel_fn = cvfs_cancel;
-	ops.notify_fn = cvfs_notify;
-	ops.trans2_fn = cvfs_trans2;
+	ops.connect = cvfs_connect;
+	ops.disconnect = cvfs_disconnect;
+	ops.unlink = cvfs_unlink;
+	ops.chkpath = cvfs_chkpath;
+	ops.qpathinfo = cvfs_qpathinfo;
+	ops.setpathinfo = cvfs_setpathinfo;
+	ops.open = cvfs_open;
+	ops.mkdir = cvfs_mkdir;
+	ops.rmdir = cvfs_rmdir;
+	ops.rename = cvfs_rename;
+	ops.copy = cvfs_copy;
+	ops.ioctl = cvfs_ioctl;
+	ops.read = cvfs_read;
+	ops.write = cvfs_write;
+	ops.seek = cvfs_seek;
+	ops.flush = cvfs_flush;	
+	ops.close = cvfs_close;
+	ops.exit = cvfs_exit;
+	ops.lock = cvfs_lock;
+	ops.setfileinfo = cvfs_setfileinfo;
+	ops.qfileinfo = cvfs_qfileinfo;
+	ops.fsinfo = cvfs_fsinfo;
+	ops.lpq = cvfs_lpq;
+	ops.search_first = cvfs_search_first;
+	ops.search_next = cvfs_search_next;
+	ops.search_close = cvfs_search_close;
+	ops.trans = cvfs_trans;
+	ops.logoff = cvfs_logoff;
+	ops.async_setup = cvfs_async_setup;
+	ops.cancel = cvfs_cancel;
+	ops.notify = cvfs_notify;
+	ops.trans2 = cvfs_trans2;
 
 	/* register ourselves with the NTVFS subsystem. We register
 	   under the name 'cifs'. */

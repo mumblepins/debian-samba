@@ -81,7 +81,6 @@ static const struct {
 	{ "SY", SID_NT_SYSTEM },
 	{ "LS", SID_NT_LOCAL_SERVICE },
 	{ "NS", SID_NT_NETWORK_SERVICE },
-	{ "IS", SID_NT_IUSR },
 
 	{ "BA", SID_BUILTIN_ADMINISTRATORS },
 	{ "BU", SID_BUILTIN_USERS },

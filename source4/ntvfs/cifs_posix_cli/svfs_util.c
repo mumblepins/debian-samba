@@ -41,15 +41,16 @@ char *cifspsx_unix_path(struct ntvfs_module_context *ntvfs,
 {
 	struct cifspsx_private *p = ntvfs->private_data;
 	char *ret;
-	char *name_lower = strlower_talloc(p, name);
 
 	if (*name != '\\') {
-		ret = talloc_asprintf(req, "%s/%s", p->connectpath, name_lower);
+		ret = talloc_asprintf(req, "%s/%s", p->connectpath, name);
 	} else {
-		ret = talloc_asprintf(req, "%s%s", p->connectpath, name_lower);
+		ret = talloc_asprintf(req, "%s%s", p->connectpath, name);
 	}
 	all_string_sub(ret, "\\", "/", 0);
-	talloc_free(name_lower);
+
+	strlower(ret + strlen(p->connectpath));
+
 	return ret;
 }
 
@@ -84,8 +85,9 @@ struct cifspsx_dir *cifspsx_list_unix(TALLOC_CTX *mem_ctx, struct ntvfs_request 
 	/* the wildcard pattern is the last part */
 	mask = p+1;
 
-	low_mask = strlower_talloc(mem_ctx, mask);
+	low_mask = talloc_strdup(mem_ctx, mask);
 	if (!low_mask) { return NULL; }
+	strlower(low_mask);
 
 	odir = opendir(dir->unix_dir);
 	if (!odir) { return NULL; }
@@ -100,11 +102,12 @@ struct cifspsx_dir *cifspsx_list_unix(TALLOC_CTX *mem_ctx, struct ntvfs_request 
 			continue;
 		}
 
-		low_name = strlower_talloc(mem_ctx, dent->d_name);
+		low_name = talloc_strdup(mem_ctx, dent->d_name);
 		if (!low_name) { continue; }
+		strlower(low_name);
 
 		/* check it matches the wildcard pattern */
-		if (ms_fnmatch_protocol(low_mask, low_name, PROTOCOL_NT1) != 0) {
+		if (ms_fnmatch(low_mask, low_name, PROTOCOL_NT1) != 0) {
 			continue;
 		}
 		

@@ -55,6 +55,7 @@ struct messaging_context *server_messaging_context(void)
 		 * children exiting.
 		 */
 		server_msg_ctx = messaging_init(NULL,
+					        procid_self(),
 					        server_event_context());
 	}
 	return server_msg_ctx;

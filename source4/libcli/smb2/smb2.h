@@ -28,6 +28,17 @@
 struct smb2_handle;
 struct smb2_lease_break;
 
+/*
+  information returned from the negotiate process
+*/
+struct smb2_negotiate {
+	DATA_BLOB secblob;
+	NTTIME system_time;
+	NTTIME server_start_time;
+	uint16_t security_mode;
+	uint16_t dialect_revision;
+};
+
 struct smb2_request_buffer {
 	/* the raw SMB2 buffer, including the 4 byte length header */
 	uint8_t *buffer;
@@ -59,14 +70,32 @@ struct smb2_request_buffer {
 
 /* this is the context for the smb2 transport layer */
 struct smb2_transport {
-	struct tevent_context *ev; /* TODO: remove this !!! */
-	struct smbXcli_conn *conn;
+	/* socket level info */
+	struct smbcli_socket *socket;
+
+	struct smb2_negotiate negotiate;
+
+	/* next seqnum to allocate */
+	uint64_t seqnum;
 
 	/* the details for coumpounded requests */
 	struct {
+		uint32_t missing;
 		bool related;
-		struct tevent_req **reqs;
+		struct smb2_request_buffer buffer;
 	} compound;
+
+	struct {
+		uint16_t charge;
+		uint16_t ask_num;
+	} credits;
+
+	/* a list of requests that are pending for receive on this
+	   connection */
+	struct smb2_request *pending_recv;
+
+	/* context of the stream -> packet parser */
+	struct packet_context *packet;
 
 	/* an idle function - if this is defined then it will be
 	   called once every period microseconds while we are waiting
@@ -75,7 +104,6 @@ struct smb2_transport {
 		void (*func)(struct smb2_transport *, void *);
 		void *private_data;
 		unsigned int period;
-		struct tevent_timer *te;
 	} idle;
 
 	struct {
@@ -95,9 +123,10 @@ struct smb2_transport {
 		/* private data passed to the oplock handler */
 		void *private_data;
 	} lease;
-	struct tevent_req *break_subreq;
 
 	struct smbcli_options options;
+
+	bool signing_required;
 };
 
 
@@ -106,7 +135,7 @@ struct smb2_transport {
 */
 struct smb2_tree {
 	struct smb2_session *session;
-	struct smbXcli_tcon *smbXcli;
+	uint32_t tid;
 };
 
 /*
@@ -115,8 +144,10 @@ struct smb2_tree {
 struct smb2_session {
 	struct smb2_transport *transport;
 	struct gensec_security *gensec;
-	struct smbXcli_session *smbXcli;
-	bool needs_bind;
+	uint64_t uid;
+	uint32_t pid;
+	DATA_BLOB session_key;
+	bool signing_active;
 };
 
 
@@ -131,17 +162,22 @@ enum smb2_request_state {SMB2_REQUEST_INIT, /* we are creating the request */
 
 /* the context for a single SMB2 request */
 struct smb2_request {
+	/* allow a request to be part of a list of requests */
+	struct smb2_request *next, *prev;
+
 	/* each request is in one of 3 possible states */
 	enum smb2_request_state state;
-
-	struct tevent_req *subreq;
 
 	struct smb2_transport *transport;
 	struct smb2_session   *session;
 	struct smb2_tree      *tree;
 
+	uint64_t seqnum;
+
 	struct {
+		bool do_cancel;
 		bool can_cancel;
+		uint64_t async_id;
 	} cancel;
 
 	/* the NT status for this request. Set by packet receive code
@@ -150,9 +186,6 @@ struct smb2_request {
 
 	struct smb2_request_buffer in;
 	struct smb2_request_buffer out;
-	struct iovec *recv_iov;
-
-	uint16_t credit_charge;
 
 	/* information on what to do with a reply when it is received
 	   asyncronously. If this is not setup when a reply is received then

@@ -119,11 +119,7 @@ workgroup %s. This is a bug.\n", name, work->work_group));
  
 	fstrcpy(servrec->serv.name,name);
 	fstrcpy(servrec->serv.comment,comment);
-	if (!strupper_m(servrec->serv.name)) {
-		DEBUG(2,("strupper_m %s failed\n", servrec->serv.name));
-		SAFE_FREE(servrec);
-		return NULL;
-	}
+	strupper_m(servrec->serv.name);
 	servrec->serv.type  = servertype;
 
 	update_server_ttl(servrec, ttl);
@@ -132,6 +128,8 @@ workgroup %s. This is a bug.\n", name, work->work_group));
       
 	DEBUG(3,("create_server_on_workgroup: Created server entry %s of type %x (%s) on \
 workgroup %s.\n", name,servertype,comment, work->work_group));
+ 
+	work->subnet->work_changed = True;
  
 	return(servrec);
 }
@@ -149,6 +147,8 @@ void update_server_ttl(struct server_record *servrec, int ttl)
 		servrec->death_time = PERMANENT_TTL;
 	else
 		servrec->death_time = (ttl != PERMANENT_TTL) ? time(NULL)+(ttl*3) : PERMANENT_TTL;
+
+	servrec->subnet->work_changed = True;
 }
 
 /*******************************************************************
@@ -168,6 +168,7 @@ void expire_servers(struct work_record *work, time_t t)
 		if ((servrec->death_time != PERMANENT_TTL) && ((t == -1) || (servrec->death_time < t))) {
 			DEBUG(3,("expire_old_servers: Removing timed out server %s\n",servrec->serv.name));
 			remove_server_from_workgroup(work, servrec);
+			work->subnet->work_changed = True;
 		}
 	}
 }
@@ -178,7 +179,7 @@ void expire_servers(struct work_record *work, time_t t)
  out this server record from an earlier subnet.
 ******************************************************************/
 
-static uint32_t write_this_server_name( struct subnet_record *subrec,
+static uint32 write_this_server_name( struct subnet_record *subrec,
                                       struct work_record *work,
                                       struct server_record *servrec)
 {
@@ -216,7 +217,7 @@ static uint32_t write_this_server_name( struct subnet_record *subrec,
  broadcast subnets.
 ******************************************************************/
 
-static uint32_t write_this_workgroup_name( struct subnet_record *subrec,
+static uint32 write_this_workgroup_name( struct subnet_record *subrec, 
                                          struct work_record *work)
 {
 	struct subnet_record *ssub;
@@ -248,7 +249,7 @@ static uint32_t write_this_workgroup_name( struct subnet_record *subrec,
   Write out the browse.dat file.
   ******************************************************************/
 
-void write_browse_list_entry(XFILE *fp, const char *name, uint32_t rec_type,
+void write_browse_list_entry(XFILE *fp, const char *name, uint32 rec_type,
 		const char *local_master_browser_name, const char *description)
 {
 	fstring tmp;
@@ -268,7 +269,7 @@ void write_browse_list(time_t t, bool force_write)
 	struct server_record *servrec;
 	char *fname;
 	char *fnamenew;
-	uint32_t stype;
+	uint32 stype;
 	int i;
 	XFILE *fp;
 	bool list_changed = force_write;
@@ -306,7 +307,6 @@ void write_browse_list(time_t t, bool force_write)
 	fnamenew = talloc_asprintf(ctx, "%s.",
 				fname);
 	if (!fnamenew) {
-		talloc_free(fname);
 		return;
 	}
 
@@ -315,8 +315,6 @@ void write_browse_list(time_t t, bool force_write)
 	if (!fp) {
 		DEBUG(0,("write_browse_list: Can't open file %s. Error was %s\n",
 			fnamenew,strerror(errno)));
-		talloc_free(fnamenew);
-		talloc_free(fname);
 		return;
 	}
 
@@ -329,8 +327,6 @@ void write_browse_list(time_t t, bool force_write)
 		DEBUG(0,("write_browse_list: Fatal error - cannot find my workgroup %s\n",
 			lp_workgroup()));
 		x_fclose(fp);
-		talloc_free(fnamenew);
-		talloc_free(fname);
 		return;
 	}
 
@@ -359,7 +355,7 @@ void write_browse_list(time_t t, bool force_write)
 
 		/* Output server details, plus what workgroup they're in. */
 		write_browse_list_entry(fp, my_netbios_names(i), stype,
-			string_truncate(lp_server_string(talloc_tos()), MAX_SERVER_STRING_LENGTH), lp_workgroup());
+			string_truncate(lp_serverstring(), MAX_SERVER_STRING_LENGTH), lp_workgroup());
 	}
 
 	for (subrec = FIRST_SUBNET; subrec ; subrec = NEXT_SUBNET_INCLUDING_UNICAST(subrec)) { 
@@ -367,7 +363,7 @@ void write_browse_list(time_t t, bool force_write)
 
 		for (work = subrec->workgrouplist; work ; work = work->next) {
 			/* Write out a workgroup record for a workgroup. */
-			uint32_t wg_type = write_this_workgroup_name( subrec, work);
+			uint32 wg_type = write_this_workgroup_name( subrec, work);
 
 			if(wg_type) {
 				write_browse_list_entry(fp, work->work_group, wg_type,
@@ -378,7 +374,7 @@ void write_browse_list(time_t t, bool force_write)
 			/* Now write out any server records a workgroup may have. */
 
 			for (servrec = work->serverlist; servrec ; servrec = servrec->next) {
-				uint32_t serv_type;
+				uint32 serv_type;
 
 				/* We have already written our names here. */
 				if(is_myname(servrec->serv.name))
@@ -399,6 +395,4 @@ void write_browse_list(time_t t, bool force_write)
 	chmod(fnamenew,0644);
 	rename(fnamenew,fname);
 	DEBUG(3,("write_browse_list: Wrote browse list into file %s\n",fname));
-	talloc_free(fnamenew);
-	talloc_free(fname);
 }

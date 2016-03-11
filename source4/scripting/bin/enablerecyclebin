@@ -2,7 +2,9 @@
 #
 # enabled the Recycle Bin optional feature
 #
+import base64
 import optparse
+import os
 import sys
 
 # Find right directory when running from source tree
@@ -10,7 +12,7 @@ sys.path.insert(0, "bin/python")
 
 import samba
 from samba import getopt as options, Ldb
-from ldb import SCOPE_BASE
+from ldb import SCOPE_SUBTREE, SCOPE_BASE, LdbError
 import sys
 import ldb
 from samba.auth import system_session
@@ -46,8 +48,8 @@ configbase=rootDse["configurationNamingContext"]
 msg = ldb.Message()
 msg.dn = ldb.Dn(sam_ldb, "")
 msg["enableOptionalFeature"] = ldb.MessageElement(
-     "CN=Partitions," +  str(configbase) + ":766ddcd8-acd0-445e-f3b9-a7f9b6744f2a",
-     ldb.FLAG_MOD_ADD, "enableOptionalFeature")
+			     "CN=Partitions," +  str(configbase) + ":766ddcd8-acd0-445e-f3b9-a7f9b6744f2a",
+			     ldb.FLAG_MOD_ADD, "enableOptionalFeature")
 res = sam_ldb.modify(msg)
 
 print "Recycle Bin feature enabled"

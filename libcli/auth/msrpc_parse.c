@@ -78,7 +78,7 @@ NTSTATUS msrpc_gen(TALLOC_CTX *mem_ctx,
 				s, &n);
 			if (!ret) {
 				va_end(ap);
-				return map_nt_error_from_unix_common(errno);
+				return map_nt_error_from_unix(errno);
 			}
 			pointers[i].length = n;
 			pointers[i].length -= 2;
@@ -92,7 +92,7 @@ NTSTATUS msrpc_gen(TALLOC_CTX *mem_ctx,
 				s, &n);
 			if (!ret) {
 				va_end(ap);
-				return map_nt_error_from_unix_common(errno);
+				return map_nt_error_from_unix(errno);
 			}
 			pointers[i].length = n;
 			pointers[i].length -= 1;
@@ -108,7 +108,7 @@ NTSTATUS msrpc_gen(TALLOC_CTX *mem_ctx,
 				s, &n);
 			if (!ret) {
 				va_end(ap);
-				return map_nt_error_from_unix_common(errno);
+				return map_nt_error_from_unix(errno);
 			}
 			pointers[i].length = n;
 			pointers[i].length -= 2;
@@ -177,7 +177,9 @@ NTSTATUS msrpc_gen(TALLOC_CTX *mem_ctx,
 
 			n = pointers[i].length;
 			SSVAL(blob->data, data_ofs, n); data_ofs += 2;
-			memcpy(blob->data+data_ofs, pointers[i].data, n);
+			if (n >= 0) {
+				memcpy(blob->data+data_ofs, pointers[i].data, n);
+			}
 			data_ofs += n;
 			break;
 		case 'd':
@@ -284,7 +286,7 @@ bool msrpc_parse(TALLOC_CTX *mem_ctx,
 					size_t pull_len;
 					if (!convert_string_talloc(mem_ctx, CH_UTF16, CH_UNIX, 
 								   blob->data + ptr, len1, 
-								   ps, &pull_len)) {
+								   ps, &pull_len, false)) {
 						ret = false;
 						goto cleanup;
 					}
@@ -320,7 +322,7 @@ bool msrpc_parse(TALLOC_CTX *mem_ctx,
 
 					if (!convert_string_talloc(mem_ctx, CH_DOS, CH_UNIX, 
 								   blob->data + ptr, len1, 
-								   ps, &pull_len)) {
+								   ps, &pull_len, false)) {
 						ret = false;
 						goto cleanup;
 					}

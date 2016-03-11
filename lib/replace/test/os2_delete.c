@@ -12,7 +12,6 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
-#include "replace-test.h"
 
 #define NUM_FILES 700
 #define READDIR_SIZE 100
@@ -22,7 +21,7 @@
 
 static int test_readdir_os2_delete_ret;
 
-#define FAILED(d) (printf("failure: readdir [\nFailed for %s - %d = %s\n]\n", d, errno, strerror(errno)), test_readdir_os2_delete_ret = 1)
+#define FAILED(d) (printf("failure: readdir [\nFailed for %s - %d = %s\n]\n", d, errno, strerror(errno)), test_readdir_os2_delete_ret = 1, 1)
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -70,8 +69,7 @@ static int os2_delete(DIR *d)
 	     de && i < READDIR_SIZE; 
 	     de=readdir(d), i++) {
 		offsets[i] = telldir(d);
-		/* strlcpy not available here */
-		snprintf(names[i], sizeof(names[i]), "%s", de->d_name);
+		strcpy(names[i], de->d_name);
 	}
 
 	if (i == 0) {

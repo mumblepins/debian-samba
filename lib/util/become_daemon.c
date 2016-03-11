@@ -24,39 +24,42 @@
 #include "includes.h"
 #include "system/filesys.h"
 #include "system/locale.h"
-#if HAVE_LIBSYSTEMD_DAEMON
-#include <systemd/sd-daemon.h>
-#endif
-#include "lib/util/close_low_fd.h"
 
 /*******************************************************************
  Close the low 3 fd's and open dev/null in their place.
 ********************************************************************/
 
-_PUBLIC_ void close_low_fds(bool stdin_too, bool stdout_too, bool stderr_too)
+_PUBLIC_ void close_low_fds(bool stderr_too)
 {
+#ifndef VALGRIND
+	int fd;
+	int i;
 
-	if (stdin_too) {
-		int ret = close_low_fd(0);
-		if (ret != 0) {
-			DEBUG(0, ("%s: close_low_fd(0) failed: %s\n",
-				  __func__, strerror(ret)));
+	close(0);
+	close(1);
+
+	if (stderr_too)
+		close(2);
+
+	/* try and use up these file descriptors, so silly
+		library routines writing to stdout etc won't cause havoc */
+	for (i=0;i<3;i++) {
+		if (i == 2 && !stderr_too)
+			continue;
+
+		fd = open("/dev/null",O_RDWR,0);
+		if (fd < 0)
+			fd = open("/dev/null",O_WRONLY,0);
+		if (fd < 0) {
+			DEBUG(0,("Can't open /dev/null\n"));
+			return;
+		}
+		if (fd != i) {
+			DEBUG(0,("Didn't get file descriptor %d\n",i));
+			return;
 		}
 	}
-	if (stdout_too) {
-		int ret = close_low_fd(1);
-		if (ret != 0) {
-			DEBUG(0, ("%s: close_low_fd(1) failed: %s\n",
-				  __func__, strerror(ret)));
-		}
-	}
-	if (stderr_too) {
-		int ret = close_low_fd(2);
-		if (ret != 0) {
-			DEBUG(0, ("%s: close_low_fd(2) failed: %s\n",
-				  __func__, strerror(ret)));
-		}
-	}
+#endif
 }
 
 /****************************************************************************
@@ -65,13 +68,8 @@ _PUBLIC_ void close_low_fds(bool stdin_too, bool stdout_too, bool stderr_too)
 
 _PUBLIC_ void become_daemon(bool do_fork, bool no_process_group, bool log_stdout)
 {
-	pid_t newpid;
 	if (do_fork) {
-		newpid = fork();
-		if (newpid) {
-#if HAVE_LIBSYSTEMD_DAEMON
-			sd_notifyf(0, "READY=0\nSTATUS=Starting process...\nMAINPID=%lu", (unsigned long) newpid);
-#endif /* HAVE_LIBSYSTEMD_DAEMON */
+		if (sys_fork()) {
 			_exit(0);
 		}
 	}
@@ -81,7 +79,7 @@ _PUBLIC_ void become_daemon(bool do_fork, bool no_process_group, bool log_stdout
 	if (!no_process_group) setsid();
 #elif defined(TIOCNOTTY)
 	if (!no_process_group) {
-		int i = open("/dev/tty", O_RDWR, 0);
+		int i = sys_open("/dev/tty", O_RDWR, 0);
 		if (i != -1) {
 			ioctl(i, (int) TIOCNOTTY, (char *)0);
 			close(i);
@@ -89,48 +87,9 @@ _PUBLIC_ void become_daemon(bool do_fork, bool no_process_group, bool log_stdout
 	}
 #endif /* HAVE_SETSID */
 
-	/* Close fd's 0,1,2 as appropriate. Needed if started by rsh. */
-	/* stdin must be open if we do not fork, for monitoring for
-	 * close.  stdout must be open if we are logging there, and we
-	 * never close stderr (but debug might dup it onto a log file) */
-	close_low_fds(do_fork, !log_stdout, false);
-}
-
-_PUBLIC_ void exit_daemon(const char *msg, int error)
-{
-#ifdef HAVE_LIBSYSTEMD_DAEMON
-	if (msg == NULL) {
-		msg = strerror(error);
+	if (!log_stdout) {
+		/* Close fd's 0,1,2. Needed if started by rsh */
+		close_low_fds(false);  /* Don't close stderr, let the debug system
+					  attach it to the logfile */
 	}
-
-	sd_notifyf(0, "STATUS=daemon failed to start: %s\n"
-				  "ERRNO=%i",
-				  msg,
-				  error);
-#endif
-	DEBUG(0, ("STATUS=daemon failed to start: %s, error code %d\n", msg, error));
-	exit(1);
-}
-
-_PUBLIC_ void daemon_ready(const char *name)
-{
-	if (name == NULL) {
-		name = "Samba";
-	}
-#ifdef HAVE_LIBSYSTEMD_DAEMON
-	sd_notifyf(0, "READY=1\nSTATUS=%s: ready to serve connections...", name);
-#endif
-	DEBUG(0, ("STATUS=daemon '%s' finished starting up and ready to serve "
-		  "connections\n", name));
-}
-
-_PUBLIC_ void daemon_status(const char *name, const char *msg)
-{
-	if (name == NULL) {
-		name = "Samba";
-	}
-#ifdef HAVE_LIBSYSTEMD_DAEMON
-	sd_notifyf(0, "\nSTATUS=%s: %s", name, msg);
-#endif
-	DEBUG(0, ("STATUS=daemon '%s' : %s", name, msg));
 }

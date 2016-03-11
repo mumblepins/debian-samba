@@ -19,10 +19,11 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "librpc/gen_ndr/ndr_winbind_c.h"
+#include "librpc/gen_ndr/ndr_wbint_c.h"
 #include "../libcli/security/security.h"
 
 struct wb_getpwsid_state {
+	struct winbindd_domain *user_domain;
 	struct tevent_context *ev;
 	struct dom_sid sid;
 	struct wbint_userinfo *userinfo;
@@ -49,6 +50,12 @@ struct tevent_req *wb_getpwsid_send(TALLOC_CTX *mem_ctx,
 	state->ev = ev;
 	state->pw = pw;
 
+	state->user_domain = find_domain_from_sid_noinit(user_sid);
+	if (state->user_domain == NULL) {
+		tevent_req_nterror(req, NT_STATUS_NO_SUCH_USER);
+		return tevent_req_post(req, ev);
+	}
+
 	subreq = wb_queryuser_send(state, ev, &state->sid);
 	if (tevent_req_nomem(subreq, req)) {
 		return tevent_req_post(req, ev);
@@ -67,12 +74,14 @@ static void wb_getpwsid_queryuser_done(struct tevent_req *subreq)
 
 	status = wb_queryuser_recv(subreq, state, &state->userinfo);
 	TALLOC_FREE(subreq);
-	if (NT_STATUS_IS_OK(status)
-	    && (state->userinfo->acct_name != NULL)
-	    && (state->userinfo->acct_name[0] != '\0'))
-	{
+	if (tevent_req_nterror(req, status)) {
+		return;
+	}
+
+	if ((state->userinfo->acct_name != NULL)
+	    && (state->userinfo->acct_name[0] != '\0')) {
 		/*
-		 * QueryUser got us a name, let's go directly to the
+		 * QueryUser got us a name, let's got directly to the
 		 * fill_pwent step
 		 */
 		subreq = wb_fill_pwent_send(state, state->ev, state->userinfo,
@@ -85,25 +94,10 @@ static void wb_getpwsid_queryuser_done(struct tevent_req *subreq)
 	}
 
 	/*
-	 * Either query_user did not succeed, or it
-	 * succeeded but did not return an acct_name.
-	 * (TODO: Can this happen at all???)
-	 * ==> Try lsa_lookupsids.
+	 * QueryUser didn't get us a name, do it via LSA.
 	 */
-	if (state->userinfo == NULL) {
-		state->userinfo = talloc_zero(state, struct wbint_userinfo);
-		if (tevent_req_nomem(state->userinfo, req)) {
-			return;
-		}
-
-		/* a successful query_user call would have filled these */
-		sid_copy(&state->userinfo->user_sid, &state->sid);
-		state->userinfo->homedir = NULL;
-		state->userinfo->shell = NULL;
-		state->userinfo->primary_gid = (gid_t)-1;
-	}
-
-	subreq = wb_lookupsid_send(state, state->ev, &state->sid);
+	subreq = wb_lookupsid_send(state, state->ev,
+				   &state->userinfo->user_sid);
 	if (tevent_req_nomem(subreq, req)) {
 		return;
 	}
@@ -126,27 +120,6 @@ static void wb_getpwsid_lookupsid_done(struct tevent_req *subreq)
 	if (tevent_req_nterror(req, status)) {
 		return;
 	}
-
-	switch (type) {
-	case SID_NAME_USER:
-	case SID_NAME_COMPUTER:
-		/*
-		 * user case: we only need the account name from lookup_sids
-		 */
-		break;
-	case SID_NAME_DOM_GRP:
-	case SID_NAME_ALIAS:
-	case SID_NAME_WKN_GRP:
-		/*
-		 * also treat group-type SIDs (they might map to ID_TYPE_BOTH)
-		 */
-		sid_copy(&state->userinfo->group_sid, &state->sid);
-		break;
-	default:
-		tevent_req_nterror(req, NT_STATUS_NO_SUCH_USER);
-		return;
-	}
-
 	subreq = wb_fill_pwent_send(state, state->ev, state->userinfo,
 				    state->pw);
 	if (tevent_req_nomem(subreq, req)) {
@@ -170,5 +143,10 @@ static void wb_getpwsid_done(struct tevent_req *subreq)
 
 NTSTATUS wb_getpwsid_recv(struct tevent_req *req)
 {
-	return tevent_req_simple_recv_ntstatus(req);
+	NTSTATUS status;
+
+	if (tevent_req_is_nterror(req, &status)) {
+		return status;
+	}
+	return NT_STATUS_OK;
 }

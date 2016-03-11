@@ -24,7 +24,6 @@
 #include "libcli/libcli.h"
 #include "torture/util.h"
 #include "lib/util/tsort.h"
-#include "torture/raw/proto.h"
 
 
 #define BASEDIR "\\testsearch"
@@ -35,17 +34,14 @@
 			NT_STATUS_NOT_SUPPORTED) ||			\
 		    NT_STATUS_EQUAL(__status,				\
 			NT_STATUS_NOT_IMPLEMENTED)) {			\
-			__supp = false;					\
-		} else {						\
-			__supp = true;					\
-		}							\
-		if (__supp) {						\
-			torture_assert_ntstatus_ok_goto(__tctx,		\
-			    __status, ret, done, #__level" failed");	\
-		} else {						\
 			torture_warning(__tctx, "(%s) Info "		\
 			    "level "#__level" is %s",			\
 			    __location__, nt_errstr(__status));		\
+			__supp = false;					\
+		} else {						\
+			torture_assert_ntstatus_ok_goto(__tctx,		\
+			    __status, ret, done, #__level" failed");	\
+			__supp = true;					\
 		}							\
 	} while (0)
 
@@ -733,7 +729,9 @@ static bool test_many_files(struct torture_context *tctx,
 		{"ID_BOTH_DIRECTORY_INFO", "KEY",   RAW_SEARCH_DATA_ID_BOTH_DIRECTORY_INFO, CONT_RESUME_KEY}
 	};
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing with %d files\n", num_files);
 
@@ -851,7 +849,9 @@ static bool test_modify_search(struct torture_context *tctx,
 	union smb_search_next io2;
 	union smb_setfileinfo sfinfo;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	printf("Creating %d files\n", num_files);
 
@@ -968,7 +968,9 @@ static bool test_sorted(struct torture_context *tctx, struct smbcli_state *cli)
 	NTSTATUS status;
 	struct multiple_result result;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	printf("Creating %d files\n", num_files);
 
@@ -1035,7 +1037,9 @@ static bool test_many_dirs(struct torture_context *tctx,
 			"doesn't support old style search calls\n");
 		return true;
 	}
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	printf("Creating %d dirs\n", num_dirs);
 
@@ -1209,7 +1213,9 @@ static bool test_os2_delete(struct torture_context *tctx,
 		return true;
 	}
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	printf("Testing OS/2 style delete on %d files\n", num_files);
 
@@ -1316,7 +1322,9 @@ static bool test_ea_list(struct torture_context *tctx,
 	struct multiple_result result;
 	union smb_setfileinfo setfile;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	printf("Testing RAW_SEARCH_EA_LIST level\n");
 
@@ -1437,7 +1445,9 @@ static bool test_max_count(struct torture_context *tctx,
 	union smb_search_first io;
 	union smb_search_next io2;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Creating %d files\n", num_files);
 

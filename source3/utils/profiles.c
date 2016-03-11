@@ -129,15 +129,8 @@ static bool copy_registry_tree( REGF_FILE *infile, REGF_NK_REC *nk,
 
 	/* swap out the SIDs in the security descriptor */
 
-	if (nk->sec_desc->sec_desc == NULL) {
-		fprintf(stderr, "Invalid (NULL) security descriptor!\n");
-		return false;
-	}
-
-	new_sd = security_descriptor_copy(outfile->mem_ctx,
-					  nk->sec_desc->sec_desc);
-	if (new_sd == NULL) {
-		fprintf(stderr, "Failed to copy security descriptor!\n");
+	if ( !(new_sd = dup_sec_desc( outfile->mem_ctx, nk->sec_desc->sec_desc )) ) {
+		fprintf( stderr, "Failed to copy security descriptor!\n" );
 		return False;
 	}
 
@@ -189,11 +182,11 @@ static bool copy_registry_tree( REGF_FILE *infile, REGF_NK_REC *nk,
 		}
 	}
 
+	/* values is a talloc()'d child of subkeys here so just throw it all away */
+
+	TALLOC_FREE( subkeys );
 
 	verbose_output("[%s]\n", path);
-
-	/* values is a talloc()'d child of subkeys here so just throw it all away */
-	TALLOC_FREE(subkeys);
 
 	return True;
 }
@@ -201,7 +194,7 @@ static bool copy_registry_tree( REGF_FILE *infile, REGF_NK_REC *nk,
 /*********************************************************************
 *********************************************************************/
 
-int main( int argc, const char *argv[] )
+int main( int argc, char *argv[] )
 {
 	TALLOC_CTX *frame = talloc_stackframe();
 	int opt;
@@ -219,13 +212,13 @@ int main( int argc, const char *argv[] )
 	};
 	poptContext pc;
 
-	smb_init_locale();
+	load_case_tables();
 
 	/* setup logging options */
 
 	setup_logging( "profiles", DEBUG_STDERR);
 
-	pc = poptGetContext("profiles", argc, argv, long_options,
+	pc = poptGetContext("profiles", argc, (const char **)argv, long_options,
 		POPT_CONTEXT_KEEP_FIRST);
 
 	poptSetOtherOptionHelp(pc, "<profilefile>");

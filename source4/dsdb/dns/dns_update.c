@@ -35,12 +35,9 @@
 #include "lib/messaging/irpc.h"
 #include "param/param.h"
 #include "system/filesys.h"
-#include "dsdb/common/util.h"
 #include "libcli/composite/composite.h"
 #include "libcli/security/dom_sid.h"
 #include "librpc/gen_ndr/ndr_irpc.h"
-
-NTSTATUS server_service_dnsupdate_init(void);
 
 struct dnsupdate_service {
 	struct task_server *task;
@@ -80,7 +77,7 @@ static void dnsupdate_rndc_done(struct tevent_req *subreq)
 	ret = samba_runcmd_recv(subreq, &sys_errno);
 	TALLOC_FREE(subreq);
 	if (ret != 0) {
-		service->confupdate.status = map_nt_error_from_unix_common(sys_errno);
+		service->confupdate.status = map_nt_error_from_unix(sys_errno);
 	} else {
 		service->confupdate.status = NT_STATUS_OK;
 	}
@@ -100,81 +97,36 @@ static void dnsupdate_rebuild(struct dnsupdate_service *service)
 {
 	int ret;
 	size_t size;
-	struct ldb_result *res1, *res2;
+	struct ldb_result *res;
 	const char *tmp_path, *path, *path_static;
 	char *static_policies;
 	int fd;
 	unsigned int i;
-	const char *attrs1[] = { "msDS-HasDomainNCs", NULL };
-	const char *attrs2[] = { "name", NULL };
+	const char *attrs[] = { "sAMAccountName", NULL };
 	const char *realm = lpcfg_realm(service->task->lp_ctx);
 	TALLOC_CTX *tmp_ctx = talloc_new(service);
 	const char * const *rndc_command = lpcfg_rndc_command(service->task->lp_ctx);
-	const char **dc_list;
-	int dc_count=0;
 
 	/* abort any pending script run */
 	TALLOC_FREE(service->confupdate.subreq);
 
-	/* find the DNs for all the non-RODC DCs in the forest */
-	ret = dsdb_search(service->samdb, tmp_ctx, &res1, ldb_get_config_basedn(service->samdb),
-			  LDB_SCOPE_SUBTREE,
-			  attrs1,
-			  0,
-			  "(&(objectclass=NTDSDSA)(!(msDS-isRODC=TRUE)))");
+	ret = ldb_search(service->samdb, tmp_ctx, &res, NULL, LDB_SCOPE_SUBTREE,
+			 attrs, "(|(samaccountname=administrator)(&(primaryGroupID=%u)(objectClass=computer)))",
+			 DOMAIN_RID_DCS);
 	if (ret != LDB_SUCCESS) {
 		DEBUG(0,(__location__ ": Unable to find DCs list - %s", ldb_errstring(service->samdb)));
 		talloc_free(tmp_ctx);
 		return;
 	}
 
-	dc_list = talloc_array(tmp_ctx, const char *, 0);
-	for (i=0; i<res1->count; i++) {
-		struct ldb_dn *server_dn = res1->msgs[i]->dn;
-		struct ldb_dn *domain_dn;
-		const char *acct_name, *full_account, *dns_domain;
-
-		/* this is a nasty hack to form the account name of
-		 * this DC. We do it this way as we don't necessarily
-		 * have access to the domain NC, so all we have to go
-		 * on is what is in the configuration partition
-		 */
-
-		domain_dn = ldb_msg_find_attr_as_dn(service->samdb, tmp_ctx, res1->msgs[i], "msDS-HasDomainNCs");
-		if (domain_dn == NULL) continue;
-
-		ldb_dn_remove_child_components(server_dn, 1);
-		ret = dsdb_search_dn(service->samdb, tmp_ctx, &res2, server_dn, attrs2, 0);
-		if (ret != LDB_SUCCESS) {
-			continue;
-		}
-
-		acct_name = ldb_msg_find_attr_as_string(res2->msgs[0], "name", NULL);
-		if (acct_name == NULL) continue;
-
-		dns_domain = samdb_dn_to_dns_domain(tmp_ctx, domain_dn);
-		if (dns_domain == NULL) {
-			continue;
-		}
-
-		full_account = talloc_asprintf(tmp_ctx, "%s$@%s", acct_name, dns_domain);
-		if (full_account == NULL) continue;
-
-		dc_list = talloc_realloc(tmp_ctx, dc_list, const char *, dc_count+1);
-		if (dc_list == NULL) {
-			continue;
-		}
-		dc_list[dc_count++] = full_account;
-	}
-
 	path = lpcfg_parm_string(service->task->lp_ctx, NULL, "dnsupdate", "path");
 	if (path == NULL) {
-		path = lpcfg_private_path(tmp_ctx, service->task->lp_ctx, "named.conf.update");
+		path = private_path(tmp_ctx, service->task->lp_ctx, "named.conf.update");
 	}
 
 	path_static = lpcfg_parm_string(service->task->lp_ctx, NULL, "dnsupdate", "extra_static_grant_rules");
 	if (path_static == NULL) {
-		path_static = lpcfg_private_path(tmp_ctx, service->task->lp_ctx, "named.conf.update.static");
+		path_static = private_path(tmp_ctx, service->task->lp_ctx, "named.conf.update.static");
 	}
 
 	tmp_path = talloc_asprintf(tmp_ctx, "%s.tmp", path);
@@ -202,10 +154,14 @@ static void dnsupdate_rebuild(struct dnsupdate_service *service)
 		dprintf(fd, "/* End of static entries */\n");
 	}
 	dprintf(fd, "\tgrant %s ms-self * A AAAA;\n", realm);
-	dprintf(fd, "\tgrant Administrator@%s wildcard * A AAAA SRV CNAME;\n", realm);
 
-	for (i=0; i<dc_count; i++) {
-		dprintf(fd, "\tgrant %s wildcard * A AAAA SRV CNAME;\n", dc_list[i]);
+	for (i=0; i<res->count; i++) {
+		const char *acctname;
+		acctname = ldb_msg_find_attr_as_string(res->msgs[i],
+						       "sAMAccountName", NULL);
+		if (!acctname) continue;
+		dprintf(fd, "\tgrant %s@%s wildcard * A AAAA SRV CNAME;\n",
+			acctname, realm);
 	}
 	dprintf(fd, "};\n");
 	close(fd);
@@ -284,7 +240,7 @@ static void dnsupdate_nameupdate_done(struct tevent_req *subreq)
 	ret = samba_runcmd_recv(subreq, &sys_errno);
 	TALLOC_FREE(subreq);
 	if (ret != 0) {
-		service->nameupdate.status = map_nt_error_from_unix_common(sys_errno);
+		service->nameupdate.status = map_nt_error_from_unix(sys_errno);
 	} else {
 		service->nameupdate.status = NT_STATUS_OK;
 	}
@@ -313,7 +269,7 @@ static void dnsupdate_spnupdate_done(struct tevent_req *subreq)
 	ret = samba_runcmd_recv(subreq, &sys_errno);
 	TALLOC_FREE(subreq);
 	if (ret != 0) {
-		service->nameupdate.status = map_nt_error_from_unix_common(sys_errno);
+		service->nameupdate.status = map_nt_error_from_unix(sys_errno);
 	} else {
 		service->nameupdate.status = NT_STATUS_OK;
 	}
@@ -397,7 +353,6 @@ struct dnsupdate_RODC_state {
 	struct irpc_message *msg;
 	struct dnsupdate_RODC *r;
 	char *tmp_path;
-	char *tmp_path2;
 	int fd;
 };
 
@@ -407,9 +362,6 @@ static int dnsupdate_RODC_destructor(struct dnsupdate_RODC_state *st)
 		close(st->fd);
 	}
 	unlink(st->tmp_path);
-	if (st->tmp_path2 != NULL) {
-		unlink(st->tmp_path2);
-	}
 	return 0;
 }
 
@@ -427,7 +379,7 @@ static void dnsupdate_RODC_callback(struct tevent_req *req)
 	ret = samba_runcmd_recv(req, &sys_errno);
 	talloc_free(req);
 	if (ret != 0) {
-		st->r->out.result = map_nt_error_from_unix_common(sys_errno);
+		st->r->out.result = map_nt_error_from_unix(sys_errno);
 		DEBUG(2,(__location__ ": RODC DNS Update failed: %s\n", nt_errstr(st->r->out.result)));
 	} else {
 		st->r->out.result = NT_STATUS_OK;
@@ -456,8 +408,7 @@ static NTSTATUS dnsupdate_dnsupdate_RODC(struct irpc_message *msg,
 	struct tevent_req *req;
 	int i, ret;
 	struct GUID ntds_guid;
-	const char *site, *dnsdomain, *dnsforest, *ntdsguid;
-	const char *hostname = NULL;
+	const char *site, *dnsdomain, *dnsforest, *ntdsguid, *hostname;
 	struct ldb_dn *sid_dn;
 	const char *attrs[] = { "dNSHostName", NULL };
 	struct ldb_result *res;
@@ -487,13 +438,6 @@ static NTSTATUS dnsupdate_dnsupdate_RODC(struct irpc_message *msg,
 	}
 
 	talloc_set_destructor(st, dnsupdate_RODC_destructor);
-
-	st->tmp_path2 = talloc_asprintf(st, "%s.cache", st->tmp_path);
-	if (!st->tmp_path2) {
-		talloc_free(st);
-		r->out.result = NT_STATUS_NO_MEMORY;
-		return NT_STATUS_OK;
-	}
 
 	sid_dn = ldb_dn_new_fmt(st, s->samdb, "<SID=%s>", dom_sid_string(st, r->in.dom_sid));
 	if (!sid_dn) {
@@ -587,8 +531,6 @@ static NTSTATUS dnsupdate_dnsupdate_RODC(struct irpc_message *msg,
 				dns_update_command,
 				"--update-list",
 				st->tmp_path,
-				"--update-cache",
-				st->tmp_path2,
 				NULL);
 	NT_STATUS_HAVE_NO_MEMORY(req);
 
@@ -608,7 +550,7 @@ static void dnsupdate_task_init(struct task_server *task)
 	NTSTATUS status;
 	struct dnsupdate_service *service;
 
-	if (lpcfg_server_role(task->lp_ctx) != ROLE_ACTIVE_DIRECTORY_DC) {
+	if (lpcfg_server_role(task->lp_ctx) != ROLE_DOMAIN_CONTROLLER) {
 		/* not useful for non-DC */
 		return;
 	}

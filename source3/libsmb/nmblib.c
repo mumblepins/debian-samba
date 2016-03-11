@@ -68,9 +68,8 @@ static void debug_nmb_res_rec(struct res_rec *res, const char *hdr)
 		res->rr_class,
 		res->ttl ) );
 
-	if (res->rdlength == 0) {
+	if( res->rdlength == 0 || res->rdata == NULL )
 		return;
-	}
 
 	for (i = 0; i < res->rdlength; i+= MAX_NETBIOSNAME_LEN) {
 		DEBUGADD(4, ("    %s %3x char ", hdr, i));
@@ -289,7 +288,7 @@ void put_name(char *dest, const char *name, int pad, unsigned int name_type)
  If buf == NULL this is a length calculation.
 ******************************************************************/
 
-static int put_nmb_name(char *buf, size_t buflen, int offset,struct nmb_name *name)
+static int put_nmb_name(char *buf,int offset,struct nmb_name *name)
 {
 	int ret,m;
 	nstring buf1;
@@ -303,9 +302,6 @@ static int put_nmb_name(char *buf, size_t buflen, int offset,struct nmb_name *na
 	}
 
 	if (buf) {
-		if (offset >= buflen) {
-			return 0;
-		}
 		buf[offset] = 0x20;
 	}
 
@@ -313,9 +309,6 @@ static int put_nmb_name(char *buf, size_t buflen, int offset,struct nmb_name *na
 
 	for (m=0;m<MAX_NETBIOSNAME_LEN;m++) {
 		if (buf) {
-			if (offset+2+2*m >= buflen) {
-				return 0;
-			}
 			buf[offset+1+2*m] = 'A' + ((buf1[m]>>4)&0xF);
 			buf[offset+2+2*m] = 'A' + (buf1[m]&0xF);
 		}
@@ -323,30 +316,20 @@ static int put_nmb_name(char *buf, size_t buflen, int offset,struct nmb_name *na
 	offset += 33;
 
 	if (buf) {
-		if (offset >= buflen) {
-			return 0;
-		}
 		buf[offset] = 0;
 	}
 
 	if (name->scope[0]) {
 		/* XXXX this scope handling needs testing */
-		size_t scopenamelen = strlen(name->scope) + 1;
-		ret += scopenamelen;
+		ret += strlen(name->scope) + 1;
 		if (buf) {
-			if (offset+1+scopenamelen >= buflen) {
-				return 0;
-			}
-			strlcpy(&buf[offset+1],name->scope,
-					buflen - (offset+1));
+			safe_strcpy(&buf[offset+1],name->scope,
+					sizeof(name->scope));
 
 			p = &buf[offset+1];
 			while ((p = strchr_m(p,'.'))) {
 				buf[offset] = PTR_DIFF(p,&buf[offset+1]);
 				offset += (buf[offset] + 1);
-				if (offset+1 >= buflen) {
-					return 0;
-				}
 				p = &buf[offset+1];
 			}
 			buf[offset] = strlen(&buf[offset+1]);
@@ -421,13 +404,13 @@ static bool parse_alloc_res_rec(char *inbuf,int *offset,int length,
  If buf == NULL this is a length calculation.
 ******************************************************************/
 
-static int put_res_rec(char *buf, size_t buflen, int offset,struct res_rec *recs,int count)
+static int put_res_rec(char *buf,int offset,struct res_rec *recs,int count)
 {
 	int ret=0;
 	int i;
 
 	for (i=0;i<count;i++) {
-		int l = put_nmb_name(buf,buflen,offset,&recs[i].rr_name);
+		int l = put_nmb_name(buf,offset,&recs[i].rr_name);
 		offset += l;
 		ret += l;
 		if (buf) {
@@ -904,8 +887,8 @@ static int build_dgram(char *buf, size_t len, struct dgram_packet *dgram)
 	if (dgram->header.msg_type == 0x10 ||
 			dgram->header.msg_type == 0x11 ||
 			dgram->header.msg_type == 0x12) {
-		offset += put_nmb_name((char *)ubuf,len,offset,&dgram->source_name);
-		offset += put_nmb_name((char *)ubuf,len,offset,&dgram->dest_name);
+		offset += put_nmb_name((char *)ubuf,offset,&dgram->source_name);
+		offset += put_nmb_name((char *)ubuf,offset,&dgram->dest_name);
 	}
 
 	if (buf) {
@@ -934,10 +917,10 @@ void make_nmb_name( struct nmb_name *n, const char *name, int type)
 	fstring unix_name;
 	memset( (char *)n, '\0', sizeof(struct nmb_name) );
 	fstrcpy(unix_name, name);
-	(void)strupper_m(unix_name);
+	strupper_m(unix_name);
 	push_ascii(n->name, unix_name, sizeof(n->name), STR_TERMINATE);
 	n->name_type = (unsigned int)type & 0xFF;
-	push_ascii(n->scope,  lp_netbios_scope(), 64, STR_TERMINATE);
+	push_ascii(n->scope,  global_scope(), 64, STR_TERMINATE);
 }
 
 /*******************************************************************
@@ -996,13 +979,13 @@ static int build_nmb(char *buf, size_t len, struct nmb_packet *nmb)
 		/* XXXX this doesn't handle a qdcount of > 1 */
 		if (len) {
 			/* Length check. */
-			int extra = put_nmb_name(NULL,0,offset,
+			int extra = put_nmb_name(NULL,offset,
 					&nmb->question.question_name);
 			if (offset + extra > len) {
 				return 0;
 			}
 		}
-		offset += put_nmb_name((char *)ubuf,len,offset,
+		offset += put_nmb_name((char *)ubuf,offset,
 				&nmb->question.question_name);
 		if (buf) {
 			RSSVAL(ubuf,offset,nmb->question.question_type);
@@ -1014,26 +997,26 @@ static int build_nmb(char *buf, size_t len, struct nmb_packet *nmb)
 	if (nmb->header.ancount) {
 		if (len) {
 			/* Length check. */
-			int extra = put_res_rec(NULL,0,offset,nmb->answers,
+			int extra = put_res_rec(NULL,offset,nmb->answers,
 					nmb->header.ancount);
 			if (offset + extra > len) {
 				return 0;
 			}
 		}
-		offset += put_res_rec((char *)ubuf,len,offset,nmb->answers,
+		offset += put_res_rec((char *)ubuf,offset,nmb->answers,
 				nmb->header.ancount);
 	}
 
 	if (nmb->header.nscount) {
 		if (len) {
 			/* Length check. */
-			int extra = put_res_rec(NULL,0,offset,nmb->nsrecs,
+			int extra = put_res_rec(NULL,offset,nmb->nsrecs,
 				nmb->header.nscount);
 			if (offset + extra > len) {
 				return 0;
 			}
 		}
-		offset += put_res_rec((char *)ubuf,len,offset,nmb->nsrecs,
+		offset += put_res_rec((char *)ubuf,offset,nmb->nsrecs,
 				nmb->header.nscount);
 	}
 
@@ -1065,13 +1048,13 @@ static int build_nmb(char *buf, size_t len, struct nmb_packet *nmb)
 	} else if (nmb->header.arcount) {
 		if (len) {
 			/* Length check. */
-			int extra = put_res_rec(NULL,0,offset,nmb->additional,
+			int extra = put_res_rec(NULL,offset,nmb->additional,
 				nmb->header.arcount);
 			if (offset + extra > len) {
 				return 0;
 			}
 		}
-		offset += put_res_rec((char *)ubuf,len,offset,nmb->additional,
+		offset += put_res_rec((char *)ubuf,offset,nmb->additional,
 			nmb->header.arcount);
 	}
 	return offset;
@@ -1148,7 +1131,7 @@ bool match_mailslot_name(struct packet_struct *p, const char *mailslot_name)
  Return the number of bits that match between two len character buffers
 ***************************************************************************/
 
-int matching_len_bits(const unsigned char *p1, const unsigned char *p2, size_t len)
+int matching_len_bits(unsigned char *p1, unsigned char *p2, size_t len)
 {
 	size_t i, j;
 	int ret = 0;
@@ -1262,7 +1245,7 @@ char *name_mangle(TALLOC_CTX *mem_ctx, const char *In, char name_type)
 	char *result;
 	char *p;
 
-	result = talloc_array(mem_ctx, char, 33 + strlen(lp_netbios_scope()) + 2);
+	result = talloc_array(mem_ctx, char, 33 + strlen(global_scope()) + 2);
 	if (result == NULL) {
 		return NULL;
 	}
@@ -1278,9 +1261,7 @@ char *name_mangle(TALLOC_CTX *mem_ctx, const char *In, char name_type)
 		nstring buf_dos;
 
 		pull_ascii_fstring(buf_unix, In);
-		if (!strupper_m(buf_unix)) {
-			return NULL;
-		}
+		strupper_m(buf_unix);
 
 		push_ascii_nstring(buf_dos, buf_unix);
 		put_name(buf, buf_dos, ' ', name_type);
@@ -1299,8 +1280,8 @@ char *name_mangle(TALLOC_CTX *mem_ctx, const char *In, char name_type)
 	p[0] = '\0';
 
 	/* Add the scope string. */
-	for( i = 0, len = 0; *(lp_netbios_scope()) != '\0'; i++, len++ ) {
-		switch( (lp_netbios_scope())[i] ) {
+	for( i = 0, len = 0; *(global_scope()) != '\0'; i++, len++ ) {
+		switch( (global_scope())[i] ) {
 			case '\0':
 				p[0] = len;
 				if( len > 0 )
@@ -1312,7 +1293,7 @@ char *name_mangle(TALLOC_CTX *mem_ctx, const char *In, char name_type)
 				len  = -1;
 				break;
 			default:
-				p[len+1] = (lp_netbios_scope())[i];
+				p[len+1] = (global_scope())[i];
 				break;
 		}
 	}
@@ -1334,7 +1315,7 @@ static unsigned char *name_ptr(unsigned char *buf, size_t buf_len, unsigned int 
 
 	c = *(unsigned char *)(buf+ofs);
 	if ((c & 0xC0) == 0xC0) {
-		uint16_t l = 0;
+		uint16 l = 0;
 
 		if (ofs > buf_len - 1) {
 			return NULL;

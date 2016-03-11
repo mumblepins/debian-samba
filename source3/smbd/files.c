@@ -22,56 +22,36 @@
 #include "smbd/globals.h"
 #include "libcli/security/security.h"
 #include "util_tdb.h"
-#include "lib/util/bitmap.h"
+
+#define VALID_FNUM(fnum)   (((fnum) >= 0) && ((fnum) < real_max_open_files))
 
 #define FILE_HANDLE_OFFSET 0x1000
 
-/**
- * create new fsp to be used for file_new or a durable handle reconnect
- */
-NTSTATUS fsp_new(struct connection_struct *conn, TALLOC_CTX *mem_ctx,
-		 files_struct **result)
+/****************************************************************************
+ Return a unique number identifying this fsp over the life of this pid,
+ and try to make it as globally unique as possible.
+ See bug #8995 for the details.
+****************************************************************************/
+
+static unsigned long get_gen_count(struct smbd_server_connection *sconn)
 {
-	NTSTATUS status = NT_STATUS_NO_MEMORY;
-	files_struct *fsp = NULL;
-	struct smbd_server_connection *sconn = conn->sconn;
-
-	fsp = talloc_zero(mem_ctx, struct files_struct);
-	if (fsp == NULL) {
-		goto fail;
-	}
-
 	/*
-	 * This can't be a child of fsp because the file_handle can be ref'd
-	 * when doing a dos/fcb open, which will then share the file_handle
-	 * across multiple fsps.
+	 * While fsp->fh->gen_id is 'unsigned long' currently
+	 * (which might by 8 bytes),
+	 * there's some oplock code which truncates it to
+	 * uint32_t(using IVAL()).
 	 */
-	fsp->fh = talloc_zero(mem_ctx, struct fd_handle);
-	if (fsp->fh == NULL) {
-		goto fail;
+	if (sconn->file_gen_counter == 0) {
+		sconn->file_gen_counter = generate_random();
 	}
-
-	fsp->fh->ref_count = 1;
-	fsp->fh->fd = -1;
-
-	fsp->fnum = FNUM_FIELD_INVALID;
-	fsp->conn = conn;
-
-	DLIST_ADD(sconn->files, fsp);
-	sconn->num_files += 1;
-
-	conn->num_files_open++;
-
-	*result = fsp;
-	return NT_STATUS_OK;
-
-fail:
-	if (fsp != NULL) {
-		TALLOC_FREE(fsp->fh);
+	sconn->file_gen_counter += 1;
+	if (sconn->file_gen_counter >= UINT32_MAX) {
+		sconn->file_gen_counter = 0;
 	}
-	TALLOC_FREE(fsp);
-
-	return status;
+	if (sconn->file_gen_counter == 0) {
+		sconn->file_gen_counter += 1;
+	}
+	return sconn->file_gen_counter;
 }
 
 /****************************************************************************
@@ -82,53 +62,84 @@ NTSTATUS file_new(struct smb_request *req, connection_struct *conn,
 		  files_struct **result)
 {
 	struct smbd_server_connection *sconn = conn->sconn;
+	int i;
 	files_struct *fsp;
 	NTSTATUS status;
 
-	status = fsp_new(conn, conn, &fsp);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+	/* we want to give out file handles differently on each new
+	   connection because of a common bug in MS clients where they try to
+	   reuse a file descriptor from an earlier smb connection. This code
+	   increases the chance that the errant client will get an error rather
+	   than causing corruption */
+	if (sconn->first_file == 0) {
+		sconn->first_file = (sys_getpid() ^ (int)time(NULL));
+		sconn->first_file %= sconn->real_max_open_files;
 	}
 
+	/* TODO: Port the id-tree implementation from Samba4 */
+
+	i = bitmap_find(sconn->file_bmap, sconn->first_file);
+	if (i == -1) {
+		DEBUG(0,("ERROR! Out of file structures\n"));
+		/* TODO: We have to unconditionally return a DOS error here,
+		 * W2k3 even returns ERRDOS/ERRnofids for ntcreate&x with
+		 * NTSTATUS negotiated */
+		return NT_STATUS_TOO_MANY_OPENED_FILES;
+	}
+
+	/*
+	 * Make a child of the connection_struct as an fsp can't exist
+	 * independent of a connection.
+	 */
+	fsp = talloc_zero(conn, struct files_struct);
+	if (!fsp) {
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	/*
+	 * This can't be a child of fsp because the file_handle can be ref'd
+	 * when doing a dos/fcb open, which will then share the file_handle
+	 * across multiple fsps.
+	 */
+	fsp->fh = talloc_zero(conn, struct fd_handle);
+	if (!fsp->fh) {
+		TALLOC_FREE(fsp);
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	fsp->fh->ref_count = 1;
+	fsp->fh->fd = -1;
+
+	fsp->conn = conn;
+	fsp->fh->gen_id = get_gen_count(sconn);
 	GetTimeOfDay(&fsp->open_time);
 
-	if (req) {
-		struct smbXsrv_connection *xconn = req->xconn;
-		struct smbXsrv_open *op = NULL;
-		NTTIME now = timeval_to_nttime(&fsp->open_time);
+	sconn->first_file = (i+1) % (sconn->real_max_open_files);
 
-		status = smbXsrv_open_create(xconn,
-					     conn->session_info,
-					     now, &op);
-		if (!NT_STATUS_IS_OK(status)) {
-			file_free(NULL, fsp);
-			return status;
-		}
-		fsp->op = op;
-		op->compat = fsp;
-		fsp->fnum = op->local_id;
-		fsp->fh->gen_id = smbXsrv_open_hash(op);
-	} else {
-		DEBUG(10, ("%s: req==NULL, INTERNAL_OPEN_ONLY, smbXsrv_open "
-			   "allocated\n", __func__));
-	}
+	bitmap_set(sconn->file_bmap, i);
+	sconn->files_used += 1;
+
+	fsp->fnum = i + FILE_HANDLE_OFFSET;
+	SMB_ASSERT(fsp->fnum < 65536);
 
 	/*
 	 * Create an smb_filename with "" for the base_name.  There are very
 	 * few NULL checks, so make sure it's initialized with something. to
 	 * be safe until an audit can be done.
 	 */
-	fsp->fsp_name = synthetic_smb_fname(fsp, "", NULL, NULL);
-	if (fsp->fsp_name == NULL) {
-		file_free(NULL, fsp);
-		return NT_STATUS_NO_MEMORY;
+	status = create_synthetic_smb_fname(fsp, "", NULL, NULL,
+					    &fsp->fsp_name);
+	if (!NT_STATUS_IS_OK(status)) {
+		TALLOC_FREE(fsp);
+		TALLOC_FREE(fsp->fh);
 	}
 
-	DEBUG(5,("allocated file structure %s (%u used)\n",
-		 fsp_fnum_dbg(fsp), (unsigned int)sconn->num_files));
+	DLIST_ADD(sconn->files, fsp);
+
+	DEBUG(5,("allocated file structure %d, fnum = %d (%d used)\n",
+		 i, fsp->fnum, sconn->files_used));
 
 	if (req != NULL) {
-		fsp->mid = req->mid;
 		req->chain_fsp = fsp;
 	}
 
@@ -138,6 +149,8 @@ NTSTATUS file_new(struct smb_request *req, connection_struct *conn,
 	  a cache hit to the *end* of the list. */
 
 	ZERO_STRUCT(sconn->fsp_fi_cache);
+
+	conn->num_files_open++;
 
 	*result = fsp;
 	return NT_STATUS_OK;
@@ -153,16 +166,9 @@ void file_close_conn(connection_struct *conn)
 
 	for (fsp=conn->sconn->files; fsp; fsp=next) {
 		next = fsp->next;
-		if (fsp->conn != conn) {
-			continue;
+		if (fsp->conn == conn) {
+			close_file(NULL, fsp, SHUTDOWN_CLOSE);
 		}
-		if (fsp->op != NULL && fsp->op->global->durable) {
-			/*
-			 * A tree disconnect closes a durable handle
-			 */
-			fsp->op->global->durable = false;
-		}
-		close_file(NULL, fsp, SHUTDOWN_CLOSE);
 	}
 }
 
@@ -170,8 +176,8 @@ void file_close_conn(connection_struct *conn)
  Close all open files for a pid and a vuid.
 ****************************************************************************/
 
-void file_close_pid(struct smbd_server_connection *sconn, uint16_t smbpid,
-		    uint64_t vuid)
+void file_close_pid(struct smbd_server_connection *sconn, uint16 smbpid,
+		    int vuid)
 {
 	files_struct *fsp, *next;
 
@@ -187,54 +193,38 @@ void file_close_pid(struct smbd_server_connection *sconn, uint16_t smbpid,
  Initialise file structures.
 ****************************************************************************/
 
-static int files_max_open_fds;
-
-bool file_init_global(void)
+bool file_init(struct smbd_server_connection *sconn)
 {
-	int request_max = lp_max_open_files();
+	int request_max_open_files = lp_max_open_files();
 	int real_lim;
-	int real_max;
-
-	if (files_max_open_fds != 0) {
-		return true;
-	}
 
 	/*
 	 * Set the max_open files to be the requested
 	 * max plus a fudgefactor to allow for the extra
 	 * fd's we need such as log files etc...
 	 */
-	real_lim = set_maxfiles(request_max + MAX_OPEN_FUDGEFACTOR);
+	real_lim = set_maxfiles(request_max_open_files + MAX_OPEN_FUDGEFACTOR);
 
-	real_max = real_lim - MAX_OPEN_FUDGEFACTOR;
+	sconn->real_max_open_files = real_lim - MAX_OPEN_FUDGEFACTOR;
 
-	if (real_max + FILE_HANDLE_OFFSET + MAX_OPEN_PIPES > 65536) {
-		real_max = 65536 - FILE_HANDLE_OFFSET - MAX_OPEN_PIPES;
-	}
+	if (sconn->real_max_open_files + FILE_HANDLE_OFFSET + MAX_OPEN_PIPES
+	    > 65536)
+		sconn->real_max_open_files =
+			65536 - FILE_HANDLE_OFFSET - MAX_OPEN_PIPES;
 
-	if (real_max != request_max) {
-		DEBUG(1, ("file_init_global: Information only: requested %d "
+	if(sconn->real_max_open_files != request_max_open_files) {
+		DEBUG(1, ("file_init: Information only: requested %d "
 			  "open files, %d are available.\n",
-			  request_max, real_max));
+			  request_max_open_files, sconn->real_max_open_files));
 	}
 
-	SMB_ASSERT(real_max > 100);
+	SMB_ASSERT(sconn->real_max_open_files > 100);
 
-	files_max_open_fds = real_max;
-	return true;
-}
+	sconn->file_bmap = bitmap_talloc(sconn, sconn->real_max_open_files);
 
-bool file_init(struct smbd_server_connection *sconn)
-{
-	bool ok;
-
-	ok = file_init_global();
-	if (!ok) {
+	if (!sconn->file_bmap) {
 		return false;
 	}
-
-	sconn->real_max_open_files = files_max_open_fds;
-
 	return true;
 }
 
@@ -242,7 +232,7 @@ bool file_init(struct smbd_server_connection *sconn)
  Close files open by a specified vuid.
 ****************************************************************************/
 
-void file_close_user(struct smbd_server_connection *sconn, uint64_t vuid)
+void file_close_user(struct smbd_server_connection *sconn, int vuid)
 {
 	files_struct *fsp, *next;
 
@@ -321,8 +311,8 @@ files_struct *file_find_dif(struct smbd_server_connection *sconn,
 			}
 			/* Paranoia check. */
 			if ((fsp->fh->fd == -1) &&
-			    (fsp->oplock_type != NO_OPLOCK &&
-			     fsp->oplock_type != LEASE_OPLOCK)) {
+			    (fsp->oplock_type != NO_OPLOCK) &&
+			    (fsp->oplock_type != FAKE_LEVEL_II_OPLOCK)) {
 				DEBUG(0,("file_find_dif: file %s file_id = "
 					 "%s, gen = %u oplock_type = %u is a "
 					 "stat open with oplock type !\n",
@@ -384,24 +374,6 @@ files_struct *file_find_di_next(files_struct *start_fsp)
 		}
 	}
 
-	return NULL;
-}
-
-struct files_struct *file_find_one_fsp_from_lease_key(
-	struct smbd_server_connection *sconn,
-	const struct smb2_lease_key *lease_key)
-{
-	struct files_struct *fsp;
-
-	for (fsp = sconn->files; fsp; fsp=fsp->next) {
-		if ((fsp->lease != NULL) &&
-		    (fsp->lease->lease.lease_key.data[0] ==
-		     lease_key->data[0]) &&
-		    (fsp->lease->lease.lease_key.data[1] ==
-		     lease_key->data[1])) {
-			return fsp;
-		}
-	}
 	return NULL;
 }
 
@@ -474,13 +446,11 @@ void file_sync_all(connection_struct *conn)
  Free up a fsp.
 ****************************************************************************/
 
-void fsp_free(files_struct *fsp)
+void file_free(struct smb_request *req, files_struct *fsp)
 {
 	struct smbd_server_connection *sconn = fsp->conn->sconn;
 
 	DLIST_REMOVE(sconn->files, fsp);
-	SMB_ASSERT(sconn->num_files > 0);
-	sconn->num_files--;
 
 	TALLOC_FREE(fsp->fake_file_handle);
 
@@ -490,43 +460,28 @@ void fsp_free(files_struct *fsp)
 		fsp->fh->ref_count--;
 	}
 
-	if (fsp->lease != NULL) {
-		if (fsp->lease->ref_count == 1) {
-			TALLOC_FREE(fsp->lease);
-		} else {
-			fsp->lease->ref_count--;
-		}
-	}
-
-	fsp->conn->num_files_open--;
-
-	/* this is paranoia, just in case someone tries to reuse the
-	   information */
-	ZERO_STRUCTP(fsp);
-
-	/* fsp->fsp_name is a talloc child and is free'd automatically. */
-	TALLOC_FREE(fsp);
-}
-
-void file_free(struct smb_request *req, files_struct *fsp)
-{
-	struct smbd_server_connection *sconn = fsp->conn->sconn;
-	uint64_t fnum = fsp->fnum;
-
 	if (fsp->notify) {
-		struct notify_context *notify_ctx =
-			fsp->conn->sconn->notify_ctx;
-		notify_remove(notify_ctx, fsp);
+		if (fsp->is_directory) {
+			notify_remove_onelevel(fsp->conn->notify_ctx,
+					       &fsp->file_id, fsp);
+		}
+		notify_remove(fsp->conn->notify_ctx, fsp);
 		TALLOC_FREE(fsp->notify);
 	}
 
 	/* Ensure this event will never fire. */
+	TALLOC_FREE(fsp->oplock_timeout);
+
+	/* Ensure this event will never fire. */
 	TALLOC_FREE(fsp->update_write_time_event);
 
-	if (fsp->op != NULL) {
-		fsp->op->compat = NULL;
-	}
-	TALLOC_FREE(fsp->op);
+	bitmap_clear(sconn->file_bmap, fsp->fnum - FILE_HANDLE_OFFSET);
+	sconn->files_used--;
+
+	DEBUG(5,("freed files structure %d (%d used)\n",
+		 fsp->fnum, sconn->files_used));
+
+	fsp->conn->num_files_open--;
 
 	if ((req != NULL) && (fsp == req->chain_fsp)) {
 		req->chain_fsp = NULL;
@@ -546,23 +501,45 @@ void file_free(struct smb_request *req, files_struct *fsp)
 	}
 
 	/* Drop all remaining extensions. */
-	vfs_remove_all_fsp_extensions(fsp);
+	while (fsp->vfs_extension) {
+		vfs_remove_fsp_extension(fsp->vfs_extension->owner, fsp);
+	}
 
-	fsp_free(fsp);
+	/* this is paranoia, just in case someone tries to reuse the
+	   information */
+	ZERO_STRUCTP(fsp);
 
-	DEBUG(5,("freed files structure %llu (%u used)\n",
-		 (unsigned long long)fnum, (unsigned int)sconn->num_files));
+	/* fsp->fsp_name is a talloc child and is free'd automatically. */
+	TALLOC_FREE(fsp);
+}
+
+/****************************************************************************
+ Get an fsp from a 16 bit fnum.
+****************************************************************************/
+
+static struct files_struct *file_fnum(struct smbd_server_connection *sconn,
+				      uint16 fnum)
+{
+	files_struct *fsp;
+	int count=0;
+
+	for (fsp=sconn->files; fsp; fsp=fsp->next, count++) {
+		if (fsp->fnum == fnum) {
+			if (count > 10) {
+				DLIST_PROMOTE(sconn->files, fsp);
+			}
+			return fsp;
+		}
+	}
+	return NULL;
 }
 
 /****************************************************************************
  Get an fsp from a packet given a 16 bit fnum.
 ****************************************************************************/
 
-files_struct *file_fsp(struct smb_request *req, uint16_t fid)
+files_struct *file_fsp(struct smb_request *req, uint16 fid)
 {
-	struct smbXsrv_open *op;
-	NTSTATUS status;
-	NTTIME now = 0;
 	files_struct *fsp;
 
 	if (req == NULL) {
@@ -579,85 +556,38 @@ files_struct *file_fsp(struct smb_request *req, uint16_t fid)
 	}
 
 	if (req->chain_fsp != NULL) {
-		if (req->chain_fsp->deferred_close) {
-			return NULL;
-		}
 		return req->chain_fsp;
 	}
 
-	if (req->xconn == NULL) {
-		return NULL;
+	fsp = file_fnum(req->sconn, fid);
+	if (fsp != NULL) {
+		req->chain_fsp = fsp;
 	}
-
-	now = timeval_to_nttime(&req->request_time);
-
-	status = smb1srv_open_lookup(req->xconn,
-				     fid, now, &op);
-	if (!NT_STATUS_IS_OK(status)) {
-		return NULL;
-	}
-
-	fsp = op->compat;
-	if (fsp == NULL) {
-		return NULL;
-	}
-
-	if (fsp->deferred_close) {
-		return NULL;
-	}
-
-	req->chain_fsp = fsp;
 	return fsp;
 }
 
-struct files_struct *file_fsp_get(struct smbd_smb2_request *smb2req,
-				  uint64_t persistent_id,
-				  uint64_t volatile_id)
+uint64_t fsp_persistent_id(const struct files_struct *fsp)
 {
-	struct smbXsrv_open *op;
-	NTSTATUS status;
-	NTTIME now = 0;
-	struct files_struct *fsp;
+	uint64_t persistent_id;
 
-	now = timeval_to_nttime(&smb2req->request_time);
+	/*
+	 * This calculates a number that is most likely
+	 * globally unique. In future we will have a database
+	 * to make it completely unique.
+	 *
+	 * 32-bit random gen_id
+	 * 16-bit truncated open_time
+	 * 16-bit fnum (valatile_id)
+	 */
+	persistent_id = fsp->fh->gen_id & UINT32_MAX;
+	persistent_id <<= 16;
+	persistent_id &= 0x0000FFFFFFFF0000LLU;
+	persistent_id |= fsp->open_time.tv_usec & UINT16_MAX;
+	persistent_id <<= 16;
+	persistent_id &= 0xFFFFFFFFFFFF0000LLU;
+	persistent_id |= fsp->fnum & UINT16_MAX;
 
-	status = smb2srv_open_lookup(smb2req->xconn,
-				     persistent_id, volatile_id,
-				     now, &op);
-	if (!NT_STATUS_IS_OK(status)) {
-		return NULL;
-	}
-
-	fsp = op->compat;
-	if (fsp == NULL) {
-		return NULL;
-	}
-
-	if (smb2req->tcon == NULL) {
-		return NULL;
-	}
-
-	if (smb2req->tcon->compat != fsp->conn) {
-		return NULL;
-	}
-
-	if (smb2req->session == NULL) {
-		return NULL;
-	}
-
-	if (smb2req->session->compat == NULL) {
-		return NULL;
-	}
-
-	if (smb2req->session->compat->vuid != fsp->vuid) {
-		return NULL;
-	}
-
-	if (fsp->deferred_close) {
-		return NULL;
-	}
-
-	return fsp;
+	return persistent_id;
 }
 
 struct files_struct *file_fsp_smb2(struct smbd_smb2_request *smb2req,
@@ -665,16 +595,39 @@ struct files_struct *file_fsp_smb2(struct smbd_smb2_request *smb2req,
 				   uint64_t volatile_id)
 {
 	struct files_struct *fsp;
+	uint64_t fsp_persistent;
 
 	if (smb2req->compat_chain_fsp != NULL) {
-		if (smb2req->compat_chain_fsp->deferred_close) {
-			return NULL;
-		}
 		return smb2req->compat_chain_fsp;
 	}
 
-	fsp = file_fsp_get(smb2req, persistent_id, volatile_id);
+	if (volatile_id > UINT16_MAX) {
+		return NULL;
+	}
+
+	fsp = file_fnum(smb2req->sconn, (uint16_t)volatile_id);
 	if (fsp == NULL) {
+		return NULL;
+	}
+	fsp_persistent = fsp_persistent_id(fsp);
+
+	if (persistent_id != fsp_persistent) {
+		return NULL;
+	}
+
+	if (smb2req->tcon == NULL) {
+		return NULL;
+	}
+
+	if (smb2req->tcon->compat_conn != fsp->conn) {
+		return NULL;
+	}
+
+	if (smb2req->session == NULL) {
+		return NULL;
+	}
+
+	if (smb2req->session->vuid != fsp->vuid) {
 		return NULL;
 	}
 
@@ -687,12 +640,9 @@ struct files_struct *file_fsp_smb2(struct smbd_smb2_request *smb2req,
 ****************************************************************************/
 
 NTSTATUS dup_file_fsp(struct smb_request *req, files_struct *from,
-		      uint32_t access_mask, uint32_t share_access,
-		      uint32_t create_options, files_struct *to)
+		      uint32 access_mask, uint32 share_access,
+		      uint32 create_options, files_struct *to)
 {
-	/* this can never happen for print files */
-	SMB_ASSERT(from->print_file == NULL);
-
 	TALLOC_FREE(to->fh);
 
 	to->fh = from->fh;
@@ -700,6 +650,7 @@ NTSTATUS dup_file_fsp(struct smb_request *req, files_struct *from,
 
 	to->file_id = from->file_id;
 	to->initial_allocation_size = from->initial_allocation_size;
+	to->mode = from->mode;
 	to->file_pid = from->file_pid;
 	to->vuid = from->vuid;
 	to->open_time = from->open_time;
@@ -707,13 +658,23 @@ NTSTATUS dup_file_fsp(struct smb_request *req, files_struct *from,
 	to->share_access = share_access;
 	to->oplock_type = from->oplock_type;
 	to->can_lock = from->can_lock;
-	to->can_read = ((access_mask & FILE_READ_DATA) != 0);
-	to->can_write =
-		CAN_WRITE(from->conn) &&
-		((access_mask & (FILE_WRITE_DATA | FILE_APPEND_DATA)) != 0);
+	to->can_read = (access_mask & (FILE_READ_DATA)) ? True : False;
+	if (!CAN_WRITE(from->conn)) {
+		to->can_write = False;
+	} else {
+		to->can_write = (access_mask & (FILE_WRITE_DATA | FILE_APPEND_DATA)) ? True : False;
+	}
 	to->modified = from->modified;
 	to->is_directory = from->is_directory;
 	to->aio_write_behind = from->aio_write_behind;
+
+	if (from->print_file) {
+		to->print_file = talloc(to, struct print_file_data);
+		if (!to->print_file) return NT_STATUS_NO_MEMORY;
+		to->print_file->rap_jobid = from->print_file->rap_jobid;
+	} else {
+		to->print_file = NULL;
+	}
 
 	return fsp_set_smb_fname(to, from->fsp_name);
 }
@@ -725,26 +686,25 @@ NTSTATUS dup_file_fsp(struct smb_request *req, files_struct *from,
 NTSTATUS file_name_hash(connection_struct *conn,
 			const char *name, uint32_t *p_name_hash)
 {
-	char tmpbuf[PATH_MAX];
-	char *fullpath, *to_free;
-	ssize_t len;
 	TDB_DATA key;
+	char *fullpath = NULL;
 
 	/* Set the hash of the full pathname. */
-
-	len = full_path_tos(conn->connectpath, name, tmpbuf, sizeof(tmpbuf),
-			    &fullpath, &to_free);
-	if (len == -1) {
+	fullpath = talloc_asprintf(talloc_tos(),
+			"%s/%s",
+			conn->connectpath,
+			name);
+	if (!fullpath) {
 		return NT_STATUS_NO_MEMORY;
 	}
-	key = (TDB_DATA) { .dptr = (uint8_t *)fullpath, .dsize = len+1 };
+	key = string_term_tdb_data(fullpath);
 	*p_name_hash = tdb_jenkins_hash(&key);
 
 	DEBUG(10,("file_name_hash: %s hash 0x%x\n",
-		  fullpath,
+		fullpath,
 		(unsigned int)*p_name_hash ));
 
-	TALLOC_FREE(to_free);
+	TALLOC_FREE(fullpath);
 	return NT_STATUS_OK;
 }
 
@@ -754,11 +714,12 @@ NTSTATUS file_name_hash(connection_struct *conn,
 NTSTATUS fsp_set_smb_fname(struct files_struct *fsp,
 			   const struct smb_filename *smb_fname_in)
 {
+	NTSTATUS status;
 	struct smb_filename *smb_fname_new;
 
-	smb_fname_new = cp_smb_filename(fsp, smb_fname_in);
-	if (smb_fname_new == NULL) {
-		return NT_STATUS_NO_MEMORY;
+	status = copy_smb_filename(fsp, smb_fname_in, &smb_fname_new);
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
 	}
 
 	TALLOC_FREE(fsp->fsp_name);
@@ -767,17 +728,4 @@ NTSTATUS fsp_set_smb_fname(struct files_struct *fsp,
 	return file_name_hash(fsp->conn,
 			smb_fname_str_dbg(fsp->fsp_name),
 			&fsp->name_hash);
-}
-
-const struct GUID *fsp_client_guid(const files_struct *fsp)
-{
-	return &fsp->conn->sconn->client->connections->smb2.client.guid;
-}
-
-uint32_t fsp_lease_type(struct files_struct *fsp)
-{
-	if (fsp->oplock_type == LEASE_OPLOCK) {
-		return fsp->lease->lease.lease_state;
-	}
-	return map_oplock_to_lease_type(fsp->oplock_type);
 }

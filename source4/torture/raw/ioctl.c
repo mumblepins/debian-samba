@@ -19,12 +19,11 @@
 */
 
 #include "includes.h"
-#include "../libcli/smb/smb_constants.h"
+#include "libcli/raw/ioctl.h"
 #include "libcli/raw/libcliraw.h"
 #include "libcli/raw/raw_proto.h"
 #include "libcli/libcli.h"
 #include "torture/util.h"
-#include "torture/raw/proto.h"
 
 #define BASEDIR "\\rawioctl"
 
@@ -179,7 +178,9 @@ bool torture_raw_ioctl(struct torture_context *torture,
 {
 	bool ret = true;
 
-	torture_assert(torture, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	ret &= test_ioctl(cli, torture);
 	ret &= test_fsctl(cli, torture);

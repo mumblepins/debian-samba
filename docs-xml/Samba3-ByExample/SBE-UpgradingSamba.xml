@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="iso-8859-1"?>
 <!DOCTYPE chapter PUBLIC "-//Samba-Team//DTD DocBook V4.2-Based Variant V1.0//EN" "http://www.samba.org/samba/DTD/samba-doc">
 <chapter id="upgrades">
-<title>Updating Samba</title>
+<title>Updating Samba-3</title>
 
 <para>
 <indexterm><primary>migrate</primary></indexterm>
@@ -16,9 +16,9 @@ installing a new Samba server to replace an older existing Samba server.
 <para>
 <indexterm><primary>smbpasswd</primary></indexterm>
 <indexterm><primary>passdb backend</primary></indexterm>
-There has also been much talk about migration of Samba from an smbpasswd
+There has also been much talk about migration of Samba-3 from an smbpasswd
 passdb backend to the use of the tdbsam or ldapsam facilities that are new
-to Samba.
+to Samba-3.
 </para>
 
 <para>
@@ -231,7 +231,7 @@ caution was on the side of the victor.
 	<indexterm><primary>stand-alone server</primary></indexterm>
 	<indexterm><primary>SAS</primary></indexterm>
 	<indexterm><primary>SID</primary></indexterm>
-	In Samba on a domain controller (PDC or BDC), the domain name controls the domain
+	In Samba-3 on a domain controller (PDC or BDC), the domain name controls the domain
 	SID. On all prior versions the hostname (computer name, or NetBIOS name) controlled
 	the SID. On a standalone server the hostname still controls the SID.
 	</para>
@@ -239,7 +239,7 @@ caution was on the side of the victor.
 	<para>
 	<indexterm><primary>net</primary><secondary>getlocalsid</secondary></indexterm>
 	<indexterm><primary>net</primary><secondary>setlocalsid</secondary></indexterm>
-	The local machine SID can be backed up using this procedure (Samba):
+	The local machine SID can be backed up using this procedure (Samba-3):
 <screen>
 &rootprompt; net getlocalsid > /etc/samba/my-local-SID
 </screen>
@@ -261,7 +261,7 @@ SID for domain FRODO is: S-1-5-21-726309263-4128913605-1168186429
 
 	<para>
 	Where the <filename>secrets.tdb</filename> file exists and a version of Samba 2.x or later
-	has been used, there is no specific need to go through this update process. Samba has the
+	has been used, there is no specific need to go through this update process. Samba-3 has the
 	ability to read the older tdb file and to perform an in-situ update to the latest tdb format.
 	This is not a reversible process &smbmdash; it is a one-way upgrade.
 	</para>
@@ -295,7 +295,7 @@ SID for domain FRODO is: S-1-5-21-726309263-4128913605-1168186429
 <screen>
 &rootprompt; rpcclient hostname lsaquery -Uroot%password
 </screen>
-	This can also be done with Samba by executing:
+	This can also be done with Samba-3 by executing:
 <screen>
 &rootprompt; net rpc info -Uroot%password
 Domain Name: MIDEARTH
@@ -430,7 +430,7 @@ Num local groups: 0
 
 	<para>
 	<indexterm><primary>compile-time</primary></indexterm>
-	Samba provides a neat new way to track the location of all control files as well as to
+	Samba-3 provides a neat new way to track the location of all control files as well as to
 	find the compile-time options used as the Samba package was built. Here  is how the dark
 	secrets of the internals of the location of control files within Samba executables can
 	be uncovered:
@@ -481,7 +481,7 @@ Paths:
 	<indexterm><primary>codepage</primary></indexterm>
 	<indexterm><primary>internationalization</primary></indexterm>
 	Samba-2.x had no support for Unicode; instead, all national language character-set support in file names
-	was done using particular locale codepage mapping techniques. Samba supports Unicode in file names, thus
+	was done using particular locale codepage mapping techniques. Samba-3 supports Unicode in file names, thus
 	providing true internationalization support.
 	</para>
 
@@ -495,7 +495,7 @@ Paths:
 
 	<para>
 	<indexterm><primary>UTF-8</primary></indexterm>
-	Files that are created with Samba will use UTF-8 encoding. Should the file system ever end up with a
+	Files that are created with Samba-3 will use UTF-8 encoding. Should the file system ever end up with a
 	mix of codepage (unix charset)-encoded file names and UTF-8-encoded file names, the mess will take some
 	effort to set straight.
 	</para>
@@ -681,7 +681,7 @@ Samba-2.x could be compiled with LDAP support.
 
 	<para>
 	<indexterm><primary>parameters</primary></indexterm>
-	The following parameters are new to Samba and should be correctly configured.
+	The following parameters are new to Samba-3 and should be correctly configured.
 	Please refer to <link linkend="secure"/> through <link linkend="net2000users"/>
 	in this book for examples of use of the new parameters shown here:
 	<indexterm><primary>add group script</primary></indexterm>
@@ -709,7 +709,7 @@ Samba-2.x could be compiled with LDAP support.
 	<indexterm><primary>add machine script</primary></indexterm>
 	<indexterm><primary>add user script</primary></indexterm>
 	The <parameter>add machine script</parameter> functionality was previously
-	handled by the <parameter>add user script</parameter>, which in Samba is
+	handled by the <parameter>add user script</parameter>, which in Samba-3 is
 	used exclusively to add user accounts.
 	</para>
 
@@ -748,7 +748,7 @@ Samba-2.x could be compiled with LDAP support.
 	<para>
 	Samba version 2.x could be compiled for use either with or without LDAP.
 	The LDAP control settings in the &smb.conf; file in this old version are
-	completely different (and less complete) than they are with Samba. This
+	completely different (and less complete) than they are with Samba-3. This
 	means that after migrating the control files, it is necessary to reconfigure
 	the LDAP settings entirely.
 	</para>
@@ -827,10 +827,72 @@ The recommended passdb backends at this time are
     replacement for stand alone servers
   * ldapsam - attribute rich account storage and retrieval
     backend utilizing an LDAP directory.
+  * ldapsam_compat - a 2.2 backward compatible LDAP account
+    backend
 
 Certain functions of the smbpasswd(8) tool have been split between the
 new smbpasswd(8) utility, the net(8) tool, and the new pdbedit(8)
 utility.  See the respective man pages for details.
+
+######################################################################
+LDAP
+####
+
+This section outlines the new features affecting Samba / LDAP
+integration.
+
+New Schema
+----------
+
+A new object class (sambaSamAccount) has been introduced to replace
+the old sambaAccount.  This change aids us in the renaming of
+attributes to prevent clashes with attributes from other vendors.
+There is a conversion script (examples/LDAP/convertSambaAccount) to
+modify and LDIF file to the new schema.
+
+Example:
+
+  $ ldapsearch .... -b "ou=people,dc=..." &gt; sambaAcct.ldif
+  $ convertSambaAccount --sid=&lt;Domain SID&gt; \
+    --input=sambaAcct.ldif --output=sambaSamAcct.ldif \
+    --changetype=[modify|add]
+
+The &lt;DOM SID&gt; can be obtained by running 'net getlocalsid
+&lt;DOMAINNAME&gt;' on the Samba PDC as root.  The changetype determines
+the format of the generated LDIF output--either create new entries
+or modify existing entries.
+
+The old sambaAccount schema may still be used by specifying the
+"ldapsam_compat" passdb backend.  However, the sambaAccount and
+associated attributes have been moved to the historical section of
+the schema file and must be uncommented before use if needed.
+The 2.2 object class declaration for a sambaAccount has not changed
+in the 3.0 samba.schema file.
+
+Other new object classes and their uses include:
+
+  * sambaDomain - domain information used to allocate rids
+    for users and groups as necessary.  The attributes are added
+    in 'ldap suffix' directory entry automatically if
+    an idmap uid/gid range has been set and the 'ldapsam'
+    passdb backend has been selected.
+
+  * sambaGroupMapping - an object representing the
+    relationship between a posixGroup and a Windows
+    group/SID.  These entries are stored in the 'ldap
+    group suffix' and managed by the 'net groupmap' command.
+
+  * sambaUnixIdPool - created in the 'ldap idmap suffix' entry
+    automatically and contains the next available 'idmap uid' and
+    'idmap gid'
+
+  * sambaIdmapEntry - object storing a mapping between a
+    SID and a UNIX uid/gid.  These objects are created by the
+    idmap_ldap module as needed.
+
+  * sambaSidEntry - object representing a SID alone, as a Structural
+    class on which to build the sambaIdmapEntry.
+
 
 New Suffix for Searching
 ------------------------
@@ -911,20 +973,20 @@ the procedure outlined above.
 </para>
 
 	<sect2>
-	<title>Samba to Samba-3 Updates on the Same Server</title>
+	<title>Samba-3 to Samba-3 Updates on the Same Server</title>
 
 	<para>
 	The guidance in this section deals with updates to an existing
-	Samba server installation.
+	Samba-3 server installation.
 	</para>
 
 	<sect3>
 	<title>Updating from Samba Versions Earlier than 3.0.5</title>
 
 	<para>
-	With the provision that the binary Samba package has been built
-	with the same path and feature settings as the existing Samba
-	package that is being updated, an update of Samba versions 3.0.0
+	With the provision that the binary Samba-3 package has been built
+	with the same path and feature settings as the existing Samba-3
+	package that is being updated, an update of Samba-3 versions 3.0.0
 	through 3.0.4 can be updated to 3.0.5 without loss of functionality
 	and without need to change either the &smb.conf; file or, where
 	used, the LDAP schema.
@@ -938,9 +1000,9 @@ the procedure outlined above.
 	<para>
 	<indexterm><primary>schema</primary></indexterm>
 	<indexterm><primary>LDAP</primary><secondary>schema</secondary></indexterm>
-	When updating versions of Samba prior to 3.0.6 to 3.0.6 through 3.0.10,
+	When updating versions of Samba-3 prior to 3.0.6 to 3.0.6 through 3.0.10,
 	it is necessary only to update the LDAP schema (where LDAP is used).
-	Always use the LDAP schema file that is shipped with the latest Samba
+	Always use the LDAP schema file that is shipped with the latest Samba-3
 	update.
 	</para>
 
@@ -1002,7 +1064,7 @@ back to searching the 'ldap suffix' in some cases.
 	</sect2>
 
 	<sect2>
-	<title>Migrating Samba to a New Server</title>
+	<title>Migrating Samba-3 to a New Server</title>
 
 	<para>
 	The two most likely candidates for replacement of a server are

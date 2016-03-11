@@ -25,7 +25,6 @@
 #include "passdb.h"
 #include "../libcli/auth/libcli_auth.h"
 #include "../libcli/security/security.h"
-#include "../lib/util/bitmap.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_PASSDB
@@ -64,7 +63,7 @@ bool pdb_is_password_change_time_max(time_t test_time)
  Return an unchanging version of max password change time - 0x7FFFFFFF.
  ********************************************************************/
 
-static time_t pdb_password_change_time_max(void)
+time_t pdb_password_change_time_max(void)
 {
 	return 0x7FFFFFFF;
 }
@@ -169,31 +168,31 @@ uint32_t pdb_get_hours_len(const struct samu *sampass)
 	return sampass->hours_len;
 }
 
-const uint8_t *pdb_get_hours(const struct samu *sampass)
+const uint8 *pdb_get_hours(const struct samu *sampass)
 {
 	return (sampass->hours);
 }
 
-const uint8_t *pdb_get_nt_passwd(const struct samu *sampass)
+const uint8 *pdb_get_nt_passwd(const struct samu *sampass)
 {
 	SMB_ASSERT((!sampass->nt_pw.data) 
 		   || sampass->nt_pw.length == NT_HASH_LEN);
-	return (uint8_t *)sampass->nt_pw.data;
+	return (uint8 *)sampass->nt_pw.data;
 }
 
-const uint8_t *pdb_get_lanman_passwd(const struct samu *sampass)
+const uint8 *pdb_get_lanman_passwd(const struct samu *sampass)
 {
 	SMB_ASSERT((!sampass->lm_pw.data) 
 		   || sampass->lm_pw.length == LM_HASH_LEN);
-	return (uint8_t *)sampass->lm_pw.data;
+	return (uint8 *)sampass->lm_pw.data;
 }
 
-const uint8_t *pdb_get_pw_history(const struct samu *sampass, uint32_t *current_hist_len)
+const uint8 *pdb_get_pw_history(const struct samu *sampass, uint32_t *current_hist_len)
 {
 	SMB_ASSERT((!sampass->nt_pw_his.data) 
 	   || ((sampass->nt_pw_his.length % PW_HISTORY_ENTRY_LEN) == 0));
 	*current_hist_len = sampass->nt_pw_his.length / PW_HISTORY_ENTRY_LEN;
-	return (uint8_t *)sampass->nt_pw_his.data;
+	return (uint8 *)sampass->nt_pw_his.data;
 }
 
 /* Return the plaintext password if known.  Most of the time
@@ -400,6 +399,12 @@ bool pdb_set_pass_can_change_time(struct samu *sampass, time_t mytime, enum pdb_
 	return pdb_set_init_flags(sampass, PDB_CANCHANGETIME, flag);
 }
 
+bool pdb_set_pass_must_change_time(struct samu *sampass, time_t mytime, enum pdb_value_state flag)
+{
+	sampass->pass_must_change_time = mytime;
+	return pdb_set_init_flags(sampass, PDB_MUSTCHANGETIME, flag);
+}
+
 bool pdb_set_pass_last_set_time(struct samu *sampass, time_t mytime, enum pdb_value_state flag)
 {
 	sampass->pass_last_set_time = mytime;
@@ -497,7 +502,7 @@ bool pdb_set_user_sid(struct samu *sampass, const struct dom_sid *u_sid, enum pd
 	return pdb_set_init_flags(sampass, PDB_USERSID, flag);
 }
 
-bool pdb_set_user_sid_from_string(struct samu *sampass, const char *u_sid, enum pdb_value_state flag)
+bool pdb_set_user_sid_from_string(struct samu *sampass, fstring u_sid, enum pdb_value_state flag)
 {
 	struct dom_sid new_sid;
 
@@ -536,7 +541,7 @@ bool pdb_set_group_sid(struct samu *sampass, const struct dom_sid *g_sid, enum p
 	if (!g_sid)
 		return False;
 
-	if ( !(sampass->group_sid = talloc( sampass, struct dom_sid )) ) {
+	if ( !(sampass->group_sid = TALLOC_P( sampass, struct dom_sid )) ) {
 		return False;
 	}
 
@@ -830,7 +835,7 @@ bool pdb_set_munged_dial(struct samu *sampass, const char *munged_dial, enum pdb
  Set the user's NT hash.
  ********************************************************************/
 
-bool pdb_set_nt_passwd(struct samu *sampass, const uint8_t pwd[NT_HASH_LEN], enum pdb_value_state flag)
+bool pdb_set_nt_passwd(struct samu *sampass, const uint8 pwd[NT_HASH_LEN], enum pdb_value_state flag)
 {
 	data_blob_clear_free(&sampass->nt_pw);
 
@@ -848,7 +853,7 @@ bool pdb_set_nt_passwd(struct samu *sampass, const uint8_t pwd[NT_HASH_LEN], enu
  Set the user's LM hash.
  ********************************************************************/
 
-bool pdb_set_lanman_passwd(struct samu *sampass, const uint8_t pwd[LM_HASH_LEN], enum pdb_value_state flag)
+bool pdb_set_lanman_passwd(struct samu *sampass, const uint8 pwd[LM_HASH_LEN], enum pdb_value_state flag)
 {
 	data_blob_clear_free(&sampass->lm_pw);
 
@@ -866,25 +871,23 @@ bool pdb_set_lanman_passwd(struct samu *sampass, const uint8_t pwd[LM_HASH_LEN],
 /*********************************************************************
  Set the user's password history hash. historyLen is the number of 
  PW_HISTORY_SALT_LEN+SALTED_MD5_HASH_LEN length
- entries to store in the history - this must match the size of the uint8_t array
+ entries to store in the history - this must match the size of the uint8 array
  in pwd.
 ********************************************************************/
 
-bool pdb_set_pw_history(struct samu *sampass, const uint8_t *pwd, uint32_t historyLen, enum pdb_value_state flag)
+bool pdb_set_pw_history(struct samu *sampass, const uint8 *pwd, uint32_t historyLen, enum pdb_value_state flag)
 {
-	DATA_BLOB new_nt_pw_his = {};
-
 	if (historyLen && pwd){
-		new_nt_pw_his = data_blob_talloc(sampass,
-						 pwd, historyLen*PW_HISTORY_ENTRY_LEN);
-		if (new_nt_pw_his.length == 0) {
+		data_blob_free(&(sampass->nt_pw_his));
+		sampass->nt_pw_his = data_blob_talloc(sampass,
+						pwd, historyLen*PW_HISTORY_ENTRY_LEN);
+		if (!sampass->nt_pw_his.length) {
 			DEBUG(0, ("pdb_set_pw_history: data_blob_talloc() failed!\n"));
 			return False;
 		}
+	} else {
+		sampass->nt_pw_his = data_blob_talloc(sampass, NULL, 0);
 	}
-
-	data_blob_free(&sampass->nt_pw_his);
-	sampass->nt_pw_his = new_nt_pw_his;
 
 	return pdb_set_init_flags(sampass, PDB_PWHISTORY, flag);
 }
@@ -945,7 +948,7 @@ bool pdb_set_unknown_6(struct samu *sampass, uint32_t unkn, enum pdb_value_state
 	return pdb_set_init_flags(sampass, PDB_UNKNOWN6, flag);
 }
 
-bool pdb_set_hours(struct samu *sampass, const uint8_t *hours, int hours_len,
+bool pdb_set_hours(struct samu *sampass, const uint8 *hours, int hours_len,
 		   enum pdb_value_state flag)
 {
 	if (hours_len > sizeof(sampass->hours)) {
@@ -1002,7 +1005,6 @@ bool pdb_set_plaintext_passwd(struct samu *sampass, const char *plaintext)
 	uchar *pwhistory;
 	uint32_t pwHistLen;
 	uint32_t current_history_len;
-	const uint8_t *current_history;
 
 	if (!plaintext)
 		return False;
@@ -1053,26 +1055,32 @@ bool pdb_set_plaintext_passwd(struct samu *sampass, const char *plaintext)
 	 * the pw_history was first loaded into the struct samu struct
 	 * and now.... JRA.
 	 */
-	current_history = pdb_get_pw_history(sampass, &current_history_len);
-	if ((current_history_len != 0) && (current_history == NULL)) {
+	pwhistory = (uchar *)pdb_get_pw_history(sampass, &current_history_len);
+
+	if ((current_history_len != 0) && (pwhistory == NULL)) {
 		DEBUG(1, ("pdb_set_plaintext_passwd: pwhistory == NULL!\n"));
 		return false;
 	}
 
-	/*
-	 * Ensure we have space for the needed history. This
-	 * also takes care of an account which did not have
-	 * any history at all so far, i.e. pwhistory==NULL
-	 */
-	pwhistory = talloc_zero_array(
+	if (current_history_len < pwHistLen) {
+		/*
+		 * Ensure we have space for the needed history. This
+		 * also takes care of an account which did not have
+		 * any history at all so far, i.e. pwhistory==NULL
+		 */
+		uchar *new_history = talloc_zero_array(
 			sampass, uchar,
 			pwHistLen*PW_HISTORY_ENTRY_LEN);
-	if (!pwhistory) {
-		return false;
-	}
 
-	memcpy(pwhistory, current_history,
-	       current_history_len*PW_HISTORY_ENTRY_LEN);
+		if (!new_history) {
+			return False;
+		}
+
+		memcpy(new_history, pwhistory,
+		       current_history_len*PW_HISTORY_ENTRY_LEN);
+
+		pwhistory = new_history;
+	}
 
 	/*
 	 * Make room for the new password in the history list.
@@ -1108,27 +1116,4 @@ uint32_t pdb_build_fields_present(struct samu *sampass)
 {
 	/* value set to all for testing */
 	return 0x00ffffff;
-}
-
-/**********************************************************************
- Helper function to determine for update_sam_account whether
- we need LDAP modification.
-*********************************************************************/
-
-bool pdb_element_is_changed(const struct samu *sampass,
-			    enum pdb_elements element)
-{
-	return IS_SAM_CHANGED(sampass, element);
-}
-
-/**********************************************************************
- Helper function to determine for update_sam_account whether
- we need LDAP modification.
- *********************************************************************/
-
-bool pdb_element_is_set_or_changed(const struct samu *sampass,
-				   enum pdb_elements element)
-{
-	return (IS_SAM_SET(sampass, element) ||
-		IS_SAM_CHANGED(sampass, element));
 }

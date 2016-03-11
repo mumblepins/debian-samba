@@ -277,15 +277,15 @@ static void unbecomeDC_send_cldap(struct libnet_UnbecomeDC_state *s)
 						lpcfg_cldap_port(s->libnet->lp_ctx),
 						&dest_address);
 	if (ret != 0) {
-		c->status = map_nt_error_from_unix_common(errno);
+		c->status = map_nt_error_from_unix(errno);
 		if (!composite_is_ok(c)) return;
 	}
 
-	c->status = cldap_socket_init(s, NULL, dest_address, &s->cldap.sock);
+	c->status = cldap_socket_init(s, s->libnet->event_ctx,
+				      NULL, dest_address, &s->cldap.sock);
 	if (!composite_is_ok(c)) return;
 
-	req = cldap_netlogon_send(s, s->libnet->event_ctx,
-				  s->cldap.sock, &s->cldap.io);
+	req = cldap_netlogon_send(s, s->cldap.sock, &s->cldap.io);
 	if (composite_nomem(req, c)) return;
 	tevent_req_set_callback(req, unbecomeDC_recv_cldap, s);
 }
@@ -543,21 +543,12 @@ static void unbecomeDC_drsuapi_connect_send(struct libnet_UnbecomeDC_state *s)
 	struct composite_context *creq;
 	char *binding_str;
 
-	binding_str = talloc_asprintf(s, "ncacn_ip_tcp:%s[seal,target_hostname=%s]",
-				      s->source_dsa.address,
-				      s->source_dsa.dns_name);
+	binding_str = talloc_asprintf(s, "ncacn_ip_tcp:%s[seal]", s->source_dsa.dns_name);
 	if (composite_nomem(binding_str, c)) return;
 
 	c->status = dcerpc_parse_binding(s, binding_str, &s->drsuapi.binding);
 	talloc_free(binding_str);
 	if (!composite_is_ok(c)) return;
-
-	if (DEBUGLEVEL >= 10) {
-		c->status = dcerpc_binding_set_flags(s->drsuapi.binding,
-						     DCERPC_DEBUG_PRINT_BOTH,
-						     0);
-		if (!composite_is_ok(c)) return;
-	}
 
 	creq = dcerpc_pipe_connect_b_send(s, s->drsuapi.binding, &ndr_table_drsuapi,
 					  s->libnet->cred, s->libnet->event_ctx,
@@ -640,19 +631,6 @@ static void unbecomeDC_drsuapi_bind_recv(struct tevent_req *subreq)
 			s->drsuapi.remote_info28.repl_epoch		= 0;
 			break;
 		}
-		case 28: {
-			s->drsuapi.remote_info28 = s->drsuapi.bind_r.out.bind_info->info.info28;
-			break;
-		}
-		case 32: {
-			struct drsuapi_DsBindInfo32 *info32;
-			info32 = &s->drsuapi.bind_r.out.bind_info->info.info32;
-			s->drsuapi.remote_info28.supported_extensions	= info32->supported_extensions;
-			s->drsuapi.remote_info28.site_guid		= info32->site_guid;
-			s->drsuapi.remote_info28.pid			= info32->pid;
-			s->drsuapi.remote_info28.repl_epoch		= info32->repl_epoch;
-			break;
-		}
 		case 48: {
 			struct drsuapi_DsBindInfo48 *info48;
 			info48 = &s->drsuapi.bind_r.out.bind_info->info.info48;
@@ -662,18 +640,8 @@ static void unbecomeDC_drsuapi_bind_recv(struct tevent_req *subreq)
 			s->drsuapi.remote_info28.repl_epoch		= info48->repl_epoch;
 			break;
 		}
-		case 52: {
-			struct drsuapi_DsBindInfo52 *info52;
-			info52 = &s->drsuapi.bind_r.out.bind_info->info.info52;
-			s->drsuapi.remote_info28.supported_extensions	= info52->supported_extensions;
-			s->drsuapi.remote_info28.site_guid		= info52->site_guid;
-			s->drsuapi.remote_info28.pid			= info52->pid;
-			s->drsuapi.remote_info28.repl_epoch		= info52->repl_epoch;
-			break;
-		}
-		default:
-			DEBUG(1, ("Warning: invalid info length in bind info: %d\n",
-				s->drsuapi.bind_r.out.bind_info->length));
+		case 28:
+			s->drsuapi.remote_info28 = s->drsuapi.bind_r.out.bind_info->info.info28;
 			break;
 		}
 	}

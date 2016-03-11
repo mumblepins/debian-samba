@@ -288,7 +288,7 @@ static struct tevent_req *wb_connect_send(TALLOC_CTX *mem_ctx,
 
 	subreq = async_connect_send(mem_ctx, ev, wb_ctx->fd,
 				    (struct sockaddr *)(void *)&sunaddr,
-				    sizeof(sunaddr), NULL, NULL, NULL);
+				    sizeof(sunaddr));
 	if (subreq == NULL) {
 		goto nomem;
 	}
@@ -325,14 +325,14 @@ static wbcErr wb_connect_recv(struct tevent_req *req)
 
 static const char *winbindd_socket_dir(void)
 {
-	if (nss_wrapper_enabled()) {
-		const char *env_dir;
+#ifdef SOCKET_WRAPPER
+	const char *env_dir;
 
-		env_dir = getenv("SELFTEST_WINBINDD_SOCKET_DIR");
-		if (env_dir != NULL) {
-			return env_dir;
-		}
+	env_dir = getenv(WINBINDD_SOCKET_DIR_ENVVAR);
+	if (env_dir) {
+		return env_dir;
 	}
+#endif
 
 	return WINBINDD_SOCKET_DIR;
 }
@@ -551,7 +551,7 @@ struct tevent_req *wb_trans_send(TALLOC_CTX *mem_ctx,
 
 	if (!tevent_queue_add(wb_ctx->queue, ev, req, wb_trans_trigger,
 			      NULL)) {
-		tevent_req_oom(req);
+		tevent_req_nomem(NULL, req);
 		return tevent_req_post(req, ev);
 	}
 	return req;

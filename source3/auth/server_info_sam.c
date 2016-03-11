@@ -49,7 +49,7 @@ static bool is_our_machine_account(const char *username)
 		return false;
 	}
 	truncname[ulen-1] = '\0';
-	ret = strequal(truncname, lp_netbios_name());
+	ret = strequal(truncname, global_myname());
 	SAFE_FREE(truncname);
 	return ret;
 }
@@ -58,48 +58,46 @@ static bool is_our_machine_account(const char *username)
  Make (and fill) a user_info struct from a struct samu
 ***************************************************************************/
 
-NTSTATUS make_server_info_sam(TALLOC_CTX *mem_ctx,
-			      struct samu *sampass,
-			      struct auth_serversupplied_info **pserver_info)
+NTSTATUS make_server_info_sam(struct auth_serversupplied_info **server_info,
+			      struct samu *sampass)
 {
 	struct passwd *pwd;
-	struct auth_serversupplied_info *server_info;
+	struct auth_serversupplied_info *result;
 	const char *username = pdb_get_username(sampass);
-	TALLOC_CTX *tmp_ctx;
 	NTSTATUS status;
 
-	tmp_ctx = talloc_stackframe();
-	if (tmp_ctx == NULL) {
+	if ( !(result = make_server_info(NULL)) ) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	server_info = make_server_info(tmp_ctx);
-	if (server_info == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
-
-	pwd = Get_Pwnam_alloc(tmp_ctx, username);
-	if (pwd == NULL) {
+	if ( !(pwd = Get_Pwnam_alloc(result, username)) ) {
 		DEBUG(1, ("User %s in passdb, but getpwnam() fails!\n",
 			  pdb_get_username(sampass)));
-		status = NT_STATUS_NO_SUCH_USER;
-		goto out;
+		TALLOC_FREE(result);
+		return NT_STATUS_NO_SUCH_USER;
 	}
 
-	status = samu_to_SamInfo3(server_info,
-				  sampass,
-				  lp_netbios_name(),
-				  &server_info->info3,
-				  &server_info->extra);
+	status = samu_to_SamInfo3(result, sampass, global_myname(),
+				  &result->info3, &result->extra);
 	if (!NT_STATUS_IS_OK(status)) {
-		goto out;
+		TALLOC_FREE(result);
+		return status;
 	}
 
-	server_info->unix_name = talloc_steal(server_info, pwd->pw_name);
+	result->unix_name = pwd->pw_name;
+	/* Ensure that we keep pwd->pw_name, because we will free pwd below */
+	talloc_steal(result, pwd->pw_name);
+	result->utok.gid = pwd->pw_gid;
+	result->utok.uid = pwd->pw_uid;
 
-	server_info->utok.gid = pwd->pw_gid;
-	server_info->utok.uid = pwd->pw_uid;
+	TALLOC_FREE(pwd);
+
+	result->sanitized_username = sanitize_username(result,
+						       result->unix_name);
+	if (result->sanitized_username == NULL) {
+		TALLOC_FREE(result);
+		return NT_STATUS_NO_MEMORY;
+	}
 
 	if (IS_DC && is_our_machine_account(username)) {
 		/*
@@ -119,13 +117,9 @@ NTSTATUS make_server_info_sam(TALLOC_CTX *mem_ctx,
 	}
 
 	DEBUG(5,("make_server_info_sam: made server info for user %s -> %s\n",
-		 pdb_get_username(sampass), server_info->unix_name));
+		 pdb_get_username(sampass), result->unix_name));
 
-	*pserver_info = talloc_steal(mem_ctx, server_info);
+	*server_info = result;
 
-	status = NT_STATUS_OK;
-out:
-	talloc_free(tmp_ctx);
-
-	return status;
+	return NT_STATUS_OK;
 }

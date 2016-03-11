@@ -33,10 +33,12 @@
   and doesn't support O_RDWR. That keeps the code simple.
 */
 
-#include "replace.h"
+#include "includes.h"
 #include "system/filesys.h"
-#include "memory.h"
-#include "xfile.h"
+
+#if _SAMBA_BUILD_ == 3
+#undef malloc
+#endif
 
 #define XBUFSIZE BUFSIZ
 

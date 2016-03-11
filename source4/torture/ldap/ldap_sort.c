@@ -27,9 +27,8 @@
 #include "ldb_wrap.h"
 #include "param/param.h"
 #include "lib/cmdline/popt_common.h" 
-#include "libcli/ldap/ldap_client.h"
 #include "torture/smbtorture.h"
-#include "torture/ldap/proto.h"
+#include "torture/local/proto.h"
 #include <ctype.h>
 
 bool torture_ldap_sort(struct torture_context *torture)

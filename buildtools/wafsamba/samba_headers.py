@@ -119,6 +119,7 @@ def public_headers_simple(bld, public_headers, header_path=None, public_headers_
             h_name =  h
             inst_name = os.path.basename(h)
         bld.INSTALL_FILES('${INCLUDEDIR}', h_name, destname=inst_name)
+        
 
 
 def PUBLIC_HEADERS(bld, public_headers, header_path=None, public_headers_install=True):

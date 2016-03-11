@@ -7,41 +7,46 @@
 
 if [ $# -lt 3 ]; then
 cat <<EOF
-Usage: test_net_registry_roundtrip.sh SCRIPTDIR SERVERCONFFILE NET CONFIGURATION RPC
+Usage: test_net_registry_roundtrip.sh SCRIPTDIR SERVERCONFFILE CONFIGURATION
 EOF
 exit 1;
 fi
 
 SCRIPTDIR="$1"
 SERVERCONFFILE="$2"
-NET="$3"
-CONFIGURATION="$4"
-RPC="$5"
+CONFIGURATION="$3"
 
-NET="$VALGRIND ${NET} $CONFIGURATION"
+NET="$VALGRIND ${NET:-$BINDIR/net} $CONFIGURATION"
+
 
 if test "x${RPC}" = "xrpc" ; then
-	NETCMD="${NET} -U${USERNAME}%${PASSWORD} -I ${SERVER_IP} rpc"
+	NETREG="${NET} -U${USERNAME}%${PASSWORD} -I ${SERVER_IP} rpc registry"
 else
-	NETCMD="${NET}"
+	NETREG="${NET} registry"
 fi
 
-
+test x"$TEST_FUNCTIONS_SH" != x"INCLUDED" && {
 incdir=`dirname $0`/../../../testprogs/blackbox
 . $incdir/subunit.sh
+}
 
 failed=0
 
-#
-# List of parameters to skip when importing configuration files:
-# They are forbidden in the registry and would lead import to fail.
-#
 SED_INVALID_PARAMS="{
-s/state directory/;&/g
 s/lock directory/;&/g
 s/lock dir/;&/g
-s/config backend/;&/g
-s/include/;&/g
+s/modules dir/;&/g
+s/logging/;&/g
+s/status/;&/g
+s/logdir/;&/g
+s/read prediction/;&/g
+s/mkprofile/;&/g
+s/valid chars/;&/g
+s/timesync/;&/g
+s/sambaconf/;&/g
+s/logtype/;&/g
+s/servername/;&/g
+s/postscript/;&/g
 }"
 
 REGPATH="HKLM\Software\Samba"
@@ -61,31 +66,31 @@ conf_roundtrip_step() {
 LOGDIR_PREFIX="conf_roundtrip"
 
 conf_roundtrip()
-(
-    DIR=$(mktemp -d ${PREFIX}/${LOGDIR_PREFIX}_XXXXXX)
-    LOG=$DIR/log
+{
+    local DIR=$(mktemp -d ${PREFIX}/${LOGDIR_PREFIX}_XXXXXX)
+    local LOG=$DIR/log
 
     echo conf_roundtrip $1 > $LOG
 
     sed -e "$SED_INVALID_PARAMS" $1 >$DIR/conf_in
 
-    conf_roundtrip_step $NETCMD conf drop
+    conf_roundtrip_step $NET conf drop
     test "x$?" = "x0" || {
         return 1
     }
 
-    test -z "$($NETCMD conf list)" 2>>$LOG
+    test -z "$($NET conf list)" 2>>$LOG
     if [ "$?" = "1" ]; then
 	echo "ERROR: conf drop failed" | tee -a $LOG
 	return 1
     fi
 
-    conf_roundtrip_step $NETCMD conf import $DIR/conf_in
+    conf_roundtrip_step $NET conf import $DIR/conf_in
     test "x$?" = "x0" || {
         return 1
     }
 
-    conf_roundtrip_step $NETCMD conf list > $DIR/conf_exp
+    conf_roundtrip_step $NET conf list > $DIR/conf_exp
     test "x$?" = "x0" || {
         return 1
     }
@@ -96,28 +101,28 @@ conf_roundtrip()
 	return 1
     fi
 
-    conf_roundtrip_step $NETCMD -d10 registry export $REGPATH $DIR/conf_exp.reg
+    conf_roundtrip_step $NET -d10 registry export $REGPATH $DIR/conf_exp.reg
     test "x$?" = "x0" || {
         return 1
     }
 
-    conf_roundtrip_step $NETCMD conf drop
+    conf_roundtrip_step $NET conf drop
     test "x$?" = "x0" || {
         return 1
     }
 
-    test -z "$($NETCMD conf list)" 2>>$LOG
+    test -z "$($NET conf list)" 2>>$LOG
     if [ "$?" = "1" ]; then
 	echo "ERROR: conf drop failed" | tee -a $LOG
 	return 1
     fi
 
-    conf_roundtrip_step $NETCMD registry import $DIR/conf_exp.reg
+    conf_roundtrip_step $NET registry import $DIR/conf_exp.reg
     test "x$?" = "x0" || {
         return 1
     }
 
-    conf_roundtrip_step $NETCMD conf list >$DIR/conf_out
+    conf_roundtrip_step $NET conf list >$DIR/conf_out
     test "x$?" = "x0"  || {
         return 1
     }
@@ -128,7 +133,7 @@ conf_roundtrip()
 	return 1
     fi
 
-    conf_roundtrip_step $NETCMD registry export $REGPATH $DIR/conf_out.reg
+    conf_roundtrip_step $NET registry export $REGPATH $DIR/conf_out.reg
     test "x$?" = "x0" || {
         return 1
     }
@@ -139,9 +144,9 @@ conf_roundtrip()
 	return 1
     fi
     rm -r $DIR
-)
+}
 
-CONF_FILES=$SERVERCONFFILE
+CONF_FILES=${CONF_FILES:-$(find $SRCDIR/ -name '*.conf' | grep -v examples/logon | xargs grep -l "\[global\]")}
 
 # remove old logs:
 for OLDDIR in $(find ${PREFIX} -type d -name "${LOGDIR_PREFIX}_*") ; do

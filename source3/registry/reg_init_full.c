@@ -69,7 +69,7 @@ struct registry_hook reg_hooks[] = {
 
 /***********************************************************************
  Open the registry database and initialize the registry_hook cache
- with all available backends.
+ with all available backens.
  ***********************************************************************/
 
 WERROR registry_init_full(void)

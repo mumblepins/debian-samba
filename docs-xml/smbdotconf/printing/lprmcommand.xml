@@ -1,6 +1,7 @@
 <samba:parameter name="lprm command"
                  context="S"
 				 type="string"
+				 print="1"
                  xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
     <para>This parameter specifies the command to be 
@@ -31,5 +32,5 @@ lprm command = /usr/bin/cancel %p-%j
 </description>
 <related>printing</related>
 
-<value type="default"><comment>determined by printing parameter</comment></value>
+<value type="default"> determined by printing parameter</value>
 </samba:parameter>

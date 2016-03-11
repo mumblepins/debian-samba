@@ -139,13 +139,12 @@ NTSTATUS net_get_remote_domain_sid(struct cli_state *cli, TALLOC_CTX *mem_ctx,
 				   const char **domain_name);
 int run_rpc_command(struct net_context *c,
 			struct cli_state *cli_arg,
-		        const struct ndr_interface_table *table,
+			const struct ndr_syntax_id *interface,
 			int conn_flags,
 			rpc_command_fn fn,
 			int argc,
 			const char **argv);
 int net_rpc_changetrustpw(struct net_context *c, int argc, const char **argv);
-int net_rpc_testjoin(struct net_context *c, int argc, const char **argv);
 int net_rpc_join(struct net_context *c, int argc, const char **argv);
 NTSTATUS rpc_info_internals(struct net_context *c,
 			const struct dom_sid *domain_sid,
@@ -199,6 +198,13 @@ int net_rpc(struct net_context *c, int argc, const char **argv);
 /* The following definitions come from utils/net_rpc_audit.c  */
 
 int net_rpc_audit(struct net_context *c, int argc, const char **argv);
+
+/* The following definitions come from utils/net_rpc_join.c  */
+
+NTSTATUS net_rpc_join_ok(struct net_context *c, const char *domain,
+			 const char *server, struct sockaddr_storage *pss);
+int net_rpc_join_newstyle(struct net_context *c, int argc, const char **argv);
+int net_rpc_testjoin(struct net_context *c, int argc, const char **argv);
 
 /* The following definitions come from utils/net_rpc_printer.c  */
 
@@ -332,7 +338,7 @@ int rpc_vampire_keytab(struct net_context *c, int argc, const char **argv);
 
 /* The following definitions come from utils/net_rpc_service.c  */
 
-const char *svc_status_string( uint32_t state );
+const char *svc_status_string( uint32 state );
 int net_rpc_service(struct net_context *c, int argc, const char **argv);
 
 /* The following definitions come from utils/net_rpc_sh_acct.c  */
@@ -394,22 +400,26 @@ NTSTATUS net_rpc_lookup_name(struct net_context *c,
 			     const char **ret_name, struct dom_sid *ret_sid,
 			     enum lsa_SidType *ret_type);
 NTSTATUS connect_to_service(struct net_context *c,
-			    struct cli_state **cli_ctx,
-			    const struct sockaddr_storage *server_ss,
-			    const char *server_name,
-			    const char *service_name,
-			    const char *service_type);
+					struct cli_state **cli_ctx,
+					struct sockaddr_storage *server_ss,
+					const char *server_name,
+					const char *service_name,
+					const char *service_type);
 NTSTATUS connect_to_ipc(struct net_context *c,
 			struct cli_state **cli_ctx,
-			const struct sockaddr_storage *server_ss,
+			struct sockaddr_storage *server_ss,
 			const char *server_name);
 NTSTATUS connect_to_ipc_anonymous(struct net_context *c,
 				struct cli_state **cli_ctx,
-				const struct sockaddr_storage *server_ss,
+				struct sockaddr_storage *server_ss,
 				const char *server_name);
+NTSTATUS connect_to_ipc_krb5(struct net_context *c,
+			struct cli_state **cli_ctx,
+			struct sockaddr_storage *server_ss,
+			const char *server_name);
 NTSTATUS connect_dst_pipe(struct net_context *c, struct cli_state **cli_dst,
 			  struct rpc_pipe_client **pp_pipe_hnd,
-			  const struct ndr_interface_table *table);
+			  const struct ndr_syntax_id *interface);
 int net_use_krb_machine_account(struct net_context *c);
 int net_use_machine_account(struct net_context *c);
 bool net_find_server(struct net_context *c,
@@ -424,7 +434,7 @@ NTSTATUS net_make_ipc_connection(struct net_context *c, unsigned flags,
 				 struct cli_state **pcli);
 NTSTATUS net_make_ipc_connection_ex(struct net_context *c ,const char *domain,
 				    const char *server,
-				    const struct sockaddr_storage *pss,
+				    struct sockaddr_storage *pss,
 				    unsigned flags, struct cli_state **pcli);
 const char *net_prompt_pass(struct net_context *c, const char *user);
 int net_run_function(struct net_context *c, int argc, const char **argv,
@@ -458,8 +468,4 @@ int net_g_lock(struct net_context *c, int argc, const char **argv);
 /* The following definitions come from utils/net_rpc_trust.c  */
 int net_rpc_trust(struct net_context *c, int argc, const char **argv);
 
-/* The following definitions come from utils/net_rpc_conf.c */
-int net_rpc_conf(struct net_context *c, int argc, const char **argv);
-
-int net_notify(struct net_context *c, int argc, const char **argv);
 #endif /*  _NET_PROTO_H_  */

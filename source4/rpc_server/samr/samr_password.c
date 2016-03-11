@@ -29,22 +29,134 @@
 #include "auth/auth.h"
 #include "libcli/auth/libcli_auth.h"
 #include "../lib/util/util_ldb.h"
-#include "rpc_server/samr/proto.h"
-#include "auth/auth_sam.h"
 
 /*
   samr_ChangePasswordUser
-
-  So old it is just not worth implementing
-  because it does not supply a plaintext and so we can't do password
-  complexity checking and cannot update all the other password hashes.
-
 */
 NTSTATUS dcesrv_samr_ChangePasswordUser(struct dcesrv_call_state *dce_call,
 					TALLOC_CTX *mem_ctx,
 					struct samr_ChangePasswordUser *r)
 {
-	return NT_STATUS_NOT_IMPLEMENTED;
+	struct dcesrv_handle *h;
+	struct samr_account_state *a_state;
+	struct ldb_context *sam_ctx;
+	struct ldb_message **res;
+	int ret;
+	struct samr_Password new_lmPwdHash, new_ntPwdHash, checkHash;
+	struct samr_Password *lm_pwd, *nt_pwd;
+	NTSTATUS status = NT_STATUS_OK;
+	const char * const attrs[] = { "dBCSPwd", "unicodePwd" , NULL };
+
+	DCESRV_PULL_HANDLE(h, r->in.user_handle, SAMR_HANDLE_USER);
+
+	a_state = h->data;
+
+	/* basic sanity checking on parameters.  Do this before any database ops */
+	if (!r->in.lm_present || !r->in.nt_present ||
+	    !r->in.old_lm_crypted || !r->in.new_lm_crypted ||
+	    !r->in.old_nt_crypted || !r->in.new_nt_crypted) {
+		/* we should really handle a change with lm not
+		   present */
+		return NT_STATUS_INVALID_PARAMETER_MIX;
+	}
+
+	/* Connect to a SAMDB with system privileges for fetching the old pw
+	 * hashes. */
+	sam_ctx = samdb_connect(mem_ctx, dce_call->event_ctx,
+				dce_call->conn->dce_ctx->lp_ctx,
+				system_session(dce_call->conn->dce_ctx->lp_ctx), 0);
+	if (sam_ctx == NULL) {
+		return NT_STATUS_INVALID_SYSTEM_SERVICE;
+	}
+
+	/* fetch the old hashes */
+	ret = gendb_search_dn(sam_ctx, mem_ctx,
+			      a_state->account_dn, &res, attrs);
+	if (ret != 1) {
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+
+	status = samdb_result_passwords(mem_ctx,
+					dce_call->conn->dce_ctx->lp_ctx,
+					res[0], &lm_pwd, &nt_pwd);
+	if (!NT_STATUS_IS_OK(status) || !nt_pwd) {
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+
+	/* decrypt and check the new lm hash */
+	if (lm_pwd) {
+		D_P16(lm_pwd->hash, r->in.new_lm_crypted->hash, new_lmPwdHash.hash);
+		D_P16(new_lmPwdHash.hash, r->in.old_lm_crypted->hash, checkHash.hash);
+		if (memcmp(checkHash.hash, lm_pwd, 16) != 0) {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
+	}
+
+	/* decrypt and check the new nt hash */
+	D_P16(nt_pwd->hash, r->in.new_nt_crypted->hash, new_ntPwdHash.hash);
+	D_P16(new_ntPwdHash.hash, r->in.old_nt_crypted->hash, checkHash.hash);
+	if (memcmp(checkHash.hash, nt_pwd, 16) != 0) {
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+
+	/* The NT Cross is not required by Win2k3 R2, but if present
+	   check the nt cross hash */
+	if (r->in.cross1_present && r->in.nt_cross && lm_pwd) {
+		D_P16(lm_pwd->hash, r->in.nt_cross->hash, checkHash.hash);
+		if (memcmp(checkHash.hash, new_ntPwdHash.hash, 16) != 0) {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
+	}
+
+	/* The LM Cross is not required by Win2k3 R2, but if present
+	   check the lm cross hash */
+	if (r->in.cross2_present && r->in.lm_cross && lm_pwd) {
+		D_P16(nt_pwd->hash, r->in.lm_cross->hash, checkHash.hash);
+		if (memcmp(checkHash.hash, new_lmPwdHash.hash, 16) != 0) {
+			return NT_STATUS_WRONG_PASSWORD;
+		}
+	}
+
+	/* Start a SAM with user privileges for the password change */
+	sam_ctx = samdb_connect(mem_ctx, dce_call->event_ctx,
+				dce_call->conn->dce_ctx->lp_ctx,
+				dce_call->conn->auth_state.session_info, 0);
+	if (sam_ctx == NULL) {
+		return NT_STATUS_INVALID_SYSTEM_SERVICE;
+	}
+
+	/* Start transaction */
+	ret = ldb_transaction_start(sam_ctx);
+	if (ret != LDB_SUCCESS) {
+		DEBUG(1, ("Failed to start transaction: %s\n", ldb_errstring(sam_ctx)));
+		return NT_STATUS_TRANSACTION_ABORTED;
+	}
+
+	/* Performs the password modification. We pass the old hashes read out
+	 * from the database since they were already checked against the user-
+	 * provided ones. */
+	status = samdb_set_password(sam_ctx, mem_ctx,
+				    a_state->account_dn,
+				    a_state->domain_state->domain_dn,
+				    NULL, &new_lmPwdHash, &new_ntPwdHash,
+				    lm_pwd, nt_pwd, /* this is a user password change */
+				    NULL,
+				    NULL);
+	if (!NT_STATUS_IS_OK(status)) {
+		ldb_transaction_cancel(sam_ctx);
+		return status;
+	}
+
+	/* And this confirms it in a transaction commit */
+	ret = ldb_transaction_commit(sam_ctx);
+	if (ret != LDB_SUCCESS) {
+		DEBUG(1,("Failed to commit transaction to change password on %s: %s\n",
+			 ldb_dn_get_linearized(a_state->account_dn),
+			 ldb_errstring(sam_ctx)));
+		return NT_STATUS_TRANSACTION_ABORTED;
+	}
+
+	return NT_STATUS_OK;
 }
 
 /*
@@ -62,17 +174,12 @@ NTSTATUS dcesrv_samr_OemChangePasswordUser2(struct dcesrv_call_state *dce_call,
 	struct ldb_dn *user_dn;
 	int ret;
 	struct ldb_message **res;
-	const char * const attrs[] = { "objectSid", "dBCSPwd",
-				       "userAccountControl",
-				       "msDS-User-Account-Control-Computed",
-				       "badPwdCount", "badPasswordTime",
-				       NULL };
+	const char * const attrs[] = { "objectSid", "dBCSPwd", NULL };
 	struct samr_Password *lm_pwd;
 	DATA_BLOB lm_pwd_blob;
 	uint8_t new_lm_hash[16];
 	struct samr_Password lm_verifier;
 	size_t unicode_pw_len;
-	size_t converted_size = 0;
 
 	if (pwbuf == NULL) {
 		return NT_STATUS_INVALID_PARAMETER;
@@ -102,7 +209,7 @@ NTSTATUS dcesrv_samr_OemChangePasswordUser2(struct dcesrv_call_state *dce_call,
 	ret = gendb_search(sam_ctx,
 			   mem_ctx, NULL, &res, attrs,
 			   "(&(sAMAccountName=%s)(objectclass=user))",
-			   ldb_binary_encode_string(mem_ctx, r->in.account->string));
+			   r->in.account->string);
 	if (ret != 1) {
 		/* Don't give the game away:  (don't allow anonymous users to prove the existance of usernames) */
 		return NT_STATUS_WRONG_PASSWORD;
@@ -112,9 +219,7 @@ NTSTATUS dcesrv_samr_OemChangePasswordUser2(struct dcesrv_call_state *dce_call,
 
 	status = samdb_result_passwords(mem_ctx, dce_call->conn->dce_ctx->lp_ctx,
 					res[0], &lm_pwd, NULL);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	} else if (!lm_pwd) {
+	if (!NT_STATUS_IS_OK(status) || !lm_pwd) {
 		return NT_STATUS_WRONG_PASSWORD;
 	}
 
@@ -125,27 +230,24 @@ NTSTATUS dcesrv_samr_OemChangePasswordUser2(struct dcesrv_call_state *dce_call,
 
 	if (!extract_pw_from_buffer(mem_ctx, pwbuf->data, &new_password)) {
 		DEBUG(3,("samr: failed to decode password buffer\n"));
-		authsam_update_bad_pwd_count(sam_ctx, res[0], ldb_get_default_basedn(sam_ctx));
 		return NT_STATUS_WRONG_PASSWORD;
 	}
 
-	if (!convert_string_talloc_handle(mem_ctx, lpcfg_iconv_handle(dce_call->conn->dce_ctx->lp_ctx),
+	if (!convert_string_talloc_convenience(mem_ctx, lpcfg_iconv_convenience(dce_call->conn->dce_ctx->lp_ctx),
 				  CH_DOS, CH_UNIX,
 				  (const char *)new_password.data,
 				  new_password.length,
-				  (void **)&new_pass, &converted_size)) {
+				  (void **)&new_pass, NULL, false)) {
 		DEBUG(3,("samr: failed to convert incoming password buffer to unix charset\n"));
-		authsam_update_bad_pwd_count(sam_ctx, res[0], ldb_get_default_basedn(sam_ctx));
 		return NT_STATUS_WRONG_PASSWORD;
 	}
 
-	if (!convert_string_talloc_handle(mem_ctx, lpcfg_iconv_handle(dce_call->conn->dce_ctx->lp_ctx),
+	if (!convert_string_talloc_convenience(mem_ctx, lpcfg_iconv_convenience(dce_call->conn->dce_ctx->lp_ctx),
 					       CH_DOS, CH_UTF16,
 					       (const char *)new_password.data,
 					       new_password.length,
-					       (void **)&new_unicode_password.data, &unicode_pw_len)) {
+					       (void **)&new_unicode_password.data, &unicode_pw_len, false)) {
 		DEBUG(3,("samr: failed to convert incoming password buffer to UTF16 charset\n"));
-		authsam_update_bad_pwd_count(sam_ctx, res[0], ldb_get_default_basedn(sam_ctx));
 		return NT_STATUS_WRONG_PASSWORD;
 	}
 	new_unicode_password.length = unicode_pw_len;
@@ -153,7 +255,6 @@ NTSTATUS dcesrv_samr_OemChangePasswordUser2(struct dcesrv_call_state *dce_call,
 	E_deshash(new_pass, new_lm_hash);
 	E_old_pw_hash(new_lm_hash, lm_pwd->hash, lm_verifier.hash);
 	if (memcmp(lm_verifier.hash, r->in.hash->hash, 16) != 0) {
-		authsam_update_bad_pwd_count(sam_ctx, res[0], ldb_get_default_basedn(sam_ctx));
 		return NT_STATUS_WRONG_PASSWORD;
 	}
 
@@ -210,14 +311,10 @@ NTSTATUS dcesrv_samr_ChangePasswordUser3(struct dcesrv_call_state *dce_call,
 	NTSTATUS status;
 	DATA_BLOB new_password;
 	struct ldb_context *sam_ctx = NULL;
-	struct ldb_dn *user_dn = NULL;
+	struct ldb_dn *user_dn;
 	int ret;
 	struct ldb_message **res;
-	const char * const attrs[] = { "unicodePwd", "dBCSPwd",
-				       "userAccountControl",
-				       "msDS-User-Account-Control-Computed",
-				       "badPwdCount", "badPasswordTime",
-				       "objectSid", NULL };
+	const char * const attrs[] = { "unicodePwd", "dBCSPwd", NULL };
 	struct samr_Password *nt_pwd, *lm_pwd;
 	DATA_BLOB nt_pwd_blob;
 	struct samr_DomInfo1 *dominfo = NULL;
@@ -249,7 +346,7 @@ NTSTATUS dcesrv_samr_ChangePasswordUser3(struct dcesrv_call_state *dce_call,
 	ret = gendb_search(sam_ctx,
 			   mem_ctx, NULL, &res, attrs,
 			   "(&(sAMAccountName=%s)(objectclass=user))",
-			   ldb_binary_encode_string(mem_ctx, r->in.account->string));
+			   r->in.account->string);
 	if (ret != 1) {
 		/* Don't give the game away:  (don't allow anonymous users to prove the existance of usernames) */
 		status = NT_STATUS_WRONG_PASSWORD;
@@ -299,13 +396,11 @@ NTSTATUS dcesrv_samr_ChangePasswordUser3(struct dcesrv_call_state *dce_call,
 	 * this) */
 	if (lm_pwd && r->in.lm_verifier != NULL) {
 		char *new_pass;
-		size_t converted_size = 0;
-
-		if (!convert_string_talloc_handle(mem_ctx, lpcfg_iconv_handle(dce_call->conn->dce_ctx->lp_ctx),
+		if (!convert_string_talloc_convenience(mem_ctx, lpcfg_iconv_convenience(dce_call->conn->dce_ctx->lp_ctx),
 					  CH_UTF16, CH_UNIX,
 					  (const char *)new_password.data,
 					  new_password.length,
-					  (void **)&new_pass, &converted_size)) {
+					  (void **)&new_pass, NULL, false)) {
 			E_deshash(new_pass, new_lm_hash);
 			E_old_pw_hash(new_nt_hash, lm_pwd->hash, lm_verifier.hash);
 			if (memcmp(lm_verifier.hash, r->in.lm_verifier->hash, 16) != 0) {
@@ -358,11 +453,6 @@ NTSTATUS dcesrv_samr_ChangePasswordUser3(struct dcesrv_call_state *dce_call,
 	return NT_STATUS_OK;
 
 failed:
-	/* Only update the badPwdCount if we found the user */
-	if (user_dn != NULL && NT_STATUS_EQUAL(status, NT_STATUS_WRONG_PASSWORD)) {
-		authsam_update_bad_pwd_count(sam_ctx, res[0], ldb_get_default_basedn(sam_ctx));
-	}
-
 	reject = talloc_zero(mem_ctx, struct userPwdChangeFailureInformation);
 	if (reject != NULL) {
 		reject->extendedFailureReason = reason;
@@ -419,10 +509,7 @@ NTSTATUS samr_set_password(struct dcesrv_call_state *dce_call,
 
 	nt_status = dcesrv_fetch_session_key(dce_call->conn, &session_key);
 	if (!NT_STATUS_IS_OK(nt_status)) {
-		DEBUG(3,("samr: failed to get session key: %s "
-			 "=> NT_STATUS_WRONG_PASSWORD\n",
-			nt_errstr(nt_status)));
-		return NT_STATUS_WRONG_PASSWORD;
+		return nt_status;
 	}
 
 	arcfour_crypt_blob(pwbuf->data, 516, &session_key);
@@ -457,14 +544,11 @@ NTSTATUS samr_set_password_ex(struct dcesrv_call_state *dce_call,
 	DATA_BLOB new_password;
 	DATA_BLOB co_session_key;
 	DATA_BLOB session_key = data_blob(NULL, 0);
-	MD5_CTX ctx;
+	struct MD5Context ctx;
 
 	nt_status = dcesrv_fetch_session_key(dce_call->conn, &session_key);
 	if (!NT_STATUS_IS_OK(nt_status)) {
-		DEBUG(3,("samr: failed to get session key: %s "
-			 "=> NT_STATUS_WRONG_PASSWORD\n",
-			nt_errstr(nt_status)));
-		return NT_STATUS_WRONG_PASSWORD;
+		return nt_status;
 	}
 
 	co_session_key = data_blob_talloc(mem_ctx, NULL, 16);
@@ -506,26 +590,11 @@ NTSTATUS samr_set_password_buffers(struct dcesrv_call_state *dce_call,
 				   const uint8_t *nt_pwd_hash)
 {
 	struct samr_Password *d_lm_pwd_hash = NULL, *d_nt_pwd_hash = NULL;
-	uint8_t random_session_key[16] = { 0, };
 	DATA_BLOB session_key = data_blob(NULL, 0);
 	DATA_BLOB in, out;
 	NTSTATUS nt_status = NT_STATUS_OK;
 
 	nt_status = dcesrv_fetch_session_key(dce_call->conn, &session_key);
-	if (NT_STATUS_EQUAL(nt_status, NT_STATUS_NO_USER_SESSION_KEY)) {
-		DEBUG(3,("samr: failed to get session key: %s "
-			 "=> use a random session key\n",
-			 nt_errstr(nt_status)));
-
-		/*
-		 * Windows just uses a random key
-		 */
-		generate_random_buffer(random_session_key,
-				       sizeof(random_session_key));
-		session_key = data_blob_const(random_session_key,
-					      sizeof(random_session_key));
-		nt_status = NT_STATUS_OK;
-	}
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		return nt_status;
 	}

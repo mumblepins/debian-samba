@@ -46,7 +46,7 @@ gss_acquire_cred(OM_uint32 *minor_status,
 	struct _gss_cred *cred;
 	struct _gss_mechanism_cred *mc;
 	OM_uint32 min_time, cred_time;
-	size_t i;
+	int i;
 
 	*minor_status = 0;
 	if (output_cred_handle == NULL)

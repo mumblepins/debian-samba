@@ -4,7 +4,6 @@
 
    Copyright (C) Andrew Tridgell 2009
    Copyright (C) Andrew Bartlett <abartlet@samba.org> 2009
-   Copyright (C) Matthieu Patou <mat@matws.net> 2011
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,7 +25,7 @@
 #include "librpc/ndr/libndr.h"
 #include "dsdb/samdb/ldb_modules/util.h"
 #include "dsdb/samdb/samdb.h"
-#include "dsdb/common/util.h"
+#include "util.h"
 #include "libcli/security/security.h"
 
 /*
@@ -110,25 +109,39 @@ int dsdb_module_search_dn(struct ldb_module *module,
 	return ret;
 }
 
-int dsdb_module_search_tree(struct ldb_module *module,
+/*
+  search for attrs in the modules below
+ */
+int dsdb_module_search(struct ldb_module *module,
 		       TALLOC_CTX *mem_ctx,
 		       struct ldb_result **_res,
-		       struct ldb_dn *basedn,
-		       enum ldb_scope scope,
-		       struct ldb_parse_tree *tree,
+		       struct ldb_dn *basedn, enum ldb_scope scope, 
 		       const char * const *attrs,
-		       int dsdb_flags,
-		       struct ldb_request *parent)
+		       int dsdb_flags, 
+		       struct ldb_request *parent,
+		       const char *format, ...) _PRINTF_ATTRIBUTE(9, 10)
 {
 	int ret;
 	struct ldb_request *req;
 	TALLOC_CTX *tmp_ctx;
 	struct ldb_result *res;
+	va_list ap;
+	char *expression;
 
 	tmp_ctx = talloc_new(mem_ctx);
 
-	/* cross-partitions searches with a basedn break multi-domain support */
-	SMB_ASSERT(basedn == NULL || (dsdb_flags & DSDB_SEARCH_SEARCH_ALL_PARTITIONS) == 0);
+	if (format) {
+		va_start(ap, format);
+		expression = talloc_vasprintf(tmp_ctx, format, ap);
+		va_end(ap);
+
+		if (!expression) {
+			talloc_free(tmp_ctx);
+			return ldb_oom(ldb_module_get_ctx(module));
+		}
+	} else {
+		expression = NULL;
+	}
 
 	res = talloc_zero(tmp_ctx, struct ldb_result);
 	if (!res) {
@@ -136,10 +149,10 @@ int dsdb_module_search_tree(struct ldb_module *module,
 		return ldb_oom(ldb_module_get_ctx(module));
 	}
 
-	ret = ldb_build_search_req_ex(&req, ldb_module_get_ctx(module), tmp_ctx,
+	ret = ldb_build_search_req(&req, ldb_module_get_ctx(module), tmp_ctx,
 				   basedn,
 				   scope,
-				   tree,
+				   expression,
 				   attrs,
 				   NULL,
 				   res,
@@ -174,81 +187,10 @@ int dsdb_module_search_tree(struct ldb_module *module,
 		ret = ldb_wait(req->handle, LDB_WAIT_ALL);
 	}
 
-	if (dsdb_flags & DSDB_SEARCH_ONE_ONLY) {
-		if (res->count == 0) {
-			talloc_free(tmp_ctx);
-			ldb_reset_err_string(ldb_module_get_ctx(module));
-			return LDB_ERR_NO_SUCH_OBJECT;
-		}
-		if (res->count != 1) {
-			talloc_free(tmp_ctx);
-			ldb_reset_err_string(ldb_module_get_ctx(module));
-			return LDB_ERR_CONSTRAINT_VIOLATION;
-		}
-	}
-
 	talloc_free(req);
 	if (ret == LDB_SUCCESS) {
 		*_res = talloc_steal(mem_ctx, res);
 	}
-	talloc_free(tmp_ctx);
-	return ret;
-}
-
-/*
-  search for attrs in the modules below
- */
-int dsdb_module_search(struct ldb_module *module,
-		       TALLOC_CTX *mem_ctx,
-		       struct ldb_result **_res,
-		       struct ldb_dn *basedn, enum ldb_scope scope,
-		       const char * const *attrs,
-		       int dsdb_flags,
-		       struct ldb_request *parent,
-		       const char *format, ...) _PRINTF_ATTRIBUTE(9, 10)
-{
-	int ret;
-	TALLOC_CTX *tmp_ctx;
-	va_list ap;
-	char *expression;
-	struct ldb_parse_tree *tree;
-
-	/* cross-partitions searches with a basedn break multi-domain support */
-	SMB_ASSERT(basedn == NULL || (dsdb_flags & DSDB_SEARCH_SEARCH_ALL_PARTITIONS) == 0);
-
-	tmp_ctx = talloc_new(mem_ctx);
-
-	if (format) {
-		va_start(ap, format);
-		expression = talloc_vasprintf(tmp_ctx, format, ap);
-		va_end(ap);
-
-		if (!expression) {
-			talloc_free(tmp_ctx);
-			return ldb_oom(ldb_module_get_ctx(module));
-		}
-	} else {
-		expression = NULL;
-	}
-
-	tree = ldb_parse_tree(tmp_ctx, expression);
-	if (tree == NULL) {
-		talloc_free(tmp_ctx);
-		ldb_set_errstring(ldb_module_get_ctx(module),
-				"Unable to parse search expression");
-		return LDB_ERR_OPERATIONS_ERROR;
-	}
-
-	ret = dsdb_module_search_tree(module,
-		       mem_ctx,
-		       _res,
-		       basedn,
-		       scope,
-		       tree,
-		       attrs,
-		       dsdb_flags,
-		       parent);
-
 	talloc_free(tmp_ctx);
 	return ret;
 }
@@ -327,84 +269,6 @@ int dsdb_module_guid_by_dn(struct ldb_module *module, struct ldb_dn *dn, struct 
 	talloc_free(tmp_ctx);
 	return LDB_SUCCESS;
 }
-
-
-/*
-  a ldb_extended request operating on modules below the
-  current module
-
-  Note that this does not automatically start a transaction. If you
-  need a transaction the caller needs to start it as needed.
- */
-int dsdb_module_extended(struct ldb_module *module,
-			 TALLOC_CTX *mem_ctx,
-			 struct ldb_result **_res,
-			 const char* oid, void* data,
-			 uint32_t dsdb_flags,
-			 struct ldb_request *parent)
-{
-	struct ldb_request *req;
-	int ret;
-	struct ldb_context *ldb = ldb_module_get_ctx(module);
-	TALLOC_CTX *tmp_ctx = talloc_new(module);
-	struct ldb_result *res;
-
-	if (_res != NULL) {
-		(*_res) = NULL;
-	}
-
-	res = talloc_zero(tmp_ctx, struct ldb_result);
-	if (!res) {
-		talloc_free(tmp_ctx);
-		return ldb_oom(ldb_module_get_ctx(module));
-	}
-
-	ret = ldb_build_extended_req(&req, ldb,
-			tmp_ctx,
-			oid,
-			data,
-			NULL,
-			res, ldb_extended_default_callback,
-			parent);
-
-	LDB_REQ_SET_LOCATION(req);
-	if (ret != LDB_SUCCESS) {
-		talloc_free(tmp_ctx);
-		return ret;
-	}
-
-	ret = dsdb_request_add_controls(req, dsdb_flags);
-	if (ret != LDB_SUCCESS) {
-		talloc_free(tmp_ctx);
-		return ret;
-	}
-
-	if (dsdb_flags & DSDB_FLAG_TRUSTED) {
-		ldb_req_mark_trusted(req);
-	}
-
-	/* Run the new request */
-	if (dsdb_flags & DSDB_FLAG_NEXT_MODULE) {
-		ret = ldb_next_request(module, req);
-	} else if (dsdb_flags & DSDB_FLAG_TOP_MODULE) {
-		ret = ldb_request(ldb_module_get_ctx(module), req);
-	} else {
-		const struct ldb_module_ops *ops = ldb_module_get_ops(module);
-		SMB_ASSERT(dsdb_flags & DSDB_FLAG_OWN_MODULE);
-		ret = ops->extended(module, req);
-	}
-	if (ret == LDB_SUCCESS) {
-		ret = ldb_wait(req->handle, LDB_WAIT_ALL);
-	}
-
-	if (_res != NULL && ret == LDB_SUCCESS) {
-		(*_res) = talloc_steal(mem_ctx, res);
-	}
-
-	talloc_free(tmp_ctx);
-	return ret;
-}
-
 
 /*
   a ldb_modify request operating on modules below the
@@ -682,16 +546,8 @@ int dsdb_check_single_valued_link(const struct dsdb_attribute *attr,
 	return LDB_SUCCESS;
 }
 
-/*
-  check if an optional feature is enabled on our own NTDS DN
-
-  Note that features can be marked as enabled in more than one
-  place. For example, the recyclebin feature is marked as enabled both
-  on the CN=Partitions,CN=Configurration object and on the NTDS DN of
-  each DC in the forest. It seems likely that it is the job of the KCC
-  to propogate between the two
- */
-int dsdb_check_optional_feature(struct ldb_module *module, struct GUID op_feature_guid, bool *feature_enabled)
+int dsdb_check_optional_feature(struct ldb_module *module, struct ldb_dn *scope,
+					struct GUID op_feature_guid, bool *feature_enabled)
 {
 	TALLOC_CTX *tmp_ctx;
 	struct ldb_context *ldb = ldb_module_get_ctx(module);
@@ -702,36 +558,33 @@ int dsdb_check_optional_feature(struct ldb_module *module, struct GUID op_featur
 	int ret;
 	unsigned int i;
 	struct ldb_message_element *el;
-	struct ldb_dn *feature_dn;
-
-	tmp_ctx = talloc_new(ldb);
-
-	feature_dn = samdb_ntds_settings_dn(ldb_module_get_ctx(module), tmp_ctx);
-	if (feature_dn == NULL) {
-		talloc_free(tmp_ctx);
-		return ldb_operr(ldb_module_get_ctx(module));
-	}
 
 	*feature_enabled = false;
 
-	ret = dsdb_module_search_dn(module, tmp_ctx, &res, feature_dn, attrs, DSDB_FLAG_NEXT_MODULE, NULL);
+	tmp_ctx = talloc_new(ldb);
+
+	ret = ldb_search(ldb, tmp_ctx, &res,
+					scope, LDB_SCOPE_BASE, attrs,
+					NULL);
 	if (ret != LDB_SUCCESS) {
 		ldb_asprintf_errstring(ldb,
-				"Could not find the feature object - dn: %s\n",
-				ldb_dn_get_linearized(feature_dn));
+				"Could no find the scope object - dn: %s\n",
+				ldb_dn_get_linearized(scope));
 		talloc_free(tmp_ctx);
 		return LDB_ERR_OPERATIONS_ERROR;
 	}
 	if (res->msgs[0]->num_elements > 0) {
-		const char *attrs2[] = {"msDS-OptionalFeatureGUID", NULL};
 
 		el = ldb_msg_find_element(res->msgs[0],"msDS-EnabledFeature");
+
+		attrs[0] = "msDS-OptionalFeatureGUID";
 
 		for (i=0; i<el->num_values; i++) {
 			search_dn = ldb_dn_from_ldb_val(tmp_ctx, ldb, &el->values[i]);
 
-			ret = dsdb_module_search_dn(module, tmp_ctx, &res,
-						    search_dn, attrs2, DSDB_FLAG_NEXT_MODULE, NULL);
+			ret = ldb_search(ldb, tmp_ctx, &res,
+							search_dn, LDB_SCOPE_BASE, attrs,
+							NULL);
 			if (ret != LDB_SUCCESS) {
 				ldb_asprintf_errstring(ldb,
 						"Could no find object dn: %s\n",
@@ -742,7 +595,7 @@ int dsdb_check_optional_feature(struct ldb_module *module, struct GUID op_featur
 
 			search_guid = samdb_result_guid(res->msgs[0], "msDS-OptionalFeatureGUID");
 
-			if (GUID_equal(&search_guid, &op_feature_guid)) {
+			if (GUID_compare(&search_guid, &op_feature_guid) == 0){
 				*feature_enabled = true;
 				break;
 			}
@@ -797,7 +650,7 @@ int dsdb_module_reference_dn(struct ldb_module *module, TALLOC_CTX *mem_ctx, str
 	attrs[1] = NULL;
 
 	ret = dsdb_module_search_dn(module, mem_ctx, &res, base, attrs,
-	                            DSDB_FLAG_NEXT_MODULE | DSDB_SEARCH_SHOW_EXTENDED_DN, parent);
+	                            DSDB_FLAG_NEXT_MODULE, parent);
 	if (ret != LDB_SUCCESS) {
 		return ret;
 	}
@@ -1048,17 +901,22 @@ bool dsdb_module_am_administrator(struct ldb_module *module)
 int dsdb_recyclebin_enabled(struct ldb_module *module, bool *enabled)
 {
 	struct ldb_context *ldb = ldb_module_get_ctx(module);
+	struct ldb_dn *partitions_dn;
 	struct GUID recyclebin_guid;
 	int ret;
 
+	partitions_dn = samdb_partitions_dn(ldb, module);
+
 	GUID_from_string(DS_GUID_FEATURE_RECYCLE_BIN, &recyclebin_guid);
 
-	ret = dsdb_check_optional_feature(module, recyclebin_guid, enabled);
+	ret = dsdb_check_optional_feature(module, partitions_dn, recyclebin_guid, enabled);
 	if (ret != LDB_SUCCESS) {
 		ldb_asprintf_errstring(ldb, "Could not verify if Recycle Bin is enabled \n");
+		talloc_free(partitions_dn);
 		return LDB_ERR_UNWILLING_TO_PERFORM;
 	}
 
+	talloc_free(partitions_dn);
 	return LDB_SUCCESS;
 }
 
@@ -1192,9 +1050,6 @@ int dsdb_module_constrainted_update_int32(struct ldb_module *module,
 	int ret;
 
 	msg = ldb_msg_new(module);
-	if (msg == NULL) {
-		return ldb_module_oom(module);
-	}
 	msg->dn = dn;
 
 	ret = dsdb_msg_constrainted_update_int32(module,
@@ -1237,9 +1092,6 @@ int dsdb_module_constrainted_update_int64(struct ldb_module *module,
 	int ret;
 
 	msg = ldb_msg_new(module);
-	if (msg == NULL) {
-		return ldb_module_oom(module);
-	}
 	msg->dn = dn;
 
 	ret = dsdb_msg_constrainted_update_int64(module,
@@ -1381,140 +1233,4 @@ struct ldb_message_element *dsdb_get_single_valued_attr(const struct ldb_message
 	}
 
 	return el;
-}
-
-/*
- * This function determines the (last) structural or 88 object class of a passed
- * "objectClass" attribute - per MS-ADTS 3.1.1.1.4 this is the last value.
- * Without schema this does not work and hence NULL is returned.
- */
-const struct dsdb_class *dsdb_get_last_structural_class(const struct dsdb_schema *schema,
-							const struct ldb_message_element *element)
-{
-	const struct dsdb_class *last_class;
-
-	if (schema == NULL) {
-		return NULL;
-	}
-
-	if (element->num_values == 0) {
-		return NULL;
-	}
-
-	last_class = dsdb_class_by_lDAPDisplayName_ldb_val(schema,
-							   &element->values[element->num_values-1]);
-	if (last_class == NULL) {
-		return NULL;
-	}
-	if (last_class->objectClassCategory > 1) {
-		return NULL;
-	}
-
-	return last_class;
-}
-
-const struct dsdb_class *dsdb_get_structural_oc_from_msg(const struct dsdb_schema *schema,
-							 const struct ldb_message *msg)
-{
-	struct ldb_message_element *oc_el;
-
-	oc_el = ldb_msg_find_element(msg, "objectClass");
-	if (!oc_el) {
-		return NULL;
-	}
-
-	return dsdb_get_last_structural_class(schema, oc_el);
-}
-
-/* Fix the DN so that the relative attribute names are in upper case so that the DN:
-   cn=Adminstrator,cn=users,dc=samba,dc=example,dc=com becomes
-   CN=Adminstrator,CN=users,DC=samba,DC=example,DC=com
-*/
-int dsdb_fix_dn_rdncase(struct ldb_context *ldb, struct ldb_dn *dn)
-{
-	int i, ret;
-	char *upper_rdn_attr;
-
-	for (i=0; i < ldb_dn_get_comp_num(dn); i++) {
-		/* We need the attribute name in upper case */
-		upper_rdn_attr = strupper_talloc(dn,
-						 ldb_dn_get_component_name(dn, i));
-		if (!upper_rdn_attr) {
-			return ldb_oom(ldb);
-		}
-		ret = ldb_dn_set_component(dn, i, upper_rdn_attr,
-					   *ldb_dn_get_component_val(dn, i));
-		talloc_free(upper_rdn_attr);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
-	}
-	return LDB_SUCCESS;
-}
-
-/**
- * Make most specific objectCategory for the objectClass of passed object
- * NOTE: In this implementation we count that it is called on already
- * verified objectClass attribute value. See objectclass.c thorough
- * implementation for all the magic that involves
- *
- * @param ldb	ldb context
- * @param schema cached schema for ldb. We may get it, but it is very time consuming.
- * 			Hence leave the responsibility to the caller.
- * @param obj	AD object to determint objectCategory for
- * @param mem_ctx Memory context - usually it is obj actually
- * @param pobjectcategory location to store found objectCategory
- *
- * @return LDB_SUCCESS or error including out of memory error
- */
-int dsdb_make_object_category(struct ldb_context *ldb, const struct dsdb_schema *schema,
-			      struct ldb_message *obj,
-			      TALLOC_CTX *mem_ctx, const char **pobjectcategory)
-{
-	const struct dsdb_class			*objectclass;
-	struct ldb_message_element		*objectclass_element;
-	struct dsdb_extended_dn_store_format	*dn_format;
-
-	objectclass_element = ldb_msg_find_element(obj, "objectClass");
-	if (!objectclass_element) {
-		ldb_asprintf_errstring(ldb, "dsdb: Cannot add %s, no objectclass specified!",
-				       ldb_dn_get_linearized(obj->dn));
-		return LDB_ERR_OBJECT_CLASS_VIOLATION;
-	}
-	if (objectclass_element->num_values == 0) {
-		ldb_asprintf_errstring(ldb, "dsdb: Cannot add %s, at least one (structural) objectclass has to be specified!",
-				       ldb_dn_get_linearized(obj->dn));
-		return LDB_ERR_CONSTRAINT_VIOLATION;
-	}
-
-	/*
-	 * Get the new top-most structural object class and check for
-	 * unrelated structural classes
-	 */
-	objectclass = dsdb_get_last_structural_class(schema,
-						     objectclass_element);
-	if (objectclass == NULL) {
-		ldb_asprintf_errstring(ldb,
-				       "Failed to find a structural class for %s",
-				       ldb_dn_get_linearized(obj->dn));
-		return LDB_ERR_UNWILLING_TO_PERFORM;
-	}
-
-	dn_format = talloc_get_type(ldb_get_opaque(ldb, DSDB_EXTENDED_DN_STORE_FORMAT_OPAQUE_NAME),
-				    struct dsdb_extended_dn_store_format);
-	if (dn_format && dn_format->store_extended_dn_in_ldb == false) {
-		/* Strip off extended components */
-		struct ldb_dn *dn = ldb_dn_new(mem_ctx, ldb,
-					       objectclass->defaultObjectCategory);
-		*pobjectcategory = ldb_dn_alloc_linearized(mem_ctx, dn);
-		talloc_free(dn);
-	} else {
-		*pobjectcategory = talloc_strdup(mem_ctx, objectclass->defaultObjectCategory);
-	}
-
-	if (*pobjectcategory == NULL) {
-		return ldb_oom(ldb);
-	}
-
-	return LDB_SUCCESS;
 }

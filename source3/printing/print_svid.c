@@ -35,11 +35,10 @@
 #include "printing/pcap.h"
 
 #if defined(SYSV) || defined(HPUX)
-bool sysv_cache_reload(struct pcap_cache **_pcache)
+bool sysv_cache_reload(void)
 {
 	char **lines;
 	int i;
-	struct pcap_cache *pcache = NULL;
 
 #if defined(HPUX)
 	DEBUG(5, ("reloading hpux printcap cache\n"));
@@ -112,16 +111,14 @@ bool sysv_cache_reload(struct pcap_cache **_pcache)
 			*tmp = '\0';
 		
 		/* add it to the cache */
-		if (!pcap_cache_add_specific(&pcache, name, NULL, NULL)) {
+		if (!pcap_cache_add(name, NULL, NULL)) {
 			TALLOC_FREE(lines);
-			pcap_cache_destroy_specific(&pcache);
-			return false;
+			return False;
 		}
 	}
 
 	TALLOC_FREE(lines);
-	*_pcache = pcache;
-	return true;
+	return True;
 }
 
 #else

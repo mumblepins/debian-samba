@@ -27,13 +27,11 @@ struct libnet_keytab_entry {
 	krb5_enctype enctype;
 };
 
-struct ads_struct;
-
 struct libnet_keytab_context {
 	krb5_context context;
 	krb5_keytab keytab;
 	const char *keytab_name;
-	struct ads_struct *ads;
+	ADS_STRUCT *ads;
 	const char *dns_domain_name;
 	uint8_t zero_buf[16];
 	uint32_t count;

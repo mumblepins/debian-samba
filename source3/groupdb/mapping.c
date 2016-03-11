@@ -27,7 +27,6 @@
 #include "../libcli/security/security.h"
 #include "lib/winbind_util.h"
 #include <tdb.h>
-#include "groupdb/mapping_tdb.h"
 
 static const struct mapping_backend *backend;
 
@@ -51,48 +50,24 @@ initialise first time the mapping list
 ****************************************************************************/
 NTSTATUS add_initial_entry(gid_t gid, const char *sid, enum lsa_SidType sid_name_use, const char *nt_name, const char *comment)
 {
-	NTSTATUS status;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 
 	if(!init_group_mapping()) {
 		DEBUG(0,("failed to initialize group mapping\n"));
 		return NT_STATUS_UNSUCCESSFUL;
 	}
 
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	map->gid=gid;
-	if (!string_to_sid(&map->sid, sid)) {
+	map.gid=gid;
+	if (!string_to_sid(&map.sid, sid)) {
 		DEBUG(0, ("string_to_sid failed: %s", sid));
-		status = NT_STATUS_UNSUCCESSFUL;
-		goto done;
+		return NT_STATUS_UNSUCCESSFUL;
 	}
 
-	map->sid_name_use=sid_name_use;
-	map->nt_name = talloc_strdup(map, nt_name);
-	if (!map->nt_name) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
+	map.sid_name_use=sid_name_use;
+	fstrcpy(map.nt_name, nt_name);
+	fstrcpy(map.comment, comment);
 
-	if (comment) {
-		map->comment = talloc_strdup(map, comment);
-	} else {
-		map->comment = talloc_strdup(map, "");
-	}
-	if (!map->comment) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	status = pdb_add_group_mapping_entry(map);
-
-done:
-	TALLOC_FREE(map);
-	return status;
+	return pdb_add_group_mapping_entry(&map);
 }
 
 static NTSTATUS alias_memberships(const struct dom_sid *members, size_t num_members,
@@ -152,19 +127,13 @@ bool get_domain_group_from_sid(struct dom_sid sid, GROUP_MAP *map)
 	/* special case check for rid 513 */
 
 	if ( !ret ) {
-		uint32_t rid;
+		uint32 rid;
 
 		sid_peek_rid( &sid, &rid );
 
 		if ( rid == DOMAIN_RID_USERS ) {
-			map->nt_name = talloc_strdup(map, "None");
-			if (!map->nt_name) {
-				return false;
-			}
-			map->comment = talloc_strdup(map, "Ordinary Users");
-			if (!map->comment) {
-				return false;
-			}
+			fstrcpy( map->nt_name, "None" );
+			fstrcpy( map->comment, "Ordinary Users" );
 			sid_copy( &map->sid, &sid );
 			map->sid_name_use = SID_NAME_DOM_GRP;
 			map->gid = (gid_t)-1;
@@ -213,11 +182,11 @@ int smb_create_group(const char *unix_group, gid_t *new_gid)
 
 	/* defer to scripts */
 
-	if ( *lp_add_group_script(talloc_tos()) ) {
+	if ( *lp_addgroup_script() ) {
 		TALLOC_CTX *ctx = talloc_tos();
 
 		add_script = talloc_strdup(ctx,
-					lp_add_group_script(ctx));
+					lp_addgroup_script());
 		if (!add_script) {
 			return -1;
 		}
@@ -269,11 +238,11 @@ int smb_delete_group(const char *unix_group)
 
 	/* defer to scripts */
 
-	if ( *lp_delete_group_script(talloc_tos()) ) {
+	if ( *lp_delgroup_script() ) {
 		TALLOC_CTX *ctx = talloc_tos();
 
 		del_script = talloc_strdup(ctx,
-				lp_delete_group_script(ctx));
+				lp_delgroup_script());
 		if (!del_script) {
 			return -1;
 		}
@@ -304,11 +273,11 @@ int smb_set_primary_group(const char *unix_group, const char* unix_user)
 
 	/* defer to scripts */
 
-	if ( *lp_set_primary_group_script(talloc_tos()) ) {
+	if ( *lp_setprimarygroup_script() ) {
 		TALLOC_CTX *ctx = talloc_tos();
 
 		add_script = talloc_strdup(ctx,
-				lp_set_primary_group_script(ctx));
+				lp_setprimarygroup_script());
 		if (!add_script) {
 			return -1;
 		}
@@ -346,11 +315,11 @@ int smb_add_user_group(const char *unix_group, const char *unix_user)
 
 	/* defer to scripts */
 
-	if ( *lp_add_user_to_group_script(talloc_tos()) ) {
+	if ( *lp_addusertogroup_script() ) {
 		TALLOC_CTX *ctx = talloc_tos();
 
 		add_script = talloc_strdup(ctx,
-				lp_add_user_to_group_script(ctx));
+				lp_addusertogroup_script());
 		if (!add_script) {
 			return -1;
 		}
@@ -386,11 +355,11 @@ int smb_delete_user_group(const char *unix_group, const char *unix_user)
 
 	/* defer to scripts */
 
-	if ( *lp_delete_user_from_group_script(talloc_tos()) ) {
+	if ( *lp_deluserfromgroup_script() ) {
 		TALLOC_CTX *ctx = talloc_tos();
 
 		del_script = talloc_strdup(ctx,
-				lp_delete_user_from_group_script(ctx));
+				lp_deluserfromgroup_script());
 		if (!del_script) {
 			return -1;
 		}
@@ -483,11 +452,9 @@ NTSTATUS pdb_default_delete_group_mapping_entry(struct pdb_methods *methods,
 }
 
 NTSTATUS pdb_default_enum_group_mapping(struct pdb_methods *methods,
-					const struct dom_sid *sid,
-					enum lsa_SidType sid_name_use,
-					GROUP_MAP ***pp_rmap,
-					size_t *p_num_entries,
-					bool unix_only)
+					   const struct dom_sid *sid, enum lsa_SidType sid_name_use,
+					   GROUP_MAP **pp_rmap, size_t *p_num_entries,
+					   bool unix_only)
 {
 	if (!init_group_mapping()) {
 		DEBUG(0,("failed to initialize group mapping\n"));
@@ -498,14 +465,14 @@ NTSTATUS pdb_default_enum_group_mapping(struct pdb_methods *methods,
 }
 
 NTSTATUS pdb_default_create_alias(struct pdb_methods *methods,
-				  const char *name, uint32_t *rid)
+				  const char *name, uint32 *rid)
 {
 	struct dom_sid sid;
 	enum lsa_SidType type;
-	uint32_t new_rid;
+	uint32 new_rid;
 	gid_t gid;
 	bool exists;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	TALLOC_CTX *mem_ctx;
 	NTSTATUS status;
 
@@ -518,16 +485,15 @@ NTSTATUS pdb_default_create_alias(struct pdb_methods *methods,
 
 	exists = lookup_name(mem_ctx, name, LOOKUP_NAME_LOCAL,
 			     NULL, NULL, &sid, &type);
+	TALLOC_FREE(mem_ctx);
 
 	if (exists) {
-		status = NT_STATUS_ALIAS_EXISTS;
-		goto done;
+		return NT_STATUS_ALIAS_EXISTS;
 	}
 
 	if (!pdb_new_rid(&new_rid)) {
 		DEBUG(0, ("Could not allocate a RID.\n"));
-		status = NT_STATUS_ACCESS_DENIED;
-		goto done;
+		return NT_STATUS_ACCESS_DENIED;
 	}
 
 	sid_compose(&sid, get_global_sam_sid(), new_rid);
@@ -535,46 +501,29 @@ NTSTATUS pdb_default_create_alias(struct pdb_methods *methods,
 	if (!winbind_allocate_gid(&gid)) {
 		DEBUG(3, ("Could not get a gid out of winbind - "
 			  "wasted a rid :-(\n"));
-		status = NT_STATUS_ACCESS_DENIED;
-		goto done;
+		return NT_STATUS_ACCESS_DENIED;
 	}
 
 	DEBUG(10, ("Creating alias %s with gid %u and rid %u\n",
 		   name, (unsigned int)gid, (unsigned int)new_rid));
 
-	map = talloc_zero(mem_ctx, GROUP_MAP);
-	if (!map) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
+	map.gid = gid;
+	sid_copy(&map.sid, &sid);
+	map.sid_name_use = SID_NAME_ALIAS;
+	fstrcpy(map.nt_name, name);
+	fstrcpy(map.comment, "");
 
-	map->gid = gid;
-	sid_copy(&map->sid, &sid);
-	map->sid_name_use = SID_NAME_ALIAS;
-	map->nt_name = talloc_strdup(map, name);
-	if (!map->nt_name) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-	map->comment = talloc_strdup(map, "");
-	if (!map->comment) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	status = pdb_add_group_mapping_entry(map);
+	status = pdb_add_group_mapping_entry(&map);
 
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(0, ("Could not add group mapping entry for alias %s "
 			  "(%s)\n", name, nt_errstr(status)));
-		goto done;
+		return status;
 	}
 
 	*rid = new_rid;
 
-done:
-	TALLOC_FREE(mem_ctx);
-	return status;
+	return NT_STATUS_OK;
 }
 
 NTSTATUS pdb_default_delete_alias(struct pdb_methods *methods,
@@ -587,78 +536,38 @@ NTSTATUS pdb_default_get_aliasinfo(struct pdb_methods *methods,
 				   const struct dom_sid *sid,
 				   struct acct_info *info)
 {
-	NTSTATUS status = NT_STATUS_OK;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
+	if (!pdb_getgrsid(&map, *sid))
+		return NT_STATUS_NO_SUCH_ALIAS;
 
-	if (!pdb_getgrsid(map, *sid)) {
-		status = NT_STATUS_NO_SUCH_ALIAS;
-		goto done;
-	}
-
-	if ((map->sid_name_use != SID_NAME_ALIAS) &&
-	    (map->sid_name_use != SID_NAME_WKN_GRP)) {
+	if ((map.sid_name_use != SID_NAME_ALIAS) &&
+	    (map.sid_name_use != SID_NAME_WKN_GRP)) {
 		DEBUG(2, ("%s is a %s, expected an alias\n",
 			  sid_string_dbg(sid),
-			  sid_type_lookup(map->sid_name_use)));
-		status = NT_STATUS_NO_SUCH_ALIAS;
-		goto done;
+			  sid_type_lookup(map.sid_name_use)));
+		return NT_STATUS_NO_SUCH_ALIAS;
 	}
 
-	info->acct_name = talloc_move(info, &map->nt_name);
-	if (!info->acct_name) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-	info->acct_desc = talloc_move(info, &map->comment);
-	if (!info->acct_desc) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-	sid_peek_rid(&map->sid, &info->rid);
-
-done:
-	TALLOC_FREE(map);
-	return status;
+	fstrcpy(info->acct_name, map.nt_name);
+	fstrcpy(info->acct_desc, map.comment);
+	sid_peek_rid(&map.sid, &info->rid);
+	return NT_STATUS_OK;
 }
 
 NTSTATUS pdb_default_set_aliasinfo(struct pdb_methods *methods,
 				   const struct dom_sid *sid,
 				   struct acct_info *info)
 {
-	NTSTATUS status = NT_STATUS_OK;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
+	if (!pdb_getgrsid(&map, *sid))
+		return NT_STATUS_NO_SUCH_ALIAS;
 
-	if (!pdb_getgrsid(map, *sid)) {
-		status = NT_STATUS_NO_SUCH_ALIAS;
-		goto done;
-	}
+	fstrcpy(map.nt_name, info->acct_name);
+	fstrcpy(map.comment, info->acct_desc);
 
-	map->nt_name = talloc_strdup(map, info->acct_name);
-	if (!map->nt_name) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-	map->comment = talloc_strdup(map, info->acct_desc);
-	if (!map->comment) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	status = pdb_update_group_mapping_entry(map);
-
-done:
-	TALLOC_FREE(map);
-	return status;
+	return pdb_update_group_mapping_entry(&map);
 }
 
 NTSTATUS pdb_default_add_aliasmem(struct pdb_methods *methods,
@@ -698,7 +607,7 @@ NTSTATUS pdb_default_alias_memberships(struct pdb_methods *methods,
 				       const struct dom_sid *domain_sid,
 				       const struct dom_sid *members,
 				       size_t num_members,
-				       uint32_t **pp_alias_rids,
+				       uint32 **pp_alias_rids,
 				       size_t *p_num_alias_rids)
 {
 	struct dom_sid *alias_sids;
@@ -726,7 +635,7 @@ NTSTATUS pdb_default_alias_memberships(struct pdb_methods *methods,
 		return NT_STATUS_OK;
 	}
 
-	*pp_alias_rids = talloc_array(mem_ctx, uint32_t, num_alias_sids);
+	*pp_alias_rids = TALLOC_ARRAY(mem_ctx, uint32, num_alias_sids);
 	if (*pp_alias_rids == NULL)
 		return NT_STATUS_NO_MEMORY;
 
@@ -790,22 +699,54 @@ NTSTATUS pdb_nop_enum_group_mapping(struct pdb_methods *methods,
 	return NT_STATUS_UNSUCCESSFUL;
 }
 
-/**
-* @brief Add a new group mapping
-*
-* @param[in] gid gid to use to store the mapping. If gid is 0,
-*                new gid will be allocated from winbind
-*
-* @return Normal NTSTATUS return
-*/
-NTSTATUS pdb_create_builtin_alias(uint32_t rid, gid_t gid)
+/****************************************************************************
+ These need to be redirected through pdb_interface.c
+****************************************************************************/
+bool pdb_get_dom_grp_info(const struct dom_sid *sid, struct acct_info *info)
+{
+	GROUP_MAP map;
+	bool res;
+
+	become_root();
+	res = get_domain_group_from_sid(*sid, &map);
+	unbecome_root();
+
+	if (!res)
+		return False;
+
+	fstrcpy(info->acct_name, map.nt_name);
+	fstrcpy(info->acct_desc, map.comment);
+	sid_peek_rid(sid, &info->rid);
+	return True;
+}
+
+bool pdb_set_dom_grp_info(const struct dom_sid *sid, const struct acct_info *info)
+{
+	GROUP_MAP map;
+
+	if (!get_domain_group_from_sid(*sid, &map))
+		return False;
+
+	fstrcpy(map.nt_name, info->acct_name);
+	fstrcpy(map.comment, info->acct_desc);
+
+	return NT_STATUS_IS_OK(pdb_update_group_mapping_entry(&map));
+}
+
+/********************************************************************
+ Really just intended to be called by smbd
+********************************************************************/
+
+NTSTATUS pdb_create_builtin_alias(uint32 rid)
 {
 	struct dom_sid sid;
 	enum lsa_SidType type;
-	gid_t gidformap;
-	GROUP_MAP *map;
+	gid_t gid;
+	GROUP_MAP map;
+	TALLOC_CTX *mem_ctx;
 	NTSTATUS status;
 	const char *name = NULL;
+	fstring groupname;
 
 	DEBUG(10, ("Trying to create builtin alias %d\n", rid));
 
@@ -813,54 +754,40 @@ NTSTATUS pdb_create_builtin_alias(uint32_t rid, gid_t gid)
 		return NT_STATUS_NO_SUCH_ALIAS;
 	}
 
-	/* use map as overall temp mem context */
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
+	if ( (mem_ctx = talloc_new(NULL)) == NULL ) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	if (!lookup_sid(map, &sid, NULL, &name, &type)) {
-		status = NT_STATUS_NO_SUCH_ALIAS;
-		goto done;
+	if ( !lookup_sid(mem_ctx, &sid, NULL, &name, &type) ) {
+		TALLOC_FREE( mem_ctx );
+		return NT_STATUS_NO_SUCH_ALIAS;
 	}
 
-	if (gid == 0) {
-		if (!winbind_allocate_gid(&gidformap)) {
-			DEBUG(3, ("pdb_create_builtin_alias: Could not get a "
-				  "gid out of winbind\n"));
-			status = NT_STATUS_ACCESS_DENIED;
-			goto done;
-		}
-	} else {
-		gidformap = gid;
+	/* validate RID so copy the name and move on */
+
+	fstrcpy( groupname, name );
+	TALLOC_FREE( mem_ctx );
+
+	if (!winbind_allocate_gid(&gid)) {
+		DEBUG(3, ("pdb_create_builtin_alias: Could not get a gid out of winbind\n"));
+		return NT_STATUS_ACCESS_DENIED;
 	}
 
-	DEBUG(10, ("Creating alias %s with gid %u\n", name,
-		   (unsigned) gidformap));
+	DEBUG(10,("Creating alias %s with gid %u\n", groupname, (unsigned int)gid));
 
-	map->gid = gidformap;
-	sid_copy(&map->sid, &sid);
-	map->sid_name_use = SID_NAME_ALIAS;
-	map->nt_name = talloc_strdup(map, name);
-	if (!map->nt_name) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-	map->comment = talloc_strdup(map, "");
-	if (!map->comment) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
+	map.gid = gid;
+	sid_copy(&map.sid, &sid);
+	map.sid_name_use = SID_NAME_ALIAS;
+	fstrcpy(map.nt_name, groupname);
+	fstrcpy(map.comment, "");
 
-	status = pdb_add_group_mapping_entry(map);
+	status = pdb_add_group_mapping_entry(&map);
 
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(0, ("pdb_create_builtin_alias: Could not add group mapping entry for alias %d "
 			  "(%s)\n", rid, nt_errstr(status)));
 	}
 
-done:
-	TALLOC_FREE(map);
 	return status;
 }
 

@@ -38,8 +38,6 @@ const struct dom_sid global_sid_World_Domain =               /* Everyone domain 
 { 1, 0, {0,0,0,0,0,1}, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_World =                      /* Everyone */
 { 1, 1, {0,0,0,0,0,1}, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-const struct dom_sid global_sid_Local_Authority =            /* Local Authority */
-{ 1, 0, {0,0,0,0,0,2}, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_Creator_Owner_Domain =       /* Creator Owner domain */
 { 1, 0, {0,0,0,0,0,3}, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_NT_Authority =    		/* NT Authority */
@@ -62,8 +60,6 @@ const struct dom_sid global_sid_Creator_Owner =		/* Creator Owner */
 { 1, 1, {0,0,0,0,0,3}, {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_Creator_Group =		/* Creator Group */
 { 1, 1, {0,0,0,0,0,3}, {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-const struct dom_sid global_sid_Owner_Rights =		/* Owner Rights */
-{ 1, 1, {0,0,0,0,0,3}, {4,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_Anonymous =			/* Anonymous login */
 { 1, 1, {0,0,0,0,0,5}, {7,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_Enterprise_DCs =		/* Enterprise DCs */
@@ -95,23 +91,6 @@ const struct dom_sid global_sid_Unix_Users =			/* Unmapped Unix users */
 { 1, 1, {0,0,0,0,0,22}, {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 const struct dom_sid global_sid_Unix_Groups =			/* Unmapped Unix groups */
 { 1, 1, {0,0,0,0,0,22}, {2,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-
-/*
- * http://technet.microsoft.com/en-us/library/hh509017(v=ws.10).aspx
- */
-const struct dom_sid global_sid_Unix_NFS =             /* MS NFS and Apple style */
-{ 1, 1, {0,0,0,0,0,5}, {88,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-const struct dom_sid global_sid_Unix_NFS_Users =		/* Unix uid, MS NFS and Apple style */
-{ 1, 2, {0,0,0,0,0,5}, {88,1,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-const struct dom_sid global_sid_Unix_NFS_Groups =		/* Unix gid, MS NFS and Apple style */
-{ 1, 2, {0,0,0,0,0,5}, {88,2,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-const struct dom_sid global_sid_Unix_NFS_Mode =			/* Unix mode */
-{ 1, 2, {0,0,0,0,0,5}, {88,3,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-/* Unused, left here for documentary purposes */
-#if 0
-const struct dom_sid global_sid_Unix_NFS_Other =		/* Unix other, MS NFS and Apple style */
-{ 1, 2, {0,0,0,0,0,5}, {88,4,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-#endif
 
 /* Unused, left here for documentary purposes */
 #if 0
@@ -242,10 +221,10 @@ void sid_copy(struct dom_sid *dst, const struct dom_sid *src)
 {
 	int i;
 
-	*dst = (struct dom_sid) {
-		.sid_rev_num = src->sid_rev_num,
-		.num_auths = src->num_auths,
-	};
+	ZERO_STRUCTP(dst);
+
+	dst->sid_rev_num = src->sid_rev_num;
+	dst->num_auths = src->num_auths;
 
 	memcpy(&dst->id_auth[0], &src->id_auth[0], sizeof(src->id_auth));
 
@@ -294,6 +273,15 @@ int sid_compare_domain(const struct dom_sid *sid1, const struct dom_sid *sid2)
 			return sid1->sub_auths[i] - sid2->sub_auths[i];
 
 	return dom_sid_compare_auth(sid1, sid2);
+}
+
+/*****************************************************************
+ Compare two sids.
+*****************************************************************/
+
+bool sid_equal(const struct dom_sid *sid1, const struct dom_sid *sid2)
+{
+	return dom_sid_compare(sid1, sid2) == 0;
 }
 
 /********************************************************************
@@ -349,18 +337,17 @@ void del_sid_from_array(const struct dom_sid *sid, struct dom_sid **sids,
 		/* if we find the SID, then decrement the count
 		   and break out of the loop */
 
-		if (dom_sid_equal(sid, &sid_list[i])) {
+		if ( sid_equal(sid, &sid_list[i]) ) {
 			*num -= 1;
 			break;
 		}
 	}
 
 	/* This loop will copy the remainder of the array
-	   if i < num of sids in the array */
+	   if i < num of sids ni the array */
 
-	for ( ; i<*num; i++ ) {
+	for ( ; i<*num; i++ )
 		sid_copy( &sid_list[i], &sid_list[i+1] );
-	}
 
 	return;
 }
@@ -390,5 +377,5 @@ bool add_rid_to_array_unique(TALLOC_CTX *mem_ctx,
 bool is_null_sid(const struct dom_sid *sid)
 {
 	static const struct dom_sid null_sid = {0};
-	return dom_sid_equal(sid, &null_sid);
+	return sid_equal(sid, &null_sid);
 }

@@ -21,7 +21,9 @@
 #define __SERVERID_H__
 
 #include "includes.h"
-#include "lib/dbwrap/dbwrap.h"
+
+/** Don't verify this unique id */
+#define SERVERID_UNIQUE_ID_NOT_TO_VERIFY 0xFFFFFFFFFFFFFFFFULL
 
 /*
  * Register a server with its unique id
@@ -34,14 +36,15 @@ bool serverid_register(const struct server_id id, uint32_t msg_flags);
 bool serverid_deregister(const struct server_id id);
 
 /*
+ * (De)register additional message flags
+ */
+bool serverid_register_msg_flags(const struct server_id id, bool do_reg,
+				 uint32_t msg_flags);
+
+/*
  * Check existence of a server id
  */
 bool serverid_exists(const struct server_id *id);
-
-/*
- * Check existence of a list of server ids
- */
-bool serverids_exist(const struct server_id *ids, int num_ids, bool *results);
 
 /*
  * Walk the list of server_ids registered

@@ -1,6 +1,7 @@
 <samba:parameter name="acl map full control"
 		context="S"
 		type="boolean"
+		advanced="1" wizard="1"
 		xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
     <para>
@@ -12,5 +13,5 @@
 	execute.
 	</para>
 </description>
-<value type="default">yes</value>
+<value type="default">True</value>
 </samba:parameter>

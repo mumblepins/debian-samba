@@ -106,66 +106,11 @@ struct smb2_request *smb2_create_send(struct smb2_tree *tree, struct smb2_create
 		}
 	}
 
-	if (io->in.durable_open_v2) {
-		uint8_t data[32];
-		uint32_t flags = 0;
-		DATA_BLOB guid_blob;
-
-		SIVAL(data, 0, io->in.timeout);
-		if (io->in.persistent_open) {
-			flags = SMB2_DHANDLE_FLAG_PERSISTENT;
-		}
-		SIVAL(data, 4, flags);
-		SBVAL(data, 8, 0x0); /* reserved */
-		status = GUID_to_ndr_blob(&io->in.create_guid, req, /* TALLOC_CTX */
-					  &guid_blob);
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-		memcpy(data+16, guid_blob.data, 16);
-
-		status = smb2_create_blob_add(req, &blobs,
-					      SMB2_CREATE_TAG_DH2Q,
-					      data_blob_const(data, 32));
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-	}
-
 	if (io->in.durable_handle) {
 		uint8_t data[16];
 		smb2_push_handle(data, io->in.durable_handle);
 		status = smb2_create_blob_add(req, &blobs,
 					      SMB2_CREATE_TAG_DHNC, data_blob_const(data, 16));
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-	}
-
-	if (io->in.durable_handle_v2) {
-		uint8_t data[36];
-		DATA_BLOB guid_blob;
-		uint32_t flags = 0;
-
-		smb2_push_handle(data, io->in.durable_handle_v2);
-		status = GUID_to_ndr_blob(&io->in.create_guid, req, /* TALLOC_CTX */
-					  &guid_blob);
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-		memcpy(data+16, guid_blob.data, 16);
-		if (io->in.persistent_open) {
-			flags = SMB2_DHANDLE_FLAG_PERSISTENT;
-		}
-		SIVAL(data, 32, flags);
-
-		status = smb2_create_blob_add(req, &blobs,
-					      SMB2_CREATE_TAG_DH2C,
-					      data_blob_const(data, 36));
 		if (!NT_STATUS_IS_OK(status)) {
 			talloc_free(req);
 			return NULL;
@@ -212,58 +157,14 @@ struct smb2_request *smb2_create_send(struct smb2_tree *tree, struct smb2_create
 	if (io->in.lease_request) {
 		uint8_t data[32];
 
-		if (!smb2_lease_push(io->in.lease_request, data,
-				     sizeof(data))) {
-			TALLOC_FREE(req);
-			return NULL;
-		}
-
-		status = smb2_create_blob_add(
-			req, &blobs, SMB2_CREATE_TAG_RQLS,
-			data_blob_const(data, sizeof(data)));
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-	}
-
-	if (io->in.lease_request_v2) {
-		uint8_t data[52];
-
-		if (!smb2_lease_push(io->in.lease_request_v2, data,
-				     sizeof(data))) {
-			TALLOC_FREE(req);
-			return NULL;
-		}
-
-		status = smb2_create_blob_add(
-			req, &blobs, SMB2_CREATE_TAG_RQLS,
-			data_blob_const(data, sizeof(data)));
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-	}
-
-	if (io->in.app_instance_id) {
-		uint8_t data[20];
-		DATA_BLOB guid_blob;
-
-		SSVAL(data, 0, 20); /* structure size */
-		SSVAL(data, 2, 0);  /* reserved */
-
-		status = GUID_to_ndr_blob(io->in.app_instance_id,
-					  req, /* TALLOC_CTX */
-					  &guid_blob);
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-		memcpy(data+4, guid_blob.data, 16);
+		memcpy(&data[0], &io->in.lease_request->lease_key, 16);
+		SIVAL(data, 16, io->in.lease_request->lease_state);
+		SIVAL(data, 20, io->in.lease_request->lease_flags);
+		SBVAL(data, 24, io->in.lease_request->lease_duration);
 
 		status = smb2_create_blob_add(req, &blobs,
-					      SMB2_CREATE_TAG_APP_INSTANCE_ID,
-					      data_blob_const(data, 20));
+					      SMB2_CREATE_TAG_RQLS,
+					      data_blob_const(data, 32));
 		if (!NT_STATUS_IS_OK(status)) {
 			talloc_free(req);
 			return NULL;
@@ -292,21 +193,6 @@ struct smb2_request *smb2_create_send(struct smb2_tree *tree, struct smb2_create
 	if (!NT_STATUS_IS_OK(status)) {
 		talloc_free(req);
 		return NULL;
-	}
-
-	if (((io->in.fname == NULL) || (strlen(io->in.fname) == 0)) &&
-	    (blob.length == 0)) {
-		struct smb2_request_buffer *buf = &req->out;
-
-		status = smb2_grow_buffer(buf, 1);
-		if (!NT_STATUS_IS_OK(status)) {
-			talloc_free(req);
-			return NULL;
-		}
-		buf->dynamic[0] = 0;
-		buf->dynamic += 1;
-		buf->body_size += 1;
-		buf->size += 1;
 	}
 
 	data_blob_free(&blob);
@@ -376,62 +262,17 @@ NTSTATUS smb2_create_recv(struct smb2_request *req, TALLOC_CTX *mem_ctx, struct 
 			memcpy(io->out.on_disk_id, io->out.blobs.blobs[i].data.data, 32);
 		}
 		if (strcmp(io->out.blobs.blobs[i].tag, SMB2_CREATE_TAG_RQLS) == 0) {
-			struct smb2_lease *ls = NULL;
 			uint8_t *data;
-
-			ZERO_STRUCT(io->out.lease_response);
-			ZERO_STRUCT(io->out.lease_response_v2);
-
-			switch (io->out.blobs.blobs[i].data.length) {
-			case 32:
-				ls = &io->out.lease_response;
-				ls->lease_version = 1;
-				break;
-			case 52:
-				ls = &io->out.lease_response_v2;
-				ls->lease_version = 2;
-				break;
-			default:
+			if (io->out.blobs.blobs[i].data.length != 32) {
 				smb2_request_destroy(req);
 				return NT_STATUS_INVALID_NETWORK_RESPONSE;
 			}
 
 			data = io->out.blobs.blobs[i].data.data;
-			memcpy(&ls->lease_key, data, 16);
-			ls->lease_state = IVAL(data, 16);
-			ls->lease_flags = IVAL(data, 20);
-			ls->lease_duration = BVAL(data, 24);
-
-			if (io->out.blobs.blobs[i].data.length == 52) {
-				memcpy(&ls->parent_lease_key, data+32, 16);
-				ls->lease_epoch = SVAL(data, 48);
-			}
-		}
-		if (strcmp(io->out.blobs.blobs[i].tag, SMB2_CREATE_TAG_DHNQ) == 0) {
-			if (io->out.blobs.blobs[i].data.length != 8) {
-				smb2_request_destroy(req);
-				return NT_STATUS_INVALID_NETWORK_RESPONSE;
-			}
-			io->out.durable_open = true;
-		}
-		if (strcmp(io->out.blobs.blobs[i].tag, SMB2_CREATE_TAG_DH2Q) == 0) {
-			uint32_t flags;
-			uint8_t *data;
-
-			if (io->out.blobs.blobs[i].data.length != 8) {
-				smb2_request_destroy(req);
-				return NT_STATUS_INVALID_NETWORK_RESPONSE;
-			}
-
-			io->out.durable_open = false;
-			io->out.durable_open_v2 = true;
-
-			data = io->out.blobs.blobs[i].data.data;
-			io->out.timeout = IVAL(data, 0);
-			flags = IVAL(data, 4);
-			if ((flags & SMB2_DHANDLE_FLAG_PERSISTENT) != 0) {
-				io->out.persistent_open = true;
-			}
+			memcpy(&io->out.lease_response.lease_key, data, 16);
+			io->out.lease_response.lease_state = IVAL(data, 16);
+			io->out.lease_response.lease_flags = IVAL(data, 20);
+			io->out.lease_response.lease_duration = BVAL(data, 24);
 		}
 	}
 

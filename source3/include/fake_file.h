@@ -41,10 +41,10 @@ struct fake_file_handle {
 enum FAKE_FILE_TYPE is_fake_file_path(const char *path);
 enum FAKE_FILE_TYPE is_fake_file(const struct smb_filename *smb_fname);
 NTSTATUS open_fake_file(struct smb_request *req, connection_struct *conn,
-				uint64_t current_vuid,
+				uint16_t current_vuid,
 				enum FAKE_FILE_TYPE fake_file_type,
 				const struct smb_filename *smb_fname,
-				uint32_t access_mask,
+				uint32 access_mask,
 				files_struct **result);
 NTSTATUS close_fake_file(struct smb_request *req, files_struct *fsp);
 

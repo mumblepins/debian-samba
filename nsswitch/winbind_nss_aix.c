@@ -279,8 +279,7 @@ static struct group *wb_aix_getgrgid(gid_t gid)
 
 	request.data.gid = gid;
 
-	ret = winbindd_request_response(NULL, WINBINDD_GETGRGID,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_GETGRGID, &request, &response);
 
 	logit("getgrgid ret=%d\n", ret);
 
@@ -312,8 +311,7 @@ static struct group *wb_aix_getgrnam(const char *name)
 
 	STRCPY_RETNULL(request.data.groupname, name);
 
-	ret = winbindd_request_response(NULL, WINBINDD_GETGRNAM,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_GETGRNAM, &request, &response);
 
 	HANDLE_ERRORS(ret);
 
@@ -372,8 +370,7 @@ static char *wb_aix_getgrset(char *user)
 		free(r_user);
 	}
 
-	ret = winbindd_request_response(NULL, WINBINDD_GETGROUPS,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_GETGROUPS, &request, &response);
 
 	HANDLE_ERRORS(ret);
 
@@ -412,8 +409,7 @@ static struct passwd *wb_aix_getpwuid(uid_t uid)
 
 	request.data.uid = uid;
 
-	ret = winbindd_request_response(NULL, WINBINDD_GETPWUID,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_GETPWUID, &request, &response);
 
 	HANDLE_ERRORS(ret);
 
@@ -446,8 +442,7 @@ static struct passwd *wb_aix_getpwnam(const char *name)
 
 	STRCPY_RETNULL(request.data.username, name);
 
-	ret = winbindd_request_response(NULL, WINBINDD_GETPWNAM,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_GETPWNAM, &request, &response);
 
 	HANDLE_ERRORS(ret);
 
@@ -480,8 +475,7 @@ static int wb_aix_lsuser(char *attributes[], attrval_t results[], int size)
 	ZERO_STRUCT(request);
 	ZERO_STRUCT(response);
 
-	ret = winbindd_request_response(NULL, WINBINDD_LIST_USERS,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_LIST_USERS, &request, &response);
 	if (ret != 0) {
 		errno = EINVAL;
 		return -1;
@@ -529,8 +523,7 @@ static int wb_aix_lsgroup(char *attributes[], attrval_t results[], int size)
 	ZERO_STRUCT(request);
 	ZERO_STRUCT(response);
 
-	ret = winbindd_request_response(NULL, WINBINDD_LIST_GROUPS,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_LIST_GROUPS, &request, &response);
 	if (ret != 0) {
 		errno = EINVAL;
 		return -1;
@@ -609,8 +602,7 @@ static attrval_t pwd_to_sid(struct passwd *pwd)
 
 	request.data.uid = pwd->pw_uid;
 
-	if (winbindd_request_response(NULL, WINBINDD_UID_TO_SID,
-				      &request, &response) !=
+	if (winbindd_request_response(WINBINDD_UID_TO_SID, &request, &response) !=
 	    NSS_STATUS_SUCCESS) {
 		r.attr_flag = ENOENT;
 	} else {
@@ -896,8 +888,7 @@ static int wb_aix_authenticate(char *user, char *pass,
 		free(r_user);
 	}
 
-	result = winbindd_request_response(NULL, WINBINDD_PAM_AUTH,
-					   &request, &response);
+	result = winbindd_request_response(WINBINDD_PAM_AUTH, &request, &response);
 
 	winbindd_free_response(&response);
 
@@ -946,8 +937,7 @@ static int wb_aix_chpass(char *user, char *oldpass, char *newpass, char **messag
 		free(r_user);
 	}
 
-	result = winbindd_request_response(NULL, WINBINDD_PAM_CHAUTHTOK,
-					   &request, &response);
+	result = winbindd_request_response(WINBINDD_PAM_CHAUTHTOK, &request, &response);
 
 	winbindd_free_response(&response);
 

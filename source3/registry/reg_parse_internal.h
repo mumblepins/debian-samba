@@ -38,7 +38,7 @@ struct cbuf;
 #if defined USE_NATIVE_ICONV && defined HAVE_NATIVE_ICONV
 #  define smb_iconv_t     iconv_t
 #  define smb_iconv(CD, IPTR, ILEN, OPTR, OLEN) \
-	iconv(CD, discard_const_p(char*, (IPTR)), ILEN, OPTR, OLEN)
+	iconv(CD, (char**)(IPTR), ILEN, OPTR, OLEN)
 #  define smb_iconv_open  iconv_open
 #  define smb_iconv_close iconv_close
 #endif
@@ -56,22 +56,7 @@ struct hive_info {
 	size_t long_name_len;
 };
 
-extern const struct hive_info HIVE_INFO_HKLM;
-extern const struct hive_info HIVE_INFO_HKCU;
-extern const struct hive_info HIVE_INFO_HKCR;
-extern const struct hive_info HIVE_INFO_HKU;
-extern const struct hive_info HIVE_INFO_HKCC;
-extern const struct hive_info HIVE_INFO_HKDD;
-extern const struct hive_info HIVE_INFO_HKPD;
-extern const struct hive_info HIVE_INFO_HKPT;
-extern const struct hive_info HIVE_INFO_HKPN;
-
-extern const struct hive_info* HIVE_INFO[];
-
-const struct hive_info* hive_info(const char* name);
-bool srprs_hive(const char** ptr, const struct hive_info** result);
-
-
+const struct hive_info* hive_info(const char* name, int nlen);
 
 const char* get_charset(const char* c);
 

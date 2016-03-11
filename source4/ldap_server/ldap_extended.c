@@ -82,7 +82,7 @@ static void ldapsrv_starttls_postprocess_done(struct tevent_req *subreq)
 				      conn, &conn->sockets.tls);
 	TALLOC_FREE(subreq);
 	if (ret == -1) {
-		NTSTATUS status = map_nt_error_from_unix_common(sys_errno);
+		NTSTATUS status = map_nt_error_from_unix(sys_errno);
 
 		DEBUG(1,("ldapsrv_starttls_postprocess_done: accept_tls_loop: "
 			 "tstream_tls_accept_recv() - %d:%s => %s",
@@ -185,9 +185,7 @@ NTSTATUS ldapsrv_ExtendedRequest(struct ldapsrv_call *call)
 		 * send and we need to return directly
 		 */
 		status = extended_ops[i].fn(call, reply, &error_str);
-		if (NT_STATUS_IS_OK(status)) {
-			return status;
-		}
+		NT_STATUS_IS_OK_RETURN(status);
  
 		if (NT_STATUS_IS_LDAP(status)) {
 			result = NT_STATUS_LDAP_CODE(status);

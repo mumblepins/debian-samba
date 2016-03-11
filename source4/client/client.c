@@ -35,8 +35,6 @@
 #include "lib/events/events.h"
 #include "lib/cmdline/popt_common.h"
 #include "librpc/gen_ndr/ndr_srvsvc_c.h"
-#include "librpc/gen_ndr/ndr_lsa.h"
-#include "librpc/gen_ndr/ndr_security.h"
 #include "libcli/util/clilsa.h"
 #include "system/dir.h"
 #include "system/filesys.h"
@@ -311,12 +309,12 @@ static bool mask_match(struct smbcli_state *c, const char *string,
 		return false;
 	
 	if (is_case_sensitive)
-		return ms_fnmatch_protocol(pattern, string, 
+		return ms_fnmatch(pattern, string, 
 				  c->transport->negotiate.protocol) == 0;
 
 	p2 = strlower_talloc(NULL, pattern);
 	s2 = strlower_talloc(NULL, string);
-	ret = ms_fnmatch_protocol(p2, s2, c->transport->negotiate.protocol) == 0;
+	ret = ms_fnmatch(p2, s2, c->transport->negotiate.protocol) == 0;
 	talloc_free(p2);
 	talloc_free(s2);
 
@@ -454,13 +452,7 @@ static void adjust_do_list_queue(void)
 static void add_to_do_list_queue(const char* entry)
 {
 	char *dlq;
-	long new_end;
-
-	if (entry == NULL) {
-		entry = "";
-	}
-
-	new_end = do_list_queue_end + ((long)strlen(entry)) + 1;
+	long new_end = do_list_queue_end + ((long)strlen(entry)) + 1;
 	while (new_end > do_list_queue_size)
 	{
 		do_list_queue_size *= 2;
@@ -481,8 +473,8 @@ static void add_to_do_list_queue(const char* entry)
 	}
 	if (do_list_queue)
 	{
-		strlcpy(do_list_queue + do_list_queue_end, entry,
-			    do_list_queue_size - do_list_queue_end);
+		safe_strcpy(do_list_queue + do_list_queue_end, entry, 
+			    do_list_queue_size - do_list_queue_end - 1);
 		do_list_queue_end = new_end;
 		DEBUG(4,("added %s to do_list_queue (start=%d, end=%d)\n",
 			 entry, (int)do_list_queue_start, (int)do_list_queue_end));
@@ -704,12 +696,11 @@ static int do_get(struct smbclient_context *ctx, char *rname, const char *p_lnam
 	char *lname;
 
 
+	lname = talloc_strdup(ctx, p_lname);
 	GetTimeOfDay(&tp_start);
 
 	if (ctx->lowercase) {
-		lname = strlower_talloc(ctx, p_lname);
-	} else {
-		lname = talloc_strdup(ctx, p_lname);
+		strlower(lname);
 	}
 
 	fnum = smbcli_open(ctx->cli->tree, rname, O_RDONLY, DENY_NONE);
@@ -728,7 +719,6 @@ static int do_get(struct smbclient_context *ctx, char *rname, const char *p_lnam
 				start = lseek(handle, 0, SEEK_END);
 				if (start == -1) {
 					d_printf("Error seeking local file\n");
-					close(handle);
 					return 1;
 				}
 			}
@@ -748,9 +738,6 @@ static int do_get(struct smbclient_context *ctx, char *rname, const char *p_lnam
 	    NT_STATUS_IS_ERR(smbcli_getattrE(ctx->cli->tree, fnum, 
 			  &attr, &size, NULL, NULL, NULL))) {
 		d_printf("getattrib: %s\n",smbcli_errstr(ctx->cli->tree));
-		if (newhandle) {
-			close(handle);
-		}
 		return 1;
 	}
 
@@ -760,9 +747,6 @@ static int do_get(struct smbclient_context *ctx, char *rname, const char *p_lnam
 	if(!(data = (uint8_t *)malloc(read_size))) { 
 		d_printf("malloc fail for size %d\n", read_size);
 		smbcli_close(ctx->cli->tree, fnum);
-		if (newhandle) {
-			close(handle);
-		}
 		return 1;
 	}
 
@@ -900,14 +884,13 @@ static void do_mget(struct smbclient_context *ctx, struct clilist_file_info *fin
 
 	ctx->remote_cur_dir = talloc_asprintf_append_buffer(NULL, "%s\\", finfo->name);
 
+	l_fname = talloc_strdup(ctx, finfo->name);
+
+	string_replace(l_fname, '\\', '/');
 	if (ctx->lowercase) {
-		l_fname = strlower_talloc(ctx, finfo->name);
-	} else {
-		l_fname = talloc_strdup(ctx, finfo->name);
+		strlower(l_fname);
 	}
 	
-	string_replace(l_fname, '\\', '/');
-
 	if (!directory_exist(l_fname) &&
 	    mkdir(l_fname, 0777) != 0) {
 		d_printf("failed to create directory %s\n", l_fname);
@@ -940,12 +923,9 @@ static int cmd_more(struct smbclient_context *ctx, const char **args)
 	char *pager;
 	int fd;
 	int rc = 0;
-	mode_t mask;
 
 	lname = talloc_asprintf(ctx, "%s/smbmore.XXXXXX",tmpdir());
-	mask = umask(S_IRWXO | S_IRWXG);
 	fd = mkstemp(lname);
-	umask(mask);
 	if (fd == -1) {
 		d_printf("failed to create temporary file for more\n");
 		return 1;
@@ -1077,8 +1057,7 @@ show 8.3 name of a file
 ****************************************************************************/
 static int cmd_altname(struct smbclient_context *ctx, const char **args)
 {
-	const char *p;
-	char *altname;
+	const char *altname;
 	char *name;
   
 	if (!args[1]) {
@@ -1088,15 +1067,12 @@ static int cmd_altname(struct smbclient_context *ctx, const char **args)
 
 	name = talloc_asprintf(ctx, "%s%s", ctx->remote_cur_dir, args[1]);
 
-	if (!NT_STATUS_IS_OK(smbcli_qpathinfo_alt_name(ctx->cli->tree, name, &p))) {
+	if (!NT_STATUS_IS_OK(smbcli_qpathinfo_alt_name(ctx->cli->tree, name, &altname))) {
 		d_printf("%s getting alt name for %s\n",
 			 smbcli_errstr(ctx->cli->tree),name);
 		return(false);
 	}
-	altname = discard_const_p(char, p);
 	d_printf("%s\n", altname);
-
-	SAFE_FREE(altname);
 
 	return 0;
 }
@@ -1150,7 +1126,6 @@ static int do_put(struct smbclient_context *ctx, char *rname, char *lname, bool 
 		if (f && reput) {
 			if (x_tseek(f, start, SEEK_SET) == -1) {
 				d_printf("Error seeking local file\n");
-				x_fclose(f);
 				return 1;
 			}
 		}
@@ -1168,7 +1143,6 @@ static int do_put(struct smbclient_context *ctx, char *rname, char *lname, bool 
 	buf = (uint8_t *)malloc(maxwrite);
 	if (!buf) {
 		d_printf("ERROR: Not enough memory!\n");
-		x_fclose(f);
 		return 1;
 	}
 	while (!x_feof(f)) {
@@ -1620,7 +1594,6 @@ fsinfo_level_t fsinfo_levels[] = {
 	{"quota-information", RAW_QFS_QUOTA_INFORMATION},
 	{"fullsize-information", RAW_QFS_FULL_SIZE_INFORMATION},
 	{"objectid", RAW_QFS_OBJECTID_INFORMATION},
-	{"sector-size-info", RAW_QFS_SECTOR_SIZE_INFORMATION},
 	{NULL, RAW_QFS_GENERIC}
 };
 
@@ -1763,22 +1736,6 @@ static int cmd_fsinfo(struct smbclient_context *ctx, const char **args)
 			 (unsigned long long) fsinfo.objectid_information.out.unknown[3],
 			 (unsigned long long) fsinfo.objectid_information.out.unknown[4],
 			 (unsigned long long) fsinfo.objectid_information.out.unknown[5] );
-		break;
-	case RAW_QFS_SECTOR_SIZE_INFORMATION:
-		d_printf("\tlogical_bytes_per_sector:			%u\n",
-			 (unsigned)fsinfo.sector_size_info.out.logical_bytes_per_sector);
-		d_printf("\tphys_bytes_per_sector_atomic:		%u\n",
-			 (unsigned)fsinfo.sector_size_info.out.phys_bytes_per_sector_atomic);
-		d_printf("\tphys_bytes_per_sector_perf:			%u\n",
-			 (unsigned)fsinfo.sector_size_info.out.phys_bytes_per_sector_perf);
-		d_printf("\tfs_effective_phys_bytes_per_sector_atomic:	%u\n",
-			 (unsigned)fsinfo.sector_size_info.out.fs_effective_phys_bytes_per_sector_atomic);
-		d_printf("\tflags:					0x%x\n",
-			 (unsigned)fsinfo.sector_size_info.out.flags);
-		d_printf("\tbyte_off_sector_align:			%u\n",
-			 (unsigned)fsinfo.sector_size_info.out.byte_off_sector_align);
-		d_printf("\tbyte_off_partition_align:			%u\n",
-			 (unsigned)fsinfo.sector_size_info.out.byte_off_partition_align);
 		break;
 	case RAW_QFS_GENERIC:
 		d_printf("\twrong level returned\n");
@@ -2172,75 +2129,18 @@ static int cmd_delprivileges(struct smbclient_context *ctx, const char **args)
 
 
 /****************************************************************************
-open a file
 ****************************************************************************/
 static int cmd_open(struct smbclient_context *ctx, const char **args)
 {
-	char *filename;
-	union smb_open io;
-	NTSTATUS status;
-	TALLOC_CTX *tmp_ctx;
-
+	char *mask;
+	
 	if (!args[1]) {
 		d_printf("open <filename>\n");
 		return 1;
 	}
-	tmp_ctx = talloc_new(ctx);
+	mask = talloc_asprintf(ctx, "%s%s", ctx->remote_cur_dir, args[1]);
 
-	filename = talloc_asprintf(tmp_ctx, "%s%s", ctx->remote_cur_dir, args[1]);
-
-	io.generic.level = RAW_OPEN_NTCREATEX;
-	io.ntcreatex.in.root_fid.fnum = 0;
-	io.ntcreatex.in.flags = 0;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.create_options = 0;
-	io.ntcreatex.in.file_attr = FILE_ATTRIBUTE_NORMAL;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_READ;
-	io.ntcreatex.in.alloc_size = 0;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	io.ntcreatex.in.impersonation = NTCREATEX_IMPERSONATION_ANONYMOUS;
-	io.ntcreatex.in.security_flags = 0;
-	io.ntcreatex.in.fname = filename;
-
-	status = smb_raw_open(ctx->cli->tree, tmp_ctx, &io);
-	talloc_free(tmp_ctx);
-
-	if (NT_STATUS_IS_OK(status)) {
-		d_printf("Opened file with fnum %u\n", (unsigned)io.ntcreatex.out.file.fnum);
-	} else {
-		d_printf("Opened failed: %s\n", nt_errstr(status));
-	}
-
-	return 0;
-}
-
-/****************************************************************************
-close a file
-****************************************************************************/
-static int cmd_close(struct smbclient_context *ctx, const char **args)
-{
-	union smb_close io;
-	NTSTATUS status;
-	uint16_t fnum;
-
-	if (!args[1]) {
-		d_printf("close <fnum>\n");
-		return 1;
-	}
-
-	fnum = atoi(args[1]);
-
-	ZERO_STRUCT(io);
-	io.generic.level = RAW_CLOSE_CLOSE;
-	io.close.in.file.fnum = fnum;
-
-	status = smb_raw_close(ctx->cli->tree, &io);
-
-	if (NT_STATUS_IS_OK(status)) {
-		d_printf("Closed file OK\n");
-	} else {
-		d_printf("Close failed: %s\n", nt_errstr(status));
-	}
+	smbcli_open(ctx->cli->tree, mask, O_RDWR, DENY_ALL);
 
 	return 0;
 }
@@ -2792,7 +2692,6 @@ static struct
   {"mput",cmd_mput,"<mask> put all matching files",{COMPL_REMOTE,COMPL_NONE}},
   {"newer",cmd_newer,"<file> only mget files newer than the specified local file",{COMPL_LOCAL,COMPL_NONE}},
   {"open",cmd_open,"<mask> open a file",{COMPL_REMOTE,COMPL_NONE}},
-  {"close",cmd_close,"<fnum> close a file",{COMPL_NONE,COMPL_NONE}},
   {"privileges",cmd_privileges,"<user> show privileges for a user",{COMPL_NONE,COMPL_NONE}},
   {"print",cmd_print,"<file name> print a file",{COMPL_NONE,COMPL_NONE}},
   {"printmode",cmd_printmode,"<graphics or text> set the print mode",{COMPL_NONE,COMPL_NONE}},
@@ -2940,8 +2839,7 @@ static char **remote_completion(const char *text, int len)
 	info.samelen = len;
 	info.text = text;
 	info.len = len;
-	info.count = 0;
-
+ 
 	if (len >= PATH_MAX)
 		return(NULL);
 
@@ -3100,17 +2998,16 @@ static void readline_callback(void)
 
 static int process_line(struct smbclient_context *ctx, const char *cline)
 {
-	char **args;
+	const char **args;
 	int i;
 
 	/* and get the first part of the command */
-	args = str_list_make_shell(ctx, cline, NULL);
+	args = (const char **) str_list_make_shell(ctx, cline, NULL);
 	if (!args || !args[0])
 		return 0;
 
 	if ((i = process_tok(args[0])) >= 0) {
-		const char **a = discard_const_p(const char *, args);
-		i = commands[i].fn(ctx, a);
+		i = commands[i].fn(ctx, args);
 	} else if (i == -2) {
 		d_printf("%s: command abbreviation ambiguous\n",args[0]);
 	} else {
@@ -3173,30 +3070,14 @@ static bool do_connect(struct smbclient_context *ctx,
 
 	if (strncmp(specified_share, "\\\\", 2) == 0 ||
 	    strncmp(specified_share, "//", 2) == 0) {
-		bool ok;
-
-		ok = smbcli_parse_unc(specified_share, ctx, &server, &share);
-		if (!ok) {
-			d_printf("Failed to parse UNC\n");
-			talloc_free(ctx);
-			return false;
-		}
+		smbcli_parse_unc(specified_share, ctx, &server, &share);
 	} else {
 		share = talloc_strdup(ctx, specified_share);
 		server = talloc_strdup(ctx, specified_server);
-		if (share == NULL || server == NULL) {
-			d_printf("Failed to allocate memory for server and share\n");
-			talloc_free(ctx);
-			return false;
-		}
 	}
 
 	ctx->remote_cur_dir = talloc_strdup(ctx, "\\");
-	if (ctx->remote_cur_dir == NULL) {
-		talloc_free(ctx);
-		return false;
-	}
-
+	
 	status = smbcli_full_connection(ctx, &ctx->cli, server, ports,
 					share, NULL, 
 					socket_options,
@@ -3241,7 +3122,6 @@ static int do_message_op(const char *netbios_name, const char *desthost,
 	struct nbt_name called, calling;
 	const char *server_name;
 	struct smbcli_state *cli;
-	bool ok;
 
 	make_nbt_name_client(&calling, netbios_name);
 
@@ -3249,18 +3129,17 @@ static int do_message_op(const char *netbios_name, const char *desthost,
 
 	server_name = destip ? destip : desthost;
 
-	cli = smbcli_state_init(NULL);
-	if (cli == NULL) {
-		d_printf("smbcli_state_init() failed\n");
+	if (!(cli = smbcli_state_init(NULL)) ||
+	    !smbcli_socket_connect(cli, server_name, destports,
+				   ev_ctx, resolve_ctx, options,
+                   socket_options)) {
+		d_printf("Connection to %s failed\n", server_name);
 		return 1;
 	}
 
-	ok = smbcli_socket_connect(cli, server_name, destports,
-				   ev_ctx, resolve_ctx, options,
-				   socket_options,
-				   &calling, &called);
-	if (!ok) {
-		d_printf("Connection to %s failed\n", server_name);
+	if (!smbcli_transport_establish(cli, &calling, &called)) {
+		d_printf("session request failed\n");
+		talloc_free(cli);
 		return 1;
 	}
 
@@ -3274,7 +3153,7 @@ static int do_message_op(const char *netbios_name, const char *desthost,
 /****************************************************************************
   main program
 ****************************************************************************/
- int main(int argc, const char *argv[])
+ int main(int argc,char *argv[])
 {
 	char *base_directory = NULL;
 	const char *dest_ip = NULL;
@@ -3322,7 +3201,7 @@ static int do_message_op(const char *netbios_name, const char *desthost,
 	ctx = talloc_zero(mem_ctx, struct smbclient_context);
 	ctx->io_bufsize = 64512;
 
-	pc = poptGetContext("smbclient", argc, argv, long_options, 0);
+	pc = poptGetContext("smbclient", argc, (const char **) argv, long_options, 0);
 	poptSetOtherOptionHelp(pc, "[OPTIONS] service <password>");
 
 	while ((opt = poptGetNextOpt(pc)) != -1) {
@@ -3352,7 +3231,7 @@ static int do_message_op(const char *netbios_name, const char *desthost,
 		}
 	}
 
-	gensec_init();
+	gensec_init(cmdline_lp_ctx);
 
 	if(poptPeekArg(pc)) {
 		char *s = strdup(poptGetArg(pc)); 

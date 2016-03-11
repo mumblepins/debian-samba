@@ -40,7 +40,7 @@ static bool find_status = false;
 static bool open_sockets(void)
 {
 	struct sockaddr_storage ss;
-	const char *sock_addr = lp_nbt_client_socket_address();
+	const char *sock_addr = lp_socket_address();
 
 	if (!interpret_string_addr(&ss, sock_addr,
 				AI_NUMERICHOST|AI_PASSIVE)) {
@@ -107,7 +107,7 @@ static char *query_flags(int flags)
  Do a node status query.
 ****************************************************************************/
 
-static bool do_node_status(const char *name,
+static void do_node_status(const char *name,
 		int type,
 		struct sockaddr_storage *pss)
 {
@@ -142,10 +142,8 @@ static bool do_node_status(const char *name,
 				extra.mac_addr[4], extra.mac_addr[5]);
 		d_printf("\n");
 		TALLOC_FREE(addrs);
-		return true;
 	} else {
 		d_printf("No reply from %s\n\n",addr);
-		return false;
 	}
 }
 
@@ -170,9 +168,27 @@ static bool query_one(const char *lookup, unsigned int lookup_type)
 				    &bcast_addr, talloc_tos(),
 				    &ip_list, &count, &flags);
 	} else {
-		status = name_resolve_bcast(
-			lookup, lookup_type,
-			talloc_tos(), &ip_list, &count);
+		const struct in_addr *bcast;
+		for (j=iface_count() - 1;
+		     !ip_list && j >= 0;
+		     j--) {
+			char addr[INET6_ADDRSTRLEN];
+			struct sockaddr_storage bcast_ss;
+
+			bcast = iface_n_bcast_v4(j);
+			if (!bcast) {
+				continue;
+			}
+			in_addr_to_sockaddr_storage(&bcast_ss, *bcast);
+			print_sockaddr(addr, sizeof(addr), &bcast_ss);
+			d_printf("querying %s on %s\n",
+			       lookup, addr);
+			status = name_query(lookup,lookup_type,
+					    use_bcast,
+					    use_bcast?True:recursion_desired,
+					    &bcast_ss, talloc_tos(),
+					    &ip_list, &count, &flags);
+		}
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
@@ -203,9 +219,7 @@ static bool query_one(const char *lookup, unsigned int lookup_type)
 		   was valid - ie. name_query returned true.
 		 */
 		if (find_status) {
-			if (!do_node_status(lookup, lookup_type, &ip_list[j])) {
-				status = NT_STATUS_UNSUCCESSFUL;
-			}
+			do_node_status(lookup, lookup_type, &ip_list[j]);
 		}
 	}
 
@@ -218,16 +232,15 @@ static bool query_one(const char *lookup, unsigned int lookup_type)
 /****************************************************************************
   main program
 ****************************************************************************/
-int main(int argc, const char *argv[])
+int main(int argc,char *argv[])
 {
 	int opt;
 	unsigned int lookup_type = 0x0;
 	fstring lookup;
 	static bool find_master=False;
 	static bool lookup_by_ip = False;
-	poptContext pc = NULL;
+	poptContext pc;
 	TALLOC_CTX *frame = talloc_stackframe();
-	int rc = 0;
 
 	struct poptOption long_options[] = {
 		POPT_AUTOHELP
@@ -247,11 +260,11 @@ int main(int argc, const char *argv[])
 
 	*lookup = 0;
 
-	smb_init_locale();
+	load_case_tables();
 
 	setup_logging(argv[0], DEBUG_STDOUT);
 
-	pc = poptGetContext("nmblookup", argc, argv,
+	pc = poptGetContext("nmblookup", argc, (const char **)argv,
 			long_options, POPT_CONTEXT_KEEP_FIRST);
 
 	poptSetOtherOptionHelp(pc, "<NODE> ...");
@@ -302,25 +315,22 @@ int main(int argc, const char *argv[])
 
 	if(!poptPeekArg(pc)) {
 		poptPrintUsage(pc, stderr, 0);
-		rc = 1;
-		goto out;
+		exit(1);
 	}
 
-	if (!lp_load_global(get_dyn_CONFIGFILE())) {
+	if (!lp_load(get_dyn_CONFIGFILE(),True,False,False,True)) {
 		fprintf(stderr, "Can't load %s - run testparm to debug it\n",
 				get_dyn_CONFIGFILE());
 	}
 
 	load_interfaces();
 	if (!open_sockets()) {
-		rc = 1;
-		goto out;
+		return(1);
 	}
 
 	while(poptPeekArg(pc)) {
 		char *p;
 		struct in_addr ip;
-		size_t nbt_len;
 
 		fstrcpy(lookup,poptGetArg(pc));
 
@@ -329,9 +339,7 @@ int main(int argc, const char *argv[])
 			ip = interpret_addr2(lookup);
 			in_addr_to_sockaddr_storage(&ss, ip);
 			fstrcpy(lookup,"*");
-			if (!do_node_status(lookup, lookup_type, &ss)) {
-				rc = 1;
-			}
+			do_node_status(lookup, lookup_type, &ss);
 			continue;
 		}
 
@@ -350,16 +358,7 @@ int main(int argc, const char *argv[])
 			sscanf(++p,"%x",&lookup_type);
 		}
 
-		nbt_len = strlen(lookup);
-		if (nbt_len > MAX_NETBIOSNAME_LEN - 1) {
-			d_printf("The specified netbios name [%s] is too long!\n",
-				 lookup);
-			continue;
-		}
-
-
 		if (!query_one(lookup, lookup_type)) {
-			rc = 1;
 			d_printf( "name_query failed to find name %s", lookup );
 			if( 0 != lookup_type ) {
 				d_printf( "#%02x", lookup_type );
@@ -368,8 +367,7 @@ int main(int argc, const char *argv[])
 		}
 	}
 
-out:
 	poptFreeContext(pc);
 	TALLOC_FREE(frame);
-	return rc;
+	return(0);
 }

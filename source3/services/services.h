@@ -40,9 +40,9 @@ typedef struct {
 /* structure to store the service handle information  */
 
 typedef struct _ServiceInfo {
-	uint8_t			type;
+	uint8			type;
 	char			*name;
-	uint32_t		access_granted;
+	uint32			access_granted;
 	SERVICE_CONTROL_OPS	*ops;
 } SERVICE_INFO;
 

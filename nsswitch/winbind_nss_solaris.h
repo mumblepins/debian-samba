@@ -25,7 +25,6 @@
 #include <nss_common.h>
 #include <nss_dbdefs.h>
 #include <nsswitch.h>
-#include "system/passwd.h"
 
 typedef nss_status_t NSS_STATUS;
 

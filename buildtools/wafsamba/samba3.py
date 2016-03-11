@@ -4,22 +4,11 @@
 import Options, Build, os
 from optparse import SUPPRESS_HELP
 from samba_utils import os_path_relpath, TO_LIST
-from samba_autoconf import library_flags
-
 
 def SAMBA3_ADD_OPTION(opt, option, help=(), dest=None, default=True,
                       with_name="with", without_name="without"):
-    if default is None:
-        default_str = "auto"
-    elif default is True:
-        default_str = "yes"
-    elif default is False:
-        default_str = "no"
-    else:
-        default_str = str(default)
-
     if help == ():
-        help = ("Build with %s support (default=%s)" % (option, default_str))
+        help = ("Build with %s support" % option)
     if dest is None:
         dest = "with_%s" % option.replace('-', '_')
 
@@ -57,42 +46,27 @@ Build.BuildContext.SAMBA3_IS_ENABLED_MODULE = SAMBA3_IS_ENABLED_MODULE
 
 def s3_fix_kwargs(bld, kwargs):
     '''fix the build arguments for s3 build rules to include the
-    necessary includes, subdir and cflags options '''
+	necessary includes, subdir and cflags options '''
     s3dir = os.path.join(bld.env.srcdir, 'source3')
     s3reldir = os_path_relpath(s3dir, bld.curdir)
 
     # the extra_includes list is relative to the source3 directory
     extra_includes = [ '.', 'include', 'lib' ]
-    # local heimdal paths only included when USING_SYSTEM_KRB5 is not set
-    if not bld.CONFIG_SET("USING_SYSTEM_KRB5"):
+    if bld.env.use_intree_heimdal:
         extra_includes += [ '../source4/heimdal/lib/com_err',
-                            '../source4/heimdal/lib/krb5',
                             '../source4/heimdal/lib/gssapi',
-                            '../source4/heimdal_build',
-                            '../bin/default/source4/heimdal/lib/asn1' ]
+                            '../source4/heimdal_build' ]
 
-    if bld.CONFIG_SET('USING_SYSTEM_TDB'):
-        (tdb_includes, tdb_ldflags, tdb_cpppath) = library_flags(bld, 'tdb')
-        extra_includes += tdb_cpppath
-    else:
+    if not bld.CONFIG_SET('USING_SYSTEM_TDB'):
         extra_includes += [ '../lib/tdb/include' ]
 
-    if bld.CONFIG_SET('USING_SYSTEM_TEVENT'):
-        (tevent_includes, tevent_ldflags, tevent_cpppath) = library_flags(bld, 'tevent')
-        extra_includes += tevent_cpppath
-    else:
+    if not bld.CONFIG_SET('USING_SYSTEM_TEVENT'):
         extra_includes += [ '../lib/tevent' ]
 
-    if bld.CONFIG_SET('USING_SYSTEM_TALLOC'):
-        (talloc_includes, talloc_ldflags, talloc_cpppath) = library_flags(bld, 'talloc')
-        extra_includes += talloc_cpppath
-    else:
+    if not bld.CONFIG_SET('USING_SYSTEM_TALLOC'):
         extra_includes += [ '../lib/talloc' ]
 
-    if bld.CONFIG_SET('USING_SYSTEM_POPT'):
-        (popt_includes, popt_ldflags, popt_cpppath) = library_flags(bld, 'popt')
-        extra_includes += popt_cpppath
-    else:
+    if not bld.CONFIG_SET('USING_SYSTEM_POPT'):
         extra_includes += [ '../lib/popt' ]
 
     # s3 builds assume that they will have a bunch of extra include paths
@@ -105,29 +79,32 @@ def s3_fix_kwargs(bld, kwargs):
         includes += TO_LIST(kwargs['includes'])
     kwargs['includes'] = includes
 
+    # some S3 code assumes that CONFIGFILE is set
+    cflags = ['-DCONFIGFILE="%s"' % bld.env['CONFIGFILE']]
+    if 'cflags' in kwargs:
+        cflags += TO_LIST(kwargs['cflags'])
+    kwargs['cflags'] = cflags
+
 # these wrappers allow for mixing of S3 and S4 build rules in the one build
 
 def SAMBA3_LIBRARY(bld, name, *args, **kwargs):
-    s3_fix_kwargs(bld, kwargs)
-    return bld.SAMBA_LIBRARY(name, *args, **kwargs)
+	s3_fix_kwargs(bld, kwargs)
+	kwargs['allow_undefined_symbols'] = True
+	return bld.SAMBA_LIBRARY(name, *args, **kwargs)
 Build.BuildContext.SAMBA3_LIBRARY = SAMBA3_LIBRARY
 
 def SAMBA3_MODULE(bld, name, *args, **kwargs):
-    s3_fix_kwargs(bld, kwargs)
-    return bld.SAMBA_MODULE(name, *args, **kwargs)
+	s3_fix_kwargs(bld, kwargs)
+	kwargs['allow_undefined_symbols'] = True
+	return bld.SAMBA_MODULE(name, *args, **kwargs)
 Build.BuildContext.SAMBA3_MODULE = SAMBA3_MODULE
 
 def SAMBA3_SUBSYSTEM(bld, name, *args, **kwargs):
-    s3_fix_kwargs(bld, kwargs)
-    return bld.SAMBA_SUBSYSTEM(name, *args, **kwargs)
+	s3_fix_kwargs(bld, kwargs)
+	return bld.SAMBA_SUBSYSTEM(name, *args, **kwargs)
 Build.BuildContext.SAMBA3_SUBSYSTEM = SAMBA3_SUBSYSTEM
 
 def SAMBA3_BINARY(bld, name, *args, **kwargs):
-    s3_fix_kwargs(bld, kwargs)
-    return bld.SAMBA_BINARY(name, *args, **kwargs)
+	s3_fix_kwargs(bld, kwargs)
+	return bld.SAMBA_BINARY(name, *args, **kwargs)
 Build.BuildContext.SAMBA3_BINARY = SAMBA3_BINARY
-
-def SAMBA3_PYTHON(bld, name, *args, **kwargs):
-    s3_fix_kwargs(bld, kwargs)
-    return bld.SAMBA_PYTHON(name, *args, **kwargs)
-Build.BuildContext.SAMBA3_PYTHON = SAMBA3_PYTHON

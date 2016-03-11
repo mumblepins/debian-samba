@@ -88,7 +88,6 @@ static struct DsSyncTest *test_create_context(struct torture_context *tctx)
 	struct drsuapi_DsBindInfo28 *our_bind_info28;
 	struct drsuapi_DsBindInfoCtr *our_bind_info_ctr;
 	const char *binding = torture_setting_string(tctx, "binding", NULL);
-	const char *host;
 	struct nbt_name name;
 
 	ctx = talloc_zero(tctx, struct DsSyncTest);
@@ -99,23 +98,15 @@ static struct DsSyncTest *test_create_context(struct torture_context *tctx)
 		printf("Bad binding string %s\n", binding);
 		return NULL;
 	}
-	status = dcerpc_binding_set_flags(ctx->drsuapi_binding,
-					  DCERPC_SIGN | DCERPC_SEAL, 0);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("dcerpc_binding_set_flags - %s\n", nt_errstr(status));
-		return NULL;
-	}
+	ctx->drsuapi_binding->flags |= DCERPC_SIGN | DCERPC_SEAL;
 
-	host = dcerpc_binding_get_string_option(ctx->drsuapi_binding, "host");
+	ctx->ldap_url = talloc_asprintf(ctx, "ldap://%s", ctx->drsuapi_binding->host);
 
-	ctx->ldap_url = talloc_asprintf(ctx, "ldap://%s", host);
-
-	make_nbt_name_server(&name, host);
+	make_nbt_name_server(&name, ctx->drsuapi_binding->host);
 
 	/* do an initial name resolution to find its IP */
-	status = resolve_name_ex(lpcfg_resolve_context(tctx->lp_ctx),
-				 0, 0, &name, tctx,
-				 &ctx->dest_address, tctx->ev);
+	status = resolve_name(lpcfg_resolve_context(tctx->lp_ctx), &name, tctx,
+			      &ctx->dest_address, tctx->ev);
 	if (!NT_STATUS_IS_OK(status)) {
 		printf("Failed to resolve %s - %s\n",
 		       name.name, nt_errstr(status));
@@ -237,19 +228,6 @@ static bool _test_DsBind(struct torture_context *tctx,
 			b->peer_bind_info28.repl_epoch		= 0;
 			break;
 		}
-		case 28: {
-			b->peer_bind_info28 = b->req.out.bind_info->info.info28;
-			break;
-		}
-		case 32: {
-			struct drsuapi_DsBindInfo32 *info32;
-			info32 = &b->req.out.bind_info->info.info32;
-			b->peer_bind_info28.supported_extensions= info32->supported_extensions;
-			b->peer_bind_info28.site_guid		= info32->site_guid;
-			b->peer_bind_info28.pid			= info32->pid;
-			b->peer_bind_info28.repl_epoch		= info32->repl_epoch;
-			break;
-		}
 		case 48: {
 			struct drsuapi_DsBindInfo48 *info48;
 			info48 = &b->req.out.bind_info->info.info48;
@@ -259,15 +237,9 @@ static bool _test_DsBind(struct torture_context *tctx,
 			b->peer_bind_info28.repl_epoch		= info48->repl_epoch;
 			break;
 		}
-		case 52: {
-			struct drsuapi_DsBindInfo52 *info52;
-			info52 = &b->req.out.bind_info->info.info52;
-			b->peer_bind_info28.supported_extensions= info52->supported_extensions;
-			b->peer_bind_info28.site_guid		= info52->site_guid;
-			b->peer_bind_info28.pid			= info52->pid;
-			b->peer_bind_info28.repl_epoch		= info52->repl_epoch;
+		case 28:
+			b->peer_bind_info28 = b->req.out.bind_info->info.info28;
 			break;
-		}
 		default:
 			printf("DsBind - warning: unknown BindInfo length: %u\n",
 			       b->req.out.bind_info->length);
@@ -298,7 +270,10 @@ static bool test_LDAPBind(struct torture_context *tctx, struct DsSyncTest *ctx,
 		return NULL;
 	}
 
-	ldb_set_modules_dir(ldb, modules_path(ldb, "ldb"));
+	ldb_set_modules_dir(ldb,
+			    talloc_asprintf(ldb,
+					    "%s/ldb",
+					    lpcfg_modulesdir(tctx->lp_ctx)));
 
 	if (ldb_set_opaque(ldb, "credentials", credentials)) {
 		talloc_free(ldb);
@@ -374,7 +349,6 @@ static bool test_analyse_objects(struct torture_context *tctx,
 						 0, NULL,
 						 NULL, NULL,
 						 gensec_skey,
-						 0,
 						 ctx, &objs);
 	torture_assert_werr_ok(tctx, status, "dsdb_extended_replicated_objects_convert() failed!");
 
@@ -546,11 +520,17 @@ static bool test_analyse_objects(struct torture_context *tctx,
 
 	for (cur = first_object; cur; cur = cur->next_object) {
 		const char *dn;
+		struct dom_sid *sid = NULL;
+		uint32_t rid = 0;
 		bool dn_printed = false;
 
 		if (!cur->object.identifier) continue;
 
 		dn = cur->object.identifier->dn;
+		if (cur->object.identifier->sid.num_auths > 0) {
+			sid = &cur->object.identifier->sid;
+			rid = sid->sub_auths[sid->num_auths - 1];
+		}
 
 		for (i=0; i < cur->object.attribute_ctr.num_attributes; i++) {
 			const char *name = NULL;
@@ -700,7 +680,7 @@ static bool test_GetNCChanges(struct torture_context *tctx,
 		}
 	}
 	status = gensec_session_key(ctx->new_dc.drsuapi.drs_pipe->conn->security_state.generic_state,
-				    ctx, &gensec_skey);
+				    &gensec_skey);
 	if (!NT_STATUS_IS_OK(status)) {
 		printf("failed to get gensec session key: %s\n", nt_errstr(status));
 		return false;
@@ -1056,13 +1036,15 @@ static bool torture_dssync_tcase_teardown(struct torture_context *tctx, void *da
 void torture_drs_rpc_dssync_tcase(struct torture_suite *suite)
 {
 	typedef bool (*run_func) (struct torture_context *test, void *tcase_data);
+
+	struct torture_test *test;
 	struct torture_tcase *tcase = torture_suite_add_tcase(suite, "dssync");
 
 	torture_tcase_set_fixture(tcase,
 				  torture_dssync_tcase_setup,
 				  torture_dssync_tcase_teardown);
 
-	torture_tcase_add_simple_test(tcase, "DC_FetchData", (run_func)test_FetchData);
-	torture_tcase_add_simple_test(tcase, "FetchNT4Data", (run_func)test_FetchNT4Data);
+	test = torture_tcase_add_simple_test(tcase, "DC_FetchData", (run_func)test_FetchData);
+	test = torture_tcase_add_simple_test(tcase, "FetchNT4Data", (run_func)test_FetchNT4Data);
 }
 

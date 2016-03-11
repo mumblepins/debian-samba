@@ -1,5 +1,5 @@
 /* this tests tdb by doing lots of ops from several simultaneous
-   writers - that stresses the locking code.
+   writers - that stresses the locking code. 
 */
 
 #include "replace.h"
@@ -33,7 +33,6 @@ static int always_transaction = 0;
 static int hash_size = 2;
 static int loopnum;
 static int count_pipe;
-static bool mutex = false;
 static struct tdb_logging_context log_ctx;
 
 #ifdef PRINTF_ATTRIBUTE
@@ -60,7 +59,7 @@ static void tdb_log(struct tdb_context *tdb, enum tdb_debug_level level, const c
 		system(ptr);
 		free(ptr);
 	}
-#endif
+#endif	
 }
 
 static void fatal(const char *why)
@@ -217,7 +216,7 @@ static int traverse_fn(struct tdb_context *tdb, TDB_DATA key, TDB_DATA dbuf,
 
 static void usage(void)
 {
-	printf("Usage: tdbtorture [-t] [-k] [-m] [-n NUM_PROCS] [-l NUM_LOOPS] [-s SEED] [-H HASH_SIZE]\n");
+	printf("Usage: tdbtorture [-t] [-k] [-n NUM_PROCS] [-l NUM_LOOPS] [-s SEED] [-H HASH_SIZE]\n");
 	exit(0);
 }
 
@@ -231,13 +230,7 @@ static void send_count_and_suicide(int sig)
 
 static int run_child(const char *filename, int i, int seed, unsigned num_loops, unsigned start)
 {
-	int tdb_flags = TDB_DEFAULT|TDB_CLEAR_IF_FIRST|TDB_INCOMPATIBLE_HASH;
-
-	if (mutex) {
-		tdb_flags |= TDB_MUTEX_LOCKING;
-	}
-
-	db = tdb_open_ex(filename, hash_size, tdb_flags,
+	db = tdb_open_ex(filename, hash_size, TDB_DEFAULT,
 			 O_RDWR | O_CREAT, 0600, &log_ctx, NULL);
 	if (!db) {
 		fatal("db open failed");
@@ -309,7 +302,7 @@ int main(int argc, char * const *argv)
 
 	log_ctx.log_fn = tdb_log;
 
-	while ((c = getopt(argc, argv, "n:l:s:H:thkm")) != -1) {
+	while ((c = getopt(argc, argv, "n:l:s:H:thk")) != -1) {
 		switch (c) {
 		case 'n':
 			num_procs = strtol(optarg, NULL, 0);
@@ -329,13 +322,6 @@ int main(int argc, char * const *argv)
 		case 'k':
 			kill_random = 1;
 			break;
-		case 'm':
-			mutex = tdb_runtime_check_for_robust_mutexes();
-			if (!mutex) {
-				printf("tdb_runtime_check_for_robust_mutexes() returned false\n");
-				exit(1);
-			}
-			break;
 		default:
 			usage();
 		}
@@ -349,10 +335,6 @@ int main(int argc, char * const *argv)
 		seed = (getpid() + time(NULL)) & 0x7FFFFFFF;
 	}
 
-	printf("Testing with %d processes, %d loops, %d hash_size, seed=%d%s\n",
-	       num_procs, num_loops, hash_size, seed,
-	       (always_transaction ? " (all within transactions)" : ""));
-
 	if (num_procs == 1 && !kill_random) {
 		/* Don't fork for this case, makes debugging easier. */
 		error_count = run_child(test_tdb, 0, seed, num_loops, 0);
@@ -360,15 +342,7 @@ int main(int argc, char * const *argv)
 	}
 
 	pids = (pid_t *)calloc(sizeof(pid_t), num_procs);
-	if (pids == NULL) {
-		perror("Unable to allocate memory for pids");
-		exit(1);
-	}
 	done = (int *)calloc(sizeof(int), num_procs);
-	if (done == NULL) {
-		perror("Unable to allocate memory for done");
-		exit(1);
-	}
 
 	if (pipe(pfds) != 0) {
 		perror("Creating pipe");
@@ -379,6 +353,10 @@ int main(int argc, char * const *argv)
 	for (i=0;i<num_procs;i++) {
 		if ((pids[i]=fork()) == 0) {
 			close(pfds[0]);
+			if (i == 0) {
+				printf("Testing with %d processes, %d loops, %d hash_size, seed=%d%s\n",
+				       num_procs, num_loops, hash_size, seed, always_transaction ? " (all within transactions)" : "");
+			}
 			exit(run_child(test_tdb, i, seed, num_loops, 0));
 		}
 	}
@@ -457,20 +435,13 @@ int main(int argc, char * const *argv)
 
 done:
 	if (error_count == 0) {
-		int tdb_flags = TDB_DEFAULT;
-
-		if (mutex) {
-			tdb_flags |= TDB_NOLOCK;
-		}
-
-		db = tdb_open_ex(test_tdb, hash_size, tdb_flags,
+		db = tdb_open_ex(test_tdb, hash_size, TDB_DEFAULT,
 				 O_RDWR, 0, &log_ctx, NULL);
 		if (!db) {
-			fatal("db open failed\n");
-			exit(1);
+			fatal("db open failed");
 		}
 		if (tdb_check(db, NULL, NULL) == -1) {
-			printf("db check failed\n");
+			printf("db check failed");
 			exit(1);
 		}
 		tdb_close(db);

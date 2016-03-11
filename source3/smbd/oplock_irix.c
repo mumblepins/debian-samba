@@ -27,10 +27,9 @@
 
 struct irix_oplocks_context {
 	struct kernel_oplocks *ctx;
-	struct smbd_server_connection *sconn;
 	int write_fd;
 	int read_fd;
-	struct tevent_fd *read_fde;
+	struct fd_event *read_fde;
 	bool pending;
 };
 
@@ -49,8 +48,8 @@ static bool irix_oplocks_available(void)
 
 	tmpname = talloc_asprintf(ctx,
 				"%s/koplock.%d",
-				lp_lock_directory(),
-				(int)getpid());
+				lp_lockdir(),
+				(int)sys_getpid());
 	if (!tmpname) {
 		TALLOC_FREE(ctx);
 		return False;
@@ -64,7 +63,7 @@ static bool irix_oplocks_available(void)
 		return False;
 	}
 
-	if((fd = open(tmpname, O_RDWR|O_CREAT|O_EXCL|O_TRUNC, 0600)) < 0) {
+	if((fd = sys_open(tmpname, O_RDWR|O_CREAT|O_EXCL|O_TRUNC, 0600)) < 0) {
 		DEBUG(0,("check_kernel_oplocks: Unable to open temp test file "
 			 "%s. Error was %s\n",
 			 tmpname, strerror(errno) ));
@@ -185,7 +184,7 @@ static files_struct *irix_oplock_receive_message(struct kernel_oplocks *_ctx)
 
 	fileid = file_id_create_dev((SMB_DEV_T)os.os_dev,
 				    (SMB_INO_T)os.os_ino);
-	if ((fsp = file_find_di_first(ctx->sconn, fileid)) == NULL) {
+	if ((fsp = file_find_di_first(smbd_server_conn, fileid)) == NULL) {
 		DEBUG(0,("irix_oplock_receive_message: unable to find open "
 			 "file with dev = %x, inode = %.0f\n",
 			 (unsigned int)os.os_dev, (double)os.os_ino ));
@@ -276,8 +275,8 @@ static void irix_release_kernel_oplock(struct kernel_oplocks *_ctx,
 	}
 }
 
-static void irix_oplocks_read_fde_handler(struct tevent_context *ev,
-					  struct tevent_fd *fde,
+static void irix_oplocks_read_fde_handler(struct event_context *ev,
+					  struct fd_event *fde,
 					  uint16_t flags,
 					  void *private_data)
 {
@@ -286,7 +285,7 @@ static void irix_oplocks_read_fde_handler(struct tevent_context *ev,
 	files_struct *fsp;
 
 	fsp = irix_oplock_receive_message(ctx->ctx);
-	break_kernel_oplock(ctx->sconn->msg_ctx, fsp);
+	break_kernel_oplock(fsp->conn->sconn->msg_ctx, fsp);
 }
 
 /****************************************************************************
@@ -300,7 +299,7 @@ static const struct kernel_oplocks_ops irix_koplocks = {
 	.contend_level2_oplocks_end	= NULL,
 };
 
-struct kernel_oplocks *irix_init_kernel_oplocks(struct smbd_server_connection *sconn)
+struct kernel_oplocks *irix_init_kernel_oplocks(TALLOC_CTX *mem_ctx)
 {
 	struct kernel_oplocks *_ctx;
 	struct irix_oplocks_context *ctx;
@@ -309,7 +308,7 @@ struct kernel_oplocks *irix_init_kernel_oplocks(struct smbd_server_connection *s
 	if (!irix_oplocks_available())
 		return NULL;
 
-	_ctx = talloc_zero(sconn, struct kernel_oplocks);
+	_ctx = talloc_zero(mem_ctx, struct kernel_oplocks);
 	if (!_ctx) {
 		return NULL;
 	}
@@ -322,7 +321,6 @@ struct kernel_oplocks *irix_init_kernel_oplocks(struct smbd_server_connection *s
 	_ctx->ops = &irix_koplocks;
 	_ctx->private_data = ctx;
 	ctx->ctx = _ctx;
-	ctx->sconn = sconn;
 
 	if(pipe(pfd) != 0) {
 		talloc_free(_ctx);
@@ -334,10 +332,10 @@ struct kernel_oplocks *irix_init_kernel_oplocks(struct smbd_server_connection *s
 	ctx->read_fd = pfd[0];
 	ctx->write_fd = pfd[1];
 
-	ctx->read_fde = tevent_add_fd(sconn->ev_ctx,
+	ctx->read_fde = event_add_fd(smbd_event_context(),
 				     ctx,
 				     ctx->read_fd,
-				     TEVENT_FD_READ,
+				     EVENT_FD_READ,
 				     irix_oplocks_read_fde_handler,
 				     ctx);
 	return _ctx;

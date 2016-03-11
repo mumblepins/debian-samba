@@ -60,7 +60,7 @@ static void nbtd_wins_start_refresh_timer(struct nbtd_iface_name *iname)
 
 	refresh_time = MIN(max_refresh_time, iname->ttl/2);
 	
-	tevent_add_timer(iname->iface->nbtsrv->task->event_ctx,
+	event_add_timed(iname->iface->nbtsrv->task->event_ctx, 
 			iname, 
 			timeval_add(&iname->registration_time, refresh_time, 0),
 			nbtd_wins_refresh, iname);
@@ -142,7 +142,6 @@ static void nbtd_wins_refresh(struct tevent_context *ev, struct tevent_timer *te
 	struct nbt_name_socket *nbtsock = wins_socket(iface);
 	struct tevent_req *subreq;
 	struct nbtd_wins_refresh_state *state;
-	char **l;
 
 	state = talloc_zero(iname, struct nbtd_wins_refresh_state);
 	if (state == NULL) {
@@ -153,8 +152,7 @@ static void nbtd_wins_refresh(struct tevent_context *ev, struct tevent_timer *te
 
 	/* setup a wins name refresh request */
 	state->io.in.name            = iname->name;
-	l = str_list_make_single(state, iname->wins_server);
-	state->io.in.wins_servers    = discard_const_p(const char *, l);
+	state->io.in.wins_servers    = (const char **)str_list_make_single(state, iname->wins_server);
 	state->io.in.wins_port       = lpcfg_nbt_port(iface->nbtsrv->task->lp_ctx);
 	state->io.in.addresses       = nbtd_address_list(iface, state);
 	state->io.in.nb_flags        = iname->nb_flags;
@@ -196,7 +194,7 @@ static void nbtd_wins_register_handler(struct tevent_req *subreq)
 		/* none of the WINS servers responded - try again 
 		   periodically */
 		int wins_retry_time = lpcfg_parm_int(iname->iface->nbtsrv->task->lp_ctx, NULL, "nbtd", "wins_retry", 300);
-		tevent_add_timer(iname->iface->nbtsrv->task->event_ctx,
+		event_add_timed(iname->iface->nbtsrv->task->event_ctx, 
 				iname,
 				timeval_current_ofs(wins_retry_time, 0),
 				nbtd_wins_register_retry,

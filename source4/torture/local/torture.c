@@ -23,7 +23,6 @@
 #include "system/wait.h"
 #include "libcli/raw/libcliraw.h"
 #include "torture/util.h"
-#include "torture/local/proto.h"
 #include "param/provision.h"
 
 static bool test_tempdir(struct torture_context *tctx)
@@ -62,7 +61,6 @@ static bool test_provision(struct torture_context *tctx)
 	settings->netbios_name = "torture";
 	settings->ntds_dn_str = NULL;
 	settings->machine_password = "geheim";
-	settings->use_ntvfs = true;
 
 	status = provision_bare(settings, tctx->lp_ctx, settings, &result);
 			

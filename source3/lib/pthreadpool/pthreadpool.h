@@ -61,7 +61,7 @@ int pthreadpool_destroy(struct pthreadpool *pool);
  *
  * This adds a job to a pthreadpool. The job can be identified by
  * job_id. This integer will be returned from
- * pthreadpool_finished_jobs() then the job is completed.
+ * pthreadpool_finished_job() then the job is completed.
  *
  * @param[in]	pool		The pool to run the job on
  * @param[in]	job_id		A custom identifier
@@ -75,7 +75,7 @@ int pthreadpool_add_job(struct pthreadpool *pool, int job_id,
 /**
  * @brief Get the signalling fd from a pthreadpool
  *
- * Completion of a job is indicated by readability of the fd returned
+ * Completion of a job is indicated by readability of the fd retuned
  * by pthreadpool_signal_fd().
  *
  * @param[in]	pool		The pool in question
@@ -84,18 +84,15 @@ int pthreadpool_add_job(struct pthreadpool *pool, int job_id,
 int pthreadpool_signal_fd(struct pthreadpool *pool);
 
 /**
- * @brief Get the job_ids of finished jobs
+ * @brief Get the job_id of a finished job
  *
  * This blocks until a job has finished unless the fd returned by
  * pthreadpool_signal_fd() is readable.
  *
  * @param[in]	pool		The pool to query for finished jobs
- * @param[out]  jobids		The job_ids of the finished job
- * @param[int]  num_jobids      The job_ids array size
- * @return			success: >=0, number of finished jobs
- *                              failure: -errno
+ * @param[out]  pjobid		The job_id of the finished job
+ * @return			success: 0, failure: errno
  */
-int pthreadpool_finished_jobs(struct pthreadpool *pool, int *jobids,
-			      unsigned num_jobids);
+int pthreadpool_finished_job(struct pthreadpool *pool, int *jobid);
 
 #endif

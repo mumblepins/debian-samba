@@ -1,16 +1,16 @@
 #ifndef _TALLOC_H_
 #define _TALLOC_H_
-/*
+/* 
    Unix SMB/CIFS implementation.
    Samba temporary memory allocation functions
 
    Copyright (C) Andrew Tridgell 2004-2005
    Copyright (C) Stefan Metzmacher 2006
-
+   
      ** NOTE! The following LGPL license applies to the talloc
      ** library. This does NOT imply that all of Samba is released
      ** under the LGPL
-
+   
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
    License as published by the Free Software Foundation; either
@@ -193,11 +193,6 @@ void *talloc_init(const char *fmt, ...) PRINTF_ATTRIBUTE(1,2);
  * Please see the documentation for talloc_set_log_fn() and
  * talloc_set_log_stderr() for more information on talloc logging
  * functions.
- *
- * If <code>TALLOC_FREE_FILL</code> environment variable is set,
- * the memory occupied by the context is filled with the value of this variable.
- * The value should be a numeric representation of the character you want to
- * use.
  *
  * talloc_free() operates recursively on its children.
  *
@@ -761,11 +756,7 @@ type *talloc_get_type(const void *ptr, #type);
  */
 void *talloc_get_type_abort(const void *ptr, #type);
 #else
-#ifdef TALLOC_GET_TYPE_ABORT_NOOP
-#define talloc_get_type_abort(ptr, type) (type *)(ptr)
-#else
 #define talloc_get_type_abort(ptr, type) (type *)_talloc_get_type_abort(ptr, #type, __location__)
-#endif
 void *_talloc_get_type_abort(const void *ptr, const char *name, const char *location);
 #endif
 
@@ -831,10 +822,6 @@ void *talloc_find_parent_bytype(const void *ptr, #type);
  * recursively. If you use the child of the talloc pool as a parent for
  * grand-children, their memory is also taken from the talloc pool.
  *
- * If there is not enough memory in the pool to allocate the new child,
- * it will create a new talloc chunk as if the parent was a normal talloc
- * context.
- *
  * If you talloc_free() children of a talloc pool, the memory is not given
  * back to the system. Instead, free(3) is only called if the talloc_pool()
  * itself is released with talloc_free().
@@ -851,43 +838,6 @@ void *talloc_find_parent_bytype(const void *ptr, #type);
  */
 void *talloc_pool(const void *context, size_t size);
 
-#ifdef DOXYGEN
-/**
- * @brief Allocate a talloc object as/with an additional pool.
- *
- * This is like talloc_pool(), but's it's more flexible
- * and allows an object to be a pool for its children.
- *
- * @param[in] ctx                   The talloc context to hang the result off.
- *
- * @param[in] type                  The type that we want to allocate.
- *
- * @param[in] num_subobjects        The expected number of subobjects, which will
- *                                  be allocated within the pool. This allocates
- *                                  space for talloc_chunk headers.
- *
- * @param[in] total_subobjects_size The size that all subobjects can use in total.
- *
- *
- * @return              The allocated talloc object, NULL on error.
- */
-void *talloc_pooled_object(const void *ctx, #type,
-			   unsigned num_subobjects,
-			   size_t total_subobjects_size);
-#else
-#define talloc_pooled_object(_ctx, _type, \
-			     _num_subobjects, \
-			     _total_subobjects_size) \
-	(_type *)_talloc_pooled_object((_ctx), sizeof(_type), #_type, \
-					(_num_subobjects), \
-					(_total_subobjects_size))
-void *_talloc_pooled_object(const void *ctx,
-			    size_t type_size,
-			    const char *type_name,
-			    unsigned num_subobjects,
-			    size_t total_subobjects_size);
-#endif
-
 /**
  * @brief Free a talloc chunk and NULL out the pointer.
  *
@@ -897,7 +847,7 @@ void *_talloc_pooled_object(const void *ctx,
  *
  * @param[in]  ctx      The chunk to be freed.
  */
-#define TALLOC_FREE(ctx) do { if (ctx != NULL) { talloc_free(ctx); ctx=NULL; } } while(0)
+#define TALLOC_FREE(ctx) do { talloc_free(ctx); ctx=NULL; } while(0)
 
 /* @} ******************************************************************/
 
@@ -965,10 +915,6 @@ size_t talloc_reference_count(const void *ptr);
  * @return              The original pointer 'ptr', NULL if talloc ran out of
  *                      memory in creating the reference.
  *
- * @warning You should try to avoid using this interface. It turns a beautiful
- *          talloc-tree into a graph. It is often really hard to debug if you
- *          screw something up by accident.
- *
  * Example:
  * @code
  *      unsigned int *a, *b, *c;
@@ -1008,10 +954,6 @@ void *_talloc_reference_loc(const void *context, const void *ptr, const char *lo
  * @note If the parent has already been removed using talloc_free() then
  * this function will fail and will return -1.  Likewise, if ptr is NULL,
  * then the function will make no modifications and return -1.
- *
- * @warning You should try to avoid using this interface. It turns a beautiful
- *          talloc-tree into a graph. It is often really hard to debug if you
- *          screw something up by accident.
  *
  * Example:
  * @code
@@ -1348,64 +1290,28 @@ void *talloc_realloc_fn(const void *context, void *ptr, size_t size);
 char *talloc_strdup(const void *t, const char *p);
 
 /**
- * @brief Append a string to given string.
- *
- * The destination string is reallocated to take
- * <code>strlen(s) + strlen(a) + 1</code> characters.
- *
- * This functions sets the name of the new pointer to the new
- * string. This is equivalent to:
- *
- * @code
- *      talloc_set_name_const(ptr, ptr)
- * @endcode
- *
- * If <code>s == NULL</code> then new context is created.
+ * @brief Append a string to given string and duplicate the result.
  *
  * @param[in]  s        The destination to append to.
  *
  * @param[in]  a        The string you want to append.
  *
- * @return              The concatenated strings, NULL on error.
+ * @return              The duplicated string, NULL on error.
  *
  * @see talloc_strdup()
- * @see talloc_strdup_append_buffer()
  */
 char *talloc_strdup_append(char *s, const char *a);
 
 /**
- * @brief Append a string to a given buffer.
- *
- * This is a more efficient version of talloc_strdup_append(). It determines the
- * length of the destination string by the size of the talloc context.
- *
- * Use this very carefully as it produces a different result than
- * talloc_strdup_append() when a zero character is in the middle of the
- * destination string.
- *
- * @code
- *      char *str_a = talloc_strdup(NULL, "hello world");
- *      char *str_b = talloc_strdup(NULL, "hello world");
- *      str_a[5] = str_b[5] = '\0'
- *
- *      char *app = talloc_strdup_append(str_a, ", hello");
- *      char *buf = talloc_strdup_append_buffer(str_b, ", hello");
- *
- *      printf("%s\n", app); // hello, hello (app = "hello, hello")
- *      printf("%s\n", buf); // hello (buf = "hello\0world, hello")
- * @endcode
- *
- * If <code>s == NULL</code> then new context is created.
+ * @brief Append a string to a given buffer and duplicate the result.
  *
  * @param[in]  s        The destination buffer to append to.
  *
  * @param[in]  a        The string you want to append.
  *
- * @return              The concatenated strings, NULL on error.
+ * @return              The duplicated string, NULL on error.
  *
  * @see talloc_strdup()
- * @see talloc_strdup_append()
- * @see talloc_array_length()
  */
 char *talloc_strdup_append_buffer(char *s, const char *a);
 
@@ -1432,19 +1338,8 @@ char *talloc_strdup_append_buffer(char *s, const char *a);
 char *talloc_strndup(const void *t, const char *p, size_t n);
 
 /**
- * @brief Append at most n characters of a string to given string.
- *
- * The destination string is reallocated to take
- * <code>strlen(s) + strnlen(a, n) + 1</code> characters.
- *
- * This functions sets the name of the new pointer to the new
- * string. This is equivalent to:
- *
- * @code
- *      talloc_set_name_const(ptr, ptr)
- * @endcode
- *
- * If <code>s == NULL</code> then new context is created.
+ * @brief Append at most n characters of a string to given string and duplicate
+ *        the result.
  *
  * @param[in]  s        The destination string to append to.
  *
@@ -1453,36 +1348,15 @@ char *talloc_strndup(const void *t, const char *p, size_t n);
  * @param[in]  n        The number of characters you want to append from the
  *                      string.
  *
- * @return              The concatenated strings, NULL on error.
+ * @return              The duplicated string, NULL on error.
  *
  * @see talloc_strndup()
- * @see talloc_strndup_append_buffer()
  */
 char *talloc_strndup_append(char *s, const char *a, size_t n);
 
 /**
- * @brief Append at most n characters of a string to given buffer
- *
- * This is a more efficient version of talloc_strndup_append(). It determines
- * the length of the destination string by the size of the talloc context.
- *
- * Use this very carefully as it produces a different result than
- * talloc_strndup_append() when a zero character is in the middle of the
- * destination string.
- *
- * @code
- *      char *str_a = talloc_strdup(NULL, "hello world");
- *      char *str_b = talloc_strdup(NULL, "hello world");
- *      str_a[5] = str_b[5] = '\0'
- *
- *      char *app = talloc_strndup_append(str_a, ", hello", 7);
- *      char *buf = talloc_strndup_append_buffer(str_b, ", hello", 7);
- *
- *      printf("%s\n", app); // hello, hello (app = "hello, hello")
- *      printf("%s\n", buf); // hello (buf = "hello\0world, hello")
- * @endcode
- *
- * If <code>s == NULL</code> then new context is created.
+ * @brief Append at most n characters of a string to given buffer and duplicate
+ *        the result.
  *
  * @param[in]  s        The destination buffer to append to.
  *
@@ -1491,11 +1365,9 @@ char *talloc_strndup_append(char *s, const char *a, size_t n);
  * @param[in]  n        The number of characters you want to append from the
  *                      string.
  *
- * @return              The concatenated strings, NULL on error.
+ * @return              The duplicated string, NULL on error.
  *
  * @see talloc_strndup()
- * @see talloc_strndup_append()
- * @see talloc_array_length()
  */
 char *talloc_strndup_append_buffer(char *s, const char *a, size_t n);
 
@@ -1590,8 +1462,6 @@ char *talloc_asprintf(const void *t, const char *fmt, ...) PRINTF_ATTRIBUTE(2,3)
  *      talloc_set_name_const(ptr, ptr)
  * @endcode
  *
- * If <code>s == NULL</code> then new context is created.
- *
  * @param[in]  s        The string to append to.
  *
  * @param[in]  fmt      The format string.
@@ -1605,27 +1475,6 @@ char *talloc_asprintf_append(char *s, const char *fmt, ...) PRINTF_ATTRIBUTE(2,3
 /**
  * @brief Append a formatted string to another string.
  *
- * This is a more efficient version of talloc_asprintf_append(). It determines
- * the length of the destination string by the size of the talloc context.
- *
- * Use this very carefully as it produces a different result than
- * talloc_asprintf_append() when a zero character is in the middle of the
- * destination string.
- *
- * @code
- *      char *str_a = talloc_strdup(NULL, "hello world");
- *      char *str_b = talloc_strdup(NULL, "hello world");
- *      str_a[5] = str_b[5] = '\0'
- *
- *      char *app = talloc_asprintf_append(str_a, "%s", ", hello");
- *      char *buf = talloc_strdup_append_buffer(str_b, "%s", ", hello");
- *
- *      printf("%s\n", app); // hello, hello (app = "hello, hello")
- *      printf("%s\n", buf); // hello (buf = "hello\0world, hello")
- * @endcode
- *
- * If <code>s == NULL</code> then new context is created.
- *
  * @param[in]  s        The string to append to
  *
  * @param[in]  fmt      The format string.
@@ -1633,9 +1482,6 @@ char *talloc_asprintf_append(char *s, const char *fmt, ...) PRINTF_ATTRIBUTE(2,3
  * @param[in]  ...      The parameters used to fill fmt.
  *
  * @return              The formatted string, NULL on error.
- *
- * @see talloc_asprintf()
- * @see talloc_asprintf_append()
  */
 char *talloc_asprintf_append_buffer(char *s, const char *fmt, ...) PRINTF_ATTRIBUTE(2,3);
 
@@ -1839,77 +1685,11 @@ void talloc_enable_leak_report(void);
  */
 void talloc_enable_leak_report_full(void);
 
-/**
- * @brief Set a custom "abort" function that is called on serious error.
- *
- * The default "abort" function is <code>abort()</code>.
- *
- * The "abort" function is called when:
- *
- * <ul>
- *  <li>talloc_get_type_abort() fails</li>
- *  <li>the provided pointer is not a valid talloc context</li>
- *  <li>when the context meta data are invalid</li>
- *  <li>when access after free is detected</li>
- * </ul>
- *
- * Example:
- *
- * @code
- * void my_abort(const char *reason)
- * {
- *      fprintf(stderr, "talloc abort: %s\n", reason);
- *      abort();
- * }
- *
- *      talloc_set_abort_fn(my_abort);
- * @endcode
- *
- * @param[in]  abort_fn      The new "abort" function.
- *
- * @see talloc_set_log_fn()
- * @see talloc_get_type()
- */
-void talloc_set_abort_fn(void (*abort_fn)(const char *reason));
-
-/**
- * @brief Set a logging function.
- *
- * @param[in]  log_fn      The logging function.
- *
- * @see talloc_set_log_stderr()
- * @see talloc_set_abort_fn()
- */
-void talloc_set_log_fn(void (*log_fn)(const char *message));
-
-/**
- * @brief Set stderr as the output for logs.
- *
- * @see talloc_set_log_fn()
- * @see talloc_set_abort_fn()
- */
-void talloc_set_log_stderr(void);
-
-/**
- * @brief Set a max memory limit for the current context hierarchy
- *	  This affects all children of this context and constrain any
- *	  allocation in the hierarchy to never exceed the limit set.
- *	  The limit can be removed by setting 0 (unlimited) as the
- *	  max_size by calling the funciton again on the sam context.
- *	  Memory limits can also be nested, meaning a hild can have
- *	  a stricter memory limit than a parent.
- *	  Memory limits are enforced only at memory allocation time.
- *	  Stealing a context into a 'limited' hierarchy properly
- *	  updates memory usage but does *not* cause failure if the
- *	  move causes the new parent to exceed its limits. However
- *	  any further allocation on that hierarchy will then fail.
- *
- * @param[in]	ctx		The talloc context to set the limit on
- * @param[in]	max_size	The (new) max_size
- */
-int talloc_set_memlimit(const void *ctx, size_t max_size);
-
 /* @} ******************************************************************/
+
+void talloc_set_abort_fn(void (*abort_fn)(const char *reason));
+void talloc_set_log_fn(void (*log_fn)(const char *message));
+void talloc_set_log_stderr(void);
 
 #if TALLOC_DEPRECATED
 #define talloc_zero_p(ctx, type) talloc_zero(ctx, type)

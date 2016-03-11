@@ -21,16 +21,16 @@ enum acl_mode
 int main(int argc, const char *argv[])
 {
     int opt;
-    int flags = 0;
+    int flags;
     int debug = 0;
     int numeric = 0;
     int stat_and_retry = 0;
     int full_time_names = 0;
     enum acl_mode mode = SMB_ACL_LIST;
-    static const char *the_acl = NULL;
+    static char *the_acl = NULL;
     int ret;
     char *p;
-    const char *debugstr;
+    char *debugstr;
     char path[1024];
     char value[1024];
     poptContext pc;

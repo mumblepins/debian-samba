@@ -21,13 +21,10 @@
 #include "includes.h"
 #include "../lib/util/tevent_ntstatus.h"
 #include "libads/sitename_cache.h"
-#include "../lib/addns/dnsquery.h"
+#include "libads/dns.h"
 #include "../libcli/netlogon/netlogon.h"
 #include "lib/async_req/async_sock.h"
-#include "lib/tsocket/tsocket.h"
 #include "libsmb/nmblib.h"
-#include "../libcli/nbt/libnbt.h"
-#include "libads/kerberos_proto.h"
 
 /* nmbd.c sets this to True. */
 bool global_in_nmbd = False;
@@ -46,14 +43,22 @@ bool global_in_nmbd = False;
 #define SAFJOINKEY_FMT	"SAFJOIN/DOMAIN/%s"
 #define SAFJOIN_TTL	3600
 
-static char *saf_key(TALLOC_CTX *mem_ctx, const char *domain)
+static char *saf_key(const char *domain)
 {
-	return talloc_asprintf_strupper_m(mem_ctx, SAFKEY_FMT, domain);
+	char *keystr;
+
+	asprintf_strupper_m(&keystr, SAFKEY_FMT, domain);
+
+	return keystr;
 }
 
-static char *saf_join_key(TALLOC_CTX *mem_ctx, const char *domain)
+static char *saf_join_key(const char *domain)
 {
-	return talloc_asprintf_strupper_m(mem_ctx, SAFJOINKEY_FMT, domain);
+	char *keystr;
+
+	asprintf_strupper_m(&keystr, SAFJOINKEY_FMT, domain);
+
+	return keystr;
 }
 
 /****************************************************************************
@@ -77,11 +82,7 @@ bool saf_store( const char *domain, const char *servername )
 		return False;
 	}
 
-	key = saf_key(talloc_tos(), domain);
-	if (key == NULL) {
-		DEBUG(1, ("saf_key() failed\n"));
-		return false;
-	}
+	key = saf_key( domain );
 	expire = time( NULL ) + lp_parm_int(-1, "saf","ttl", SAF_TTL);
 
 	DEBUG(10,("saf_store: domain = [%s], server = [%s], expire = [%u]\n",
@@ -89,7 +90,7 @@ bool saf_store( const char *domain, const char *servername )
 
 	ret = gencache_set( key, servername, expire );
 
-	TALLOC_FREE( key );
+	SAFE_FREE( key );
 
 	return ret;
 }
@@ -110,11 +111,7 @@ bool saf_join_store( const char *domain, const char *servername )
 		return False;
 	}
 
-	key = saf_join_key(talloc_tos(), domain);
-	if (key == NULL) {
-		DEBUG(1, ("saf_join_key() failed\n"));
-		return false;
-	}
+	key = saf_join_key( domain );
 	expire = time( NULL ) + lp_parm_int(-1, "saf","join ttl", SAFJOIN_TTL);
 
 	DEBUG(10,("saf_join_store: domain = [%s], server = [%s], expire = [%u]\n",
@@ -122,7 +119,7 @@ bool saf_join_store( const char *domain, const char *servername )
 
 	ret = gencache_set( key, servername, expire );
 
-	TALLOC_FREE( key );
+	SAFE_FREE( key );
 
 	return ret;
 }
@@ -137,25 +134,17 @@ bool saf_delete( const char *domain )
 		return False;
 	}
 
-	key = saf_join_key(talloc_tos(), domain);
-	if (key == NULL) {
-		DEBUG(1, ("saf_join_key() failed\n"));
-		return false;
-	}
+	key = saf_join_key(domain);
 	ret = gencache_del(key);
-	TALLOC_FREE(key);
+	SAFE_FREE(key);
 
 	if (ret) {
 		DEBUG(10,("saf_delete[join]: domain = [%s]\n", domain ));
 	}
 
-	key = saf_key(talloc_tos(), domain);
-	if (key == NULL) {
-		DEBUG(1, ("saf_key() failed\n"));
-		return false;
-	}
+	key = saf_key(domain);
 	ret = gencache_del(key);
-	TALLOC_FREE(key);
+	SAFE_FREE(key);
 
 	if (ret) {
 		DEBUG(10,("saf_delete: domain = [%s]\n", domain ));
@@ -167,7 +156,7 @@ bool saf_delete( const char *domain )
 /****************************************************************************
 ****************************************************************************/
 
-char *saf_fetch(TALLOC_CTX *mem_ctx, const char *domain )
+char *saf_fetch( const char *domain )
 {
 	char *server = NULL;
 	time_t timeout;
@@ -179,15 +168,11 @@ char *saf_fetch(TALLOC_CTX *mem_ctx, const char *domain )
 		return NULL;
 	}
 
-	key = saf_join_key(talloc_tos(), domain);
-	if (key == NULL) {
-		DEBUG(1, ("saf_join_key() failed\n"));
-		return NULL;
-	}
+	key = saf_join_key( domain );
 
-	ret = gencache_get( key, mem_ctx, &server, &timeout );
+	ret = gencache_get( key, &server, &timeout );
 
-	TALLOC_FREE( key );
+	SAFE_FREE( key );
 
 	if ( ret ) {
 		DEBUG(5,("saf_fetch[join]: Returning \"%s\" for \"%s\" domain\n",
@@ -195,15 +180,11 @@ char *saf_fetch(TALLOC_CTX *mem_ctx, const char *domain )
 		return server;
 	}
 
-	key = saf_key(talloc_tos(), domain);
-	if (key == NULL) {
-		DEBUG(1, ("saf_key() failed\n"));
-		return NULL;
-	}
+	key = saf_key( domain );
 
-	ret = gencache_get( key, mem_ctx, &server, &timeout );
+	ret = gencache_get( key, &server, &timeout );
 
-	TALLOC_FREE( key );
+	SAFE_FREE( key );
 
 	if ( !ret ) {
 		DEBUG(5,("saf_fetch: failed to find server for \"%s\" domain\n",
@@ -216,35 +197,15 @@ char *saf_fetch(TALLOC_CTX *mem_ctx, const char *domain )
 	return server;
 }
 
-static void set_socket_addr_v4(struct sockaddr_storage *addr)
-{
-	if (!interpret_string_addr(addr, lp_nbt_client_socket_address(),
-				   AI_NUMERICHOST|AI_PASSIVE)) {
-		zero_sockaddr(addr);
-	}
-	if (addr->ss_family != AF_INET) {
-		zero_sockaddr(addr);
-	}
-}
-
-static struct in_addr my_socket_addr_v4(void)
-{
-	struct sockaddr_storage my_addr;
-	struct sockaddr_in *in_addr = (struct sockaddr_in *)((char *)&my_addr);
-
-	set_socket_addr_v4(&my_addr);
-	return in_addr->sin_addr;
-}
-
 /****************************************************************************
  Generate a random trn_id.
 ****************************************************************************/
 
 static int generate_trn_id(void)
 {
-	uint16_t id;
+	uint16 id;
 
-	generate_random_buffer((uint8_t *)&id, sizeof(id));
+	generate_random_buffer((uint8 *)&id, sizeof(id));
 
 	return id % (unsigned)0x7FFF;
 }
@@ -265,7 +226,7 @@ static struct node_status *parse_node_status(TALLOC_CTX *mem_ctx, char *p,
 	if (*num_names == 0)
 		return NULL;
 
-	ret = talloc_array(mem_ctx, struct node_status,*num_names);
+	ret = TALLOC_ARRAY(mem_ctx, struct node_status,*num_names);
 	if (!ret)
 		return NULL;
 
@@ -296,10 +257,11 @@ struct sock_packet_read_state {
 	struct nb_packet_reader *reader;
 	struct tevent_req *reader_req;
 
-	struct tdgram_context *sock;
+	int sock;
 	struct tevent_req *socket_req;
-	uint8_t *buf;
-	struct tsocket_address *addr;
+	uint8_t buf[1024];
+	struct sockaddr_storage addr;
+	socklen_t addr_len;
 
 	bool (*validator)(struct packet_struct *p,
 			  void *private_data);
@@ -315,7 +277,7 @@ static void sock_packet_read_got_socket(struct tevent_req *subreq);
 static struct tevent_req *sock_packet_read_send(
 	TALLOC_CTX *mem_ctx,
 	struct tevent_context *ev,
-	struct tdgram_context *sock,
+	int sock, /* dgram socket */
 	struct nb_packet_reader *reader,
 	enum packet_type type,
 	int trn_id,
@@ -348,7 +310,10 @@ static struct tevent_req *sock_packet_read_send(
 			state->reader_req, sock_packet_read_got_packet, req);
 	}
 
-	state->socket_req = tdgram_recvfrom_send(state, ev, state->sock);
+	state->addr_len = sizeof(state->addr);
+	state->socket_req = recvfrom_send(state, ev, sock,
+					  state->buf, sizeof(state->buf), 0,
+					  &state->addr, &state->addr_len);
 	if (tevent_req_nomem(state->socket_req, req)) {
 		return tevent_req_post(req, ev);
 	}
@@ -420,17 +385,11 @@ static void sock_packet_read_got_socket(struct tevent_req *subreq)
 		subreq, struct tevent_req);
 	struct sock_packet_read_state *state = tevent_req_data(
 		req, struct sock_packet_read_state);
-	union {
-		struct sockaddr sa;
-		struct sockaddr_in sin;
-	} addr;
-	ssize_t ret;
+	struct sockaddr_in *in_addr;
 	ssize_t received;
 	int err;
-	bool ok;
 
-	received = tdgram_recvfrom_recv(subreq, &err, state,
-					&state->buf, &state->addr);
+	received = recvfrom_recv(subreq, &err);
 
 	TALLOC_FREE(state->socket_req);
 
@@ -447,20 +406,13 @@ static void sock_packet_read_got_socket(struct tevent_req *subreq)
 		tevent_req_nterror(req, map_nt_error_from_unix(err));
 		return;
 	}
-	ok = tsocket_address_is_inet(state->addr, "ipv4");
-	if (!ok) {
+	if (state->addr.ss_family != AF_INET) {
 		goto retry;
 	}
-	ret = tsocket_address_bsd_sockaddr(state->addr,
-					   &addr.sa,
-					   sizeof(addr.sin));
-	if (ret == -1) {
-		tevent_req_nterror(req, map_nt_error_from_unix(errno));
-		return;
-	}
+	in_addr = (struct sockaddr_in *)(void *)&state->addr;
 
 	state->packet = parse_packet((char *)state->buf, received, state->type,
-				     addr.sin.sin_addr, addr.sin.sin_port);
+				     in_addr->sin_addr, in_addr->sin_port);
 	if (state->packet == NULL) {
 		DEBUG(10, ("parse_packet failed\n"));
 		goto retry;
@@ -486,10 +438,9 @@ retry:
 		free_packet(state->packet);
 		state->packet = NULL;
 	}
-	TALLOC_FREE(state->buf);
-	TALLOC_FREE(state->addr);
-
-	state->socket_req = tdgram_recvfrom_send(state, state->ev, state->sock);
+	state->socket_req = recvfrom_send(state, state->ev, state->sock,
+					  state->buf, sizeof(state->buf), 0,
+					  &state->addr, &state->addr_len);
 	if (tevent_req_nomem(state->socket_req, req)) {
 		return;
 	}
@@ -514,11 +465,10 @@ static NTSTATUS sock_packet_read_recv(struct tevent_req *req,
 
 struct nb_trans_state {
 	struct tevent_context *ev;
-	struct tdgram_context *sock;
+	int sock;
 	struct nb_packet_reader *reader;
 
-	struct tsocket_address *src_addr;
-	struct tsocket_address *dst_addr;
+	const struct sockaddr_storage *dst_addr;
 	uint8_t *buf;
 	size_t buflen;
 	enum packet_type type;
@@ -540,8 +490,8 @@ static void nb_trans_send_next(struct tevent_req *subreq);
 static struct tevent_req *nb_trans_send(
 	TALLOC_CTX *mem_ctx,
 	struct tevent_context *ev,
-	const struct sockaddr_storage *_my_addr,
-	const struct sockaddr_storage *_dst_addr,
+	const struct sockaddr_storage *my_addr,
+	const struct sockaddr_storage *dst_addr,
 	bool bcast,
 	uint8_t *buf, size_t buflen,
 	enum packet_type type, int trn_id,
@@ -549,15 +499,8 @@ static struct tevent_req *nb_trans_send(
 			  void *private_data),
 	void *private_data)
 {
-	const struct sockaddr *my_addr =
-		discard_const_p(const struct sockaddr, _my_addr);
-	size_t my_addr_len = sizeof(*_my_addr);
-	const struct sockaddr *dst_addr =
-		discard_const_p(const struct sockaddr, _dst_addr);
-	size_t dst_addr_len = sizeof(*_dst_addr);
 	struct tevent_req *req, *subreq;
 	struct nb_trans_state *state;
-	int ret;
 
 	req = tevent_req_create(mem_ctx, &state, struct nb_trans_state);
 	if (req == NULL) {
@@ -565,6 +508,7 @@ static struct tevent_req *nb_trans_send(
 	}
 	talloc_set_destructor(state, nb_trans_state_destructor);
 	state->ev = ev;
+	state->dst_addr = dst_addr;
 	state->buf = buf;
 	state->buflen = buflen;
 	state->type = type;
@@ -572,27 +516,15 @@ static struct tevent_req *nb_trans_send(
 	state->validator = validator;
 	state->private_data = private_data;
 
-	ret = tsocket_address_bsd_from_sockaddr(state,
-						my_addr, my_addr_len,
-						&state->src_addr);
-	if (ret == -1) {
+	state->sock = open_socket_in(SOCK_DGRAM, 0, 3, my_addr, True);
+	if (state->sock == -1) {
 		tevent_req_nterror(req, map_nt_error_from_unix(errno));
+		DEBUG(10, ("open_socket_in failed: %s\n", strerror(errno)));
 		return tevent_req_post(req, ev);
 	}
 
-	ret = tsocket_address_bsd_from_sockaddr(state,
-						dst_addr, dst_addr_len,
-						&state->dst_addr);
-	if (ret == -1) {
-		tevent_req_nterror(req, map_nt_error_from_unix(errno));
-		return tevent_req_post(req, ev);
-	}
-
-	ret = tdgram_inet_udp_broadcast_socket(state->src_addr, state,
-					       &state->sock);
-	if (ret == -1) {
-		tevent_req_nterror(req, map_nt_error_from_unix(errno));
-		return tevent_req_post(req, ev);
+	if (bcast) {
+		set_socket_options(state->sock,"SO_BROADCAST");
 	}
 
 	subreq = nb_packet_reader_send(state, ev, type, state->trn_id, NULL);
@@ -605,6 +537,10 @@ static struct tevent_req *nb_trans_send(
 
 static int nb_trans_state_destructor(struct nb_trans_state *s)
 {
+	if (s->sock != -1) {
+		close(s->sock);
+		s->sock = -1;
+	}
 	if (s->packet != NULL) {
 		free_packet(s->packet);
 		s->packet = NULL;
@@ -637,10 +573,8 @@ static void nb_trans_got_reader(struct tevent_req *subreq)
 	}
 	tevent_req_set_callback(subreq, nb_trans_done, req);
 
-	subreq = tdgram_sendto_send(state, state->ev,
-				    state->sock,
-				    state->buf, state->buflen,
-				    state->dst_addr);
+	subreq = sendto_send(state, state->ev, state->sock,
+			     state->buf, state->buflen, 0, state->dst_addr);
 	if (tevent_req_nomem(subreq, req)) {
 		return;
 	}
@@ -656,7 +590,7 @@ static void nb_trans_sent(struct tevent_req *subreq)
 	ssize_t sent;
 	int err;
 
-	sent = tdgram_sendto_recv(subreq, &err);
+	sent = sendto_recv(subreq, &err);
 	TALLOC_FREE(subreq);
 	if (sent == -1) {
 		DEBUG(10, ("sendto failed: %s\n", strerror(err)));
@@ -685,10 +619,8 @@ static void nb_trans_send_next(struct tevent_req *subreq)
 		tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
 		return;
 	}
-	subreq = tdgram_sendto_send(state, state->ev,
-				    state->sock,
-				    state->buf, state->buflen,
-				    state->dst_addr);
+	subreq = sendto_send(state, state->ev, state->sock,
+			     state->buf, state->buflen, 0, state->dst_addr);
 	if (tevent_req_nomem(subreq, req)) {
 		return;
 	}
@@ -773,7 +705,10 @@ struct tevent_req *node_status_query_send(TALLOC_CTX *mem_ctx,
 	in_addr = (struct sockaddr_in *)(void *)&state->addr;
 	in_addr->sin_port = htons(NMB_PORT);
 
-	set_socket_addr_v4(&state->my_addr);
+	if (!interpret_string_addr(&state->my_addr, lp_socket_address(),
+				   AI_NUMERICHOST|AI_PASSIVE)) {
+		zero_sockaddr(&state->my_addr);
+	}
 
 	ZERO_STRUCT(p);
 	nmb->header.name_trn_id = generate_trn_id();
@@ -898,7 +833,7 @@ NTSTATUS node_status_query(TALLOC_CTX *mem_ctx, struct nmb_name *name,
 	struct tevent_req *req;
 	NTSTATUS status = NT_STATUS_NO_MEMORY;
 
-	ev = samba_tevent_context_init(frame);
+	ev = tevent_context_init(frame);
 	if (ev == NULL) {
 		goto fail;
 	}
@@ -957,7 +892,10 @@ bool name_status_find(const char *q_name,
 		return false;
 	}
 
-	set_socket_addr_v4(&ss);
+	if (!interpret_string_addr(&ss, lp_socket_address(),
+				AI_NUMERICHOST|AI_PASSIVE)) {
+		zero_sockaddr(&ss);
+	}
 
 	/* W2K PDC's seem not to respond to '*'#0. JRA */
 	make_nmb_name(&nname, q_name, q_type);
@@ -1025,9 +963,9 @@ static int addr_compare(const struct sockaddr_storage *ss1,
 
 	for (i=0;i<num_interfaces;i++) {
 		const struct sockaddr_storage *pss = iface_n_bcast(i);
-		const unsigned char *p_ss1 = NULL;
-		const unsigned char *p_ss2 = NULL;
-		const unsigned char *p_if = NULL;
+		unsigned char *p_ss1 = NULL;
+		unsigned char *p_ss2 = NULL;
+		unsigned char *p_if = NULL;
 		size_t len = 0;
 		int bits1, bits2;
 
@@ -1036,21 +974,21 @@ static int addr_compare(const struct sockaddr_storage *ss1,
 			continue;
 		}
 		if (pss->ss_family == AF_INET) {
-			p_if = (const unsigned char *)
+			p_if = (unsigned char *)
 				&((const struct sockaddr_in *)pss)->sin_addr;
-			p_ss1 = (const unsigned char *)
+			p_ss1 = (unsigned char *)
 				&((const struct sockaddr_in *)ss1)->sin_addr;
-			p_ss2 = (const unsigned char *)
+			p_ss2 = (unsigned char *)
 				&((const struct sockaddr_in *)ss2)->sin_addr;
 			len = 4;
 		}
 #if defined(HAVE_IPV6)
 		if (pss->ss_family == AF_INET6) {
-			p_if = (const unsigned char *)
+			p_if = (unsigned char *)
 				&((const struct sockaddr_in6 *)pss)->sin6_addr;
-			p_ss1 = (const unsigned char *)
+			p_ss1 = (unsigned char *)
 				&((const struct sockaddr_in6 *)ss1)->sin6_addr;
-			p_ss2 = (const unsigned char *)
+			p_ss2 = (unsigned char *)
 				&((const struct sockaddr_in6 *)ss2)->sin6_addr;
 			len = 16;
 		}
@@ -1065,14 +1003,14 @@ static int addr_compare(const struct sockaddr_storage *ss1,
 	}
 
 	/* Bias towards directly reachable IPs */
-	if (iface_local((const struct sockaddr *)ss1)) {
+	if (iface_local((struct sockaddr *)ss1)) {
 		if (ss1->ss_family == AF_INET) {
 			max_bits1 += 32;
 		} else {
 			max_bits1 += 128;
 		}
 	}
-	if (iface_local((const struct sockaddr *)ss2)) {
+	if (iface_local((struct sockaddr *)ss2)) {
 		if (ss2->ss_family == AF_INET) {
 			max_bits2 += 32;
 		} else {
@@ -1086,7 +1024,7 @@ static int addr_compare(const struct sockaddr_storage *ss1,
  compare 2 ldap IPs by nearness to our interfaces - used in qsort
 *******************************************************************/
 
-static int ip_service_compare(struct ip_service *ss1, struct ip_service *ss2)
+int ip_service_compare(struct ip_service *ss1, struct ip_service *ss2)
 {
 	int result;
 
@@ -1133,7 +1071,7 @@ static void sort_service_list(struct ip_service *servlist, int count)
  Remove any duplicate address/port pairs in the list
  *********************************************************************/
 
-int remove_duplicate_addrs2(struct ip_service *iplist, int count )
+static int remove_duplicate_addrs2(struct ip_service *iplist, int count )
 {
 	int i, j;
 
@@ -1147,8 +1085,7 @@ int remove_duplicate_addrs2(struct ip_service *iplist, int count )
 		}
 
 		for ( j=i+1; j<count; j++ ) {
-			if (sockaddr_equal((struct sockaddr *)(void *)&iplist[i].ss,
-					   (struct sockaddr *)(void *)&iplist[j].ss) &&
+			if (sockaddr_equal((struct sockaddr *)&iplist[i].ss, (struct sockaddr *)&iplist[j].ss) &&
 					iplist[i].port == iplist[j].port) {
 				zero_sockaddr(&iplist[j].ss);
 			}
@@ -1174,7 +1111,7 @@ int remove_duplicate_addrs2(struct ip_service *iplist, int count )
 static bool prioritize_ipv4_list(struct ip_service *iplist, int count)
 {
 	TALLOC_CTX *frame = talloc_stackframe();
-	struct ip_service *iplist_new = talloc_array(frame, struct ip_service, count);
+	struct ip_service *iplist_new = TALLOC_ARRAY(frame, struct ip_service, count);
 	int i, j;
 
 	if (iplist_new == NULL) {
@@ -1264,7 +1201,10 @@ struct tevent_req *name_query_send(TALLOC_CTX *mem_ctx,
 	in_addr = (struct sockaddr_in *)(void *)&state->addr;
 	in_addr->sin_port = htons(NMB_PORT);
 
-	set_socket_addr_v4(&state->my_addr);
+	if (!interpret_string_addr(&state->my_addr, lp_socket_address(),
+				   AI_NUMERICHOST|AI_PASSIVE)) {
+		zero_sockaddr(&state->my_addr);
+	}
 
 	ZERO_STRUCT(p);
 	nmb->header.name_trn_id = generate_trn_id();
@@ -1374,7 +1314,7 @@ static bool name_query_validator(struct packet_struct *p, void *private_data)
 		return false;
 	}
 
-	tmp_addrs = talloc_realloc(
+	tmp_addrs = TALLOC_REALLOC_ARRAY(
 		state, state->addrs, struct sockaddr_storage,
 		state->num_addrs + nmb->answers->rdlength/6);
 	if (tmp_addrs == NULL) {
@@ -1404,8 +1344,8 @@ static bool name_query_validator(struct packet_struct *p, void *private_data)
 
 		for (j=0; j<state->num_addrs; j++) {
 			if (sockaddr_equal(
-				    (struct sockaddr *)(void *)&addr,
-				    (struct sockaddr *)(void *)&state->addrs[j])) {
+				    (struct sockaddr *)&addr,
+				    (struct sockaddr *)&state->addrs[j])) {
 				break;
 			}
 		}
@@ -1484,18 +1424,9 @@ NTSTATUS name_query_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
 		req, struct name_query_state);
 	NTSTATUS status;
 
-	if (tevent_req_is_nterror(req, &status)) {
-		if (state->bcast &&
-		    NT_STATUS_EQUAL(status, NT_STATUS_IO_TIMEOUT)) {
-			/*
-			 * In the broadcast case we collect replies until the
-			 * timeout.
-			 */
-			status = NT_STATUS_OK;
-		}
-		if (!NT_STATUS_IS_OK(status)) {
-			return status;
-		}
+	if (tevent_req_is_nterror(req, &status)
+	    && !NT_STATUS_EQUAL(status, NT_STATUS_IO_TIMEOUT)) {
+		return status;
 	}
 	if (state->num_addrs == 0) {
 		return NT_STATUS_NOT_FOUND;
@@ -1522,7 +1453,7 @@ NTSTATUS name_query(const char *name, int name_type,
 	struct timeval timeout;
 	NTSTATUS status = NT_STATUS_NO_MEMORY;
 
-	ev = samba_tevent_context_init(frame);
+	ev = tevent_context_init(frame);
 	if (ev == NULL) {
 		goto fail;
 	}
@@ -1592,314 +1523,15 @@ static bool convert_ss2service(struct ip_service **return_iplist,
 		(*return_iplist)[real_count].ss   = ss_list[i];
 		(*return_iplist)[real_count].port = PORT_NONE;
 		real_count++;
-	}
+        }
 
 	*pcount = real_count;
 	return true;
 }
 
-struct name_queries_state {
-	struct tevent_context *ev;
-	const char *name;
-	int name_type;
-	bool bcast;
-	bool recurse;
-	const struct sockaddr_storage *addrs;
-	int num_addrs;
-	int wait_msec;
-	int timeout_msec;
-
-	struct tevent_req **subreqs;
-	int num_received;
-	int num_sent;
-
-	int received_index;
-	struct sockaddr_storage *result_addrs;
-	int num_result_addrs;
-	uint8_t flags;
-};
-
-static void name_queries_done(struct tevent_req *subreq);
-static void name_queries_next(struct tevent_req *subreq);
-
-/*
- * Send a name query to multiple destinations with a wait time in between
- */
-
-static struct tevent_req *name_queries_send(
-	TALLOC_CTX *mem_ctx, struct tevent_context *ev,
-	const char *name, int name_type,
-	bool bcast, bool recurse,
-	const struct sockaddr_storage *addrs,
-	int num_addrs, int wait_msec, int timeout_msec)
-{
-	struct tevent_req *req, *subreq;
-	struct name_queries_state *state;
-
-	req = tevent_req_create(mem_ctx, &state,
-				struct name_queries_state);
-	if (req == NULL) {
-		return NULL;
-	}
-	state->ev = ev;
-	state->name = name;
-	state->name_type = name_type;
-	state->bcast = bcast;
-	state->recurse = recurse;
-	state->addrs = addrs;
-	state->num_addrs = num_addrs;
-	state->wait_msec = wait_msec;
-	state->timeout_msec = timeout_msec;
-
-	state->subreqs = talloc_zero_array(
-		state, struct tevent_req *, num_addrs);
-	if (tevent_req_nomem(state->subreqs, req)) {
-		return tevent_req_post(req, ev);
-	}
-	state->num_sent = 0;
-
-	subreq = name_query_send(
-		state->subreqs, state->ev, name, name_type, bcast, recurse,
-		&state->addrs[state->num_sent]);
-	if (tevent_req_nomem(subreq, req)) {
-		return tevent_req_post(req, ev);
-	}
-	if (!tevent_req_set_endtime(
-		    subreq, state->ev,
-		    timeval_current_ofs(0, state->timeout_msec * 1000))) {
-		tevent_req_oom(req);
-		return tevent_req_post(req, ev);
-	}
-	tevent_req_set_callback(subreq, name_queries_done, req);
-
-	state->subreqs[state->num_sent] = subreq;
-	state->num_sent += 1;
-
-	if (state->num_sent < state->num_addrs) {
-		subreq = tevent_wakeup_send(
-			state, state->ev,
-			timeval_current_ofs(0, state->wait_msec * 1000));
-		if (tevent_req_nomem(subreq, req)) {
-			return tevent_req_post(req, ev);
-		}
-		tevent_req_set_callback(subreq, name_queries_next, req);
-	}
-	return req;
-}
-
-static void name_queries_done(struct tevent_req *subreq)
-{
-	struct tevent_req *req = tevent_req_callback_data(
-		subreq, struct tevent_req);
-	struct name_queries_state *state = tevent_req_data(
-		req, struct name_queries_state);
-	int i;
-	NTSTATUS status;
-
-	status = name_query_recv(subreq, state, &state->result_addrs,
-				 &state->num_result_addrs, &state->flags);
-
-	for (i=0; i<state->num_sent; i++) {
-		if (state->subreqs[i] == subreq) {
-			break;
-		}
-	}
-	if (i == state->num_sent) {
-		tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
-		return;
-	}
-	TALLOC_FREE(state->subreqs[i]);
-
-	state->num_received += 1;
-
-	if (!NT_STATUS_IS_OK(status)) {
-
-		if (state->num_received >= state->num_addrs) {
-			tevent_req_nterror(req, status);
-			return;
-		}
-		/*
-		 * Still outstanding requests, just wait
-		 */
-		return;
-	}
-	state->received_index = i;
-	tevent_req_done(req);
-}
-
-static void name_queries_next(struct tevent_req *subreq)
-{
-	struct tevent_req *req = tevent_req_callback_data(
-		subreq, struct tevent_req);
-	struct name_queries_state *state = tevent_req_data(
-		req, struct name_queries_state);
-
-	if (!tevent_wakeup_recv(subreq)) {
-		tevent_req_nterror(req, NT_STATUS_INTERNAL_ERROR);
-		return;
-	}
-
-	subreq = name_query_send(
-		state->subreqs, state->ev,
-		state->name, state->name_type, state->bcast, state->recurse,
-		&state->addrs[state->num_sent]);
-	if (tevent_req_nomem(subreq, req)) {
-		return;
-	}
-	tevent_req_set_callback(subreq, name_queries_done, req);
-	if (!tevent_req_set_endtime(
-		    subreq, state->ev,
-		    timeval_current_ofs(0, state->timeout_msec * 1000))) {
-		tevent_req_oom(req);
-		return;
-	}
-	state->subreqs[state->num_sent] = subreq;
-	state->num_sent += 1;
-
-	if (state->num_sent < state->num_addrs) {
-		subreq = tevent_wakeup_send(
-			state, state->ev,
-			timeval_current_ofs(0, state->wait_msec * 1000));
-		if (tevent_req_nomem(subreq, req)) {
-			return;
-		}
-		tevent_req_set_callback(subreq, name_queries_next, req);
-	}
-}
-
-static NTSTATUS name_queries_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
-				  struct sockaddr_storage **result_addrs,
-				  int *num_result_addrs, uint8_t *flags,
-				  int *received_index)
-{
-	struct name_queries_state *state = tevent_req_data(
-		req, struct name_queries_state);
-	NTSTATUS status;
-
-	if (tevent_req_is_nterror(req, &status)) {
-		return status;
-	}
-
-	if (result_addrs != NULL) {
-		*result_addrs = talloc_move(mem_ctx, &state->result_addrs);
-	}
-	if (num_result_addrs != NULL) {
-		*num_result_addrs = state->num_result_addrs;
-	}
-	if (flags != NULL) {
-		*flags = state->flags;
-	}
-	if (received_index != NULL) {
-		*received_index = state->received_index;
-	}
-	return NT_STATUS_OK;
-}
-
 /********************************************************
  Resolve via "bcast" method.
 *********************************************************/
-
-struct name_resolve_bcast_state {
-	struct sockaddr_storage *addrs;
-	int num_addrs;
-};
-
-static void name_resolve_bcast_done(struct tevent_req *subreq);
-
-struct tevent_req *name_resolve_bcast_send(TALLOC_CTX *mem_ctx,
-					   struct tevent_context *ev,
-					   const char *name,
-					   int name_type)
-{
-	struct tevent_req *req, *subreq;
-	struct name_resolve_bcast_state *state;
-	struct sockaddr_storage *bcast_addrs;
-	int i, num_addrs, num_bcast_addrs;
-
-	req = tevent_req_create(mem_ctx, &state,
-				struct name_resolve_bcast_state);
-	if (req == NULL) {
-		return NULL;
-	}
-
-	if (lp_disable_netbios()) {
-		DEBUG(5, ("name_resolve_bcast(%s#%02x): netbios is disabled\n",
-			  name, name_type));
-		tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
-		return tevent_req_post(req, ev);
-	}
-
-	/*
-	 * "bcast" means do a broadcast lookup on all the local interfaces.
-	 */
-
-	DEBUG(3, ("name_resolve_bcast: Attempting broadcast lookup "
-		  "for name %s<0x%x>\n", name, name_type));
-
-	num_addrs = iface_count();
-	bcast_addrs = talloc_array(state, struct sockaddr_storage, num_addrs);
-	if (tevent_req_nomem(bcast_addrs, req)) {
-		return tevent_req_post(req, ev);
-	}
-
-	/*
-	 * Lookup the name on all the interfaces, return on
-	 * the first successful match.
-	 */
-	num_bcast_addrs = 0;
-
-	for (i=0; i<num_addrs; i++) {
-		const struct sockaddr_storage *pss = iface_n_bcast(i);
-
-		if (pss->ss_family != AF_INET) {
-			continue;
-		}
-		bcast_addrs[num_bcast_addrs] = *pss;
-		num_bcast_addrs += 1;
-	}
-
-	subreq = name_queries_send(state, ev, name, name_type, true, true,
-				   bcast_addrs, num_bcast_addrs, 0, 1000);
-	if (tevent_req_nomem(subreq, req)) {
-		return tevent_req_post(req, ev);
-	}
-	tevent_req_set_callback(subreq, name_resolve_bcast_done, req);
-	return req;
-}
-
-static void name_resolve_bcast_done(struct tevent_req *subreq)
-{
-	struct tevent_req *req = tevent_req_callback_data(
-		subreq, struct tevent_req);
-	struct name_resolve_bcast_state *state = tevent_req_data(
-		req, struct name_resolve_bcast_state);
-	NTSTATUS status;
-
-	status = name_queries_recv(subreq, state,
-				   &state->addrs, &state->num_addrs,
-				   NULL, NULL);
-	TALLOC_FREE(subreq);
-	if (tevent_req_nterror(req, status)) {
-		return;
-	}
-	tevent_req_done(req);
-}
-
-NTSTATUS name_resolve_bcast_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
-				 struct sockaddr_storage **addrs,
-				 int *num_addrs)
-{
-	struct name_resolve_bcast_state *state = tevent_req_data(
-		req, struct name_resolve_bcast_state);
-	NTSTATUS status;
-
-	if (tevent_req_is_nterror(req, &status)) {
-		return status;
-	}
-	*addrs = talloc_move(mem_ctx, &state->addrs);
-	*num_addrs = state->num_addrs;
-	return NT_STATUS_OK;
-}
 
 NTSTATUS name_resolve_bcast(const char *name,
 			int name_type,
@@ -1907,202 +1539,98 @@ NTSTATUS name_resolve_bcast(const char *name,
 			struct sockaddr_storage **return_iplist,
 			int *return_count)
 {
-	TALLOC_CTX *frame = talloc_stackframe();
-	struct tevent_context *ev;
-	struct tevent_req *req;
-	NTSTATUS status = NT_STATUS_NO_MEMORY;
+	int i;
+	int num_interfaces = iface_count();
+	struct sockaddr_storage *ss_list;
+	NTSTATUS status = NT_STATUS_NOT_FOUND;
 
-	ev = samba_tevent_context_init(frame);
-	if (ev == NULL) {
-		goto fail;
+	if (lp_disable_netbios()) {
+		DEBUG(5,("name_resolve_bcast(%s#%02x): netbios is disabled\n",
+					name, name_type));
+		return NT_STATUS_INVALID_PARAMETER;
 	}
-	req = name_resolve_bcast_send(frame, ev, name, name_type);
-	if (req == NULL) {
-		goto fail;
+
+	*return_iplist = NULL;
+	*return_count = 0;
+
+	/*
+	 * "bcast" means do a broadcast lookup on all the local interfaces.
+	 */
+
+	DEBUG(3,("name_resolve_bcast: Attempting broadcast lookup "
+		"for name %s<0x%x>\n", name, name_type));
+
+	/*
+	 * Lookup the name on all the interfaces, return on
+	 * the first successful match.
+	 */
+	for( i = num_interfaces-1; i >= 0; i--) {
+		const struct sockaddr_storage *pss = iface_n_bcast(i);
+
+		/* Done this way to fix compiler error on IRIX 5.x */
+		if (!pss) {
+			continue;
+		}
+		status = name_query(name, name_type, true, true, pss,
+				    talloc_tos(), &ss_list, return_count,
+				    NULL);
+		if (NT_STATUS_IS_OK(status)) {
+			goto success;
+		}
 	}
-	if (!tevent_req_poll_ntstatus(req, ev, &status)) {
-		goto fail;
-	}
-	status = name_resolve_bcast_recv(req, mem_ctx, return_iplist,
-					 return_count);
- fail:
-	TALLOC_FREE(frame);
+
+	/* failed - no response */
+
+	return status;
+
+success:
+	*return_iplist = ss_list;
 	return status;
 }
 
-struct query_wins_list_state {
-	struct tevent_context *ev;
-	const char *name;
-	uint8_t name_type;
-	struct in_addr *servers;
-	uint32_t num_servers;
-	struct sockaddr_storage server;
-	uint32_t num_sent;
+/********************************************************
+ Resolve via "wins" method.
+*********************************************************/
 
-	struct sockaddr_storage *addrs;
-	int num_addrs;
-	uint8_t flags;
-};
-
-static void query_wins_list_done(struct tevent_req *subreq);
-
-/*
- * Query a list of (replicating) wins servers in sequence, call them
- * dead if they don't reply
- */
-
-static struct tevent_req *query_wins_list_send(
-	TALLOC_CTX *mem_ctx, struct tevent_context *ev,
-	struct in_addr src_ip, const char *name, uint8_t name_type,
-	struct in_addr *servers, int num_servers)
+NTSTATUS resolve_wins(const char *name,
+		int name_type,
+		struct ip_service **return_iplist,
+		int *return_count)
 {
-	struct tevent_req *req, *subreq;
-	struct query_wins_list_state *state;
-
-	req = tevent_req_create(mem_ctx, &state,
-				struct query_wins_list_state);
-	if (req == NULL) {
-		return NULL;
-	}
-	state->ev = ev;
-	state->name = name;
-	state->name_type = name_type;
-	state->servers = servers;
-	state->num_servers = num_servers;
-
-	if (state->num_servers == 0) {
-		tevent_req_nterror(req, NT_STATUS_NOT_FOUND);
-		return tevent_req_post(req, ev);
-	}
-
-	in_addr_to_sockaddr_storage(
-		&state->server, state->servers[state->num_sent]);
-
-	subreq = name_query_send(state, state->ev,
-				 state->name, state->name_type,
-				 false, true, &state->server);
-	state->num_sent += 1;
-	if (tevent_req_nomem(subreq, req)) {
-		return tevent_req_post(req, ev);
-	}
-	if (!tevent_req_set_endtime(subreq, state->ev,
-				    timeval_current_ofs(2, 0))) {
-		tevent_req_oom(req);
-		return tevent_req_post(req, ev);
-	}
-	tevent_req_set_callback(subreq, query_wins_list_done, req);
-	return req;
-}
-
-static void query_wins_list_done(struct tevent_req *subreq)
-{
-	struct tevent_req *req = tevent_req_callback_data(
-		subreq, struct tevent_req);
-	struct query_wins_list_state *state = tevent_req_data(
-		req, struct query_wins_list_state);
-	NTSTATUS status;
-
-	status = name_query_recv(subreq, state,
-				 &state->addrs, &state->num_addrs,
-				 &state->flags);
-	TALLOC_FREE(subreq);
-	if (NT_STATUS_IS_OK(status)) {
-		tevent_req_done(req);
-		return;
-	}
-	if (!NT_STATUS_EQUAL(status, NT_STATUS_IO_TIMEOUT)) {
-		tevent_req_nterror(req, status);
-		return;
-	}
-	wins_srv_died(state->servers[state->num_sent-1],
-		      my_socket_addr_v4());
-
-	if (state->num_sent == state->num_servers) {
-		tevent_req_nterror(req, NT_STATUS_NOT_FOUND);
-		return;
-	}
-
-	in_addr_to_sockaddr_storage(
-		&state->server, state->servers[state->num_sent]);
-
-	subreq = name_query_send(state, state->ev,
-				 state->name, state->name_type,
-				 false, true, &state->server);
-	state->num_sent += 1;
-	if (tevent_req_nomem(subreq, req)) {
-		return;
-	}
-	if (!tevent_req_set_endtime(subreq, state->ev,
-				    timeval_current_ofs(2, 0))) {
-		tevent_req_oom(req);
-		return;
-	}
-	tevent_req_set_callback(subreq, query_wins_list_done, req);
-}
-
-static NTSTATUS query_wins_list_recv(struct tevent_req *req,
-				     TALLOC_CTX *mem_ctx,
-				     struct sockaddr_storage **addrs,
-				     int *num_addrs,
-				     uint8_t *flags)
-{
-	struct query_wins_list_state *state = tevent_req_data(
-		req, struct query_wins_list_state);
-	NTSTATUS status;
-
-	if (tevent_req_is_nterror(req, &status)) {
-		return status;
-	}
-	if (addrs != NULL) {
-		*addrs = talloc_move(mem_ctx, &state->addrs);
-	}
-	if (num_addrs != NULL) {
-		*num_addrs = state->num_addrs;
-	}
-	if (flags != NULL) {
-		*flags = state->flags;
-	}
-	return NT_STATUS_OK;
-}
-
-struct resolve_wins_state {
-	int num_sent;
-	int num_received;
-
-	struct sockaddr_storage *addrs;
-	int num_addrs;
-	uint8_t flags;
-};
-
-static void resolve_wins_done(struct tevent_req *subreq);
-
-struct tevent_req *resolve_wins_send(TALLOC_CTX *mem_ctx,
-				     struct tevent_context *ev,
-				     const char *name,
-				     int name_type)
-{
-	struct tevent_req *req, *subreq;
-	struct resolve_wins_state *state;
-	char **wins_tags = NULL;
-	struct sockaddr_storage src_ss;
+	int t, i;
+	char **wins_tags;
+	struct sockaddr_storage src_ss, *ss_list = NULL;
 	struct in_addr src_ip;
-	int i, num_wins_tags;
+	NTSTATUS status;
 
-	req = tevent_req_create(mem_ctx, &state,
-				struct resolve_wins_state);
-	if (req == NULL) {
-		return NULL;
+	if (lp_disable_netbios()) {
+		DEBUG(5,("resolve_wins(%s#%02x): netbios is disabled\n",
+					name, name_type));
+		return NT_STATUS_INVALID_PARAMETER;
 	}
+
+	*return_iplist = NULL;
+	*return_count = 0;
+
+	DEBUG(3,("resolve_wins: Attempting wins lookup for name %s<0x%x>\n",
+				name, name_type));
 
 	if (wins_srv_count() < 1) {
 		DEBUG(3,("resolve_wins: WINS server resolution selected "
 			"and no WINS servers listed.\n"));
-		tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
-		goto fail;
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	/* we try a lookup on each of the WINS tags in turn */
+	wins_tags = wins_srv_tags();
+
+	if (!wins_tags) {
+		/* huh? no tags?? give up in disgust */
+		return NT_STATUS_INVALID_PARAMETER;
 	}
 
 	/* the address we will be sending from */
-	if (!interpret_string_addr(&src_ss, lp_nbt_client_socket_address(),
+	if (!interpret_string_addr(&src_ss, lp_socket_address(),
 				AI_NUMERICHOST|AI_PASSIVE)) {
 		zero_sockaddr(&src_ss);
 	}
@@ -2113,164 +1641,80 @@ struct tevent_req *resolve_wins_send(TALLOC_CTX *mem_ctx,
 		DEBUG(3,("resolve_wins: cannot receive WINS replies "
 			"on IPv6 address %s\n",
 			addr));
-		tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
-		goto fail;
+		wins_srv_tags_free(wins_tags);
+		return NT_STATUS_INVALID_PARAMETER;
 	}
 
-	src_ip = ((const struct sockaddr_in *)(void *)&src_ss)->sin_addr;
+	src_ip = ((struct sockaddr_in *)&src_ss)->sin_addr;
 
-	wins_tags = wins_srv_tags();
-	if (wins_tags == NULL) {
-		tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
-		goto fail;
-	}
+	/* in the worst case we will try every wins server with every
+	   tag! */
+	for (t=0; wins_tags && wins_tags[t]; t++) {
+		int srv_count = wins_srv_count_tag(wins_tags[t]);
+		for (i=0; i<srv_count; i++) {
+			struct sockaddr_storage wins_ss;
+			struct in_addr wins_ip;
 
-	num_wins_tags = 0;
-	while (wins_tags[num_wins_tags] != NULL) {
-		num_wins_tags += 1;
-	}
-
-	for (i=0; i<num_wins_tags; i++) {
-		int num_servers, num_alive;
-		struct in_addr *servers, *alive;
-		int j;
-
-		if (!wins_server_tag_ips(wins_tags[i], talloc_tos(),
-					 &servers, &num_servers)) {
-			DEBUG(10, ("wins_server_tag_ips failed for tag %s\n",
-				   wins_tags[i]));
-			continue;
-		}
-
-		alive = talloc_array(state, struct in_addr, num_servers);
-		if (tevent_req_nomem(alive, req)) {
-			goto fail;
-		}
-
-		num_alive = 0;
-		for (j=0; j<num_servers; j++) {
-			struct in_addr wins_ip = servers[j];
+			wins_ip = wins_srv_ip_tag(wins_tags[t], src_ip);
 
 			if (global_in_nmbd && ismyip_v4(wins_ip)) {
 				/* yikes! we'll loop forever */
 				continue;
 			}
+
 			/* skip any that have been unresponsive lately */
 			if (wins_srv_is_dead(wins_ip, src_ip)) {
 				continue;
 			}
-			DEBUG(3, ("resolve_wins: using WINS server %s "
-				 "and tag '%s'\n",
-				  inet_ntoa(wins_ip), wins_tags[i]));
-			alive[num_alive] = wins_ip;
-			num_alive += 1;
-		}
-		TALLOC_FREE(servers);
 
-		if (num_alive == 0) {
-			continue;
-		}
+			DEBUG(3,("resolve_wins: using WINS server %s "
+				"and tag '%s'\n",
+				inet_ntoa(wins_ip), wins_tags[t]));
 
-		subreq = query_wins_list_send(
-			state, ev, src_ip, name, name_type,
-			alive, num_alive);
-		if (tevent_req_nomem(subreq, req)) {
-			goto fail;
-		}
-		tevent_req_set_callback(subreq, resolve_wins_done, req);
-		state->num_sent += 1;
-	}
+			in_addr_to_sockaddr_storage(&wins_ss, wins_ip);
+			status = name_query(name,
+						name_type,
+						false,
+						true,
+						&wins_ss,
+						talloc_tos(),
+						&ss_list,
+						return_count,
+						NULL);
 
-	if (state->num_sent == 0) {
-		tevent_req_nterror(req, NT_STATUS_NOT_FOUND);
-		goto fail;
+			/* exit loop if we got a list of addresses */
+
+			if (NT_STATUS_IS_OK(status)) {
+				goto success;
+			}
+
+			if (NT_STATUS_EQUAL(status,
+					    NT_STATUS_IO_TIMEOUT)) {
+				/* Timed out waiting for WINS server to
+				 * respond.
+				 * Mark it dead. */
+				wins_srv_died(wins_ip, src_ip);
+			} else {
+				/* The name definitely isn't in this
+				   group of WINS servers.
+				   goto the next group  */
+				break;
+			}
+		}
 	}
 
 	wins_srv_tags_free(wins_tags);
-	return req;
-fail:
+	return NT_STATUS_NO_LOGON_SERVERS;
+
+success:
+
+	status = NT_STATUS_OK;
+	if (!convert_ss2service(return_iplist, ss_list, return_count))
+		status = NT_STATUS_INVALID_PARAMETER;
+
+	TALLOC_FREE(ss_list);
 	wins_srv_tags_free(wins_tags);
-	return tevent_req_post(req, ev);
-}
 
-static void resolve_wins_done(struct tevent_req *subreq)
-{
-	struct tevent_req *req = tevent_req_callback_data(
-		subreq, struct tevent_req);
-	struct resolve_wins_state *state = tevent_req_data(
-		req, struct resolve_wins_state);
-	NTSTATUS status;
-
-	status = query_wins_list_recv(subreq, state, &state->addrs,
-				      &state->num_addrs, &state->flags);
-	if (NT_STATUS_IS_OK(status)) {
-		tevent_req_done(req);
-		return;
-	}
-
-	state->num_received += 1;
-
-	if (state->num_received < state->num_sent) {
-		/*
-		 * Wait for the others
-		 */
-		return;
-	}
-	tevent_req_nterror(req, status);
-}
-
-NTSTATUS resolve_wins_recv(struct tevent_req *req, TALLOC_CTX *mem_ctx,
-			   struct sockaddr_storage **addrs,
-			   int *num_addrs, uint8_t *flags)
-{
-	struct resolve_wins_state *state = tevent_req_data(
-		req, struct resolve_wins_state);
-	NTSTATUS status;
-
-	if (tevent_req_is_nterror(req, &status)) {
-		return status;
-	}
-	if (addrs != NULL) {
-		*addrs = talloc_move(mem_ctx, &state->addrs);
-	}
-	if (num_addrs != NULL) {
-		*num_addrs = state->num_addrs;
-	}
-	if (flags != NULL) {
-		*flags = state->flags;
-	}
-	return NT_STATUS_OK;
-}
-
-/********************************************************
- Resolve via "wins" method.
-*********************************************************/
-
-NTSTATUS resolve_wins(const char *name,
-		int name_type,
-		TALLOC_CTX *mem_ctx,
-		struct sockaddr_storage **return_iplist,
-		int *return_count)
-{
-	struct tevent_context *ev;
-	struct tevent_req *req;
-	NTSTATUS status = NT_STATUS_NO_MEMORY;
-
-	ev = samba_tevent_context_init(talloc_tos());
-	if (ev == NULL) {
-		goto fail;
-	}
-	req = resolve_wins_send(ev, ev, name, name_type);
-	if (req == NULL) {
-		goto fail;
-	}
-	if (!tevent_req_poll_ntstatus(req, ev, &status)) {
-		goto fail;
-	}
-	status = resolve_wins_recv(req, mem_ctx, return_iplist, return_count,
-				   NULL);
-fail:
-	TALLOC_FREE(ev);
 	return status;
 }
 
@@ -2440,32 +1884,24 @@ static NTSTATUS resolve_ads(const char *name,
 	}
 
 	/* The DNS code needs fixing to find IPv6 addresses... JRA. */
+
 	switch (name_type) {
 		case 0x1b:
 			DEBUG(5,("resolve_ads: Attempting to resolve "
 				 "PDC for %s using DNS\n", name));
-			status = ads_dns_query_pdc(ctx,
-						   name,
-						   &dcs,
-						   &numdcs);
+			status = ads_dns_query_pdc(ctx, name, &dcs, &numdcs);
 			break;
 
 		case 0x1c:
 			DEBUG(5,("resolve_ads: Attempting to resolve "
 				 "DCs for %s using DNS\n", name));
-			status = ads_dns_query_dcs(ctx,
-						   name,
-						   sitename,
-						   &dcs,
+			status = ads_dns_query_dcs(ctx, name, sitename, &dcs,
 						   &numdcs);
 			break;
 		case KDC_NAME_TYPE:
 			DEBUG(5,("resolve_ads: Attempting to resolve "
 				 "KDCs for %s using DNS\n", name));
-			status = ads_dns_query_kdcs(ctx,
-						    name,
-						    sitename,
-						    &dcs,
+			status = ads_dns_query_kdcs(ctx, name, sitename, &dcs,
 						    &numdcs);
 			break;
 		default:
@@ -2476,13 +1912,6 @@ static NTSTATUS resolve_ads(const char *name,
 	if ( !NT_STATUS_IS_OK( status ) ) {
 		talloc_destroy(ctx);
 		return status;
-	}
-
-	if (numdcs == 0) {
-		*return_iplist = NULL;
-		*return_count = 0;
-		talloc_destroy(ctx);
-		return NT_STATUS_OK;
 	}
 
 	for (i=0;i<numdcs;i++) {
@@ -2582,38 +2011,6 @@ static NTSTATUS resolve_ads(const char *name,
 	return NT_STATUS_OK;
 }
 
-static const char **filter_out_nbt_lookup(TALLOC_CTX *mem_ctx,
-					  const char **resolve_order)
-{
-	size_t i, len, result_idx;
-	const char **result;
-
-	len = 0;
-	while (resolve_order[len] != NULL) {
-		len += 1;
-	}
-
-	result = talloc_array(mem_ctx, const char *, len+1);
-	if (result == NULL) {
-		return NULL;
-	}
-
-	result_idx = 0;
-
-	for (i=0; i<len; i++) {
-		const char *tok = resolve_order[i];
-
-		if (strequal(tok, "lmhosts") || strequal(tok, "wins") ||
-		    strequal(tok, "bcast")) {
-			continue;
-		}
-		result[result_idx++] = tok;
-	}
-	result[result_idx] = NULL;
-
-	return result;
-}
-
 /*******************************************************************
  Internal interface to resolve a name into an IP address.
  Use this function if the string is either an IP address, DNS
@@ -2630,9 +2027,10 @@ NTSTATUS internal_resolve_name(const char *name,
 				const char *sitename,
 				struct ip_service **return_iplist,
 				int *return_count,
-				const char **resolve_order)
+				const char *resolve_order)
 {
-	const char *tok;
+	char *tok;
+	const char *ptr;
 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
 	int i;
 	TALLOC_CTX *frame = NULL;
@@ -2685,35 +2083,21 @@ NTSTATUS internal_resolve_name(const char *name,
 
 	/* set the name resolution order */
 
-	if (resolve_order && strcmp(resolve_order[0], "NULL") == 0) {
+	if (strcmp( resolve_order, "NULL") == 0) {
 		DEBUG(8,("internal_resolve_name: all lookups disabled\n"));
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
-	if (!resolve_order || !resolve_order[0]) {
-		static const char *host_order[] = { "host", NULL };
-		resolve_order = host_order;
-	}
-
-	frame = talloc_stackframe();
-
-	if ((strlen(name) > MAX_NETBIOSNAME_LEN - 1) ||
-	    (strchr(name, '.') != NULL)) {
-		/*
-		 * Don't do NBT lookup, the name would not fit anyway
-		 */
-		resolve_order = filter_out_nbt_lookup(frame, resolve_order);
-		if (resolve_order == NULL) {
-			TALLOC_FREE(frame);
-			return NT_STATUS_NO_MEMORY;
-		}
+	if (!resolve_order[0]) {
+		ptr = "host";
+	} else {
+		ptr = resolve_order;
 	}
 
 	/* iterate through the name resolution backends */
 
-	for (i=0; resolve_order[i]; i++) {
-		tok = resolve_order[i];
-
+	frame = talloc_stackframe();
+	while (next_token_talloc(frame, &ptr, &tok, LIST_SEP)) {
 		if((strequal(tok, "host") || strequal(tok, "hosts"))) {
 			status = resolve_hosts(name, name_type, return_iplist,
 					       return_count);
@@ -2739,30 +2123,23 @@ NTSTATUS internal_resolve_name(const char *name,
 			if (NT_STATUS_IS_OK(status)) {
 				goto done;
 			}
-		} else if (strequal(tok, "lmhosts")) {
+		} else if(strequal( tok, "lmhosts")) {
 			status = resolve_lmhosts(name, name_type,
 						 return_iplist, return_count);
 			if (NT_STATUS_IS_OK(status)) {
 				goto done;
 			}
-		} else if (strequal(tok, "wins")) {
+		} else if(strequal( tok, "wins")) {
 			/* don't resolve 1D via WINS */
-			struct sockaddr_storage *ss_list;
 			if (name_type != 0x1D) {
 				status = resolve_wins(name, name_type,
-						      talloc_tos(),
-						      &ss_list,
+						      return_iplist,
 						      return_count);
 				if (NT_STATUS_IS_OK(status)) {
-					if (!convert_ss2service(return_iplist,
-								ss_list,
-								return_count)) {
-						status = NT_STATUS_NO_MEMORY;
-					}
 					goto done;
 				}
 			}
-		} else if (strequal(tok, "bcast")) {
+		} else if(strequal( tok, "bcast")) {
 			struct sockaddr_storage *ss_list;
 			status = name_resolve_bcast(
 				name, name_type, talloc_tos(),
@@ -2852,28 +2229,26 @@ bool resolve_name(const char *name,
 	struct ip_service *ss_list = NULL;
 	char *sitename = NULL;
 	int count = 0;
-	NTSTATUS status;
 
 	if (is_ipaddress(name)) {
 		return interpret_string_addr(return_ss, name, AI_NUMERICHOST);
 	}
 
-	sitename = sitename_fetch(talloc_tos(), lp_realm()); /* wild guess */
+	sitename = sitename_fetch(lp_realm()); /* wild guess */
 
-	status = internal_resolve_name(name, name_type, sitename,
-				       &ss_list, &count,
-				       lp_name_resolve_order());
-	if (NT_STATUS_IS_OK(status)) {
+	if (NT_STATUS_IS_OK(internal_resolve_name(name, name_type, sitename,
+						  &ss_list, &count,
+						  lp_name_resolve_order()))) {
 		int i;
 
 		if (prefer_ipv4) {
 			for (i=0; i<count; i++) {
 				if (!is_zero_addr(&ss_list[i].ss) &&
-				    !is_broadcast_addr((struct sockaddr *)(void *)&ss_list[i].ss) &&
+						!is_broadcast_addr((struct sockaddr *)&ss_list[i].ss) &&
 						(ss_list[i].ss.ss_family == AF_INET)) {
 					*return_ss = ss_list[i].ss;
 					SAFE_FREE(ss_list);
-					TALLOC_FREE(sitename);
+					SAFE_FREE(sitename);
 					return True;
 				}
 			}
@@ -2882,17 +2257,17 @@ bool resolve_name(const char *name,
 		/* only return valid addresses for TCP connections */
 		for (i=0; i<count; i++) {
 			if (!is_zero_addr(&ss_list[i].ss) &&
-			    !is_broadcast_addr((struct sockaddr *)(void *)&ss_list[i].ss)) {
+					!is_broadcast_addr((struct sockaddr *)&ss_list[i].ss)) {
 				*return_ss = ss_list[i].ss;
 				SAFE_FREE(ss_list);
-				TALLOC_FREE(sitename);
+				SAFE_FREE(sitename);
 				return True;
 			}
 		}
 	}
 
 	SAFE_FREE(ss_list);
-	TALLOC_FREE(sitename);
+	SAFE_FREE(sitename);
 	return False;
 }
 
@@ -2920,7 +2295,7 @@ NTSTATUS resolve_name_list(TALLOC_CTX *ctx,
 	*return_ss_arr = NULL;
 
 	if (is_ipaddress(name)) {
-		*return_ss_arr = talloc(ctx, struct sockaddr_storage);
+		*return_ss_arr = TALLOC_P(ctx, struct sockaddr_storage);
 		if (!*return_ss_arr) {
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -2932,12 +2307,12 @@ NTSTATUS resolve_name_list(TALLOC_CTX *ctx,
 		return NT_STATUS_OK;
 	}
 
-	sitename = sitename_fetch(ctx, lp_realm()); /* wild guess */
+	sitename = sitename_fetch(lp_realm()); /* wild guess */
 
 	status = internal_resolve_name(name, name_type, sitename,
 						  &ss_list, &count,
 						  lp_name_resolve_order());
-	TALLOC_FREE(sitename);
+	SAFE_FREE(sitename);
 
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
@@ -2946,7 +2321,7 @@ NTSTATUS resolve_name_list(TALLOC_CTX *ctx,
 	/* only return valid addresses for TCP connections */
 	for (i=0, num_entries = 0; i<count; i++) {
 		if (!is_zero_addr(&ss_list[i].ss) &&
-		    !is_broadcast_addr((struct sockaddr *)(void *)&ss_list[i].ss)) {
+				!is_broadcast_addr((struct sockaddr *)&ss_list[i].ss)) {
 			num_entries++;
 		}
 	}
@@ -2955,7 +2330,7 @@ NTSTATUS resolve_name_list(TALLOC_CTX *ctx,
 		return NT_STATUS_BAD_NETWORK_NAME;
 	}
 
-	*return_ss_arr = talloc_array(ctx,
+	*return_ss_arr = TALLOC_ARRAY(ctx,
 				struct sockaddr_storage,
 				num_entries);
 	if (!(*return_ss_arr)) {
@@ -2965,7 +2340,7 @@ NTSTATUS resolve_name_list(TALLOC_CTX *ctx,
 
 	for (i=0, num_entries = 0; i<count; i++) {
 		if (!is_zero_addr(&ss_list[i].ss) &&
-		    !is_broadcast_addr((struct sockaddr *)(void *)&ss_list[i].ss)) {
+				!is_broadcast_addr((struct sockaddr *)&ss_list[i].ss)) {
 			(*return_ss_arr)[num_entries++] = ss_list[i].ss;
 		}
 	}
@@ -3022,12 +2397,12 @@ bool get_pdc_ip(const char *domain, struct sockaddr_storage *pss)
 	struct ip_service *ip_list = NULL;
 	int count = 0;
 	NTSTATUS status = NT_STATUS_DOMAIN_CONTROLLER_NOT_FOUND;
-	static const char *ads_order[] = { "ads", NULL };
+
 	/* Look up #1B name */
 
 	if (lp_security() == SEC_ADS) {
 		status = internal_resolve_name(domain, 0x1b, NULL, &ip_list,
-					       &count, ads_order);
+					       &count, "ads");
 	}
 
 	if (!NT_STATUS_IS_OK(status) || count == 0) {
@@ -3035,7 +2410,6 @@ bool get_pdc_ip(const char *domain, struct sockaddr_storage *pss)
 					       &count,
 					       lp_name_resolve_order());
 		if (!NT_STATUS_IS_OK(status)) {
-			SAFE_FREE(ip_list);
 			return false;
 		}
 	}
@@ -3069,7 +2443,7 @@ static NTSTATUS get_dc_list(const char *domain,
 			enum dc_lookup_type lookup_type,
 			bool *ordered)
 {
-	const char **resolve_order = NULL;
+	char *resolve_order = NULL;
 	char *saf_servername = NULL;
 	char *pserver = NULL;
 	const char *p;
@@ -3084,7 +2458,6 @@ static NTSTATUS get_dc_list(const char *domain,
 	int auto_count = 0;
 	NTSTATUS status;
 	TALLOC_CTX *ctx = talloc_init("get_dc_list");
-	int auto_name_type = 0x1C;
 
 	*ip_list = NULL;
 	*count = 0;
@@ -3101,50 +2474,59 @@ static NTSTATUS get_dc_list(const char *domain,
 	   are disabled and ads_only is True, then set the string to
 	   NULL. */
 
-	resolve_order = lp_name_resolve_order();
+	resolve_order = talloc_strdup(ctx, lp_name_resolve_order());
 	if (!resolve_order) {
 		status = NT_STATUS_NO_MEMORY;
 		goto out;
 	}
+	strlower_m(resolve_order);
 	if (lookup_type == DC_ADS_ONLY)  {
-		if (str_list_check_ci(resolve_order, "host")) {
-			static const char *ads_order[] = { "ads", NULL };
-			resolve_order = ads_order;
+		if (strstr( resolve_order, "host")) {
+			resolve_order = talloc_strdup(ctx, "ads");
 
 			/* DNS SRV lookups used by the ads resolver
 			   are already sorted by priority and weight */
 			*ordered = true;
 		} else {
-			/* this is quite bizarre! */
-			static const char *null_order[] = { "NULL", NULL };
-                        resolve_order = null_order;
+                        resolve_order = talloc_strdup(ctx, "NULL");
 		}
 	} else if (lookup_type == DC_KDC_ONLY) {
-		static const char *kdc_order[] = { "kdc", NULL };
 		/* DNS SRV lookups used by the ads/kdc resolver
 		   are already sorted by priority and weight */
 		*ordered = true;
-		resolve_order = kdc_order;
-		auto_name_type = KDC_NAME_TYPE;
+		resolve_order = talloc_strdup(ctx, "kdc");
+	}
+	if (!resolve_order) {
+		status = NT_STATUS_NO_MEMORY;
+		goto out;
 	}
 
 	/* fetch the server we have affinity for.  Add the
 	   'password server' list to a search for our domain controllers */
 
-	saf_servername = saf_fetch(ctx, domain);
+	saf_servername = saf_fetch( domain);
 
 	if (strequal(domain, lp_workgroup()) || strequal(domain, lp_realm())) {
 		pserver = talloc_asprintf(ctx, "%s, %s",
 			saf_servername ? saf_servername : "",
-			lp_password_server());
+			lp_passwordserver());
 	} else {
 		pserver = talloc_asprintf(ctx, "%s, *",
 			saf_servername ? saf_servername : "");
 	}
 
-	TALLOC_FREE(saf_servername);
+	SAFE_FREE(saf_servername);
 	if (!pserver) {
 		status = NT_STATUS_NO_MEMORY;
+		goto out;
+	}
+
+	/* if we are starting from scratch, just lookup DOMAIN<0x1c> */
+
+	if (!*pserver ) {
+		DEBUG(10,("get_dc_list: no preferred domain controllers.\n"));
+		status = internal_resolve_name(domain, 0x1C, sitename, ip_list,
+					     count, resolve_order);
 		goto out;
 	}
 
@@ -3160,8 +2542,7 @@ static NTSTATUS get_dc_list(const char *domain,
 	p = pserver;
 	while (next_token_talloc(ctx, &p, &name, LIST_SEP)) {
 		if (!done_auto_lookup && strequal(name, "*")) {
-			status = internal_resolve_name(domain, auto_name_type,
-						       sitename,
+			status = internal_resolve_name(domain, 0x1C, sitename,
 						       &auto_ip_list,
 						       &auto_count,
 						       resolve_order);
@@ -3179,14 +2560,13 @@ static NTSTATUS get_dc_list(const char *domain,
 	/* if we have no addresses and haven't done the auto lookup, then
 	   just return the list of DC's.  Or maybe we just failed. */
 
-	if (num_addresses == 0) {
+	if ((num_addresses == 0)) {
 		if (done_auto_lookup) {
 			DEBUG(4,("get_dc_list: no servers found\n"));
 			status = NT_STATUS_NO_LOGON_SERVERS;
 			goto out;
 		}
-		status = internal_resolve_name(domain, auto_name_type,
-					       sitename, ip_list,
+		status = internal_resolve_name(domain, 0x1C, sitename, ip_list,
 					     count, resolve_order);
 		goto out;
 	}
@@ -3238,19 +2618,13 @@ static NTSTATUS get_dc_list(const char *domain,
 		/* added support for address:port syntax for ads
 		 * (not that I think anyone will ever run the LDAP
 		 * server in an AD domain on something other than
-		 * port 389
-		 * However, the port should not be used for kerberos
-		 */
+		 * port 389 */
 
-		port = (lookup_type == DC_ADS_ONLY) ? LDAP_PORT :
-			((lookup_type == DC_KDC_ONLY) ? DEFAULT_KRB5_PORT :
-			 PORT_NONE);
+		port = (lp_security() == SEC_ADS) ? LDAP_PORT : PORT_NONE;
 		if ((port_str=strchr(name, ':')) != NULL) {
 			*port_str = '\0';
-			if (lookup_type != DC_KDC_ONLY) {
-				port_str++;
-				port = atoi(port_str);
-			}
+			port_str++;
+			port = atoi(port_str);
 		}
 
 		/* explicit lookup; resolve_name() will
@@ -3341,9 +2715,10 @@ NTSTATUS get_sorted_dc_list( const char *domain,
 	*count = 0;
 
 	DEBUG(8,("get_sorted_dc_list: attempting lookup "
-		"for name %s (sitename %s)\n",
+		"for name %s (sitename %s) using [%s]\n",
 		domain,
-		 sitename ? sitename : "NULL"));
+		sitename ? sitename : "NULL",
+		(ads_only ? "ads" : lp_name_resolve_order())));
 
 	if (ads_only) {
 		lookup_type = DC_ADS_ONLY;

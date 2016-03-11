@@ -196,11 +196,9 @@ static struct pvfs_sys_ctx *pvfs_sys_pushdir(struct pvfs_state *pvfs,
 		talloc_free(ctx);
 		return NULL;
 	}
-
 	ctx->old_wd = talloc_strdup(ctx, cwd);
-	free(cwd);
-
 	if (ctx->old_wd == NULL) {
+		free(cwd);
 		talloc_free(ctx);
 		return NULL;
 	}
@@ -258,7 +256,7 @@ static int pvfs_sys_chown(struct pvfs_state *pvfs, struct pvfs_sys_ctx *ctx, con
 /*
   wrap open for system override
 */
-int pvfs_sys_open(struct pvfs_state *pvfs, const char *filename, int flags, mode_t mode, bool allow_override)
+int pvfs_sys_open(struct pvfs_state *pvfs, const char *filename, int flags, mode_t mode)
 {
 	int fd, ret;
 	struct pvfs_sys_ctx *ctx;
@@ -269,7 +267,7 @@ int pvfs_sys_open(struct pvfs_state *pvfs, const char *filename, int flags, mode
 
 	fd = open(filename, flags, mode);
 	if (fd != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return fd;
 	}
@@ -368,7 +366,7 @@ int pvfs_sys_open(struct pvfs_state *pvfs, const char *filename, int flags, mode
 /*
   wrap unlink for system override
 */
-int pvfs_sys_unlink(struct pvfs_state *pvfs, const char *filename, bool allow_override)
+int pvfs_sys_unlink(struct pvfs_state *pvfs, const char *filename)
 {
 	int ret;
 	struct pvfs_sys_ctx *ctx;
@@ -378,7 +376,7 @@ int pvfs_sys_unlink(struct pvfs_state *pvfs, const char *filename, bool allow_ov
 
 	ret = unlink(filename);
 	if (ret != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return ret;
 	}
@@ -407,38 +405,17 @@ int pvfs_sys_unlink(struct pvfs_state *pvfs, const char *filename, bool allow_ov
 static bool contains_symlink(const char *path)
 {
 	int fd = open(path, PVFS_NOFOLLOW | O_RDONLY);
-	int posix_errno = errno;
 	if (fd != -1) {
 		close(fd);
 		return false;
 	}
-
-#if defined(ENOTSUP) && defined(OSF1)
-	/* handle special Tru64 errno */
-	if (errno == ENOTSUP) {
-		posix_errno = ELOOP;
-	}
-#endif /* ENOTSUP */
-
-#ifdef EFTYPE
-	/* fix broken NetBSD errno */
-	if (errno == EFTYPE) {
-		posix_errno = ELOOP;
-	}
-#endif /* EFTYPE */
-
-	/* fix broken FreeBSD errno */
-	if (errno == EMLINK) {
-		posix_errno = ELOOP;
-	}
-
-	return (posix_errno == ELOOP);
+	return (errno == ELOOP);
 }
 
 /*
   wrap rename for system override
 */
-int pvfs_sys_rename(struct pvfs_state *pvfs, const char *name1, const char *name2, bool allow_override)
+int pvfs_sys_rename(struct pvfs_state *pvfs, const char *name1, const char *name2)
 {
 	int ret;
 	struct pvfs_sys_ctx *ctx;
@@ -448,7 +425,7 @@ int pvfs_sys_rename(struct pvfs_state *pvfs, const char *name1, const char *name
 
 	ret = rename(name1, name2);
 	if (ret != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return ret;
 	}
@@ -503,7 +480,7 @@ int pvfs_sys_rename(struct pvfs_state *pvfs, const char *name1, const char *name
 /*
   wrap mkdir for system override
 */
-int pvfs_sys_mkdir(struct pvfs_state *pvfs, const char *dirname, mode_t mode, bool allow_override)
+int pvfs_sys_mkdir(struct pvfs_state *pvfs, const char *dirname, mode_t mode)
 {
 	int ret;
 	struct pvfs_sys_ctx *ctx;
@@ -513,7 +490,7 @@ int pvfs_sys_mkdir(struct pvfs_state *pvfs, const char *dirname, mode_t mode, bo
 
 	ret = mkdir(dirname, mode);
 	if (ret != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return ret;
 	}
@@ -541,7 +518,6 @@ int pvfs_sys_mkdir(struct pvfs_state *pvfs, const char *dirname, mode_t mode, bo
 	}
 
 	talloc_free(ctx);
-	errno = orig_errno;
 	return ret;
 }
 
@@ -549,7 +525,7 @@ int pvfs_sys_mkdir(struct pvfs_state *pvfs, const char *dirname, mode_t mode, bo
 /*
   wrap rmdir for system override
 */
-int pvfs_sys_rmdir(struct pvfs_state *pvfs, const char *dirname, bool allow_override)
+int pvfs_sys_rmdir(struct pvfs_state *pvfs, const char *dirname)
 {
 	int ret;
 	struct pvfs_sys_ctx *ctx;
@@ -559,7 +535,7 @@ int pvfs_sys_rmdir(struct pvfs_state *pvfs, const char *dirname, bool allow_over
 
 	ret = rmdir(dirname);
 	if (ret != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return ret;
 	}
@@ -587,7 +563,7 @@ int pvfs_sys_rmdir(struct pvfs_state *pvfs, const char *dirname, bool allow_over
 /*
   wrap fchmod for system override
 */
-int pvfs_sys_fchmod(struct pvfs_state *pvfs, int fd, mode_t mode, bool allow_override)
+int pvfs_sys_fchmod(struct pvfs_state *pvfs, int fd, mode_t mode)
 {
 	int ret;
 	struct pvfs_sys_ctx *ctx;
@@ -597,7 +573,7 @@ int pvfs_sys_fchmod(struct pvfs_state *pvfs, int fd, mode_t mode, bool allow_ove
 
 	ret = fchmod(fd, mode);
 	if (ret != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return ret;
 	}
@@ -626,7 +602,7 @@ int pvfs_sys_fchmod(struct pvfs_state *pvfs, int fd, mode_t mode, bool allow_ove
 /*
   wrap chmod for system override
 */
-int pvfs_sys_chmod(struct pvfs_state *pvfs, const char *filename, mode_t mode, bool allow_override)
+int pvfs_sys_chmod(struct pvfs_state *pvfs, const char *filename, mode_t mode)
 {
 	int ret;
 	struct pvfs_sys_ctx *ctx;
@@ -636,7 +612,7 @@ int pvfs_sys_chmod(struct pvfs_state *pvfs, const char *filename, mode_t mode, b
 
 	ret = chmod(filename, mode);
 	if (ret != -1 ||
-	    !allow_override ||
+	    !(pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) ||
 	    errno != EACCES) {
 		return ret;
 	}

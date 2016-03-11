@@ -113,19 +113,25 @@ bool non_mappable_sid(struct dom_sid *sid)
  Caller must free.
 *****************************************************************/
 
-char *sid_binstring_hex_talloc(TALLOC_CTX *mem_ctx, const struct dom_sid *sid)
+char *sid_binstring_hex(const struct dom_sid *sid)
 {
+	char *buf, *s;
 	int len = ndr_size_dom_sid(sid, 0);
-	char buf[len];
+	buf = (char *)SMB_MALLOC(len);
+	if (!buf)
+		return NULL;
 	sid_linearize(buf, len, sid);
-	return hex_encode_talloc(mem_ctx, (const unsigned char *)buf, len);
+	hex_encode((const unsigned char *)buf, len, &s);
+	free(buf);
+	return s;
 }
 
 NTSTATUS sid_array_from_info3(TALLOC_CTX *mem_ctx,
 			      const struct netr_SamInfo3 *info3,
 			      struct dom_sid **user_sids,
 			      uint32_t *num_user_sids,
-			      bool include_user_group_rid)
+			      bool include_user_group_rid,
+			      bool skip_ressource_groups)
 {
 	NTSTATUS status;
 	struct dom_sid sid;
@@ -185,6 +191,12 @@ NTSTATUS sid_array_from_info3(TALLOC_CTX *mem_ctx,
          */
 
 	for (i = 0; i < info3->sidcount; i++) {
+
+		if (skip_ressource_groups &&
+		    (info3->sids[i].attributes & SE_GROUP_RESOURCE)) {
+			continue;
+		}
+
 		status = add_sid_to_array(mem_ctx, info3->sids[i].sid,
 				      &sid_array, &num_sids);
 		if (!NT_STATUS_IS_OK(status)) {

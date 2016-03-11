@@ -20,7 +20,6 @@
 #include "includes.h"
 #include "libcli/libcli.h"
 #include "torture/util.h"
-#include "torture/unix/proto.h"
 #include "lib/cmdline/popt_common.h"
 #include "libcli/resolve/resolve.h"
 #include "param/param.h"
@@ -66,9 +65,8 @@ static struct smbcli_state *connect_to_server(struct torture_context *tctx)
 					lpcfg_gensec_settings(tctx, tctx->lp_ctx));
 
 	if (!NT_STATUS_IS_OK(status)) {
-		torture_comment(tctx, "failed to connect to //%s/%s: %s\n",
-			       host, share, nt_errstr(status));
-		torture_fail(tctx, "Failed to connect to server");
+		printf("failed to connect to //%s/%s: %s\n",
+			host, share, nt_errstr(status));
 		return NULL;
 	}
 

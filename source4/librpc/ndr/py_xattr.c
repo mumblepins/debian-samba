@@ -19,6 +19,10 @@
 
 #include <Python.h>
 
+#ifndef Py_RETURN_NONE
+#define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
+#endif
+
 static void PyType_AddMethods(PyTypeObject *type, PyMethodDef *methods)
 {
         PyObject *dict;
@@ -59,7 +63,7 @@ static void ntacl_print_debug_helper(struct ndr_print *ndr, const char *format, 
 
 static PyObject *py_ntacl_print(PyObject *self, PyObject *args)
 {
-	struct xattr_NTACL *ntacl = pytalloc_get_ptr(self);
+	struct xattr_NTACL *ntacl = py_talloc_get_ptr(self);
 	struct ndr_print *pr;
 	TALLOC_CTX *mem_ctx;
 

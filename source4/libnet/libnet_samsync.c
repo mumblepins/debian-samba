@@ -182,9 +182,9 @@ NTSTATUS libnet_SamSync_netlogon(struct libnet_context *ctx, TALLOC_CTX *mem_ctx
 
 	/* get NETLOGON credentials */
 
-	creds = cli_credentials_get_netlogon_creds(machine_account);
-	if (creds == NULL) {
-		r->out.error_string = talloc_strdup(mem_ctx, "Could not obtain NETLOGON credentials from credentials");
+	nt_status = dcerpc_schannel_creds(p->conn->security_state.generic_state, samsync_ctx, &creds);
+	if (!NT_STATUS_IS_OK(nt_status)) {
+		r->out.error_string = talloc_strdup(mem_ctx, "Could not obtain NETLOGON credentials from DCERPC/GENSEC layer");
 		talloc_free(samsync_ctx);
 		return nt_status;
 	}
@@ -269,7 +269,7 @@ NTSTATUS libnet_SamSync_netlogon(struct libnet_context *ctx, TALLOC_CTX *mem_ctx
 		} while (NT_STATUS_EQUAL(dbsync_nt_status, STATUS_MORE_ENTRIES));
 		
 		if (!NT_STATUS_IS_OK(dbsync_nt_status)) {
-			r->out.error_string = talloc_asprintf(mem_ctx, "libnet_SamSync_netlogon failed: unexpected inconsistency. Should not get error %s here", nt_errstr(dbsync_nt_status));
+			r->out.error_string = talloc_asprintf(mem_ctx, "libnet_SamSync_netlogon failed: unexpected inconsistancy. Should not get error %s here", nt_errstr(nt_status));
 			talloc_free(samsync_ctx);
 			return dbsync_nt_status;
 		}

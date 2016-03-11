@@ -19,7 +19,6 @@
 
 #include "../replace/replace.h"
 #include "tevent_ntstatus.h"
-#include "libcli/util/error.h"
 
 #define TEVENT_NTERROR_MAGIC (0x917b5acd)
 
@@ -76,15 +75,12 @@ bool tevent_req_is_nterror(struct tevent_req *req, NTSTATUS *status)
 
 NTSTATUS tevent_req_simple_recv_ntstatus(struct tevent_req *req)
 {
-	NTSTATUS status = NT_STATUS_OK;
+	NTSTATUS status;
 
-	/*
-	 * Ignore result of tevent_req_is_nterror, we're only interested in
-	 * the status
-	 */
-	tevent_req_is_nterror(req, &status);
-	tevent_req_received(req);
-	return status;
+	if (tevent_req_is_nterror(req, &status)) {
+		return status;
+	}
+	return NT_STATUS_OK;
 }
 
 void tevent_req_simple_finish_ntstatus(struct tevent_req *subreq,
@@ -100,15 +96,4 @@ void tevent_req_simple_finish_ntstatus(struct tevent_req *subreq,
 		return;
 	}
 	tevent_req_done(req);
-}
-
-bool tevent_req_poll_ntstatus(struct tevent_req *req,
-			      struct tevent_context *ev,
-			      NTSTATUS *status)
-{
-	bool ret = tevent_req_poll(req, ev);
-	if (!ret) {
-		*status = map_nt_error_from_unix_common(errno);
-	}
-	return ret;
 }

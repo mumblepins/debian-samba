@@ -24,7 +24,6 @@
 #include "registry.h"
 #include "registry/reg_api.h"
 #include "../libcli/registry/util_reg.h"
-#include "libgpo/gpext/gpext.h"
 
 #define GP_EXT_NAME "scripts"
 
@@ -63,12 +62,12 @@ static NTSTATUS scripts_get_reg_config(TALLOC_CTX *mem_ctx,
 		{ NULL, REG_NONE, NULL },
 	};
 
-	info = talloc_zero(mem_ctx, struct gp_extension_reg_info);
+	info = TALLOC_ZERO_P(mem_ctx, struct gp_extension_reg_info);
 	NT_STATUS_HAVE_NO_MEMORY(info);
 
-	status = gpext_info_add_entry(mem_ctx, GP_EXT_NAME,
-				      GP_EXT_GUID_SCRIPTS,
-				      table, info);
+	status = gp_ext_info_add_entry(mem_ctx, GP_EXT_NAME,
+				       GP_EXT_GUID_SCRIPTS,
+				       table, info);
 	NT_STATUS_NOT_OK_RETURN(status);
 
 	*reg_info = info;
@@ -90,10 +89,10 @@ static NTSTATUS generate_gp_registry_entry(TALLOC_CTX *mem_ctx,
 	struct gp_registry_entry *entry = NULL;
 	struct registry_value *data = NULL;
 
-	entry = talloc_zero(mem_ctx, struct gp_registry_entry);
+	entry = TALLOC_ZERO_P(mem_ctx, struct gp_registry_entry);
 	NT_STATUS_HAVE_NO_MEMORY(entry);
 
-	data = talloc_zero(mem_ctx, struct registry_value);
+	data = TALLOC_ZERO_P(mem_ctx, struct registry_value);
 	NT_STATUS_HAVE_NO_MEMORY(data);
 
 	data->type = data_type;
@@ -103,7 +102,7 @@ static NTSTATUS generate_gp_registry_entry(TALLOC_CTX *mem_ctx,
 			SBVAL(data->data.data, 0, *(uint64_t *)data_p);
 			break;
 		case REG_SZ:
-			if (!push_reg_sz(mem_ctx, &data->data, (const char *)data_p)) {
+			if (!push_reg_sz(mem_ctx, &data->data, (char *)data_p)) {
 				return NT_STATUS_NO_MEMORY;
 			}
 			break;
@@ -228,7 +227,7 @@ static NTSTATUS scripts_parse_ini_section(struct gp_inifile_context *ini_ctx,
 
 static WERROR scripts_store_reg_gpovals(TALLOC_CTX *mem_ctx,
 					struct registry_key *key,
-					const struct GROUP_POLICY_OBJECT *gpo)
+					struct GROUP_POLICY_OBJECT *gpo)
 {
 	WERROR werr;
 
@@ -267,7 +266,7 @@ static WERROR scripts_apply(TALLOC_CTX *mem_ctx,
 			    struct registry_key *root_key,
 			    uint32_t flags,
 			    const char *section,
-			    const struct GROUP_POLICY_OBJECT *gpo,
+			    struct GROUP_POLICY_OBJECT *gpo,
 			    struct gp_registry_entry *entries,
 			    size_t num_entries)
 {
@@ -336,12 +335,14 @@ static WERROR scripts_apply(TALLOC_CTX *mem_ctx,
 /****************************************************************
 ****************************************************************/
 
-static NTSTATUS scripts_process_group_policy(TALLOC_CTX *mem_ctx,
+static NTSTATUS scripts_process_group_policy(ADS_STRUCT *ads,
+					     TALLOC_CTX *mem_ctx,
 					     uint32_t flags,
 					     struct registry_key *root_key,
 					     const struct security_token *token,
-					     const struct GROUP_POLICY_OBJECT *deleted_gpo_list,
-					     const struct GROUP_POLICY_OBJECT *changed_gpo_list)
+					     struct GROUP_POLICY_OBJECT *gpo,
+					     const char *extension_guid,
+					     const char *snapin_guid)
 {
 	NTSTATUS status;
 	WERROR werr;
@@ -356,72 +357,45 @@ static NTSTATUS scripts_process_group_policy(TALLOC_CTX *mem_ctx,
 		GP_SCRIPTS_INI_LOGON,
 		GP_SCRIPTS_INI_LOGOFF
 	};
-	const struct GROUP_POLICY_OBJECT *gpo;
-	char *gpo_cache_path = cache_path(GPO_CACHE_DIR);
-	if (gpo_cache_path == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
 
-	/* implementation of the policy callback function, see
-	 * http://msdn.microsoft.com/en-us/library/aa373494%28v=vs.85%29.aspx
-	 * for details - gd */
+	debug_gpext_header(0, "scripts_process_group_policy", flags, gpo,
+			   extension_guid, snapin_guid);
 
-	/* for now do not process the list of deleted group policies
+	status = gpo_get_unix_path(mem_ctx, cache_path(GPO_CACHE_DIR), gpo, &unix_path);
+	NT_STATUS_NOT_OK_RETURN(status);
 
-	for (gpo = deleted_gpo_list; gpo; gpo = gpo->next) {
-	}
+	status = gp_inifile_init_context(mem_ctx, flags, unix_path,
+					 GP_SCRIPTS_INI, &ini_ctx);
+	NT_STATUS_NOT_OK_RETURN(status);
 
-	*/
+	for (i = 0; i < ARRAY_SIZE(list); i++) {
 
-	for (gpo = changed_gpo_list; gpo; gpo = gpo->next) {
+		TALLOC_FREE(entries);
+		num_entries = 0;
 
-		gpext_debug_header(0, "scripts_process_group_policy", flags,
-				   gpo, GP_EXT_GUID_SCRIPTS, NULL);
+		status = scripts_parse_ini_section(ini_ctx, flags, list[i],
+						   &entries, &num_entries);
+		if (NT_STATUS_EQUAL(status, NT_STATUS_OBJECT_NAME_NOT_FOUND)) {
+			continue;
+		}
 
-		status = gpo_get_unix_path(mem_ctx, gpo_cache_path,
-					   gpo, &unix_path);
 		if (!NT_STATUS_IS_OK(status)) {
-			goto err_cache_path_free;
+			return status;
 		}
 
-		status = gp_inifile_init_context(mem_ctx, flags, unix_path,
-						 GP_SCRIPTS_INI, &ini_ctx);
-		if (!NT_STATUS_IS_OK(status)) {
-			goto err_cache_path_free;
+		dump_reg_entries(flags, "READ", entries, num_entries);
+
+		werr = scripts_apply(ini_ctx->mem_ctx, token, root_key,
+				     flags, list[i], gpo, entries, num_entries);
+		if (!W_ERROR_IS_OK(werr)) {
+			continue; /* FIXME: finally fix storing emtpy strings and REG_QWORD! */
+			TALLOC_FREE(ini_ctx);
+			return werror_to_ntstatus(werr);
 		}
-
-		for (i = 0; i < ARRAY_SIZE(list); i++) {
-
-			TALLOC_FREE(entries);
-			num_entries = 0;
-
-			status = scripts_parse_ini_section(ini_ctx, flags, list[i],
-							   &entries, &num_entries);
-			if (NT_STATUS_EQUAL(status, NT_STATUS_OBJECT_NAME_NOT_FOUND)) {
-				continue;
-			}
-
-			if (!NT_STATUS_IS_OK(status)) {
-				TALLOC_FREE(ini_ctx);
-				goto err_cache_path_free;
-			}
-
-			dump_reg_entries(flags, "READ", entries, num_entries);
-
-			werr = scripts_apply(ini_ctx->mem_ctx, token, root_key,
-					     flags, list[i], gpo, entries, num_entries);
-			if (!W_ERROR_IS_OK(werr)) {
-				continue; /* FIXME: finally fix storing emtpy strings and REG_QWORD! */
-			}
-		}
-
-		TALLOC_FREE(ini_ctx);
 	}
-	status = NT_STATUS_OK;
 
-err_cache_path_free:
-	talloc_free(gpo_cache_path);
-	return status;
+	TALLOC_FREE(ini_ctx);
+	return NT_STATUS_OK;
 }
 
 /****************************************************************
@@ -439,7 +413,7 @@ static NTSTATUS scripts_shutdown(void)
 {
 	NTSTATUS status;
 
-	status = gpext_unregister_gp_extension(GP_EXT_NAME);
+	status = unregister_gp_extension(GP_EXT_NAME);
 	if (NT_STATUS_IS_OK(status)) {
 		return status;
 	}
@@ -469,9 +443,9 @@ NTSTATUS gpext_scripts_init(void)
 	ctx = talloc_init("gpext_scripts_init");
 	NT_STATUS_HAVE_NO_MEMORY(ctx);
 
-	status = gpext_register_gp_extension(ctx, SMB_GPEXT_INTERFACE_VERSION,
-					     GP_EXT_NAME, GP_EXT_GUID_SCRIPTS,
-					     &scripts_methods);
+	status = register_gp_extension(ctx, SMB_GPEXT_INTERFACE_VERSION,
+				       GP_EXT_NAME, GP_EXT_GUID_SCRIPTS,
+				       &scripts_methods);
 	if (!NT_STATUS_IS_OK(status)) {
 		TALLOC_FREE(ctx);
 	}

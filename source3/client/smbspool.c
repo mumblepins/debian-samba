@@ -151,14 +151,7 @@ main(int argc,			/* I - Number of command-line arguments */
 		perror("ERROR: Unable to open print file");
 		goto done;
 	} else {
-		char *p = argv[4];
-		char *endp;
-
-		copies = strtol(p, &endp, 10);
-		if (p == endp) {
-			perror("ERROR: Unable to determine number of copies");
-			goto done;
-		}
+		copies = atoi(argv[4]);
 	}
 
 	/*
@@ -252,9 +245,11 @@ main(int argc,			/* I - Number of command-line arguments */
 
 	setup_logging("smbspool", DEBUG_STDOUT);
 
-	smb_init_locale();
+	lp_set_in_client(True);	/* Make sure that we tell lp_load we are */
 
-	if (!lp_load_client(get_dyn_CONFIGFILE())) {
+	load_case_tables();
+
+	if (!lp_load(get_dyn_CONFIGFILE(), True, False, False, True)) {
 		fprintf(stderr, "ERROR: Can't load %s - run testparm to debug it\n", get_dyn_CONFIGFILE());
 		goto done;
 	}
@@ -409,7 +404,7 @@ smb_complete_connection(const char *myname,
 	/* Start the SMB connection */
 	*need_auth = false;
 	nt_status = cli_start_connection(&cli, myname, server, NULL, port,
-					 SMB_SIGNING_DEFAULT, flags);
+					 Undefined, flags);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		fprintf(stderr, "ERROR: Connection failed: %s\n", nt_errstr(nt_status));
 		return NULL;
@@ -440,8 +435,8 @@ smb_complete_connection(const char *myname,
 		return NULL;
 	}
 
-	nt_status = cli_tree_connect(cli, share, "?????", password,
-				     strlen(password) + 1);
+	nt_status = cli_tcon_andx(cli, share, "?????", password,
+				  strlen(password) + 1);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		fprintf(stderr, "ERROR: Tree connect failed (%s)\n",
 			nt_errstr(nt_status));

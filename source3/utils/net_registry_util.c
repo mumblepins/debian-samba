@@ -27,20 +27,12 @@
 
 void print_registry_key(const char *keyname, NTTIME *modtime)
 {
-	const char *ts = _("None");
-	char *freeme = NULL;
-
-	if (modtime != 0) {
-		freeme = http_timestring(talloc_tos(),
-					 nt_time_to_unix(*modtime));
-		ts = freeme;
-	}
-
 	d_printf(_("Keyname   = %s\n"), keyname);
-	d_printf(_("Modtime   = %s\n"), ts);
+	d_printf(_("Modtime   = %s\n"),
+		 modtime
+		 ? http_timestring(talloc_tos(), nt_time_to_unix(*modtime))
+		 : _("None"));
 	d_printf("\n");
-
-	TALLOC_FREE(freeme);
 }
 
 void print_registry_value(const struct registry_value *valvalue, bool raw)
@@ -58,7 +50,7 @@ void print_registry_value(const struct registry_value *valvalue, bool raw)
 		if (!raw) {
 			d_printf(_("Value      = "));
 		}
-		d_printf("%u\n", v);
+		d_printf("%d\n", v);
 		break;
 	}
 	case REG_SZ:
@@ -79,7 +71,7 @@ void print_registry_value(const struct registry_value *valvalue, bool raw)
 		break;
 	}
 	case REG_MULTI_SZ: {
-		uint32_t j;
+		uint32 j;
 		const char **a;
 
 		if (!pull_reg_multi_sz(talloc_tos(), &valvalue->data, &a)) {

@@ -91,18 +91,10 @@ static void human_readable(off_t s, char *buffer, int l)
 static void get_auth_data(const char *srv, const char *shr, char *wg, int wglen, char *un, int unlen, char *pw, int pwlen)
 {
 	static char hasasked = 0;
-	static char *savedwg;
-	static char *savedun;
-	static char *savedpw;
 	char *wgtmp, *usertmp;
 	char tmp[128];
 
-	if (hasasked) {
-		strncpy(wg, savedwg, wglen - 1);
-		strncpy(un, savedun, unlen - 1);
-		strncpy(pw, savedpw, pwlen - 1);
-		return;
-	}
+	if(hasasked) return;
 	hasasked = 1;
 
 	if(!nonprompt && !username) {
@@ -117,20 +109,16 @@ static void get_auth_data(const char *srv, const char *shr, char *wg, int wglen,
 	} else if(username) strncpy(un, username, unlen-1);
 
 	if(!nonprompt && !password) {
-		char *prompt;
+		char *prompt, *pass;
 		if (asprintf(&prompt, "Password for %s at %s: ", shr, srv) == -1) {
 			return;
 		}
-		(void) samba_getpass(prompt, pw, pwlen, false, false);
+		pass = getpass(prompt);
 		free(prompt);
+		strncpy(pw, pass, pwlen-1);
 	} else if(password) strncpy(pw, password, pwlen-1);
 
 	if(workgroup)strncpy(wg, workgroup, wglen-1);
-
-	/* save the values found for later */
-	savedwg = SMB_STRDUP(wg);
-	savedun = SMB_STRDUP(un);
-	savedpw = SMB_STRDUP(pw);
 
 	wgtmp = SMB_STRNDUP(wg, wglen); 
 	usertmp = SMB_STRNDUP(un, unlen);
@@ -172,7 +160,6 @@ static int smb_download_dir(const char *base, const char *name, int resume)
 		char *newname;
 		if(!strcmp(dirent->name, ".") || !strcmp(dirent->name, ".."))continue;
 		if (asprintf(&newname, "%s/%s", tmpname, dirent->name) == -1) {
-			free(tmpname);
 			return 1;
 		}
 		switch(dirent->smbc_type) {
@@ -463,9 +450,6 @@ static int smb_download_file(const char *base, const char *name, int recursive,
 
 	readbuf = (char *)SMB_MALLOC(blocksize);
 	if (!readbuf) {
-		if (localhandle != STDOUT_FILENO) {
-			close(localhandle);
-		}
 		return 1;
 	}
 
@@ -632,7 +616,7 @@ int main(int argc, const char **argv)
 	};
 	poptContext pc;
 
-	smb_init_locale();
+	load_case_tables();
 
 	/* only read rcfile if it exists */
 	if (asprintf(&rcfile, "%s/.smbgetrc", getenv("HOME")) == -1) {
@@ -686,7 +670,7 @@ int main(int argc, const char **argv)
 	if (smb_encrypt) {
 		SMBCCTX *smb_ctx = smbc_set_context(NULL);
 		smbc_option_set(smb_ctx,
-			discard_const_p(char, "smb_encrypt_level"),
+			CONST_DISCARD(char *, "smb_encrypt_level"),
 			"require");
 	}
 

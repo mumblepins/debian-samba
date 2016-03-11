@@ -25,15 +25,13 @@
 #include "libsmb/clidgram.h"
 #include "libsmb/nmblib.h"
 #include "messages.h"
-#include "librpc/gen_ndr/samr.h"
-#include "../lib/util/pidfile.h"
 
 /*
  * cli_send_mailslot, send a mailslot for client code ...
  */
 
 static bool cli_prep_mailslot(bool unique, const char *mailslot,
-		       uint16_t priority,
+		       uint16 priority,
 		       char *buf, int len,
 		       const char *srcname, int src_type,
 		       const char *dstname, int dest_type,
@@ -142,7 +140,7 @@ static bool prep_getdc_request(const struct sockaddr_storage *dc_ss,
 		my_sid = *sid;
 	}
 
-	my_acct_name = talloc_asprintf(talloc_tos(), "%s$", lp_netbios_name());
+	my_acct_name = talloc_asprintf(talloc_tos(), "%s$", global_myname());
 	if (my_acct_name == NULL) {
 		goto fail;
 	}
@@ -151,7 +149,7 @@ static bool prep_getdc_request(const struct sockaddr_storage *dc_ss,
 	s		= &packet.req.logon;
 
 	s->request_count	= 0;
-	s->computer_name	= lp_netbios_name();
+	s->computer_name	= global_myname();
 	s->user_name		= my_acct_name;
 	s->mailslot_name	= my_mailslot;
 	s->acct_control		= ACB_WSTRUST;
@@ -172,7 +170,7 @@ static bool prep_getdc_request(const struct sockaddr_storage *dc_ss,
 
 	ret = cli_prep_mailslot(false, NBT_MAILSLOT_NTLOGON, 0,
 				(char *)blob.data, blob.length,
-				lp_netbios_name(), 0, domain_name, 0x1c,
+				global_myname(), 0, domain_name, 0x1c,
 				dc_ss, dgm_id, p);
 fail:
 	TALLOC_FREE(frame);
@@ -229,7 +227,7 @@ static bool parse_getdc_response(
 
 	blob = p.smb.body.trans.data;
 
-	r = talloc_zero(mem_ctx, struct netlogon_samlogon_response);
+	r = TALLOC_ZERO_P(mem_ctx, struct netlogon_samlogon_response);
 	if (!r) {
 		return false;
 	}
@@ -324,11 +322,11 @@ struct tevent_req *nbt_getdc_send(TALLOC_CTX *mem_ctx,
 		return tevent_req_post(req, ev);
 	}
 	state->my_mailslot = mailslot_name(
-		state, ((const struct sockaddr_in *)dc_addr)->sin_addr);
+		state, ((struct sockaddr_in *)dc_addr)->sin_addr);
 	if (tevent_req_nomem(state->my_mailslot, req)) {
 		return tevent_req_post(req, ev);
 	}
-	state->nmbd_pid = pidfile_pid(lp_pid_directory(), "nmbd");
+	state->nmbd_pid = pidfile_pid("nmbd");
 	if (state->nmbd_pid == 0) {
 		DEBUG(3, ("No nmbd found\n"));
 		tevent_req_nterror(req, NT_STATUS_NOT_SUPPORTED);
@@ -453,7 +451,7 @@ NTSTATUS nbt_getdc(struct messaging_context *msg_ctx,
 	struct tevent_req *req;
 	NTSTATUS status = NT_STATUS_NO_MEMORY;
 
-	ev = samba_tevent_context_init(frame);
+	ev = tevent_context_init(frame);
 	if (ev == NULL) {
 		goto fail;
 	}

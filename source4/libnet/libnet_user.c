@@ -79,7 +79,7 @@ struct composite_context* libnet_CreateUser_send(struct libnet_context *ctx,
 	ZERO_STRUCT(s->r.out);
 
 	/* prerequisite: make sure the domain is opened */
-	prereq_met = samr_domain_opened(ctx, c, s->r.in.domain_name, &c, &s->domain_open,
+	prereq_met = samr_domain_opened(ctx, s->r.in.domain_name, &c, &s->domain_open,
 					continue_domain_open_create, monitor);
 	if (!prereq_met) return c;
 
@@ -88,9 +88,7 @@ struct composite_context* libnet_CreateUser_send(struct libnet_context *ctx,
 	s->user_add.in.domain_handle  = ctx->samr.handle;
 
 	/* send the request */
-	create_req = libnet_rpc_useradd_send(s, s->ctx->event_ctx,
-					     ctx->samr.samr_handle,
-					     &s->user_add, monitor);
+	create_req = libnet_rpc_useradd_send(ctx->samr.pipe, &s->user_add, monitor);
 	if (composite_nomem(create_req, c)) return c;
 
 	/* set the next stage */
@@ -110,8 +108,8 @@ static void continue_domain_open_create(struct composite_context *ctx)
 	struct composite_context *create_req;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct create_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct create_user_state);
 
 	/* receive result of DomainOpen call */
 	c->status = libnet_DomainOpen_recv(ctx, s->ctx, c, &s->domain_open);
@@ -125,9 +123,7 @@ static void continue_domain_open_create(struct composite_context *ctx)
 	s->user_add.in.domain_handle  = s->ctx->samr.handle;
 
 	/* send the request */
-	create_req = libnet_rpc_useradd_send(s, s->ctx->event_ctx,
-					     s->ctx->samr.samr_handle,
-					     &s->user_add, s->monitor_fn);
+	create_req = libnet_rpc_useradd_send(s->ctx->samr.pipe, &s->user_add, s->monitor_fn);
 	if (composite_nomem(create_req, c)) return;
 
 	/* set the next stage */
@@ -144,8 +140,8 @@ static void continue_rpc_useradd(struct composite_context *ctx)
 	struct create_user_state *s;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct create_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct create_user_state);
 	
 	/* receive result of the call */
 	c->status = libnet_rpc_useradd_recv(ctx, c, &s->user_add);
@@ -171,12 +167,14 @@ NTSTATUS libnet_CreateUser_recv(struct composite_context *c, TALLOC_CTX *mem_ctx
 				struct libnet_CreateUser *r)
 {
 	NTSTATUS status;
+	struct create_user_state *s;
 
 	r->out.error_string = NULL;
 
 	/* wait for result of async request and check status code */
 	status = composite_wait(c);
 	if (!NT_STATUS_IS_OK(status)) {
+		s = talloc_get_type(c->private_data, struct create_user_state);
 		r->out.error_string = talloc_strdup(mem_ctx, nt_errstr(status));
 	}
 
@@ -251,7 +249,7 @@ struct composite_context *libnet_DeleteUser_send(struct libnet_context *ctx,
 	ZERO_STRUCT(s->r.out);
 	
 	/* prerequisite: make sure the domain is opened before proceeding */
-	prereq_met = samr_domain_opened(ctx, c, s->r.in.domain_name, &c, &s->domain_open,
+	prereq_met = samr_domain_opened(ctx, s->r.in.domain_name, &c, &s->domain_open,
 					continue_domain_open_delete, monitor);
 	if (!prereq_met) return c;
 
@@ -260,9 +258,7 @@ struct composite_context *libnet_DeleteUser_send(struct libnet_context *ctx,
 	s->user_del.in.domain_handle  = ctx->samr.handle;
 
 	/* send request */
-	delete_req = libnet_rpc_userdel_send(s, s->ctx->event_ctx,
-					     ctx->samr.samr_handle,
-					     &s->user_del, monitor);
+	delete_req = libnet_rpc_userdel_send(ctx->samr.pipe, &s->user_del, monitor);
 	if (composite_nomem(delete_req, c)) return c;
 	
 	/* set the next stage */
@@ -282,8 +278,8 @@ static void continue_domain_open_delete(struct composite_context *ctx)
 	struct composite_context *delete_req;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct delete_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct delete_user_state);
 
 	/* receive result of DomainOpen call */
 	c->status = libnet_DomainOpen_recv(ctx, s->ctx, c, &s->domain_open);
@@ -297,9 +293,7 @@ static void continue_domain_open_delete(struct composite_context *ctx)
 	s->user_del.in.domain_handle  = s->ctx->samr.handle;
 
 	/* send request */
-	delete_req = libnet_rpc_userdel_send(s, s->ctx->event_ctx,
-					     s->ctx->samr.samr_handle,
-					     &s->user_del, s->monitor_fn);
+	delete_req = libnet_rpc_userdel_send(s->ctx->samr.pipe, &s->user_del, s->monitor_fn);
 	if (composite_nomem(delete_req, c)) return;
 
 	/* set the next stage */
@@ -316,8 +310,8 @@ static void continue_rpc_userdel(struct composite_context *ctx)
 	struct delete_user_state *s;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct delete_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct delete_user_state);
 
 	/* receive result of userdel call */
 	c->status = libnet_rpc_userdel_recv(ctx, c, &s->user_del);
@@ -349,7 +343,7 @@ NTSTATUS libnet_DeleteUser_recv(struct composite_context *c, TALLOC_CTX *mem_ctx
 	/* wait for result of async request and check status code */
 	status = composite_wait(c);
 	if (!NT_STATUS_IS_OK(status)) {
-		s = talloc_get_type_abort(c->private_data, struct delete_user_state);
+		s = talloc_get_type(c->private_data, struct delete_user_state);
 		r->out.error_string = talloc_steal(mem_ctx, s->r.out.error_string);
 	}
 	
@@ -423,7 +417,7 @@ struct composite_context *libnet_ModifyUser_send(struct libnet_context *ctx,
 	s->ctx = ctx;
 	s->r = *r;
 
-	prereq_met = samr_domain_opened(ctx, c, s->r.in.domain_name, &c, &s->domain_open,
+	prereq_met = samr_domain_opened(ctx, s->r.in.domain_name, &c, &s->domain_open,
 					continue_domain_open_modify, monitor);
 	if (!prereq_met) return c;
 
@@ -431,9 +425,7 @@ struct composite_context *libnet_ModifyUser_send(struct libnet_context *ctx,
 	s->user_info.in.domain_handle = ctx->samr.handle;
 	s->user_info.in.level         = level;
 
-	userinfo_req = libnet_rpc_userinfo_send(s, s->ctx->event_ctx,
-						ctx->samr.samr_handle,
-						&s->user_info, monitor);
+	userinfo_req = libnet_rpc_userinfo_send(ctx->samr.pipe, &s->user_info, monitor);
 	if (composite_nomem(userinfo_req, c)) return c;
 
 	composite_continue(c, userinfo_req, continue_rpc_userinfo, c);
@@ -453,8 +445,8 @@ static void continue_domain_open_modify(struct composite_context *ctx)
 	struct composite_context *userinfo_req;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct modify_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct modify_user_state);
 
 	c->status = libnet_DomainOpen_recv(ctx, s->ctx, c, &s->domain_open);
 	if (!composite_is_ok(c)) return;
@@ -465,9 +457,7 @@ static void continue_domain_open_modify(struct composite_context *ctx)
 	s->user_info.in.username       = s->r.in.user_name;
 	s->user_info.in.level          = level;
 
-	userinfo_req = libnet_rpc_userinfo_send(s, s->ctx->event_ctx,
-						s->ctx->samr.samr_handle,
-						&s->user_info, s->monitor_fn);
+	userinfo_req = libnet_rpc_userinfo_send(s->ctx->samr.pipe, &s->user_info, s->monitor_fn);
 	if (composite_nomem(userinfo_req, c)) return;
 	
 	composite_continue(c, userinfo_req, continue_rpc_userinfo, c);
@@ -484,8 +474,8 @@ static void continue_rpc_userinfo(struct composite_context *ctx)
 	struct modify_user_state *s;
 	struct composite_context *usermod_req;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct modify_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct modify_user_state);
 
 	c->status = libnet_rpc_userinfo_recv(ctx, c, &s->user_info);
 	if (!composite_is_ok(c)) return;
@@ -495,9 +485,7 @@ static void continue_rpc_userinfo(struct composite_context *ctx)
 
 	c->status = set_user_changes(c, &s->user_mod.in.change, &s->user_info, &s->r);
 
-	usermod_req = libnet_rpc_usermod_send(s, s->ctx->event_ctx,
-					      s->ctx->samr.samr_handle,
-					      &s->user_mod, s->monitor_fn);
+	usermod_req = libnet_rpc_usermod_send(s->ctx->samr.pipe, &s->user_mod, s->monitor_fn);
 	if (composite_nomem(usermod_req, c)) return;
 
 	composite_continue(c, usermod_req, continue_rpc_usermod, c);
@@ -563,8 +551,8 @@ static void continue_rpc_usermod(struct composite_context *ctx)
 	struct modify_user_state *s;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct modify_user_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct modify_user_state);
 	
 	c->status = libnet_rpc_usermod_recv(ctx, c, &s->user_mod);
 	if (!composite_is_ok(c)) return;
@@ -675,7 +663,7 @@ struct composite_context* libnet_UserInfo_send(struct libnet_context *ctx,
 	}
 
 	/* prerequisite: make sure the domain is opened */
-	prereq_met = samr_domain_opened(ctx, c, s->domain_name, &c, &s->domopen,
+	prereq_met = samr_domain_opened(ctx, s->domain_name, &c, &s->domopen,
 					continue_domain_open_info, monitor);
 	if (!prereq_met) return c;
 
@@ -700,8 +688,7 @@ struct composite_context* libnet_UserInfo_send(struct libnet_context *ctx,
 		s->userinfo.in.level = 21;
 
 		/* send the request */
-		info_req = libnet_rpc_userinfo_send(s, s->ctx->event_ctx,
-						    s->ctx->samr.samr_handle,
+		info_req = libnet_rpc_userinfo_send(s->ctx->samr.pipe,
 						    &s->userinfo,
 						    s->monitor_fn);
 		if (composite_nomem(info_req, c)) return c;
@@ -726,8 +713,8 @@ static void continue_domain_open_info(struct composite_context *ctx)
 	struct composite_context *lookup_req, *info_req;
 	struct monitor_msg msg;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct user_info_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct user_info_state);
 
 	/* receive result of DomainOpen call */
 	c->status = libnet_DomainOpen_recv(ctx, s->ctx, c, &s->domopen);
@@ -757,8 +744,7 @@ static void continue_domain_open_info(struct composite_context *ctx)
 		s->userinfo.in.level = 21;
 
 		/* send the request */
-		info_req = libnet_rpc_userinfo_send(s, s->ctx->event_ctx,
-						    s->ctx->samr.samr_handle,
+		info_req = libnet_rpc_userinfo_send(s->ctx->samr.pipe,
 						    &s->userinfo,
 						    s->monitor_fn);
 		if (composite_nomem(info_req, c)) return;
@@ -779,8 +765,8 @@ static void continue_name_found(struct composite_context *ctx)
 	struct user_info_state *s;
 	struct composite_context *info_req;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct user_info_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct user_info_state);
 
 	/* receive result of LookupName call */
 	c->status = libnet_LookupName_recv(ctx, c, &s->lookup);
@@ -798,9 +784,7 @@ static void continue_name_found(struct composite_context *ctx)
 	s->userinfo.in.level = 21;
 
 	/* send the request */
-	info_req = libnet_rpc_userinfo_send(s, s->ctx->event_ctx,
-					    s->ctx->samr.samr_handle,
-					    &s->userinfo, s->monitor_fn);
+	info_req = libnet_rpc_userinfo_send(s->ctx->samr.pipe, &s->userinfo, s->monitor_fn);
 	if (composite_nomem(info_req, c)) return;
 
 	/* set the next stage */
@@ -816,8 +800,8 @@ static void continue_info_received(struct composite_context *ctx)
 	struct composite_context *c;
 	struct user_info_state *s;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct user_info_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct user_info_state);
 	
 	/* receive result of userinfo call */
 	c->status = libnet_rpc_userinfo_recv(ctx, c, &s->userinfo);
@@ -846,7 +830,7 @@ NTSTATUS libnet_UserInfo_recv(struct composite_context *c, TALLOC_CTX *mem_ctx,
 	if (NT_STATUS_IS_OK(status) && r != NULL) {
 		struct samr_UserInfo21 *info;
 
-		s = talloc_get_type_abort(c->private_data, struct user_info_state);
+		s = talloc_get_type(c->private_data, struct user_info_state);
 		info = &s->userinfo.out.info.info21;
 
 		r->out.user_sid = dom_sid_add_rid(mem_ctx, s->ctx->samr.sid, info->rid);
@@ -969,7 +953,7 @@ struct composite_context* libnet_UserList_send(struct libnet_context *ctx,
 	s->monitor_fn   = monitor;
 
 	/* make sure we have lsa domain handle before doing anything */
-	prereq_met = lsa_domain_opened(ctx, c, s->domain_name, &c, &s->domain_open,
+	prereq_met = lsa_domain_opened(ctx, s->domain_name, &c, &s->domain_open,
 				       continue_lsa_domain_opened, monitor);
 	if (!prereq_met) return c;
 
@@ -1000,8 +984,8 @@ static void continue_lsa_domain_opened(struct composite_context *ctx)
 	struct userlist_state *s;
 	struct tevent_req *subreq;
 	
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userlist_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct userlist_state);
 	
 	/* receive lsa domain handle */
 	c->status = libnet_DomainOpen_recv(ctx, s->ctx, c, &s->domain_open);
@@ -1034,7 +1018,7 @@ static void continue_domain_queried(struct tevent_req *subreq)
 	bool prereq_met = false;
 	
 	c = tevent_req_callback_data(subreq, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userlist_state);
+	s = talloc_get_type(c->private_data, struct userlist_state);
 
 	/* receive result of rpc request */
 	c->status = dcerpc_lsa_QueryInfoPolicy_r_recv(subreq, s);
@@ -1045,7 +1029,7 @@ static void continue_domain_queried(struct tevent_req *subreq)
 	s->dominfo = (*s->query_domain.out.info)->domain;
 
 	/* make sure we have samr domain handle before continuing */
-	prereq_met = samr_domain_opened(s->ctx, c, s->domain_name, &c, &s->domain_open,
+	prereq_met = samr_domain_opened(s->ctx, s->domain_name, &c, &s->domain_open,
 					continue_samr_domain_opened, s->monitor_fn);
 	if (!prereq_met) return;
 
@@ -1080,8 +1064,8 @@ static void continue_samr_domain_opened(struct composite_context *ctx)
 	struct userlist_state *s;
 	struct tevent_req *subreq;
 
-	c = talloc_get_type_abort(ctx->async.private_data, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userlist_state);
+	c = talloc_get_type(ctx->async.private_data, struct composite_context);
+	s = talloc_get_type(c->private_data, struct userlist_state);
 
 	/* receive samr domain handle */
 	c->status = libnet_DomainOpen_recv(ctx, s->ctx, c, &s->domain_open);
@@ -1118,7 +1102,7 @@ static void continue_users_enumerated(struct tevent_req *subreq)
 	uint32_t i;
 
 	c = tevent_req_callback_data(subreq, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userlist_state);
+	s = talloc_get_type(c->private_data, struct userlist_state);
 
 	/* receive result of rpc request */
 	c->status = dcerpc_samr_EnumDomainUsers_r_recv(subreq, s);
@@ -1164,12 +1148,10 @@ static void continue_users_enumerated(struct tevent_req *subreq)
 		
 		/* that's it */
 		composite_done(c);
-		return;
 
 	} else {
 		/* something went wrong */
 		composite_error(c, c->status);
-		return;
 	}
 }
 
@@ -1198,7 +1180,7 @@ NTSTATUS libnet_UserList_recv(struct composite_context* c, TALLOC_CTX *mem_ctx,
 	    NT_STATUS_EQUAL(status, STATUS_MORE_ENTRIES) ||
 	    NT_STATUS_EQUAL(status, NT_STATUS_NO_MORE_ENTRIES)) {
 		
-		s = talloc_get_type_abort(c->private_data, struct userlist_state);
+		s = talloc_get_type(c->private_data, struct userlist_state);
 		
 		/* get results from composite context */
 		r->out.count = s->count;

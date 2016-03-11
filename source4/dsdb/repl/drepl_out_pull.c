@@ -57,8 +57,8 @@ void drepl_reps_update(struct dreplsrv_service *s, const char *reps_attr,
 	}
 
 	for (i=0; i<count; i++) {
-		if (GUID_equal(source_dsa_obj_guid,
-			       &reps[i].ctr.ctr1.source_dsa_obj_guid)) {
+		if (GUID_compare(source_dsa_obj_guid,
+				 &reps[i].ctr.ctr1.source_dsa_obj_guid) == 0) {
 			break;
 		}
 	}
@@ -101,25 +101,7 @@ WERROR dreplsrv_schedule_partition_pull_source(struct dreplsrv_service *s,
 	W_ERROR_HAVE_NO_MEMORY(op);
 
 	op->service	= s;
-	/*
-	 * source may either be the long-term list of partners, or
-	 * from dreplsrv_partition_source_dsa_temporary().  Because it
-	 * can be either, we can't talloc_steal() it here, so we
-	 * instead we reference it.
-	 *
-	 * We never talloc_free() the p->sources pointers - indeed we
-	 * never remove them - and the temp source will otherwise go
-	 * away with the msg it is allocated on.
-	 *
-	 * Finally the pointer created in drepl_request_extended_op()
-	 * is removed with talloc_unlink().
-	 *
-	 */
-	op->source_dsa	= talloc_reference(op, source);
-	if (!op->source_dsa) {
-		return WERR_NOMEM;
-	}
-
+	op->source_dsa	= source;
 	op->options	= options;
 	op->extended_op = extended_op;
 	op->fsmo_info   = fsmo_info;

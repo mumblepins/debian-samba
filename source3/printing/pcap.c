@@ -83,26 +83,28 @@ void pcap_cache_destroy_specific(struct pcap_cache **pp_cache)
 	*pp_cache = NULL;
 }
 
-bool pcap_cache_loaded(time_t *_last_change)
+bool pcap_cache_add(const char *name, const char *comment, const char *location)
+{
+	NTSTATUS status;
+	time_t t = time_mono(NULL);
+
+	status = printer_list_set_printer(talloc_tos(), name, comment, location, t);
+	return NT_STATUS_IS_OK(status);
+}
+
+bool pcap_cache_loaded(void)
 {
 	NTSTATUS status;
 	time_t last;
 
 	status = printer_list_get_last_refresh(&last);
-	if (!NT_STATUS_IS_OK(status)) {
-		return false;
-	}
-	if (_last_change != NULL) {
-		*_last_change = last;
-	}
-	return true;
+	return NT_STATUS_IS_OK(status);
 }
 
 bool pcap_cache_replace(const struct pcap_cache *pcache)
 {
 	const struct pcap_cache *p;
 	NTSTATUS status;
-	time_t t = time_mono(NULL);
 
 	status = printer_list_mark_reload();
 	if (!NT_STATUS_IS_OK(status)) {
@@ -111,11 +113,7 @@ bool pcap_cache_replace(const struct pcap_cache *pcache)
 	}
 
 	for (p = pcache; p; p = p->next) {
-		status = printer_list_set_printer(talloc_tos(), p->name,
-						  p->comment, p->location, t);
-		if (!NT_STATUS_IS_OK(status)) {
-			return false;
-		}
+		pcap_cache_add(p->name, p->comment, p->location);
 	}
 
 	status = printer_list_clean_old();
@@ -134,14 +132,20 @@ void pcap_cache_reload(struct tevent_context *ev,
 {
 	const char *pcap_name = lp_printcapname();
 	bool pcap_reloaded = False;
+	NTSTATUS status;
 	bool post_cache_fill_fn_handled = false;
-	struct pcap_cache *pcache = NULL;
 
 	DEBUG(3, ("reloading printcap cache\n"));
 
 	/* only go looking if no printcap name supplied */
 	if (pcap_name == NULL || *pcap_name == 0) {
 		DEBUG(0, ("No printcap file name configured!\n"));
+		return;
+	}
+
+	status = printer_list_mark_reload();
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("Failed to mark printer list for reload!\n"));
 		return;
 	}
 
@@ -160,48 +164,42 @@ void pcap_cache_reload(struct tevent_context *ev,
 
 #ifdef HAVE_IPRINT
 	if (strequal(pcap_name, "iprint")) {
-		pcap_reloaded = iprint_cache_reload(&pcache);
+		pcap_reloaded = iprint_cache_reload();
 		goto done;
 	}
 #endif
 
 #if defined(SYSV) || defined(HPUX)
 	if (strequal(pcap_name, "lpstat")) {
-		pcap_reloaded = sysv_cache_reload(&pcache);
+		pcap_reloaded = sysv_cache_reload();
 		goto done;
 	}
 #endif
 
 #ifdef AIX
 	if (strstr_m(pcap_name, "/qconfig") != NULL) {
-		pcap_reloaded = aix_cache_reload(&pcache);
+		pcap_reloaded = aix_cache_reload();
 		goto done;
 	}
 #endif
 
-	pcap_reloaded = std_pcap_cache_reload(pcap_name, &pcache);
+	pcap_reloaded = std_pcap_cache_reload(pcap_name);
 
-/* Fix silly compiler warning about done not being used if none of the above
- * ifdefs are used */
-#if defined(HAVE_CUPS) || defined(HAVE_IPRINT) || defined(SYSV) || defined(HPUX) || defined(AIX)
 done:
-#endif
 	DEBUG(3, ("reload status: %s\n", (pcap_reloaded) ? "ok" : "error"));
 
 	if ((pcap_reloaded) && (post_cache_fill_fn_handled == false)) {
 		/* cleanup old entries only if the operation was successful,
 		 * otherwise keep around the old entries until we can
-		 * successfully reload */
-
-		if (!pcap_cache_replace(pcache)) {
-			DEBUG(0, ("Failed to replace printer list!\n"));
+		 * successfuly reaload */
+		status = printer_list_clean_old();
+		if (!NT_STATUS_IS_OK(status)) {
+			DEBUG(0, ("Failed to cleanup printer list!\n"));
 		}
-
 		if (post_cache_fill_fn != NULL) {
 			post_cache_fill_fn(ev, msg_ctx);
 		}
 	}
-	pcap_cache_destroy_specific(&pcache);
 
 	return;
 }
@@ -231,11 +229,11 @@ void pcap_printer_fn_specific(const struct pcap_cache *pc,
 	return;
 }
 
-void pcap_printer_read_fn(void (*fn)(const char *, const char *, const char *, void *), void *pdata)
+void pcap_printer_fn(void (*fn)(const char *, const char *, const char *, void *), void *pdata)
 {
 	NTSTATUS status;
 
-	status = printer_list_read_run_fn(fn, pdata);
+	status = printer_list_run_fn(fn, pdata);
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(3, ("Failed to run fn for all printers!\n"));
 	}

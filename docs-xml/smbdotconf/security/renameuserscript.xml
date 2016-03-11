@@ -1,6 +1,7 @@
 <samba:parameter name="rename user script"
                  context="G"
-				 type="string"
+                 advanced="1" developer="1"
+				 type="boolean"
 				 xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
     <para>
@@ -28,5 +29,5 @@
 
 </description>
 
-<value type="default"></value>
+<value type="default">no</value>
 </samba:parameter>

@@ -55,7 +55,7 @@ _PUBLIC_ NTSTATUS composite_wait(struct composite_context *c)
 	c->used_wait = true;
 
 	while (c->state < COMPOSITE_STATE_DONE) {
-		if (tevent_loop_once(c->event_ctx) != 0) {
+		if (event_loop_once(c->event_ctx) != 0) {
 			return NT_STATUS_UNSUCCESSFUL;
 		}
 	}
@@ -106,7 +106,7 @@ _PUBLIC_ void composite_error(struct composite_context *ctx, NTSTATUS status)
 		return;
 	}
 	if (!ctx->used_wait && !ctx->async.fn) {
-		tevent_add_timer(ctx->event_ctx, ctx, timeval_zero(), composite_trigger, ctx);
+		event_add_timed(ctx->event_ctx, ctx, timeval_zero(), composite_trigger, ctx);
 	}
 	ctx->status = status;
 	ctx->state = COMPOSITE_STATE_ERROR;
@@ -136,7 +136,7 @@ _PUBLIC_ bool composite_is_ok(struct composite_context *ctx)
 _PUBLIC_ void composite_done(struct composite_context *ctx)
 {
 	if (!ctx->used_wait && !ctx->async.fn) {
-		tevent_add_timer(ctx->event_ctx, ctx, timeval_zero(), composite_trigger, ctx);
+		event_add_timed(ctx->event_ctx, ctx, timeval_zero(), composite_trigger, ctx);
 	}
 	ctx->state = COMPOSITE_STATE_DONE;
 	if (ctx->async.fn != NULL) {
@@ -157,7 +157,7 @@ _PUBLIC_ void composite_continue(struct composite_context *ctx,
 	   already finished, then we should run the callback with an
 	   immediate event, otherwise we can be stuck forever */
 	if (new_ctx->state >= COMPOSITE_STATE_DONE && continuation) {
-		tevent_add_timer(new_ctx->event_ctx, new_ctx, timeval_zero(), composite_trigger, new_ctx);
+		event_add_timed(new_ctx->event_ctx, new_ctx, timeval_zero(), composite_trigger, new_ctx);
 	}
 }
 
@@ -167,10 +167,6 @@ _PUBLIC_ void composite_continue_smb(struct composite_context *ctx,
 				     void *private_data)
 {
 	if (composite_nomem(new_req, ctx)) return;
-	if (new_req->state > SMBCLI_REQUEST_RECV) {
-		composite_error(ctx, new_req->status);
-		return;
-	}
 	new_req->async.fn = continuation;
 	new_req->async.private_data = private_data;
 }
@@ -181,10 +177,6 @@ _PUBLIC_ void composite_continue_smb2(struct composite_context *ctx,
 				      void *private_data)
 {
 	if (composite_nomem(new_req, ctx)) return;
-	if (new_req->state > SMB2_REQUEST_RECV) {
-		composite_error(ctx, new_req->status);
-		return;
-	}
 	new_req->async.fn = continuation;
 	new_req->async.private_data = private_data;
 }

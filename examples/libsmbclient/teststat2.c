@@ -34,10 +34,11 @@ int main(int argc, char* argv[])
 static int gettime(const char * pUrl,
                    const char * pLocalPath)
 {
+        //char *pSmbPath = 0;
         struct stat st;
-        char m_time[32];
-        char c_time[32];
-        char a_time[32];
+        char mtime[32];
+        char ctime[32];
+        char atime[32];
         
         smbc_init(get_auth_data_fn, 0);
         
@@ -48,12 +49,12 @@ static int gettime(const char * pUrl,
         }
         
         printf("SAMBA\n mtime:%lu/%s ctime:%lu/%s atime:%lu/%s\n",
-               st.st_mtime, ctime_r(&st.st_mtime, m_time),
-               st.st_ctime, ctime_r(&st.st_ctime, c_time),
-               st.st_atime, ctime_r(&st.st_atime, a_time)); 
+               st.st_mtime, ctime_r(&st.st_mtime, mtime),
+               st.st_ctime, ctime_r(&st.st_ctime, ctime),
+               st.st_atime, ctime_r(&st.st_atime, atime)); 
         
         
-        /* check the stat on this file */
+        // check the stat on this file
         if (stat(pLocalPath, &st) < 0)
         {
                 perror("stat");
@@ -61,10 +62,11 @@ static int gettime(const char * pUrl,
         }
         
         printf("LOCAL\n mtime:%lu/%s ctime:%lu/%s atime:%lu/%s\n",
-               st.st_mtime, ctime_r(&st.st_mtime, m_time),
-               st.st_ctime, ctime_r(&st.st_ctime, c_time),
-               st.st_atime, ctime_r(&st.st_atime, a_time));
+               st.st_mtime, ctime_r(&st.st_mtime, mtime),
+               st.st_ctime, ctime_r(&st.st_ctime, ctime),
+               st.st_atime, ctime_r(&st.st_atime, atime));
         
         
         return 0;
 }
+

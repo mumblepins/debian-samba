@@ -249,7 +249,7 @@ static struct chat_struct *make_pw_chat(const char *p)
 
 		special_char_sub(prompt);
 		fstrcpy(t->prompt, prompt);
-		(void)strlower_m(t->prompt);
+		strlower_m(t->prompt);
 		trim_char(t->prompt, ' ', ' ');
 
 		if (!next_token_talloc(frame, &p, &reply, NULL)) {
@@ -262,7 +262,7 @@ static struct chat_struct *make_pw_chat(const char *p)
 
 		special_char_sub(reply);
 		fstrcpy(t->reply, reply);
-		(void)strlower_m(t->reply);
+		strlower_m(t->reply);
 		trim_char(t->reply, ' ', ' ');
 
 	}
@@ -299,7 +299,7 @@ static int smb_pam_passchange_conv(int num_msg,
 	if (num_msg <= 0)
 		return PAM_CONV_ERR;
 
-	if ((pw_chat = make_pw_chat(lp_passwd_chat(talloc_tos()))) == NULL)
+	if ((pw_chat = make_pw_chat(lp_passwd_chat())) == NULL)
 		return PAM_CONV_ERR;
 
 	/*
@@ -524,7 +524,7 @@ static NTSTATUS smb_pam_auth(pam_handle_t *pamh, const char *user)
 	 */
 
 	DEBUG(4,("smb_pam_auth: PAM: Authenticate User: %s\n", user));
-	pam_error = pam_authenticate(pamh, PAM_SILENT | (lp_null_passwords() ? 0 : PAM_DISALLOW_NULL_AUTHTOK));
+	pam_error = pam_authenticate(pamh, PAM_SILENT | lp_null_passwords() ? 0 : PAM_DISALLOW_NULL_AUTHTOK);
 	switch( pam_error ){
 		case PAM_AUTH_ERR:
 			DEBUG(2, ("smb_pam_auth: PAM: Authentication Error for user %s\n", user));
@@ -720,7 +720,7 @@ static bool smb_pam_chauthtok(pam_handle_t *pamh, const char * user)
  * PAM Externally accessible Session handler
  */
 
-bool smb_pam_claim_session(const char *user, const char *tty, const char *rhost)
+bool smb_pam_claim_session(char *user, char *tty, char *rhost)
 {
 	pam_handle_t *pamh = NULL;
 	struct pam_conv *pconv = NULL;
@@ -748,7 +748,7 @@ bool smb_pam_claim_session(const char *user, const char *tty, const char *rhost)
  * PAM Externally accessible Session handler
  */
 
-bool smb_pam_close_session(const char *user, const char *tty, const char *rhost)
+bool smb_pam_close_session(char *user, char *tty, char *rhost)
 {
 	pam_handle_t *pamh = NULL;
 	struct pam_conv *pconv = NULL;
@@ -880,13 +880,13 @@ NTSTATUS smb_pam_accountcheck(const char *user, const char *rhost)
 }
 
 /* If PAM not used, also no PAM restrictions on sessions. */
-bool smb_pam_claim_session(const char *user, const char *tty, const char *rhost)
+bool smb_pam_claim_session(char *user, char *tty, char *rhost)
 {
 	return True;
 }
 
 /* If PAM not used, also no PAM restrictions on sessions. */
-bool smb_pam_close_session(const char *in_user, const char *tty, const char *rhost)
+bool smb_pam_close_session(char *in_user, char *tty, char *rhost)
 {
 	return True;
 }

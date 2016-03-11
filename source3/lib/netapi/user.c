@@ -68,7 +68,7 @@ static void convert_USER_INFO_X_to_samr_user_info21(struct USER_INFO_X *infoX,
 		fields_present |= SAMR_FIELD_DESCRIPTION;
 	}
 	if (infoX->usriX_password_age) {
-		fields_present |= SAMR_FIELD_EXPIRED_FLAG;
+		fields_present |= SAMR_FIELD_FORCE_PWD_CHANGE;
 	}
 	if (infoX->usriX_full_name) {
 		fields_present |= SAMR_FIELD_FULL_NAME;
@@ -400,7 +400,7 @@ WERROR NetUserAdd_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -552,7 +552,7 @@ WERROR NetUserDel_r(struct libnetapi_ctx *ctx,
 	ZERO_STRUCT(user_handle);
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 
 	if (!W_ERROR_IS_OK(werr)) {
@@ -575,7 +575,7 @@ WERROR NetUserDel_r(struct libnetapi_ctx *ctx,
 	status = dcerpc_samr_OpenDomain(b, talloc_tos(),
 					&connect_handle,
 					SAMR_DOMAIN_ACCESS_OPEN_ACCOUNT,
-					discard_const_p(struct dom_sid, &global_sid_Builtin),
+					CONST_DISCARD(struct dom_sid *, &global_sid_Builtin),
 					&builtin_handle,
 					&result);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -602,14 +602,6 @@ WERROR NetUserDel_r(struct libnetapi_ctx *ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (user_rids.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != 1) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 
@@ -1201,6 +1193,9 @@ static NTSTATUS libnetapi_samr_lookup_user_map_USER_INFO(TALLOC_CTX *mem_ctx,
 	}
 
 	switch (level) {
+		case 0:
+			/* already returned above */
+			break;
 		case 1:
 			status = info21_to_USER_INFO_1(mem_ctx, info21, &info1);
 			NT_STATUS_NOT_OK_RETURN(status);
@@ -1319,7 +1314,7 @@ WERROR NetUserEnum_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -1441,7 +1436,7 @@ static WERROR convert_samr_dispinfo_to_NET_DISPLAY_USER(TALLOC_CTX *mem_ctx,
 	struct NET_DISPLAY_USER *user = NULL;
 	int i;
 
-	user = talloc_zero_array(mem_ctx,
+	user = TALLOC_ZERO_ARRAY(mem_ctx,
 				 struct NET_DISPLAY_USER,
 				 info->count);
 	W_ERROR_HAVE_NO_MEMORY(user);
@@ -1485,7 +1480,7 @@ static WERROR convert_samr_dispinfo_to_NET_DISPLAY_MACHINE(TALLOC_CTX *mem_ctx,
 	struct NET_DISPLAY_MACHINE *machine = NULL;
 	int i;
 
-	machine = talloc_zero_array(mem_ctx,
+	machine = TALLOC_ZERO_ARRAY(mem_ctx,
 				    struct NET_DISPLAY_MACHINE,
 				    info->count);
 	W_ERROR_HAVE_NO_MEMORY(machine);
@@ -1527,7 +1522,7 @@ static WERROR convert_samr_dispinfo_to_NET_DISPLAY_GROUP(TALLOC_CTX *mem_ctx,
 	struct NET_DISPLAY_GROUP *group = NULL;
 	int i;
 
-	group = talloc_zero_array(mem_ctx,
+	group = TALLOC_ZERO_ARRAY(mem_ctx,
 				  struct NET_DISPLAY_GROUP,
 				  info->count);
 	W_ERROR_HAVE_NO_MEMORY(group);
@@ -1627,7 +1622,7 @@ WERROR NetQueryDisplayInformation_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -1761,7 +1756,7 @@ WERROR NetUserGetInfo_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -1806,14 +1801,6 @@ WERROR NetUserGetInfo_r(struct libnetapi_ctx *ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (user_rids.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != 1) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 
@@ -1901,7 +1888,6 @@ WERROR NetUserSetInfo_r(struct libnetapi_ctx *ctx,
 		case 1012:
 		case 1024:
 			user_mask = SAMR_USER_ACCESS_SET_LOC_COM;
-			break;
 		case 1051:
 			user_mask = SAMR_USER_ACCESS_SET_ATTRIBUTES |
 				    SAMR_USER_ACCESS_GET_GROUPS;
@@ -1933,7 +1919,7 @@ WERROR NetUserSetInfo_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -1979,14 +1965,6 @@ WERROR NetUserSetInfo_r(struct libnetapi_ctx *ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (user_rids.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != 1) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 
@@ -2392,7 +2370,7 @@ WERROR NetUserModalsGet_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -2877,7 +2855,7 @@ WERROR NetUserModalsSet_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -3012,7 +2990,7 @@ WERROR NetUserGetGroups_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -3046,14 +3024,6 @@ WERROR NetUserGetGroups_r(struct libnetapi_ctx *ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (user_rids.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != 1) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 
@@ -3109,14 +3079,6 @@ WERROR NetUserGetGroups_r(struct libnetapi_ctx *ctx,
 	if (!NT_STATUS_IS_OK(result) &&
 	    !NT_STATUS_EQUAL(result, STATUS_SOME_UNMAPPED)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (names.count != rid_array->count) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (types.count != rid_array->count) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 
@@ -3175,6 +3137,7 @@ WERROR NetUserSetGroups_r(struct libnetapi_ctx *ctx,
 	size_t num_del_rids = 0;
 
 	uint32_t *member_rids = NULL;
+	size_t num_member_rids = 0;
 
 	struct GROUP_USERS_INFO_0 *i0 = NULL;
 	struct GROUP_USERS_INFO_1 *i1 = NULL;
@@ -3188,7 +3151,6 @@ WERROR NetUserSetGroups_r(struct libnetapi_ctx *ctx,
 
 	ZERO_STRUCT(connect_handle);
 	ZERO_STRUCT(domain_handle);
-	ZERO_STRUCT(group_handle);
 
 	if (!r->in.buffer) {
 		return WERR_INVALID_PARAM;
@@ -3203,7 +3165,7 @@ WERROR NetUserSetGroups_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -3237,14 +3199,6 @@ WERROR NetUserSetGroups_r(struct libnetapi_ctx *ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (user_rids.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != 1) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 
@@ -3307,16 +3261,9 @@ WERROR NetUserSetGroups_r(struct libnetapi_ctx *ctx,
 		werr = ntstatus_to_werror(result);
 		goto done;
 	}
-	if (group_rids.count != r->in.num_entries) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != r->in.num_entries) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
 
 	member_rids = group_rids.ids;
+	num_member_rids = group_rids.count;
 
 	status = dcerpc_samr_GetGroupsForUser(b, talloc_tos(),
 					      &user_handle,
@@ -3544,7 +3491,7 @@ WERROR NetUserGetLocalGroups_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -3592,14 +3539,6 @@ WERROR NetUserGetLocalGroups_r(struct libnetapi_ctx *ctx,
 		werr = ntstatus_to_werror(result);
 		goto done;
 	}
-	if (user_rids.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (name_types.count != 1) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
 
 	status = dcerpc_samr_OpenUser(b, talloc_tos(),
 				      &domain_handle,
@@ -3635,7 +3574,7 @@ WERROR NetUserGetLocalGroups_r(struct libnetapi_ctx *ctx,
 	}
 
 	sid_array.num_sids = rid_array->count + 1;
-	sid_array.sids = talloc_array(ctx, struct lsa_SidPtr, sid_array.num_sids);
+	sid_array.sids = TALLOC_ARRAY(ctx, struct lsa_SidPtr, sid_array.num_sids);
 	if (!sid_array.sids) {
 		werr = WERR_NOMEM;
 		goto done;
@@ -3719,14 +3658,6 @@ WERROR NetUserGetLocalGroups_r(struct libnetapi_ctx *ctx,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		werr = ntstatus_to_werror(result);
-		goto done;
-	}
-	if (names.count != num_rids) {
-		werr = WERR_BAD_NET_RESP;
-		goto done;
-	}
-	if (types.count != num_rids) {
-		werr = WERR_BAD_NET_RESP;
 		goto done;
 	}
 

@@ -1,22 +1,13 @@
 '\" t
 .\"     Title: testparm
 .\"    Author: [see the "AUTHOR" section]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 03/30/2016
+.\" Generator: DocBook XSL Stylesheets v1.75.2 <http://docbook.sf.net/>
+.\"      Date: 06/22/2012
 .\"    Manual: User Commands
-.\"    Source: Samba 4.3
+.\"    Source: Samba 3.6
 .\"  Language: English
 .\"
-.TH "TESTPARM" "1" "03/30/2016" "Samba 4\&.3" "User Commands"
-.\" -----------------------------------------------------------------
-.\" * Define some portability stuff
-.\" -----------------------------------------------------------------
-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.\" http://bugs.debian.org/507673
-.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
-.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.ie \n(.g .ds Aq \(aq
-.el       .ds Aq '
+.TH "TESTPARM" "1" "06/22/2012" "Samba 3\&.6" "User Commands"
 .\" -----------------------------------------------------------------
 .\" * set default formatting
 .\" -----------------------------------------------------------------
@@ -31,7 +22,7 @@
 testparm \- check an smb\&.conf configuration file for internal correctness
 .SH "SYNOPSIS"
 .HP \w'\ 'u
-testparm [\-s|\-\-suppress\-prompt] [\-\-help] [\-v|\-\-verbose] {config\ filename} [hostname\ hostIP]
+testparm [\-s] [\-h] [\-v] [\-t\ <encoding>] {config\ filename} [hostname\ hostIP]
 .SH "DESCRIPTION"
 .PP
 This tool is part of the
@@ -59,11 +50,16 @@ file it returns an exit code of 1 to the calling program, else it returns an exi
 testparm\&.
 .SH "OPTIONS"
 .PP
-\-s|\-\-suppress\-prompt
+\-s
 .RS 4
 Without this option,
 testparm
 will prompt for a carriage return after printing the service names and before dumping the service definitions\&.
+.RE
+.PP
+\-h|\-\-help
+.RS 4
+Print a summary of command line options\&.
 .RE
 .PP
 \-V|\-\-version
@@ -71,44 +67,16 @@ will prompt for a carriage return after printing the service names and before du
 Prints the program version number\&.
 .RE
 .PP
-\-\-option=<name>=<value>
-.RS 4
-Set the
-\fBsmb.conf\fR(5)
-option "<name>" to value "<value>" from the command line\&. This overrides compiled\-in defaults and options read from the configuration file\&.
-.RE
-.PP
-\-?|\-\-help
-.RS 4
-Print a summary of command line options\&.
-.RE
-.PP
-\-\-usage
-.RS 4
-Display brief usage message\&.
-.RE
-.PP
-\-d|\-\-debuglevel=level
-.RS 4
-\fIlevel\fR
-is an integer from 0 to 10\&. The default value if this parameter is not specified is 1\&.
-.sp
-The higher this value, the more detail will be logged to the log files about the activities of the server\&. At level 0, only critical errors and serious warnings will be logged\&. Level 1 is a reasonable level for day\-to\-day running \- it generates a small amount of information about operations carried out\&.
-.sp
-Levels above 1 will generate considerable amounts of log data, and should only be used when investigating a problem\&. Levels above 3 are designed for use only by developers and generate HUGE amounts of log data, most of which is extremely cryptic\&.
-.sp
-Note that specifying this parameter here will override the
-\m[blue]\fBlog level\fR\m[]
-parameter in the
-smb\&.conf
-file\&.
-.RE
-.PP
-\-v|\-\-verbose
+\-v
 .RS 4
 If this option is specified, testparm will also output all options that were not used in
 \fBsmb.conf\fR(5)
 and are thus set to their defaults\&.
+.RE
+.PP
+\-t encoding
+.RS 4
+Output data in specified encoding\&.
 .RE
 .PP
 \-\-parameter\-name parametername
@@ -119,16 +87,6 @@ Dumps the named parameter\&. If no section\-name is set the view is limited by d
 \-\-section\-name sectionname
 .RS 4
 Dumps the named section\&.
-.RE
-.PP
-\-\-show\-all\-parameters
-.RS 4
-Show the parameters, type, possible values\&.
-.RE
-.PP
-\-l|\-\-skip\-logic\-checks
-.RS 4
-Skip the global checks\&.
 .RE
 .PP
 configfilename

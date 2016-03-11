@@ -104,6 +104,12 @@ _PUBLIC_ struct smbcli_request *smb_raw_read_send(struct smbcli_tree *tree, unio
 		return NULL;
 	}
 
+	/* the transport layer needs to know that a readbraw is pending
+	   and handle receives a little differently */
+	if (parms->generic.level == RAW_READ_READBRAW) {
+		tree->session->transport->readbraw_pending = 1;
+	}
+
 	return req;
 }
 
@@ -155,8 +161,6 @@ _PUBLIC_ NTSTATUS smb_raw_read_recv(struct smbcli_request *req, union smb_read *
 		parms->readx.out.remaining       = SVAL(req->in.vwv, VWV(2));
 		parms->readx.out.compaction_mode = SVAL(req->in.vwv, VWV(3));
 		parms->readx.out.nread = SVAL(req->in.vwv, VWV(5));
-		parms->readx.out.flags2 = req->flags2;
-		parms->readx.out.data_offset = SVAL(req->in.vwv, VWV(6));
 
 		/* handle oversize replies for non-chained readx replies with
 		   CAP_LARGE_READX. The snia spec has must to answer for. */
@@ -298,7 +302,7 @@ _PUBLIC_ struct smbcli_request *smb_raw_write_send(struct smbcli_tree *tree, uni
 /****************************************************************************
  raw write interface (async recv)
 ****************************************************************************/
-_PUBLIC_ NTSTATUS smb_raw_write_recv(struct smbcli_request *req, union smb_write *parms)
+NTSTATUS smb_raw_write_recv(struct smbcli_request *req, union smb_write *parms)
 {
 	if (!smbcli_request_receive(req) ||
 	    !NT_STATUS_IS_OK(req->status)) {

@@ -30,7 +30,7 @@
 #include "winbindd/winbindd.h"
 #include "winbindd/winbindd_proto.h"
 #include "ntdomain.h"
-#include "librpc/gen_ndr/srv_winbind.h"
+#include "librpc/gen_ndr/srv_wbint.h"
 
 struct wbint_bh_state {
 	struct winbindd_domain *domain;
@@ -96,7 +96,7 @@ static struct tevent_req *wbint_bh_raw_call_send(TALLOC_CTX *mem_ctx,
 
 	ok = wbint_bh_is_connected(h);
 	if (!ok) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
@@ -144,7 +144,7 @@ static void wbint_bh_raw_call_done(struct tevent_req *subreq)
 		state->response->extra_data.data,
 		state->response->length - sizeof(struct winbindd_response));
 	if (state->response->extra_data.data && !state->out_data.data) {
-		tevent_req_oom(req);
+		tevent_req_nomem(NULL, req);
 		return;
 	}
 
@@ -201,7 +201,7 @@ static struct tevent_req *wbint_bh_disconnect_send(TALLOC_CTX *mem_ctx,
 
 	ok = wbint_bh_is_connected(h);
 	if (!ok) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
@@ -283,7 +283,7 @@ struct dcerpc_binding_handle *wbint_binding_handle(TALLOC_CTX *mem_ctx,
 	h = dcerpc_binding_handle_create(mem_ctx,
 					 &wbint_bh_ops,
 					 NULL,
-					 &ndr_table_winbind,
+					 &ndr_table_wbint,
 					 &hs,
 					 struct wbint_bh_state,
 					 __location__);
@@ -304,7 +304,7 @@ enum winbindd_result winbindd_dual_ndrcmd(struct winbindd_domain *domain,
 	int num_fns;
 	bool ret;
 
-	winbind_get_pipe_fns(&fns, &num_fns);
+	wbint_get_pipe_fns(&fns, &num_fns);
 
 	if (state->request->data.ndrcmd >= num_fns) {
 		return WINBINDD_ERROR;

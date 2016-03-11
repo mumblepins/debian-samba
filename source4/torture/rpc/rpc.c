@@ -75,7 +75,7 @@ _PUBLIC_ NTSTATUS torture_rpc_connection(struct torture_context *tctx,
 	NTSTATUS status;
 	struct dcerpc_binding *binding;
 
-	dcerpc_init();
+	dcerpc_init(tctx->lp_ctx);
 
 	status = torture_rpc_binding(tctx, &binding);
 	if (NT_STATUS_IS_ERR(status))
@@ -105,32 +105,21 @@ NTSTATUS torture_rpc_connection_transport(struct torture_context *tctx,
 	NTSTATUS status;
 	struct dcerpc_binding *binding;
 
-	*p = NULL;
-
 	status = torture_rpc_binding(tctx, &binding);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (NT_STATUS_IS_ERR(status))
 		return status;
-	}
 
-	status = dcerpc_binding_set_transport(binding, transport);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	}
-
-	status = dcerpc_binding_set_assoc_group_id(binding, assoc_group_id);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	}
+	binding->transport = transport;
+	binding->assoc_group_id = assoc_group_id;
 
 	status = dcerpc_pipe_connect_b(tctx, p, binding, table,
-				       cmdline_credentials,
-				       tctx->ev, tctx->lp_ctx);
-	if (!NT_STATUS_IS_OK(status)) {
+				       cmdline_credentials, tctx->ev, tctx->lp_ctx);
+					   
+	if (NT_STATUS_IS_ERR(status)) {
 		*p = NULL;
-		return status;
 	}
 
-	return NT_STATUS_OK;
+        return status;
 }
 
 static bool torture_rpc_setup_machine_workstation(struct torture_context *tctx,
@@ -489,9 +478,7 @@ NTSTATUS torture_rpc_init(void)
 	torture_suite_add_suite(suite, torture_rpc_object_uuid(suite));
 	torture_suite_add_suite(suite, torture_rpc_winreg(suite));
 	torture_suite_add_suite(suite, torture_rpc_spoolss(suite));
-#ifdef AD_DC_BUILD_IS_ENABLED
 	torture_suite_add_suite(suite, torture_rpc_spoolss_notify(suite));
-#endif
 	torture_suite_add_suite(suite, torture_rpc_spoolss_win(suite));
 	torture_suite_add_suite(suite, torture_rpc_spoolss_driver(suite));
 	torture_suite_add_suite(suite, torture_rpc_spoolss_access(suite));
@@ -507,7 +494,6 @@ NTSTATUS torture_rpc_init(void)
 	torture_suite_add_simple_test(suite, "schannel", torture_rpc_schannel);
 	torture_suite_add_simple_test(suite, "schannel2", torture_rpc_schannel2);
 	torture_suite_add_simple_test(suite, "bench-schannel1", torture_rpc_schannel_bench1);
-	torture_suite_add_simple_test(suite, "schannel_anon_setpw", torture_rpc_schannel_anon_setpw);
 	torture_suite_add_suite(suite, torture_rpc_srvsvc(suite));
 	torture_suite_add_suite(suite, torture_rpc_svcctl(suite));
 	torture_suite_add_suite(suite, torture_rpc_samr_accessmask(suite));
@@ -515,10 +501,8 @@ NTSTATUS torture_rpc_init(void)
 	torture_suite_add_suite(suite, torture_rpc_samr_passwords_pwdlastset(suite));
 	torture_suite_add_suite(suite, torture_rpc_samr_passwords_badpwdcount(suite));
 	torture_suite_add_suite(suite, torture_rpc_samr_passwords_lockout(suite));
-	torture_suite_add_suite(suite, torture_rpc_samr_passwords_validate(suite));
 	torture_suite_add_suite(suite, torture_rpc_samr_user_privileges(suite));
 	torture_suite_add_suite(suite, torture_rpc_samr_large_dc(suite));
-	torture_suite_add_suite(suite, torture_rpc_samr_priv(suite));
 	torture_suite_add_suite(suite, torture_rpc_epmapper(suite));
 	torture_suite_add_suite(suite, torture_rpc_initshutdown(suite));
 	torture_suite_add_suite(suite, torture_rpc_oxidresolve(suite));
@@ -527,6 +511,7 @@ NTSTATUS torture_rpc_init(void)
 	torture_suite_add_simple_test(suite, "scanner", torture_rpc_scanner);
 	torture_suite_add_simple_test(suite, "autoidl", torture_rpc_autoidl);
 	torture_suite_add_simple_test(suite, "countcalls", torture_rpc_countcalls);
+	torture_suite_add_simple_test(suite, "multibind", torture_multi_bind);
 	torture_suite_add_simple_test(suite, "authcontext", torture_bind_authcontext);
 	torture_suite_add_suite(suite, torture_rpc_samba3(suite));
 	torture_rpc_drsuapi_tcase(suite);
@@ -541,9 +526,6 @@ NTSTATUS torture_rpc_init(void)
 	torture_suite_add_suite(suite, torture_rpc_ntsvcs(suite));
 	torture_suite_add_suite(suite, torture_rpc_bind(suite));
 	torture_suite_add_suite(suite, torture_rpc_backupkey(suite));
-	torture_suite_add_suite(suite, torture_rpc_fsrvp(suite));
-	torture_suite_add_suite(suite, torture_rpc_clusapi(suite));
-	torture_suite_add_suite(suite, torture_rpc_witness(suite));
 
 	suite->description = talloc_strdup(suite, "DCE/RPC protocol and interface tests");
 

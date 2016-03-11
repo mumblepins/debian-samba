@@ -59,10 +59,10 @@ bool login_cache_init(void)
 
 bool login_cache_shutdown(void)
 {
-	/* tdb_close routine returns non-zero on error */
+	/* tdb_close routine returns -1 on error */
 	if (!cache) return False;
 	DEBUG(5, ("Closing cache file\n"));
-	return tdb_close(cache) == 0;
+	return tdb_close(cache) != -1;
 }
 
 /* if we can't read the cache, oh well, no need to return anything */
@@ -152,7 +152,7 @@ bool login_cache_write(const struct samu *sampass,
 			 entry->acct_ctrl,
 			 entry->bad_password_count,
 			 bad_password_time);
-	databuf.dptr = SMB_MALLOC_ARRAY(uint8_t, databuf.dsize);
+	databuf.dptr = SMB_MALLOC_ARRAY(uint8, databuf.dsize);
 	if (!databuf.dptr) {
 		SAFE_FREE(keystr);
 		return False;

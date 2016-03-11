@@ -24,7 +24,10 @@
 #include "torture/torture.h"
 #include "librpc/gen_ndr/winreg.h"
 #include "param/param.h"
-#include "lib/registry/tests/proto.h"
+
+struct torture_suite *torture_registry_hive(TALLOC_CTX *mem_ctx);
+struct torture_suite *torture_registry_registry(TALLOC_CTX *mem_ctx);
+struct torture_suite *torture_registry_diff(TALLOC_CTX *mem_ctx);
 
 static bool test_str_regtype(struct torture_context *ctx)
 {
@@ -91,7 +94,7 @@ static bool test_reg_val_data_string_sz(struct torture_context *ctx)
 {
 	DATA_BLOB db;
 	convert_string_talloc(ctx, CH_UTF8, CH_UTF16,
-					  "bla", 3, (void **)&db.data, &db.length);
+					  "bla", 3, (void **)&db.data, &db.length, false);
 	torture_assert_str_equal(ctx, "bla",
 				 reg_val_data_string(ctx, REG_SZ, db),
 				 "sz failed");
@@ -128,7 +131,7 @@ static bool test_reg_val_description(struct torture_context *ctx)
 	convert_string_talloc(ctx, CH_UTF8, CH_UTF16,
 					    "stationary traveller",
 					    strlen("stationary traveller"),
-					    (void **)&data.data, &data.length);
+					    (void **)&data.data, &data.length, false);
 	torture_assert_str_equal(ctx, "camel = REG_SZ : stationary traveller",
 				 reg_val_description(ctx, "camel", REG_SZ, data),
 				 "reg_val_description failed");
@@ -142,7 +145,7 @@ static bool test_reg_val_description_nullname(struct torture_context *ctx)
 	convert_string_talloc(ctx, CH_UTF8, CH_UTF16,
 					    "west berlin",
 					    strlen("west berlin"),
-					    (void **)&data.data, &data.length);
+					    (void **)&data.data, &data.length, false);
 	torture_assert_str_equal(ctx, "<No Name> = REG_SZ : west berlin",
 				 reg_val_description(ctx, NULL, REG_SZ, data),
 				 "description with null name failed");

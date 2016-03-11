@@ -59,8 +59,6 @@ krb5_clear_error_message(krb5_context context)
  * Set the context full error string for a specific error code.
  * The error that is stored should be internationalized.
  *
- * The if context is NULL, no error string is stored.
- *
  * @param context Kerberos 5 context
  * @param ret The error code
  * @param fmt Error string for the error code
@@ -84,8 +82,6 @@ krb5_set_error_message(krb5_context context, krb5_error_code ret,
 /**
  * Set the context full error string for a specific error code.
  *
- * The if context is NULL, no error string is stored.
- *
  * @param context Kerberos 5 context
  * @param ret The error code
  * @param fmt Error string for the error code
@@ -102,9 +98,6 @@ krb5_vset_error_message (krb5_context context, krb5_error_code ret,
 {
     int r;
 
-    if (context == NULL)
-	return;
-
     HEIMDAL_MUTEX_lock(context->mutex);
     if (context->error_string) {
 	free(context->error_string);
@@ -120,8 +113,6 @@ krb5_vset_error_message (krb5_context context, krb5_error_code ret,
 /**
  * Prepend the context full error string for a specific error code.
  * The error that is stored should be internationalized.
- *
- * The if context is NULL, no error string is stored.
  *
  * @param context Kerberos 5 context
  * @param ret The error code
@@ -146,8 +137,6 @@ krb5_prepend_error_message(krb5_context context, krb5_error_code ret,
 /**
  * Prepend the contexts's full error string for a specific error code.
  *
- * The if context is NULL, no error string is stored.
- *
  * @param context Kerberos 5 context
  * @param ret The error code
  * @param fmt Error string for the error code
@@ -162,10 +151,6 @@ krb5_vprepend_error_message(krb5_context context, krb5_error_code ret,
     __attribute__ ((format (printf, 3, 0)))
 {
     char *str = NULL, *str2 = NULL;
-
-    if (context == NULL)
-	return;
-
     HEIMDAL_MUTEX_lock(context->mutex);
     if (context->error_code != ret) {
 	HEIMDAL_MUTEX_unlock(context->mutex);
@@ -303,9 +288,9 @@ krb5_free_error_message(krb5_context context, const char *msg)
  * @ingroup krb5
  */
 
+KRB5_DEPRECATED
 KRB5_LIB_FUNCTION const char* KRB5_LIB_CALL
 krb5_get_err_text(krb5_context context, krb5_error_code code)
-    KRB5_DEPRECATED_FUNCTION("Use X instead")
 {
     const char *p = NULL;
     if(context != NULL)

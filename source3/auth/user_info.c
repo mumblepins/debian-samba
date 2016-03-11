@@ -20,7 +20,6 @@
 #include "includes.h"
 #include "auth.h"
 #include "librpc/gen_ndr/samr.h"
-#include "../lib/tsocket/tsocket.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_AUTH
@@ -41,14 +40,12 @@ static int clear_string(char *password)
  Create an auth_usersupplied_data structure
 ****************************************************************************/
 
-NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
-			struct auth_usersupplied_info **ret_user_info,
+NTSTATUS make_user_info(struct auth_usersupplied_info **ret_user_info,
 			const char *smb_name,
 			const char *internal_username,
 			const char *client_domain,
 			const char *domain,
 			const char *workstation_name,
-			const struct tsocket_address *remote_address,
 			const DATA_BLOB *lm_pwd,
 			const DATA_BLOB *nt_pwd,
 			const struct samr_Password *lm_interactive_pwd,
@@ -61,7 +58,10 @@ NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
 
 	DEBUG(5,("attempting to make a user_info for %s (%s)\n", internal_username, smb_name));
 
-	user_info = talloc_zero(mem_ctx, struct auth_usersupplied_info);
+	/* FIXME: Have the caller provide a talloc context of the
+	 * correct lifetime (possibly talloc_tos(), but it depends on
+	 * the caller) */
+	user_info = talloc_zero(NULL, struct auth_usersupplied_info);
 	if (user_info == NULL) {
 		DEBUG(0,("talloc failed for user_info\n"));
 		return NT_STATUS_NO_MEMORY;
@@ -70,63 +70,33 @@ NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
 	DEBUG(5,("making strings for %s's user_info struct\n", internal_username));
 
 	user_info->client.account_name = talloc_strdup(user_info, smb_name);
-	if (user_info->client.account_name == NULL) {
-		TALLOC_FREE(user_info);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->client.account_name, user_info);
 
 	user_info->mapped.account_name = talloc_strdup(user_info, internal_username);
-	if (user_info->mapped.account_name == NULL) {
-		TALLOC_FREE(user_info);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->mapped.account_name, user_info);
 
 	user_info->mapped.domain_name = talloc_strdup(user_info, domain);
-	if (user_info->mapped.domain_name == NULL) {
-		TALLOC_FREE(user_info);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->mapped.domain_name, user_info);
 
 	user_info->client.domain_name = talloc_strdup(user_info, client_domain);
-	if (user_info->client.domain_name == NULL) {
-		TALLOC_FREE(user_info);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->client.domain_name, user_info);
 
 	user_info->workstation_name = talloc_strdup(user_info, workstation_name);
-	if (user_info->workstation_name == NULL) {
-		TALLOC_FREE(user_info);
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	user_info->remote_host = tsocket_address_copy(remote_address, user_info);
-	if (user_info->remote_host == NULL) {
-		TALLOC_FREE(user_info);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->workstation_name, user_info);
 
 	DEBUG(5,("making blobs for %s's user_info struct\n", internal_username));
 
 	if (lm_pwd && lm_pwd->data) {
 		user_info->password.response.lanman = data_blob_talloc(user_info, lm_pwd->data, lm_pwd->length);
-		if (user_info->password.response.lanman.data == NULL) {
-			TALLOC_FREE(user_info);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->password.response.lanman.data, user_info);
 	}
 	if (nt_pwd && nt_pwd->data) {
 		user_info->password.response.nt = data_blob_talloc(user_info, nt_pwd->data, nt_pwd->length);
-		if (user_info->password.response.nt.data == NULL) {
-			TALLOC_FREE(user_info);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->password.response.nt.data, user_info);
 	}
 	if (lm_interactive_pwd) {
 		user_info->password.hash.lanman = talloc(user_info, struct samr_Password);
-		if (user_info->password.hash.lanman == NULL) {
-			TALLOC_FREE(user_info);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->password.hash.lanman, user_info);
 		memcpy(user_info->password.hash.lanman->hash, lm_interactive_pwd->hash,
 		       sizeof(user_info->password.hash.lanman->hash));
 		talloc_set_destructor(user_info->password.hash.lanman, clear_samr_Password);
@@ -134,10 +104,7 @@ NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
 
 	if (nt_interactive_pwd) {
 		user_info->password.hash.nt = talloc(user_info, struct samr_Password);
-		if (user_info->password.hash.nt == NULL) {
-			TALLOC_FREE(user_info);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->password.hash.nt, user_info);
 		memcpy(user_info->password.hash.nt->hash, nt_interactive_pwd->hash,
 		       sizeof(user_info->password.hash.nt->hash));
 		talloc_set_destructor(user_info->password.hash.nt, clear_samr_Password);
@@ -145,10 +112,7 @@ NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
 
 	if (plaintext_password) {
 		user_info->password.plaintext = talloc_strdup(user_info, plaintext_password);
-		if (user_info->password.plaintext == NULL) {
-			TALLOC_FREE(user_info);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(user_info->password.plaintext, user_info);
 		talloc_set_destructor(user_info->password.plaintext, clear_string);
 	}
 
@@ -159,4 +123,13 @@ NTSTATUS make_user_info(TALLOC_CTX *mem_ctx,
 	DEBUG(10,("made a user_info for %s (%s)\n", internal_username, smb_name));
 	*ret_user_info = user_info;
 	return NT_STATUS_OK;
+}
+
+/***************************************************************************
+ Free a user_info struct
+***************************************************************************/
+
+void free_user_info(struct auth_usersupplied_info **user_info)
+{
+	TALLOC_FREE(*user_info);
 }

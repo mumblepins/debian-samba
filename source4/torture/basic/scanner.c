@@ -23,7 +23,6 @@
 #include "libcli/raw/raw_proto.h"
 #include "system/filesys.h"
 #include "param/param.h"
-#include "torture/basic/proto.h"
 
 #define VERBOSE 0
 #define OP_MIN 0

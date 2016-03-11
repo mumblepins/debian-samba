@@ -20,14 +20,21 @@
 */
 
 #include "includes.h"
-#include "system/passwd.h"
 #include "auth/auth.h"
 #include "vfs_posix.h"
 #include "librpc/gen_ndr/xattr.h"
 #include "libcli/security/security.h"
 #include "param/param.h"
 #include "../lib/util/unix_privs.h"
-#include "lib/util/samba_modules.h"
+
+#if defined(UID_WRAPPER)
+#if !defined(UID_WRAPPER_REPLACE) && !defined(UID_WRAPPER_NOT_REPLACE)
+#define UID_WRAPPER_REPLACE
+#include "../uid_wrapper/uid_wrapper.h"
+#endif
+#else
+#define uwrap_enabled() 0
+#endif
 
 /* the list of currently registered ACL backends */
 static struct pvfs_acl_backend {
@@ -82,7 +89,7 @@ const struct pvfs_acl_ops *pvfs_acl_backend_byname(const char *name)
 	return NULL;
 }
 
-NTSTATUS pvfs_acl_init(void)
+NTSTATUS pvfs_acl_init(struct loadparm_context *lp_ctx)
 {
 	static bool initialized = false;
 #define _MODULE_PROTO(init) extern NTSTATUS init(void);
@@ -93,7 +100,7 @@ NTSTATUS pvfs_acl_init(void)
 	if (initialized) return NT_STATUS_OK;
 	initialized = true;
 
-	shared_init = load_samba_modules(NULL, "pvfs_acl");
+	shared_init = load_samba_modules(NULL, lp_ctx, "pvfs_acl");
 
 	run_init_functions(static_init);
 	run_init_functions(shared_init);
@@ -151,6 +158,7 @@ static NTSTATUS pvfs_default_acl(struct pvfs_state *pvfs,
 	struct security_ace ace;
 	mode_t mode;
 	struct id_map *ids;
+	struct composite_context *ctx;
 
 	*psd = security_descriptor_initialise(req);
 	if (*psd == NULL) {
@@ -169,7 +177,10 @@ static NTSTATUS pvfs_default_acl(struct pvfs_state *pvfs,
 	ids[1].xid.type = ID_TYPE_GID;
 	ids[1].sid = NULL;
 
-	status = wbc_xids_to_sids(pvfs->ntvfs->ctx->event_ctx, ids, 2);
+	ctx = wbc_xids_to_sids_send(pvfs->wbc_ctx, ids, 2, ids);
+	NT_STATUS_HAVE_NO_MEMORY(ctx);
+
+	status = wbc_xids_to_sids_recv(ctx, &ids);
 	NT_STATUS_NOT_OK_RETURN(status);
 
 	sd->owner_sid = talloc_steal(sd, ids[0].sid);
@@ -266,23 +277,6 @@ static void normalise_sd_flags(struct security_descriptor *sd, uint32_t secinfo_
 	}
 }
 
-static bool pvfs_privileged_access(uid_t uid)
-{
-	uid_t euid;
-
-	if (uid_wrapper_enabled()) {
-		setenv("UID_WRAPPER_MYUID", "1", 1);
-	}
-
-	euid = geteuid();
-
-	if (uid_wrapper_enabled()) {
-		unsetenv("UID_WRAPPER_MYUID");
-	}
-
-	return (uid == euid);
-}
-
 /*
   answer a setfileinfo for an ACL
 */
@@ -300,6 +294,7 @@ NTSTATUS pvfs_acl_set(struct pvfs_state *pvfs,
 	uid_t new_uid = -1;
 	gid_t new_gid = -1;
 	struct id_map *ids;
+	struct composite_context *ctx;
 
 	if (pvfs->acl_ops != NULL) {
 		status = pvfs->acl_ops->acl_load(pvfs, name, fd, req, &sd);
@@ -330,8 +325,9 @@ NTSTATUS pvfs_acl_set(struct pvfs_state *pvfs,
 		}
 		if (!dom_sid_equal(sd->owner_sid, new_sd->owner_sid)) {
 			ids->sid = new_sd->owner_sid;
-			status = wbc_sids_to_xids(pvfs->ntvfs->ctx->event_ctx,
-						  ids, 1);
+			ctx = wbc_sids_to_xids_send(pvfs->wbc_ctx, ids, 1, ids);
+			NT_STATUS_HAVE_NO_MEMORY(ctx);
+			status = wbc_sids_to_xids_recv(ctx, &ids);
 			NT_STATUS_NOT_OK_RETURN(status);
 
 			if (ids->xid.type == ID_TYPE_BOTH ||
@@ -341,15 +337,15 @@ NTSTATUS pvfs_acl_set(struct pvfs_state *pvfs,
 		}
 		sd->owner_sid = new_sd->owner_sid;
 	}
-
 	if (secinfo_flags & SECINFO_GROUP) {
 		if (!(access_mask & SEC_STD_WRITE_OWNER)) {
 			return NT_STATUS_ACCESS_DENIED;
 		}
 		if (!dom_sid_equal(sd->group_sid, new_sd->group_sid)) {
 			ids->sid = new_sd->group_sid;
-			status = wbc_sids_to_xids(pvfs->ntvfs->ctx->event_ctx,
-						  ids, 1);
+			ctx = wbc_sids_to_xids_send(pvfs->wbc_ctx, ids, 1, ids);
+			NT_STATUS_HAVE_NO_MEMORY(ctx);
+			status = wbc_sids_to_xids_recv(ctx, &ids);
 			NT_STATUS_NOT_OK_RETURN(status);
 
 			if (ids->xid.type == ID_TYPE_BOTH ||
@@ -360,39 +356,19 @@ NTSTATUS pvfs_acl_set(struct pvfs_state *pvfs,
 		}
 		sd->group_sid = new_sd->group_sid;
 	}
-
 	if (secinfo_flags & SECINFO_DACL) {
 		if (!(access_mask & SEC_STD_WRITE_DAC)) {
 			return NT_STATUS_ACCESS_DENIED;
 		}
 		sd->dacl = new_sd->dacl;
 		pvfs_translate_generic_bits(sd->dacl);
-		sd->type |= SEC_DESC_DACL_PRESENT;
 	}
-
 	if (secinfo_flags & SECINFO_SACL) {
 		if (!(access_mask & SEC_FLAG_SYSTEM_SECURITY)) {
 			return NT_STATUS_ACCESS_DENIED;
 		}
 		sd->sacl = new_sd->sacl;
 		pvfs_translate_generic_bits(sd->sacl);
-		sd->type |= SEC_DESC_SACL_PRESENT;
-	}
-
-	if (secinfo_flags & SECINFO_PROTECTED_DACL) {
-		if (new_sd->type & SEC_DESC_DACL_PROTECTED) {
-			sd->type |= SEC_DESC_DACL_PROTECTED;
-		} else {
-			sd->type &= ~SEC_DESC_DACL_PROTECTED;
-		}
-	}
-
-	if (secinfo_flags & SECINFO_PROTECTED_SACL) {
-		if (new_sd->type & SEC_DESC_SACL_PROTECTED) {
-			sd->type |= SEC_DESC_SACL_PROTECTED;
-		} else {
-			sd->type &= ~SEC_DESC_SACL_PROTECTED;
-		}
 	}
 
 	if (new_uid == old_uid) {
@@ -412,7 +388,7 @@ NTSTATUS pvfs_acl_set(struct pvfs_state *pvfs,
 			ret = fchown(fd, new_uid, new_gid);
 		}
 		if (errno == EPERM) {
-			if (pvfs_privileged_access(name->st.st_uid)) {
+			if (uwrap_enabled()) {
 				ret = 0;
 			} else {
 				/* try again as root if we have SEC_PRIV_RESTORE or
@@ -507,7 +483,7 @@ static bool pvfs_group_member(struct pvfs_state *pvfs, gid_t gid)
 		return true;
 	}
 	ngroups = getgroups(0, NULL);
-	if (ngroups <= 0) {
+	if (ngroups == 0) {
 		return false;
 	}
 	groups = talloc_array(pvfs, gid_t, ngroups);
@@ -538,36 +514,33 @@ static NTSTATUS pvfs_access_check_unix(struct pvfs_state *pvfs,
 				       struct pvfs_filename *name,
 				       uint32_t *access_mask)
 {
-	uint32_t max_bits = 0;
+	uid_t uid = geteuid();
+	uint32_t max_bits = SEC_RIGHTS_FILE_READ | SEC_FILE_ALL;
 	struct security_token *token = req->session_info->security_token;
 
 	if (pvfs_read_only(pvfs, *access_mask)) {
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
-	if (name == NULL) {
-		max_bits |= SEC_RIGHTS_FILE_ALL | SEC_STD_ALL;
-	} else if (pvfs_privileged_access(name->st.st_uid)) {
-		/* use the IxUSR bits */
-		if ((name->st.st_mode & S_IWUSR)) {
-			max_bits |= SEC_RIGHTS_FILE_ALL | SEC_STD_ALL;
-		} else if ((name->st.st_mode & (S_IRUSR | S_IXUSR))) {
-			max_bits |= SEC_RIGHTS_FILE_READ | SEC_RIGHTS_FILE_EXECUTE | SEC_STD_ALL;
-		}
-	} else if (pvfs_group_member(pvfs, name->st.st_gid)) {
-		/* use the IxGRP bits */
-		if ((name->st.st_mode & S_IWGRP)) {
-			max_bits |= SEC_RIGHTS_FILE_ALL | SEC_STD_ALL;
-		} else if ((name->st.st_mode & (S_IRGRP | S_IXGRP))) {
-			max_bits |= SEC_RIGHTS_FILE_READ | SEC_RIGHTS_FILE_EXECUTE | SEC_STD_ALL;
-		}
-	} else {
-		/* use the IxOTH bits */
-		if ((name->st.st_mode & S_IWOTH)) {
-			max_bits |= SEC_RIGHTS_FILE_ALL | SEC_STD_ALL;
-		} else if ((name->st.st_mode & (S_IROTH | S_IXOTH))) {
-			max_bits |= SEC_RIGHTS_FILE_READ | SEC_RIGHTS_FILE_EXECUTE | SEC_STD_ALL;
-		}
+	if (name == NULL || uid == name->st.st_uid) {
+		max_bits |= SEC_STD_ALL;
+	} else if (security_token_has_privilege(token, SEC_PRIV_RESTORE)) {
+		max_bits |= SEC_STD_DELETE;
+	}
+
+	if (name == NULL ||
+	    (name->st.st_mode & S_IWOTH) ||
+	    ((name->st.st_mode & S_IWGRP) && 
+	     pvfs_group_member(pvfs, name->st.st_gid))) {
+		max_bits |= SEC_STD_ALL;
+	}
+
+	if (uwrap_enabled()) {
+		/* when running with the uid wrapper, files will be created
+		   owned by the ruid, but we may have a different simulated 
+		   euid. We need to force the permission bits as though the 
+		   files owner matches the euid */
+		max_bits |= SEC_STD_ALL;
 	}
 
 	if (*access_mask & SEC_FLAG_MAXIMUM_ALLOWED) {
@@ -590,12 +563,12 @@ static NTSTATUS pvfs_access_check_unix(struct pvfs_state *pvfs,
 	}
 
 	if (*access_mask & ~max_bits) {
-		DEBUG(5,(__location__ " denied access to '%s' - wanted 0x%08x but got 0x%08x (missing 0x%08x)\n",
+		DEBUG(0,(__location__ " denied access to '%s' - wanted 0x%08x but got 0x%08x (missing 0x%08x)\n",
 			 name?name->full_name:"(new file)", *access_mask, max_bits, *access_mask & ~max_bits));
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
-	if (pvfs->ntvfs->ctx->protocol < PROTOCOL_SMB2_02) {
+	if (pvfs->ntvfs->ctx->protocol != PROTOCOL_SMB2) {
 		/* on SMB, this bit is always granted, even if not
 		   asked for */
 		*access_mask |= SEC_FILE_READ_ATTRIBUTE;
@@ -622,7 +595,7 @@ NTSTATUS pvfs_access_check(struct pvfs_state *pvfs,
 	bool allow_delete = false;
 
 	/* on SMB2 a blank access mask is always denied */
-	if (pvfs->ntvfs->ctx->protocol >= PROTOCOL_SMB2_02 &&
+	if (pvfs->ntvfs->ctx->protocol == PROTOCOL_SMB2 &&
 	    *access_mask == 0) {
 		return NT_STATUS_ACCESS_DENIED;
 	}
@@ -648,7 +621,7 @@ NTSTATUS pvfs_access_check(struct pvfs_state *pvfs,
 
 	/* expand the generic access bits to file specific bits */
 	*access_mask = pvfs_translate_mask(*access_mask);
-	if (pvfs->ntvfs->ctx->protocol < PROTOCOL_SMB2_02) {
+	if (pvfs->ntvfs->ctx->protocol != PROTOCOL_SMB2) {
 		*access_mask &= ~SEC_FILE_READ_ATTRIBUTE;
 	}
 
@@ -673,16 +646,8 @@ NTSTATUS pvfs_access_check(struct pvfs_state *pvfs,
 	/* check the acl against the required access mask */
 	status = se_access_check(sd, token, *access_mask, access_mask);
 	talloc_free(acl);
-
-	/* if we used a NT acl, then allow access override if the
-	   share allows for posix permission override
-	*/
-	if (NT_STATUS_IS_OK(status)) {
-		name->allow_override = (pvfs->flags & PVFS_FLAG_PERM_OVERRIDE) != 0;
-	}
-
 done:
-	if (pvfs->ntvfs->ctx->protocol < PROTOCOL_SMB2_02) {
+	if (pvfs->ntvfs->ctx->protocol != PROTOCOL_SMB2) {
 		/* on SMB, this bit is always granted, even if not
 		   asked for */
 		*access_mask |= SEC_FILE_READ_ATTRIBUTE;
@@ -780,7 +745,7 @@ NTSTATUS pvfs_access_check_create(struct pvfs_state *pvfs,
 		*access_mask &= ~SEC_FLAG_MAXIMUM_ALLOWED;
 	}
 
-	if (pvfs->ntvfs->ctx->protocol < PROTOCOL_SMB2_02) {
+	if (pvfs->ntvfs->ctx->protocol != PROTOCOL_SMB2) {
 		/* on SMB, this bit is always granted, even if not
 		   asked for */
 		*access_mask |= SEC_FILE_READ_ATTRIBUTE;
@@ -809,11 +774,7 @@ NTSTATUS pvfs_access_check_parent(struct pvfs_state *pvfs,
 		return status;
 	}
 
-	status = pvfs_access_check_simple(pvfs, req, parent, access_mask);
-	if (NT_STATUS_IS_OK(status) && parent->allow_override) {
-		name->allow_override = true;
-	}
-	return status;
+	return pvfs_access_check_simple(pvfs, req, parent, access_mask);
 }
 
 
@@ -937,25 +898,20 @@ NTSTATUS pvfs_acl_inherited_sd(struct pvfs_state *pvfs,
 	NTSTATUS status;
 	struct security_descriptor *parent_sd, *sd;
 	struct id_map *ids;
+	struct composite_context *ctx;
 	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
 
 	*ret_sd = NULL;
 
 	acl = talloc(req, struct xattr_NTACL);
-	if (acl == NULL) {
-		TALLOC_FREE(tmp_ctx);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(acl, tmp_ctx);
 
 	status = pvfs_acl_load(pvfs, parent, -1, acl);
 	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_FOUND)) {
 		talloc_free(tmp_ctx);
 		return NT_STATUS_OK;
 	}
-	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(tmp_ctx);
-		return status;
-	}
+	NT_STATUS_NOT_OK_RETURN_AND_FREE(status, tmp_ctx);
 
 	switch (acl->version) {
 	case 1:
@@ -976,16 +932,10 @@ NTSTATUS pvfs_acl_inherited_sd(struct pvfs_state *pvfs,
 
 	/* create the new sd */
 	sd = security_descriptor_initialise(req);
-	if (sd == NULL) {
-		TALLOC_FREE(tmp_ctx);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(sd, tmp_ctx);
 
 	ids = talloc_array(sd, struct id_map, 2);
-	if (ids == NULL) {
-		TALLOC_FREE(tmp_ctx);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(ids, tmp_ctx);
 
 	ids[0].xid.id = geteuid();
 	ids[0].xid.type = ID_TYPE_UID;
@@ -997,11 +947,11 @@ NTSTATUS pvfs_acl_inherited_sd(struct pvfs_state *pvfs,
 	ids[1].sid = NULL;
 	ids[1].status = ID_UNKNOWN;
 
-	status = wbc_xids_to_sids(pvfs->ntvfs->ctx->event_ctx, ids, 2);
-	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(tmp_ctx);
-		return status;
-	}
+	ctx = wbc_xids_to_sids_send(pvfs->wbc_ctx, ids, 2, ids);
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(ctx, tmp_ctx);
+
+	status = wbc_xids_to_sids_recv(ctx, &ids);
+	NT_STATUS_NOT_OK_RETURN_AND_FREE(status, tmp_ctx);
 
 	sd->owner_sid = talloc_steal(sd, ids[0].sid);
 	sd->group_sid = talloc_steal(sd, ids[1].sid);
@@ -1010,10 +960,7 @@ NTSTATUS pvfs_acl_inherited_sd(struct pvfs_state *pvfs,
 
 	/* fill in the aces from the parent */
 	status = pvfs_acl_inherit_aces(pvfs, parent_sd, sd, container);
-	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(tmp_ctx);
-		return status;
-	}
+	NT_STATUS_NOT_OK_RETURN_AND_FREE(status, tmp_ctx);
 
 	/* if there is nothing to inherit then we fallback to the
 	   default acl */

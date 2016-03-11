@@ -26,7 +26,7 @@ static NTSTATUS cmd_echo_add_one(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ct
 				 int argc, const char **argv)
 {
 	struct dcerpc_binding_handle *b = cli->binding_handle;
-	uint32_t request = 1, response;
+	uint32 request = 1, response;
 	NTSTATUS status;
 
 	if (argc > 2) {
@@ -53,7 +53,7 @@ static NTSTATUS cmd_echo_data(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx,
 			      int argc, const char **argv)
 {
 	struct dcerpc_binding_handle *b = cli->binding_handle;
-	uint32_t size, i;
+	uint32 size, i;
 	NTSTATUS status;
 	uint8_t *in_data = NULL, *out_data = NULL;
 
@@ -105,7 +105,7 @@ static NTSTATUS cmd_echo_source_data(struct rpc_pipe_client *cli,
 				     const char **argv)
 {
 	struct dcerpc_binding_handle *b = cli->binding_handle;
-	uint32_t size, i;
+	uint32 size, i;
 	NTSTATUS status;
 	uint8_t *out_data = NULL;
 
@@ -146,7 +146,7 @@ static NTSTATUS cmd_echo_sink_data(struct rpc_pipe_client *cli, TALLOC_CTX *mem_
 				   int argc, const char **argv)
 {
 	struct dcerpc_binding_handle *b = cli->binding_handle;
-	uint32_t size, i;
+	uint32 size, i;
 	NTSTATUS status;
 	uint8_t *in_data = NULL;
 
@@ -184,9 +184,9 @@ struct cmd_set echo_commands[] = {
 
 	{ "ECHO" },
 
-	{ "echoaddone", RPC_RTYPE_NTSTATUS, cmd_echo_add_one,     NULL, &ndr_table_rpcecho, NULL, "Add one to a number", "" },
-	{ "echodata",   RPC_RTYPE_NTSTATUS, cmd_echo_data,        NULL, &ndr_table_rpcecho, NULL, "Echo data",           "" },
-	{ "sinkdata",   RPC_RTYPE_NTSTATUS, cmd_echo_sink_data,   NULL, &ndr_table_rpcecho, NULL, "Sink data",           "" },
-	{ "sourcedata", RPC_RTYPE_NTSTATUS, cmd_echo_source_data, NULL, &ndr_table_rpcecho, NULL, "Source data",         "" },
+	{ "echoaddone", RPC_RTYPE_NTSTATUS, cmd_echo_add_one,     NULL, &ndr_table_rpcecho.syntax_id, NULL, "Add one to a number", "" },
+	{ "echodata",   RPC_RTYPE_NTSTATUS, cmd_echo_data,        NULL, &ndr_table_rpcecho.syntax_id, NULL, "Echo data",           "" },
+	{ "sinkdata",   RPC_RTYPE_NTSTATUS, cmd_echo_sink_data,   NULL, &ndr_table_rpcecho.syntax_id, NULL, "Sink data",           "" },
+	{ "sourcedata", RPC_RTYPE_NTSTATUS, cmd_echo_source_data, NULL, &ndr_table_rpcecho.syntax_id, NULL, "Source data",         "" },
 	{ NULL }
 };

@@ -42,14 +42,11 @@
  */
 #define HEIM_SHA_H 1
 
-#if SHA1_RENAME_NEEDED
+#if 0
 /* symbol renaming */
 #define SHA1_Init hc_SHA1_Init
 #define SHA1_Update hc_SHA1_Update
 #define SHA1_Final hc_SHA1_Final
-#endif
-#if SHA256_RENAME_NEEDED
-/* symbol renaming */
 #define SHA256_Init hc_SHA256_Init
 #define SHA256_Update hc_SHA256_Update
 #define SHA256_Final hc_SHA256_Final
@@ -87,8 +84,8 @@ struct hc_sha256state {
 
 typedef struct hc_sha256state SHA256_CTX;
 
-void samba_SHA256_Init (SHA256_CTX *);
-void samba_SHA256_Update (SHA256_CTX *, const void *, size_t);
-void samba_SHA256_Final (void *, SHA256_CTX *);
+void SHA256_Init (SHA256_CTX *);
+void SHA256_Update (SHA256_CTX *, const void *, size_t);
+void SHA256_Final (void *, SHA256_CTX *);
 
 #endif /* HEIM_SHA_H */

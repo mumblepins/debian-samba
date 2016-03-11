@@ -19,7 +19,6 @@
 
 #include "replace.h"
 #include "system/time.h"
-#include "replace-test.h"
 
 #endif /* LIBREPLACE_CONFIGURE_TEST_STRPTIME */
 

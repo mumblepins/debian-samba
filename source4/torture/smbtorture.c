@@ -32,7 +32,6 @@
 #include "librpc/rpc/dcerpc.h"
 #include "auth/gensec/gensec.h"
 #include "param/param.h"
-#include "lib/util/samba_modules.h"
 
 #if HAVE_READLINE_HISTORY_H
 #include <readline/history.h>
@@ -158,20 +157,12 @@ bool torture_parse_target(struct loadparm_context *lp_ctx, const char *target)
 
 	/* see if its a RPC transport specifier */
 	if (!smbcli_parse_unc(target, NULL, &host, &share)) {
-		const char *h;
-
 		status = dcerpc_parse_binding(talloc_autofree_context(), target, &binding_struct);
 		if (NT_STATUS_IS_ERR(status)) {
 			d_printf("Invalid option: %s is not a valid torture target (share or binding string)\n\n", target);
 			return false;
 		}
-
-		h = dcerpc_binding_get_string_option(binding_struct, "host");
-		host = discard_const_p(char, h);
-		if (host != NULL) {
-			lpcfg_set_cmdline(lp_ctx, "torture:host", host);
-		}
-
+		lpcfg_set_cmdline(lp_ctx, "torture:host", binding_struct->host);
 		if (lpcfg_parm_string(lp_ctx, NULL, "torture", "share") == NULL)
 			lpcfg_set_cmdline(lp_ctx, "torture:share", "IPC$");
 		lpcfg_set_cmdline(lp_ctx, "torture:binding", target);
@@ -358,10 +349,73 @@ _NORETURN_ static void max_runtime_handler(int sig)
 	exit(1);
 }
 
+struct timeval last_suite_started;
+
+static void simple_suite_start(struct torture_context *ctx,
+			       struct torture_suite *suite)
+{
+	last_suite_started = timeval_current();
+	printf("Running %s\n", suite->name);
+}
+
+static void simple_suite_finish(struct torture_context *ctx,
+			        struct torture_suite *suite)
+{
+
+	printf("%s took %g secs\n\n", suite->name, 
+		   timeval_elapsed(&last_suite_started));
+}
+
+static void simple_test_result(struct torture_context *context, 
+			       enum torture_result res, const char *reason)
+{
+	switch (res) {
+	case TORTURE_OK:
+		if (reason)
+			printf("OK: %s\n", reason);
+		break;
+	case TORTURE_FAIL:
+		printf("TEST %s FAILED! - %s\n", context->active_test->name, reason);
+		break;
+	case TORTURE_ERROR:
+		printf("ERROR IN TEST %s! - %s\n", context->active_test->name, reason); 
+		break;
+	case TORTURE_SKIP:
+		printf("SKIP: %s - %s\n", context->active_test->name, reason);
+		break;
+	}
+}
+
+static void simple_comment(struct torture_context *test, 
+			   const char *comment)
+{
+	printf("%s", comment);
+}
+
+static void simple_warning(struct torture_context *test, 
+			   const char *comment)
+{
+	fprintf(stderr, "WARNING: %s\n", comment);
+}
+
+static void simple_progress(struct torture_context *test,
+	int offset, enum torture_progress_whence whence)
+{
+}
+
+const static struct torture_ui_ops std_ui_ops = {
+	.comment = simple_comment,
+	.warning = simple_warning,
+	.suite_start = simple_suite_start,
+	.suite_finish = simple_suite_finish,
+	.test_result = simple_test_result,
+	.progress = simple_progress,
+};
+
 /****************************************************************************
   main program
 ****************************************************************************/
-int main(int argc, const char *argv[])
+int main(int argc,char *argv[])
 {
 	int opt, i;
 	bool correct = true;
@@ -381,7 +435,7 @@ int main(int argc, const char *argv[])
 	const char *extra_module = NULL;
 	static int list_tests = 0, list_testsuites = 0;
 	int num_extra_users = 0;
-	const char **restricted = NULL;
+	char **restricted = NULL;
 	int num_restricted = -1;
 	const char *load_list = NULL;
 	enum {OPT_LOADFILE=1000,OPT_UNCLIST,OPT_TIMELIMIT,OPT_DNS, OPT_LIST,
@@ -428,12 +482,10 @@ int main(int argc, const char *argv[])
 
 	setlinebuf(stdout);
 
-	printf("smbtorture %s\n", samba_version_string());
-
 	/* we are never interested in SIGPIPE */
 	BlockSignals(true, SIGPIPE);
 
-	pc = poptGetContext("smbtorture", argc, argv, long_options,
+	pc = poptGetContext("smbtorture", argc, (const char **) argv, long_options, 
 			    POPT_CONTEXT_KEEP_FIRST);
 
 	poptSetOtherOptionHelp(pc, "<binding>|<unc> TEST1 TEST2 ...");
@@ -482,9 +534,8 @@ int main(int argc, const char *argv[])
 	}
 
 	if (load_list != NULL) {
-		char **r;
-		r = file_lines_load(load_list, &num_restricted, 0, talloc_autofree_context());
-		restricted = discard_const_p(const char *, r);
+		restricted = file_lines_load(load_list, &num_restricted, 0,
+									 talloc_autofree_context());
 		if (restricted == NULL) {
 			printf("Unable to read load list file '%s'\n", load_list);
 			exit(1);
@@ -496,9 +547,6 @@ int main(int argc, const char *argv[])
 		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:resume_key_support", "false");
 	} else if (strcmp(target, "samba4") == 0) {
 		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:samba4", "true");
-	} else if (strcmp(target, "samba4-ntvfs") == 0) {
-		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:samba4", "true");
-		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:samba4-ntvfs", "true");
 	} else if (strcmp(target, "winxp") == 0) {
 		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:winxp", "true");
 	} else if (strcmp(target, "w2k3") == 0) {
@@ -507,8 +555,6 @@ int main(int argc, const char *argv[])
 		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:w2k8", "true");
 		lpcfg_set_cmdline(cmdline_lp_ctx,
 		    "torture:invalid_lock_range_support", "false");
-	} else if (strcmp(target, "w2k12") == 0) {
-		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:w2k12", "true");
 	} else if (strcmp(target, "win7") == 0) {
 		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:win7", "true");
 		lpcfg_set_cmdline(cmdline_lp_ctx, "torture:cn_max_buffer_size",
@@ -555,7 +601,7 @@ int main(int argc, const char *argv[])
 	}
 
 	if (extra_module != NULL) {
-		init_module_fn fn = load_module(poptGetOptArg(pc), false, NULL);
+	    init_module_fn fn = load_module(talloc_autofree_context(), poptGetOptArg(pc));
 
 		if (fn == NULL) 
 			d_printf("Unable to load module from %s\n", poptGetOptArg(pc));
@@ -603,7 +649,7 @@ int main(int argc, const char *argv[])
 	srandom(torture_seed);
 
 	if (!strcmp(ui_ops_name, "simple")) {
-		ui_ops = &torture_simple_ui_ops;
+		ui_ops = &std_ui_ops;
 	} else if (!strcmp(ui_ops_name, "subunit")) {
 		ui_ops = &torture_subunit_ui_ops;
 	} else {
@@ -640,7 +686,7 @@ int main(int argc, const char *argv[])
 
 	torture->lp_ctx = cmdline_lp_ctx;
 
-	gensec_init();
+	gensec_init(cmdline_lp_ctx);
 
 	if (shell) {
 		/* In shell mode, just ignore any remaining test names. */

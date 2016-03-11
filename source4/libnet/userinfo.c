@@ -30,7 +30,7 @@
 
 
 struct userinfo_state {
-	struct dcerpc_binding_handle *binding_handle;
+	struct dcerpc_pipe        *pipe;
 	struct policy_handle      domain_handle;
 	struct policy_handle      user_handle;
 	uint16_t                  level;
@@ -62,7 +62,7 @@ static void continue_userinfo_lookup(struct tevent_req *subreq)
 	struct msg_rpc_lookup_name *msg_lookup;
 
 	c = tevent_req_callback_data(subreq, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userinfo_state);
+	s = talloc_get_type(c->private_data, struct userinfo_state);
 
 	/* receive samr_Lookup reply */
 	c->status = dcerpc_samr_LookupNames_r_recv(subreq, s);
@@ -90,13 +90,8 @@ static void continue_userinfo_lookup(struct tevent_req *subreq)
 
 	/* have we actually got name resolved
 	   - we're looking for only one at the moment */
-	if (s->lookup.out.rids->count != s->lookup.in.num_names) {
-		composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
-	}
-	if (s->lookup.out.types->count != s->lookup.in.num_names) {
-		composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
+	if (s->lookup.out.rids->count == 0) {
+		composite_error(c, NT_STATUS_NO_SUCH_USER);
 	}
 
 	/* TODO: find proper status code for more than one rid found */
@@ -109,7 +104,7 @@ static void continue_userinfo_lookup(struct tevent_req *subreq)
 
 	/* send request */
 	subreq = dcerpc_samr_OpenUser_r_send(s, c->event_ctx,
-					     s->binding_handle,
+					     s->pipe->binding_handle,
 					     &s->openuser);
 	if (composite_nomem(subreq, c)) return;
 
@@ -128,15 +123,15 @@ static void continue_userinfo_openuser(struct tevent_req *subreq)
 	struct msg_rpc_open_user *msg_open;
 
 	c = tevent_req_callback_data(subreq, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userinfo_state);
+	s = talloc_get_type(c->private_data, struct userinfo_state);
 
 	/* receive samr_OpenUser reply */
 	c->status = dcerpc_samr_OpenUser_r_recv(subreq, s);
 	TALLOC_FREE(subreq);
 	if (!composite_is_ok(c)) return;
 
-	if (!NT_STATUS_IS_OK(s->openuser.out.result)) {
-		composite_error(c, s->openuser.out.result);
+	if (!NT_STATUS_IS_OK(s->queryuserinfo.out.result)) {
+		composite_error(c, s->queryuserinfo.out.result);
 		return;
 	}
 
@@ -160,7 +155,7 @@ static void continue_userinfo_openuser(struct tevent_req *subreq)
 	
 	/* queue rpc call, set event handling and new state */
 	subreq = dcerpc_samr_QueryUserInfo_r_send(s, c->event_ctx,
-						  s->binding_handle,
+						  s->pipe->binding_handle,
 						  &s->queryuserinfo);
 	if (composite_nomem(subreq, c)) return;
 	
@@ -179,7 +174,7 @@ static void continue_userinfo_getuser(struct tevent_req *subreq)
 	struct msg_rpc_query_user *msg_query;
 
 	c = tevent_req_callback_data(subreq, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userinfo_state);
+	s = talloc_get_type(c->private_data, struct userinfo_state);
 
 	/* receive samr_QueryUserInfo reply */
 	c->status = dcerpc_samr_QueryUserInfo_r_recv(subreq, s);
@@ -211,7 +206,7 @@ static void continue_userinfo_getuser(struct tevent_req *subreq)
 	
 	/* queue rpc call, set event handling and new state */
 	subreq = dcerpc_samr_Close_r_send(s, c->event_ctx,
-					  s->binding_handle,
+					  s->pipe->binding_handle,
 					  &s->samrclose);
 	if (composite_nomem(subreq, c)) return;
 	
@@ -230,7 +225,7 @@ static void continue_userinfo_closeuser(struct tevent_req *subreq)
 	struct msg_rpc_close_user *msg_close;
 
 	c = tevent_req_callback_data(subreq, struct composite_context);
-	s = talloc_get_type_abort(c->private_data, struct userinfo_state);
+	s = talloc_get_type(c->private_data, struct userinfo_state);
 
 	/* receive samr_Close reply */
 	c->status = dcerpc_samr_Close_r_recv(subreq, s);
@@ -263,9 +258,7 @@ static void continue_userinfo_closeuser(struct tevent_req *subreq)
  * @param p dce/rpc call pipe 
  * @param io arguments and results of the call
  */
-struct composite_context *libnet_rpc_userinfo_send(TALLOC_CTX *mem_ctx,
-						   struct tevent_context *ev,
-						   struct dcerpc_binding_handle *b,
+struct composite_context *libnet_rpc_userinfo_send(struct dcerpc_pipe *p,
 						   struct libnet_rpc_userinfo *io,
 						   void (*monitor)(struct monitor_msg*))
 {
@@ -274,9 +267,9 @@ struct composite_context *libnet_rpc_userinfo_send(TALLOC_CTX *mem_ctx,
 	struct dom_sid *sid;
 	struct tevent_req *subreq;
 
-	if (!b || !io) return NULL;
+	if (!p || !io) return NULL;
 	
-	c = composite_create(mem_ctx, ev);
+	c = composite_create(p, dcerpc_event_context(p));
 	if (c == NULL) return c;
 	
 	s = talloc_zero(c, struct userinfo_state);
@@ -285,7 +278,7 @@ struct composite_context *libnet_rpc_userinfo_send(TALLOC_CTX *mem_ctx,
 	c->private_data = s;
 
 	s->level         = io->in.level;
-	s->binding_handle= b;
+	s->pipe          = p;
 	s->domain_handle = io->in.domain_handle;
 	s->monitor_fn    = monitor;
 
@@ -300,7 +293,7 @@ struct composite_context *libnet_rpc_userinfo_send(TALLOC_CTX *mem_ctx,
 		
 		/* send request */
 		subreq = dcerpc_samr_OpenUser_r_send(s, c->event_ctx,
-						     s->binding_handle,
+						     p->binding_handle,
 						     &s->openuser);
 		if (composite_nomem(subreq, c)) return c;
 
@@ -322,7 +315,7 @@ struct composite_context *libnet_rpc_userinfo_send(TALLOC_CTX *mem_ctx,
 		
 		/* send request */
 		subreq = dcerpc_samr_LookupNames_r_send(s, c->event_ctx,
-							s->binding_handle,
+							p->binding_handle,
 							&s->lookup);
 		if (composite_nomem(subreq, c)) return c;
 		
@@ -352,7 +345,7 @@ NTSTATUS libnet_rpc_userinfo_recv(struct composite_context *c, TALLOC_CTX *mem_c
 	status = composite_wait(c);
 	
 	if (NT_STATUS_IS_OK(status) && io) {
-		s = talloc_get_type_abort(c->private_data, struct userinfo_state);
+		s = talloc_get_type(c->private_data, struct userinfo_state);
 		talloc_steal(mem_ctx, s->info);
 		io->out.info = *s->info;
 	}
@@ -372,11 +365,10 @@ NTSTATUS libnet_rpc_userinfo_recv(struct composite_context *c, TALLOC_CTX *mem_c
  * @return nt status code of execution
  */
 
-NTSTATUS libnet_rpc_userinfo(struct tevent_context *ev,
-			     struct dcerpc_binding_handle *b,
+NTSTATUS libnet_rpc_userinfo(struct dcerpc_pipe *p,
 			     TALLOC_CTX *mem_ctx,
 			     struct libnet_rpc_userinfo *io)
 {
-	struct composite_context *c = libnet_rpc_userinfo_send(mem_ctx, ev, b, io, NULL);
+	struct composite_context *c = libnet_rpc_userinfo_send(p, io, NULL);
 	return libnet_rpc_userinfo_recv(c, mem_ctx, io);
 }

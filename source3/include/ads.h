@@ -13,7 +13,7 @@ struct ads_struct;
 
 struct ads_saslwrap_ops {
 	const char *name;
-	ADS_STATUS (*wrap)(struct ads_struct *, uint8_t *buf, uint32_t len);
+	ADS_STATUS (*wrap)(struct ads_struct *, uint8 *buf, uint32 len);
 	ADS_STATUS (*unwrap)(struct ads_struct *);
 	void (*disconnect)(struct ads_struct *);
 };
@@ -26,7 +26,7 @@ enum ads_saslwrap_type {
 
 typedef struct ads_struct {
 	int is_mine;	/* do I own this structure's memory? */
-
+	
 	/* info needed to find the server */
 	struct {
 		char *realm;
@@ -45,7 +45,6 @@ typedef struct ads_struct {
 		char *kdc_server;
 		unsigned flags;
 		int time_offset;
-		char *ccache_name;
 		time_t tgt_expire;
 		time_t tgs_expire;
 		time_t renewable;
@@ -53,7 +52,7 @@ typedef struct ads_struct {
 
 	/* info derived from the servers config */
 	struct {
-		uint32_t flags; /* cldap flags identifying the services. */
+		uint32 flags; /* cldap flags identifying the services. */
 		char *realm;
 		char *bind_path;
 		char *ldap_server_name;
@@ -82,23 +81,23 @@ typedef struct ads_struct {
 		const struct ads_saslwrap_ops *wrap_ops;
 		void *wrap_private_data;
 		struct {
-			uint32_t ofs;
-			uint32_t needed;
-			uint32_t left;
+			uint32 ofs;
+			uint32 needed;
+			uint32 left;
 #define        ADS_SASL_WRAPPING_IN_MAX_WRAPPED        0x0FFFFFFF
-			uint32_t max_wrapped;
-			uint32_t min_wrapped;
-			uint32_t size;
-			uint8_t *buf;
+			uint32 max_wrapped;
+			uint32 min_wrapped;
+			uint32 size;
+			uint8 *buf;
 		} in;
 		struct {
-			uint32_t ofs;
-			uint32_t left;
+			uint32 ofs;
+			uint32 left;
 #define        ADS_SASL_WRAPPING_OUT_MAX_WRAPPED       0x00A00000
-			uint32_t max_unwrapped;
-			uint32_t sig_size;
-			uint32_t size;
-			uint8_t *buf;
+			uint32 max_unwrapped;
+			uint32 sig_size;
+			uint32 size;
+			uint8 *buf;
 		} out;
 	} ldap;
 #endif /* HAVE_LDAP */
@@ -127,6 +126,17 @@ typedef void **ADS_MODLIST;
 #define ADS_LDAP_MATCHING_RULE_BIT_OR	"1.2.840.113556.1.4.804"
 
 #define ADS_PINGS          0x0000FFFF  /* Ping response */
+
+/* ads auth control flags */
+#define ADS_AUTH_DISABLE_KERBEROS 0x0001
+#define ADS_AUTH_NO_BIND          0x0002
+#define ADS_AUTH_ANON_BIND        0x0004
+#define ADS_AUTH_SIMPLE_BIND      0x0008
+#define ADS_AUTH_ALLOW_NTLMSSP    0x0010
+#define ADS_AUTH_SASL_SIGN        0x0020
+#define ADS_AUTH_SASL_SEAL        0x0040
+#define ADS_AUTH_SASL_FORCE       0x0080
+#define ADS_AUTH_USER_CREDS       0x0100
 
 enum ads_extended_dn_flags {
 	ADS_EXTENDED_DN_HEX_STRING	= 0,

@@ -22,8 +22,7 @@
 #include "rpc_client/rpc_client.h"
 #include "../librpc/gen_ndr/ndr_spoolss_c.h"
 #include "rpc_client/cli_spoolss.h"
-#include "registry.h"
-#include "libcli/registry/util_reg.h"
+#include "registry/reg_objects.h"
 
 #ifdef HAVE_ADS
 
@@ -115,45 +114,46 @@ ADS_STATUS ads_add_printer_entry(ADS_STRUCT *ads, char *prt_dn,
 /*
   map a REG_SZ to an ldap mod
 */
-static bool map_sz(TALLOC_CTX *ctx, ADS_MODLIST *mods,
-		   const char *name, struct registry_value *value)
+static bool map_sz(TALLOC_CTX *ctx, ADS_MODLIST *mods, 
+		   struct regval_blob *value)
 {
-	const char *str_value = NULL;
+	char *str_value = NULL;
+	size_t converted_size;
 	ADS_STATUS status;
 
-	if (value->type != REG_SZ)
+	if (regval_type(value) != REG_SZ)
 		return false;
 
-	if (value->data.length  && value->data.data) {
-		if (!pull_reg_sz(ctx, &value->data, &str_value)) {
+	if (regval_size(value) && *((smb_ucs2_t *) regval_data_p(value))) {
+		if (!pull_ucs2_talloc(ctx, &str_value,
+				      (const smb_ucs2_t *) regval_data_p(value),
+				      &converted_size))
+		{
 			return false;
 		}
-		status = ads_mod_str(ctx, mods, name, str_value);
+		status = ads_mod_str(ctx, mods, regval_name(value), str_value);
 		return ADS_ERR_OK(status);
 	}
 	return true;
+		
 }
 
 /*
   map a REG_DWORD to an ldap mod
 */
-static bool map_dword(TALLOC_CTX *ctx, ADS_MODLIST *mods,
-		      const char *name, struct registry_value *value)
+static bool map_dword(TALLOC_CTX *ctx, ADS_MODLIST *mods, 
+		      struct regval_blob *value)
 {
 	char *str_value = NULL;
 	ADS_STATUS status;
 
-	if (value->type != REG_DWORD) {
-		return false;
-	}
-	if (value->data.length != sizeof(uint32_t)) {
-		return false;
-	}
-	str_value = talloc_asprintf(ctx, "%d", IVAL(value->data.data, 0));
+	if (regval_type(value) != REG_DWORD)
+		return False;
+	str_value = talloc_asprintf(ctx, "%d", *((uint32 *) regval_data_p(value)));
 	if (!str_value) {
-		return false;
+		return False;
 	}
-	status = ads_mod_str(ctx, mods, name, str_value);
+	status = ads_mod_str(ctx, mods, regval_name(value), str_value);
 	return ADS_ERR_OK(status);
 }
 
@@ -161,21 +161,19 @@ static bool map_dword(TALLOC_CTX *ctx, ADS_MODLIST *mods,
   map a boolean REG_BINARY to an ldap mod
 */
 static bool map_bool(TALLOC_CTX *ctx, ADS_MODLIST *mods,
-		     const char *name, struct registry_value *value)
+		     struct regval_blob *value)
 {
-	const char *str_value;
+	char *str_value;
 	ADS_STATUS status;
 
-	if (value->type != REG_BINARY) {
-		return false;
+	if ((regval_type(value) != REG_BINARY) || (regval_size(value) != 1))
+		return False;
+	str_value =  talloc_asprintf(ctx, "%s", 
+				     *(regval_data_p(value)) ? "TRUE" : "FALSE");
+	if (!str_value) {
+		return False;
 	}
-	if (value->data.length != 1) {
-		return false;
-	}
-
-	str_value =  *value->data.data ? "TRUE" : "FALSE";
-
-	status = ads_mod_str(ctx, mods, name, str_value);
+	status = ads_mod_str(ctx, mods, regval_name(value), str_value);
 	return ADS_ERR_OK(status);
 }
 
@@ -183,35 +181,55 @@ static bool map_bool(TALLOC_CTX *ctx, ADS_MODLIST *mods,
   map a REG_MULTI_SZ to an ldap mod
 */
 static bool map_multi_sz(TALLOC_CTX *ctx, ADS_MODLIST *mods,
-			 const char *name, struct registry_value *value)
+			 struct regval_blob *value)
 {
-	const char **str_values = NULL;
+	char **str_values = NULL;
+	size_t converted_size;
+	smb_ucs2_t *cur_str = (smb_ucs2_t *) regval_data_p(value);
+        uint32 size = 0, num_vals = 0, i=0;
 	ADS_STATUS status;
 
-	if (value->type != REG_MULTI_SZ) {
-		return false;
-	}
+	if (regval_type(value) != REG_MULTI_SZ)
+		return False;
 
-	if (value->data.length  && value->data.data) {
-		if (!pull_reg_multi_sz(ctx, &value->data, &str_values)) {
-			return false;
+	while(cur_str && *cur_str && (size < regval_size(value))) {
+		size += 2 * (strlen_w(cur_str) + 1);
+		cur_str += strlen_w(cur_str) + 1;
+		num_vals++;
+	};
+
+	if (num_vals) {
+		str_values = TALLOC_ARRAY(ctx, char *, num_vals + 1);
+		if (!str_values) {
+			return False;
 		}
-		status = ads_mod_strlist(ctx, mods, name, str_values);
+		memset(str_values, '\0', 
+		       (num_vals + 1) * sizeof(char *));
+
+		cur_str = (smb_ucs2_t *) regval_data_p(value);
+		for (i=0; i < num_vals; i++) {
+			cur_str += pull_ucs2_talloc(ctx, &str_values[i],
+						    cur_str, &converted_size) ?
+			    converted_size : (size_t)-1;
+		}
+
+		status = ads_mod_strlist(ctx, mods, regval_name(value),
+					 (const char **) str_values);
 		return ADS_ERR_OK(status);
-	}
-	return true;
+	} 
+	return True;
 }
 
 struct valmap_to_ads {
 	const char *valname;
-	bool (*fn)(TALLOC_CTX *, ADS_MODLIST *, const char *, struct registry_value *);
+	bool (*fn)(TALLOC_CTX *, ADS_MODLIST *, struct regval_blob *);
 };
 
 /*
   map a REG_SZ to an ldap mod
 */
 static void map_regval_to_ads(TALLOC_CTX *ctx, ADS_MODLIST *mods, 
-			      const char *name, struct registry_value *value)
+			      struct regval_blob *value)
 {
 	const struct valmap_to_ads map[] = {
 		{SPOOL_REG_ASSETNUMBER, map_sz},
@@ -271,12 +289,13 @@ static void map_regval_to_ads(TALLOC_CTX *ctx, ADS_MODLIST *mods,
 	int i;
 
 	for (i=0; map[i].valname; i++) {
-		if (strcasecmp_m(map[i].valname, name) == 0) {
-			if (!map[i].fn(ctx, mods, name, value)) {
-				DEBUG(5, ("Add of value %s to modlist failed\n", name));
+		if (StrCaseCmp(map[i].valname, regval_name(value)) == 0) {
+			if (!map[i].fn(ctx, mods, value)) {
+				DEBUG(5, ("Add of value %s to modlist failed\n", regval_name(value)));
 			} else {
-				DEBUG(7, ("Mapped value %s\n", name));
+				DEBUG(7, ("Mapped value %s\n", regval_name(value)));
 			}
+			
 		}
 	}
 }
@@ -292,7 +311,7 @@ WERROR get_remote_printer_publishing_data(struct rpc_pipe_client *cli,
 	char *printername;
 	struct spoolss_PrinterEnumValues *info;
 	uint32_t count;
-	uint32_t i;
+	uint32 i;
 	struct policy_handle pol;
 	WERROR werr;
 
@@ -324,11 +343,18 @@ WERROR get_remote_printer_publishing_data(struct rpc_pipe_client *cli,
 	} else {
 		/* Have the data we need now, so start building */
 		for (i=0; i < count; i++) {
-			struct registry_value v;
-			v.type = info[i].type;
-			v.data = *info[i].data;
+			struct regval_blob *v;
 
-			map_regval_to_ads(mem_ctx, mods, info[i].value_name, &v);
+			v = regval_compose(mem_ctx, info[i].value_name,
+					   info[i].type,
+					   info[i].data->data,
+					   info[i].data->length);
+			if (v == NULL) {
+				return WERR_NOMEM;
+			}
+
+			map_regval_to_ads(mem_ctx, mods, v);
+			talloc_free(v);
 		}
 	}
 
@@ -342,11 +368,18 @@ WERROR get_remote_printer_publishing_data(struct rpc_pipe_client *cli,
 			  printername, win_errstr(result)));
 	} else {
 		for (i=0; i < count; i++) {
-			struct registry_value v;
-			v.type = info[i].type;
-			v.data = *info[i].data;
+			struct regval_blob *v;
 
-			map_regval_to_ads(mem_ctx, mods, info[i].value_name, &v);
+			v = regval_compose(mem_ctx, info[i].value_name,
+					   info[i].type,
+					   info[i].data->data,
+					   info[i].data->length);
+			if (v == NULL) {
+				return WERR_NOMEM;
+			}
+
+			map_regval_to_ads(mem_ctx, mods, v);
+			talloc_free(v);
 		}
 	}
 

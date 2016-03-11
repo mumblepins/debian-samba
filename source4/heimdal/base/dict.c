@@ -77,7 +77,7 @@ struct heim_type_data dict_object = {
 static size_t
 isprime(size_t p)
 {
-    size_t q, i;
+    int q, i;
 
     for(i = 2 ; i < p; i++) {
 	q = p / i;
@@ -120,7 +120,7 @@ heim_dict_create(size_t size)
 	heim_release(dict);
 	return NULL;
     }
-
+    
     dict->tab = calloc(dict->size, sizeof(dict->tab[0]));
     if (dict->tab == NULL) {
 	dict->size = 0;

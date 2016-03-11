@@ -250,11 +250,11 @@ static NTSTATUS smb_create_user(TALLOC_CTX *mem_ctx,
 
 	/* Create appropriate user */
 	if (acct_flags & ACB_NORMAL) {
-		add_script = lp_add_user_script(mem_ctx);
+		add_script = talloc_strdup(mem_ctx, lp_adduser_script());
 	} else if ( (acct_flags & ACB_WSTRUST) ||
 		    (acct_flags & ACB_SVRTRUST) ||
 		    (acct_flags & ACB_DOMTRUST) ) {
-		add_script = lp_add_machine_script(mem_ctx);
+		add_script = talloc_strdup(mem_ctx, lp_addmachine_script());
 	} else {
 		DEBUG(1, ("Unknown user type: %s\n",
 			  pdb_encode_acct_ctrl(acct_flags, NEW_PW_FORMAT_SPACE_PADDED_LEN)));
@@ -301,7 +301,7 @@ static NTSTATUS fetch_account_info(TALLOC_CTX *mem_ctx,
 	NTSTATUS nt_ret = NT_STATUS_UNSUCCESSFUL;
 	fstring account;
 	struct samu *sam_account=NULL;
-	GROUP_MAP *map = NULL;
+	GROUP_MAP map;
 	struct group *grp;
 	struct dom_sid user_sid;
 	struct dom_sid group_sid;
@@ -355,19 +355,14 @@ static NTSTATUS fetch_account_info(TALLOC_CTX *mem_ctx,
 
 	group_sid = *pdb_get_group_sid(sam_account);
 
-	map = talloc_zero(mem_ctx, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (!pdb_getgrsid(map, group_sid)) {
+	if (!pdb_getgrsid(&map, group_sid)) {
 		DEBUG(0, ("Primary group of %s has no mapping!\n",
 			  pdb_get_username(sam_account)));
 	} else {
-		if (map->gid != passwd->pw_gid) {
-			if (!(grp = getgrgid(map->gid))) {
+		if (map.gid != passwd->pw_gid) {
+			if (!(grp = getgrgid(map.gid))) {
 				DEBUG(0, ("Could not find unix group %lu for user %s (group SID=%s)\n",
-					  (unsigned long)map->gid, pdb_get_username(sam_account), sid_string_tos(&group_sid)));
+					  (unsigned long)map.gid, pdb_get_username(sam_account), sid_string_tos(&group_sid)));
 			} else {
 				smb_set_primary_group(grp->gr_name, pdb_get_username(sam_account));
 			}
@@ -381,7 +376,6 @@ static NTSTATUS fetch_account_info(TALLOC_CTX *mem_ctx,
 
  done:
 	TALLOC_FREE(sam_account);
-	TALLOC_FREE(map);
 	return nt_ret;
 }
 
@@ -392,65 +386,60 @@ static NTSTATUS fetch_group_info(TALLOC_CTX *mem_ctx,
 				 uint32_t rid,
 				 struct netr_DELTA_GROUP *r)
 {
+	fstring name;
+	fstring comment;
 	struct group *grp = NULL;
 	struct dom_sid group_sid;
 	fstring sid_string;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	bool insert = true;
 
-	map = talloc_zero(mem_ctx, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
+	fstrcpy(name, r->group_name.string);
+	fstrcpy(comment, r->description.string);
+
 	/* add the group to the mapping table */
 	sid_compose(&group_sid, get_global_sam_sid(), rid);
 	sid_to_fstring(sid_string, &group_sid);
 
-	if (pdb_getgrsid(map, group_sid)) {
-		if (map->gid != -1) {
-			grp = getgrgid(map->gid);
-		}
+	if (pdb_getgrsid(&map, group_sid)) {
+		if ( map.gid != -1 )
+			grp = getgrgid(map.gid);
 		insert = false;
-	}
-
-	map->nt_name = talloc_strdup(map, r->group_name.string);
-	if (!map->nt_name) {
-		return NT_STATUS_NO_MEMORY;
-	}
-	map->comment = talloc_strdup(map, r->description.string);
-	if (!map->comment) {
-		return NT_STATUS_NO_MEMORY;
 	}
 
 	if (grp == NULL) {
 		gid_t gid;
 
 		/* No group found from mapping, find it from its name. */
-		if ((grp = getgrnam(map->nt_name)) == NULL) {
+		if ((grp = getgrnam(name)) == NULL) {
 
 			/* No appropriate group found, create one */
 
-			d_printf("Creating unix group: '%s'\n", map->nt_name);
+			d_printf("Creating unix group: '%s'\n", name);
 
-			if (smb_create_group(map->nt_name, &gid) != 0)
+			if (smb_create_group(name, &gid) != 0)
 				return NT_STATUS_ACCESS_DENIED;
 
-			if ((grp = getgrnam(map->nt_name)) == NULL)
+			if ((grp = getgrnam(name)) == NULL)
 				return NT_STATUS_ACCESS_DENIED;
 		}
 	}
 
-	map->gid = grp->gr_gid;
-	map->sid = group_sid;
-	map->sid_name_use = SID_NAME_DOM_GRP;
-
-	if (insert) {
-		pdb_add_group_mapping_entry(map);
+	map.gid = grp->gr_gid;
+	map.sid = group_sid;
+	map.sid_name_use = SID_NAME_DOM_GRP;
+	fstrcpy(map.nt_name, name);
+	if (r->description.string) {
+		fstrcpy(map.comment, comment);
 	} else {
-		pdb_update_group_mapping_entry(map);
+		fstrcpy(map.comment, "");
 	}
 
-	TALLOC_FREE(map);
+	if (insert)
+		pdb_add_group_mapping_entry(&map);
+	else
+		pdb_update_group_mapping_entry(&map);
+
 	return NT_STATUS_OK;
 }
 
@@ -465,7 +454,7 @@ static NTSTATUS fetch_group_mem_info(TALLOC_CTX *mem_ctx,
 	char **nt_members = NULL;
 	char **unix_members;
 	struct dom_sid group_sid;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	struct group *grp;
 
 	if (r->num_rids == 0) {
@@ -474,30 +463,20 @@ static NTSTATUS fetch_group_mem_info(TALLOC_CTX *mem_ctx,
 
 	sid_compose(&group_sid, get_global_sam_sid(), rid);
 
-	map = talloc_zero(mem_ctx, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (!get_domain_group_from_sid(group_sid, map)) {
+	if (!get_domain_group_from_sid(group_sid, &map)) {
 		DEBUG(0, ("Could not find global group %d\n", rid));
-		TALLOC_FREE(map);
 		return NT_STATUS_NO_SUCH_GROUP;
 	}
 
-	if (!(grp = getgrgid(map->gid))) {
-		DEBUG(0, ("Could not find unix group %lu\n",
-						(unsigned long)map->gid));
-		TALLOC_FREE(map);
+	if (!(grp = getgrgid(map.gid))) {
+		DEBUG(0, ("Could not find unix group %lu\n", (unsigned long)map.gid));
 		return NT_STATUS_NO_SUCH_GROUP;
 	}
-
-	TALLOC_FREE(map);
 
 	d_printf("Group members of %s: ", grp->gr_name);
 
 	if (r->num_rids) {
-		if ((nt_members = talloc_zero_array(mem_ctx, char *, r->num_rids)) == NULL) {
+		if ((nt_members = TALLOC_ZERO_ARRAY(mem_ctx, char *, r->num_rids)) == NULL) {
 			DEBUG(0, ("talloc failed\n"));
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -596,65 +575,56 @@ static NTSTATUS fetch_alias_info(TALLOC_CTX *mem_ctx,
 				 struct netr_DELTA_ALIAS *r,
 				 const struct dom_sid *dom_sid)
 {
+	fstring name;
+	fstring comment;
 	struct group *grp = NULL;
 	struct dom_sid alias_sid;
 	fstring sid_string;
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	bool insert = true;
 
-	map = talloc_zero(mem_ctx, GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
+	fstrcpy(name, r->alias_name.string);
+	fstrcpy(comment, r->description.string);
 
 	/* Find out whether the group is already mapped */
 	sid_compose(&alias_sid, dom_sid, rid);
 	sid_to_fstring(sid_string, &alias_sid);
 
-	if (pdb_getgrsid(map, alias_sid)) {
-		grp = getgrgid(map->gid);
+	if (pdb_getgrsid(&map, alias_sid)) {
+		grp = getgrgid(map.gid);
 		insert = false;
-	}
-
-	map->nt_name = talloc_strdup(map, r->alias_name.string);
-	if (!map->nt_name) {
-		return NT_STATUS_NO_MEMORY;
-	}
-	map->comment = talloc_strdup(map, r->description.string);
-	if (!map->comment) {
-		return NT_STATUS_NO_MEMORY;
 	}
 
 	if (grp == NULL) {
 		gid_t gid;
 
 		/* No group found from mapping, find it from its name. */
-		if ((grp = getgrnam(map->nt_name)) == NULL) {
+		if ((grp = getgrnam(name)) == NULL) {
 			/* No appropriate group found, create one */
-			d_printf("Creating unix group: '%s'\n", map->nt_name);
-			if (smb_create_group(map->nt_name, &gid) != 0)
+			d_printf("Creating unix group: '%s'\n", name);
+			if (smb_create_group(name, &gid) != 0)
 				return NT_STATUS_ACCESS_DENIED;
 			if ((grp = getgrgid(gid)) == NULL)
 				return NT_STATUS_ACCESS_DENIED;
 		}
 	}
 
-	map->gid = grp->gr_gid;
-	map->sid = alias_sid;
+	map.gid = grp->gr_gid;
+	map.sid = alias_sid;
 
-	if (dom_sid_equal(dom_sid, &global_sid_Builtin)) {
-		map->sid_name_use = SID_NAME_WKN_GRP;
-	} else {
-		map->sid_name_use = SID_NAME_ALIAS;
-	}
+	if (dom_sid_equal(dom_sid, &global_sid_Builtin))
+		map.sid_name_use = SID_NAME_WKN_GRP;
+	else
+		map.sid_name_use = SID_NAME_ALIAS;
 
-	if (insert) {
-		pdb_add_group_mapping_entry(map);
-	} else {
-		pdb_update_group_mapping_entry(map);
-	}
+	fstrcpy(map.nt_name, name);
+	fstrcpy(map.comment, comment);
 
-	TALLOC_FREE(map);
+	if (insert)
+		pdb_add_group_mapping_entry(&map);
+	else
+		pdb_update_group_mapping_entry(&map);
+
 	return NT_STATUS_OK;
 }
 
@@ -689,9 +659,9 @@ static NTSTATUS fetch_domain_info(TALLOC_CTX *mem_ctx,
 			nt_errstr(status));
 	}
 
-	u_max_age = uint64s_nt_time_to_unix_abs((uint64_t *)&r->max_password_age);
-	u_min_age = uint64s_nt_time_to_unix_abs((uint64_t *)&r->min_password_age);
-	u_logout = uint64s_nt_time_to_unix_abs((uint64_t *)&r->force_logoff_time);
+	u_max_age = uint64s_nt_time_to_unix_abs((uint64 *)&r->max_password_age);
+	u_min_age = uint64s_nt_time_to_unix_abs((uint64 *)&r->min_password_age);
+	u_logout = uint64s_nt_time_to_unix_abs((uint64 *)&r->force_logoff_time);
 
 	domname = r->domain_name.string;
 	if (!domname) {
@@ -714,15 +684,15 @@ static NTSTATUS fetch_domain_info(TALLOC_CTX *mem_ctx,
 		return nt_status;
 
 	if (!pdb_set_account_policy(PDB_POLICY_MAX_PASSWORD_AGE,
-				    (uint32_t)u_max_age))
+				    (uint32)u_max_age))
 		return nt_status;
 
 	if (!pdb_set_account_policy(PDB_POLICY_MIN_PASSWORD_AGE,
-				    (uint32_t)u_min_age))
+				    (uint32)u_min_age))
 		return nt_status;
 
 	if (!pdb_set_account_policy(PDB_POLICY_TIME_TO_LOGOUT,
-				    (uint32_t)u_logout))
+				    (uint32)u_logout))
 		return nt_status;
 
 	if (lockstr) {

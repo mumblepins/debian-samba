@@ -19,7 +19,6 @@
 #include "includes.h"
 #include "system/filesys.h"
 #include "smbd/smbd.h"
-#include "lib/util/tevent_unix.h"
 
 /* Commit data module.
  *
@@ -69,11 +68,11 @@ enum eof_mode
 struct commit_info
 {
         /* For chunk-based commits */
-        off_t dbytes;	/* Dirty (uncommitted) bytes */
-        off_t dthresh;	/* Dirty data threshold */
+        SMB_OFF_T dbytes;	/* Dirty (uncommitted) bytes */
+        SMB_OFF_T dthresh;	/* Dirty data threshold */
         /* For commits on EOF */
         enum eof_mode on_eof;
-        off_t eof;		/* Expected file size */
+        SMB_OFF_T eof;		/* Expected file size */
 };
 
 static int commit_do(
@@ -122,7 +121,7 @@ static int commit_all(
 static int commit(
         struct vfs_handle_struct *	handle,
         files_struct *		        fsp,
-	off_t			offset,
+	SMB_OFF_T			offset,
         ssize_t			        last_write)
 {
         struct commit_info *c;
@@ -184,7 +183,7 @@ static int commit_open(
 	int		    flags,
 	mode_t		    mode)
 {
-        off_t dthresh;
+        SMB_OFF_T dthresh;
 	const char *eof_mode;
         struct commit_info *c = NULL;
         int fd;
@@ -230,16 +229,7 @@ static int commit_open(
         /* EOF commit modes require us to know the initial file size. */
         if (c && (c->on_eof != EOF_NONE)) {
                 SMB_STRUCT_STAT st;
-		/*
-		 * Setting the fd of the FSP is a hack
-		 * but also practiced elsewhere -
-		 * needed for calling the VFS.
-		 */
-		fsp->fh->fd = fd;
-		if (SMB_VFS_FSTAT(fsp, &st) == -1) {
-			int saved_errno = errno;
-			SMB_VFS_CLOSE(fsp);
-			errno = saved_errno;
+                if (SMB_VFS_FSTAT(fsp, &st) == -1) {
                         return -1;
                 }
 		c->eof = st.st_ex_size;
@@ -271,7 +261,7 @@ static ssize_t commit_pwrite(
         files_struct *      fsp,
         const void *        data,
         size_t              count,
-	off_t	    offset)
+	SMB_OFF_T	    offset)
 {
         ssize_t ret;
 
@@ -283,83 +273,6 @@ static ssize_t commit_pwrite(
         }
 
         return ret;
-}
-
-struct commit_pwrite_state {
-	struct vfs_handle_struct *handle;
-	struct files_struct *fsp;
-	ssize_t ret;
-	int err;
-};
-
-static void commit_pwrite_written(struct tevent_req *subreq);
-
-static struct tevent_req *commit_pwrite_send(struct vfs_handle_struct *handle,
-					     TALLOC_CTX *mem_ctx,
-					     struct tevent_context *ev,
-					     struct files_struct *fsp,
-					     const void *data,
-					     size_t n, off_t offset)
-{
-	struct tevent_req *req, *subreq;
-	struct commit_pwrite_state *state;
-
-	req = tevent_req_create(mem_ctx, &state, struct commit_pwrite_state);
-	if (req == NULL) {
-		return NULL;
-	}
-	state->handle = handle;
-	state->fsp = fsp;
-
-	subreq = SMB_VFS_NEXT_PWRITE_SEND(state, ev, handle, fsp, data,
-					  n, offset);
-	if (tevent_req_nomem(subreq, req)) {
-		return tevent_req_post(req, ev);
-	}
-	tevent_req_set_callback(subreq, commit_pwrite_written, req);
-	return req;
-}
-
-static void commit_pwrite_written(struct tevent_req *subreq)
-{
-	struct tevent_req *req = tevent_req_callback_data(
-		subreq, struct tevent_req);
-	struct commit_pwrite_state *state = tevent_req_data(
-		req, struct commit_pwrite_state);
-	int commit_ret;
-
-	state->ret = SMB_VFS_PWRITE_RECV(subreq, &state->err);
-	TALLOC_FREE(subreq);
-
-	if (state->ret <= 0) {
-		tevent_req_done(req);
-		return;
-	}
-
-	/*
-	 * Ok, this is a sync fake. We should make the sync async as well, but
-	 * I'm too lazy for that right now -- vl
-	 */
-	commit_ret = commit(state->handle, state->fsp, state->fsp->fh->pos,
-			    state->ret);
-
-	if (commit_ret == -1) {
-		state->ret = -1;
-	}
-
-	tevent_req_done(req);
-}
-
-static ssize_t commit_pwrite_recv(struct tevent_req *req, int *err)
-{
-	struct commit_pwrite_state *state =
-		tevent_req_data(req, struct commit_pwrite_state);
-
-	if (tevent_req_is_unix_error(req, err)) {
-		return -1;
-	}
-	*err = state->err;
-	return state->ret;
 }
 
 static int commit_close(
@@ -374,7 +287,7 @@ static int commit_close(
 static int commit_ftruncate(
         vfs_handle_struct * handle,
         files_struct *      fsp,
-        off_t           len)
+        SMB_OFF_T           len)
 {
         int result;
 
@@ -394,12 +307,10 @@ static int commit_ftruncate(
 static struct vfs_fn_pointers vfs_commit_fns = {
         .open_fn = commit_open,
         .close_fn = commit_close,
-        .write_fn = commit_write,
-        .pwrite_fn = commit_pwrite,
-        .pwrite_send_fn = commit_pwrite_send,
-        .pwrite_recv_fn = commit_pwrite_recv,
+        .write = commit_write,
+        .pwrite = commit_pwrite,
         .connect_fn = commit_connect,
-        .ftruncate_fn = commit_ftruncate
+        .ftruncate = commit_ftruncate
 };
 
 NTSTATUS vfs_commit_init(void);

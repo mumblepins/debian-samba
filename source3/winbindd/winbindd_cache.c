@@ -28,7 +28,7 @@
 #include "winbindd.h"
 #include "tdb_validate.h"
 #include "../libcli/auth/libcli_auth.h"
-#include "../librpc/gen_ndr/ndr_winbind.h"
+#include "../librpc/gen_ndr/ndr_wbint.h"
 #include "ads.h"
 #include "nss_info.h"
 #include "../libcli/security/security.h"
@@ -46,7 +46,7 @@
 
 extern struct winbindd_methods reconnect_methods;
 #ifdef HAVE_ADS
-extern struct winbindd_methods reconnect_ads_methods;
+extern struct winbindd_methods ads_methods;
 #endif
 extern struct winbindd_methods builtin_passdb_methods;
 extern struct winbindd_methods sam_passdb_methods;
@@ -59,6 +59,8 @@ extern struct winbindd_methods sam_passdb_methods;
 
 static const char *non_centry_keys[] = {
 	"SEQNUM/",
+	"DR/",
+	"DE/",
 	"WINBINDD_OFFLINE",
 	WINBINDD_CACHE_VERSION_KEYSTR,
 	NULL
@@ -99,10 +101,10 @@ struct winbind_cache {
 
 struct cache_entry {
 	NTSTATUS status;
-	uint32_t sequence_number;
+	uint32 sequence_number;
 	uint64_t timeout;
-	uint8_t *data;
-	uint32_t len, ofs;
+	uint8 *data;
+	uint32 len, ofs;
 };
 
 void (*smb_panic_fn)(const char *const why) = smb_panic;
@@ -120,20 +122,17 @@ static struct winbind_cache *get_cache(struct winbindd_domain *domain)
 
 	if (domain->internal) {
 		domain->backend = &builtin_passdb_methods;
-	}
-
-	if (dom_sid_equal(&domain->sid, &global_sid_Builtin)) {
-		domain->initialized = true;
+		domain->initialized = True;
 	}
 
 	if (strequal(domain->name, get_global_sam_name()) &&
-	    sid_check_is_our_sam(&domain->sid)) {
+	    sid_check_is_domain(&domain->sid)) {
 		domain->backend = &sam_passdb_methods;
+		domain->initialized = True;
 	}
 
 	if ( !domain->initialized ) {
-		/* We do not need a connection to an RW DC for cache operation */
-		init_dc_connection(domain, false);
+		init_dc_connection( domain );
 	}
 
 	/* 
@@ -168,7 +167,7 @@ static struct winbind_cache *get_cache(struct winbindd_domain *domain)
 		    && domain->active_directory
 		    && !lp_winbind_rpc_only()) {
 			DEBUG(5,("get_cache: Setting ADS methods for domain %s\n", domain->name));
-			domain->backend = &reconnect_ads_methods;
+			domain->backend = &ads_methods;
 		} else {
 #endif	/* HAVE_ADS */
 			DEBUG(5,("get_cache: Setting MS-RPC methods for domain %s\n", domain->name));
@@ -228,11 +227,11 @@ static uint64_t centry_uint64_t(struct cache_entry *centry)
 }
 
 /*
-  pull a uint32_t from a cache entry
+  pull a uint32 from a cache entry 
 */
-static uint32_t centry_uint32(struct cache_entry *centry)
+static uint32 centry_uint32(struct cache_entry *centry)
 {
-	uint32_t ret;
+	uint32 ret;
 
 	if (!centry_check_bytes(centry, 4)) {
 		smb_panic_fn("centry_uint32");
@@ -243,11 +242,11 @@ static uint32_t centry_uint32(struct cache_entry *centry)
 }
 
 /*
-  pull a uint16_t from a cache entry
+  pull a uint16 from a cache entry 
 */
-static uint16_t centry_uint16(struct cache_entry *centry)
+static uint16 centry_uint16(struct cache_entry *centry)
 {
-	uint16_t ret;
+	uint16 ret;
 	if (!centry_check_bytes(centry, 2)) {
 		smb_panic_fn("centry_uint16");
 	}
@@ -257,11 +256,11 @@ static uint16_t centry_uint16(struct cache_entry *centry)
 }
 
 /*
-  pull a uint8_t from a cache entry
+  pull a uint8 from a cache entry 
 */
-static uint8_t centry_uint8(struct cache_entry *centry)
+static uint8 centry_uint8(struct cache_entry *centry)
 {
-	uint8_t ret;
+	uint8 ret;
 	if (!centry_check_bytes(centry, 1)) {
 		smb_panic_fn("centry_uint8");
 	}
@@ -281,7 +280,7 @@ static NTTIME centry_nttime(struct cache_entry *centry)
 	}
 	ret = IVAL(centry->data, centry->ofs);
 	centry->ofs += 4;
-	ret += (uint64_t)IVAL(centry->data, centry->ofs) << 32;
+	ret += (uint64)IVAL(centry->data, centry->ofs) << 32;
 	centry->ofs += 4;
 	return ret;
 }
@@ -299,7 +298,7 @@ static time_t centry_time(struct cache_entry *centry)
 */
 static char *centry_string(struct cache_entry *centry, TALLOC_CTX *mem_ctx)
 {
-	uint32_t len;
+	uint32 len;
 	char *ret;
 
 	len = centry_uint8(centry);
@@ -313,7 +312,7 @@ static char *centry_string(struct cache_entry *centry, TALLOC_CTX *mem_ctx)
 		smb_panic_fn("centry_string");
 	}
 
-	ret = talloc_array(mem_ctx, char, len+1);
+	ret = TALLOC_ARRAY(mem_ctx, char, len+1);
 	if (!ret) {
 		smb_panic_fn("centry_string out of memory\n");
 	}
@@ -328,7 +327,7 @@ static char *centry_string(struct cache_entry *centry, TALLOC_CTX *mem_ctx)
 */
 static char *centry_hash16(struct cache_entry *centry, TALLOC_CTX *mem_ctx)
 {
-	uint32_t len;
+	uint32 len;
 	char *ret;
 
 	len = centry_uint8(centry);
@@ -343,7 +342,7 @@ static char *centry_hash16(struct cache_entry *centry, TALLOC_CTX *mem_ctx)
 		return NULL;
 	}
 
-	ret = talloc_array(mem_ctx, char, 16);
+	ret = TALLOC_ARRAY(mem_ctx, char, 16);
 	if (!ret) {
 		smb_panic_fn("centry_hash out of memory\n");
 	}
@@ -398,53 +397,48 @@ static bool wcache_server_down(struct winbindd_domain *domain)
 	return ret;
 }
 
-struct wcache_seqnum_state {
-	uint32_t *seqnum;
-	uint32_t *last_seq_check;
-};
-
-static int wcache_seqnum_parser(TDB_DATA key, TDB_DATA data,
-				void *private_data)
-{
-	struct wcache_seqnum_state *state = private_data;
-
-	if (data.dsize != 8) {
-		DEBUG(10, ("wcache_fetch_seqnum: invalid data size %d\n",
-			   (int)data.dsize));
-		return -1;
-	}
-
-	*state->seqnum = IVAL(data.dptr, 0);
-	*state->last_seq_check = IVAL(data.dptr, 4);
-	return 0;
-}
-
 static bool wcache_fetch_seqnum(const char *domain_name, uint32_t *seqnum,
 				uint32_t *last_seq_check)
 {
-	struct wcache_seqnum_state state = {
-		.seqnum = seqnum, .last_seq_check = last_seq_check
-	};
-	size_t len = strlen(domain_name);
-	char keystr[len+8];
-	TDB_DATA key = { .dptr = (uint8_t *)keystr, .dsize = sizeof(keystr) };
-	int ret;
+	char *key;
+	TDB_DATA data;
 
 	if (wcache->tdb == NULL) {
 		DEBUG(10,("wcache_fetch_seqnum: tdb == NULL\n"));
 		return false;
 	}
 
-	snprintf(keystr, sizeof(keystr),  "SEQNUM/%s", domain_name);
+	key = talloc_asprintf(talloc_tos(), "SEQNUM/%s", domain_name);
+	if (key == NULL) {
+		DEBUG(10, ("talloc failed\n"));
+		return false;
+	}
 
-	ret = tdb_parse_record(wcache->tdb, key, wcache_seqnum_parser,
-			       &state);
-	return (ret == 0);
+	data = tdb_fetch_bystring(wcache->tdb, key);
+	TALLOC_FREE(key);
+
+	if (data.dptr == NULL) {
+		DEBUG(10, ("wcache_fetch_seqnum: %s not found\n",
+			   domain_name));
+		return false;
+	}
+	if (data.dsize != 8) {
+		DEBUG(10, ("wcache_fetch_seqnum: invalid data size %d\n",
+			   (int)data.dsize));
+		SAFE_FREE(data.dptr);
+		return false;
+	}
+
+	*seqnum = IVAL(data.dptr, 0);
+	*last_seq_check = IVAL(data.dptr, 4);
+	SAFE_FREE(data.dptr);
+
+	return true;
 }
 
 static NTSTATUS fetch_cache_seqnum( struct winbindd_domain *domain, time_t now )
 {
-	uint32_t last_check, time_diff;
+	uint32 last_check, time_diff;
 
 	if (!wcache_fetch_seqnum(domain->name, &domain->sequence_number,
 				 &last_check)) {
@@ -458,13 +452,13 @@ static NTSTATUS fetch_cache_seqnum( struct winbindd_domain *domain, time_t now )
 	if ( time_diff > lp_winbind_cache_time() ) {
 		DEBUG(10,("fetch_cache_seqnum: timeout [%s][%u @ %u]\n",
 			domain->name, domain->sequence_number,
-			(uint32_t)domain->last_seq_check));
+			(uint32)domain->last_seq_check));
 		return NT_STATUS_UNSUCCESSFUL;
 	}
 
 	DEBUG(10,("fetch_cache_seqnum: success [%s][%u @ %u]\n", 
 		domain->name, domain->sequence_number, 
-		(uint32_t)domain->last_seq_check));
+		(uint32)domain->last_seq_check));
 
 	return NT_STATUS_OK;
 }
@@ -472,9 +466,7 @@ static NTSTATUS fetch_cache_seqnum( struct winbindd_domain *domain, time_t now )
 bool wcache_store_seqnum(const char *domain_name, uint32_t seqnum,
 			 time_t last_seq_check)
 {
-	size_t len = strlen(domain_name);
-	char keystr[len+8];
-	TDB_DATA key = { .dptr = (uint8_t *)keystr, .dsize = sizeof(keystr) };
+	char *key_str;
 	uint8_t buf[8];
 	int ret;
 
@@ -483,16 +475,22 @@ bool wcache_store_seqnum(const char *domain_name, uint32_t seqnum,
 		return false;
 	}
 
-	snprintf(keystr, sizeof(keystr),  "SEQNUM/%s", domain_name);
+	key_str = talloc_asprintf(talloc_tos(), "SEQNUM/%s", domain_name);
+	if (key_str == NULL) {
+		DEBUG(10, ("talloc_asprintf failed\n"));
+		return false;
+	}
 
 	SIVAL(buf, 0, seqnum);
 	SIVAL(buf, 4, last_seq_check);
 
-	ret = tdb_store(wcache->tdb, key, make_tdb_data(buf, sizeof(buf)),
-			TDB_REPLACE);
-	if (ret != 0) {
+	ret = tdb_store_bystring(wcache->tdb, key_str,
+				 make_tdb_data(buf, sizeof(buf)), TDB_REPLACE);
+	TALLOC_FREE(key_str);
+	if (ret == -1) {
 		DEBUG(10, ("tdb_store_bystring failed: %s\n",
 			   tdb_errorstr(wcache->tdb)));
+		TALLOC_FREE(key_str);
 		return false;
 	}
 
@@ -672,7 +670,7 @@ static struct cache_entry *wcache_fetch_raw(char *kstr)
 static bool is_my_own_sam_domain(struct winbindd_domain *domain)
 {
 	if (strequal(domain->name, get_global_sam_name()) &&
-	    sid_check_is_our_sam(&domain->sid)) {
+	    sid_check_is_domain(&domain->sid)) {
 		return true;
 	}
 
@@ -759,7 +757,7 @@ static void wcache_delete(const char *format, ...)
 /*
   make sure we have at least len bytes available in a centry 
 */
-static void centry_expand(struct cache_entry *centry, uint32_t len)
+static void centry_expand(struct cache_entry *centry, uint32 len)
 {
 	if (centry->len - centry->ofs >= len)
 		return;
@@ -783,9 +781,9 @@ static void centry_put_uint64_t(struct cache_entry *centry, uint64_t v)
 }
 
 /*
-  push a uint32_t into a centry
+  push a uint32 into a centry 
 */
-static void centry_put_uint32(struct cache_entry *centry, uint32_t v)
+static void centry_put_uint32(struct cache_entry *centry, uint32 v)
 {
 	centry_expand(centry, 4);
 	SIVAL(centry->data, centry->ofs, v);
@@ -793,9 +791,9 @@ static void centry_put_uint32(struct cache_entry *centry, uint32_t v)
 }
 
 /*
-  push a uint16_t into a centry
+  push a uint16 into a centry 
 */
-static void centry_put_uint16(struct cache_entry *centry, uint16_t v)
+static void centry_put_uint16(struct cache_entry *centry, uint16 v)
 {
 	centry_expand(centry, 2);
 	SSVAL(centry->data, centry->ofs, v);
@@ -803,9 +801,9 @@ static void centry_put_uint16(struct cache_entry *centry, uint16_t v)
 }
 
 /*
-  push a uint8_t into a centry
+  push a uint8 into a centry 
 */
-static void centry_put_uint8(struct cache_entry *centry, uint8_t v)
+static void centry_put_uint8(struct cache_entry *centry, uint8 v)
 {
 	centry_expand(centry, 1);
 	SCVAL(centry->data, centry->ofs, v);
@@ -840,7 +838,7 @@ static void centry_put_string(struct cache_entry *centry, const char *s)
 /* 
    push a 16 byte hash into a centry - treat as 16 byte string.
  */
-static void centry_put_hash16(struct cache_entry *centry, const uint8_t val[16])
+static void centry_put_hash16(struct cache_entry *centry, const uint8 val[16])
 {
 	centry_put_uint8(centry, 16);
 	centry_expand(centry, 16);
@@ -860,7 +858,7 @@ static void centry_put_sid(struct cache_entry *centry, const struct dom_sid *sid
 */
 static void centry_put_ntstatus(struct cache_entry *centry, NTSTATUS status)
 {
-	uint32_t status_value = NT_STATUS_V(status);
+	uint32 status_value = NT_STATUS_V(status);
 	centry_put_uint32(centry, status_value);
 }
 
@@ -890,8 +888,7 @@ static void centry_put_time(struct cache_entry *centry, time_t t)
 /*
   start a centry for output. When finished, call centry_end()
 */
-static struct cache_entry *centry_start(struct winbindd_domain *domain,
-					NTSTATUS status)
+struct cache_entry *centry_start(struct winbindd_domain *domain, NTSTATUS status)
 {
 	struct cache_entry *centry;
 
@@ -901,7 +898,7 @@ static struct cache_entry *centry_start(struct winbindd_domain *domain,
 	centry = SMB_XMALLOC_P(struct cache_entry);
 
 	centry->len = 8192; /* reasonable default */
-	centry->data = SMB_XMALLOC_ARRAY(uint8_t, centry->len);
+	centry->data = SMB_XMALLOC_ARRAY(uint8, centry->len);
 	centry->ofs = 0;
 	centry->sequence_number = domain->sequence_number;
 	centry->timeout = lp_winbind_cache_time() + time(NULL);
@@ -948,19 +945,10 @@ static void wcache_save_name_to_sid(struct winbindd_domain *domain,
 	centry = centry_start(domain, status);
 	if (!centry)
 		return;
-
-	if ((domain_name == NULL) || (domain_name[0] == '\0')) {
-		struct winbindd_domain *mydomain =
-			find_domain_from_sid_noinit(sid);
-		if (mydomain != NULL) {
-			domain_name = mydomain->name;
-		}
-	}
-
 	centry_put_uint32(centry, type);
 	centry_put_sid(centry, sid);
 	fstrcpy(uname, name);
-	(void)strupper_m(uname);
+	strupper_m(uname);
 	centry_end(centry, "NS/%s/%s", domain_name, uname);
 	DEBUG(10,("wcache_save_name_to_sid: %s\\%s -> %s (%s)\n", domain_name,
 		  uname, sid_string_dbg(sid), nt_errstr(status)));
@@ -977,14 +965,6 @@ static void wcache_save_sid_to_name(struct winbindd_domain *domain, NTSTATUS sta
 	if (!centry)
 		return;
 
-	if ((domain_name == NULL) || (domain_name[0] == '\0')) {
-		struct winbindd_domain *mydomain =
-			find_domain_from_sid_noinit(sid);
-		if (mydomain != NULL) {
-			domain_name = mydomain->name;
-		}
-	}
-
 	if (NT_STATUS_IS_OK(status)) {
 		centry_put_uint32(centry, type);
 		centry_put_string(centry, domain_name);
@@ -992,8 +972,8 @@ static void wcache_save_sid_to_name(struct winbindd_domain *domain, NTSTATUS sta
 	}
 
 	centry_end(centry, "SN/%s", sid_to_fstring(sid_string, sid));
-	DEBUG(10,("wcache_save_sid_to_name: %s -> %s\\%s (%s)\n", sid_string,
-		  domain_name, name, nt_errstr(status)));
+	DEBUG(10,("wcache_save_sid_to_name: %s -> %s (%s)\n", sid_string, 
+		  name, nt_errstr(status)));
 	centry_free(centry);
 }
 
@@ -1086,7 +1066,7 @@ static void wcache_save_username_alias(struct winbindd_domain *domain,
 	centry_put_string( centry, alias );
 
 	fstrcpy(uname, name);
-	(void)strupper_m(uname);
+	strupper_m(uname);
 	centry_end(centry, "NSS/NA/%s", uname);
 
 	DEBUG(10,("wcache_save_username_alias: %s -> %s\n", name, alias ));
@@ -1107,7 +1087,7 @@ static void wcache_save_alias_username(struct winbindd_domain *domain,
 	centry_put_string( centry, name );
 
 	fstrcpy(uname, alias);
-	(void)strupper_m(uname);
+	strupper_m(uname);
 	centry_end(centry, "NSS/AN/%s", uname);
 
 	DEBUG(10,("wcache_save_alias_username: %s -> %s\n", alias, name ));
@@ -1133,18 +1113,13 @@ NTSTATUS resolve_username_to_alias( TALLOC_CTX *mem_ctx,
 	if (!cache->tdb)
 		goto do_query;
 
-	upper_name = talloc_strdup(mem_ctx, name);
-	if (upper_name == NULL) {
+	if ( (upper_name = SMB_STRDUP(name)) == NULL )
 		return NT_STATUS_NO_MEMORY;
-	}
-	if (!strupper_m(upper_name)) {
-		talloc_free(upper_name);
-		return NT_STATUS_INVALID_PARAMETER;
-	}
+	strupper_m(upper_name);
 
 	centry = wcache_fetch(cache, domain, "NSS/NA/%s", upper_name);
 
-	talloc_free(upper_name);
+	SAFE_FREE( upper_name );
 
 	if (!centry)
 		goto do_query;
@@ -1213,18 +1188,13 @@ NTSTATUS resolve_alias_to_username( TALLOC_CTX *mem_ctx,
 	if (!cache->tdb)
 		goto do_query;
 
-	upper_name = talloc_strdup(mem_ctx, alias);
-	if (upper_name == NULL) {
+	if ( (upper_name = SMB_STRDUP(alias)) == NULL )
 		return NT_STATUS_NO_MEMORY;
-	}
-	if (!strupper_m(upper_name)) {
-		talloc_free(upper_name);
-		return NT_STATUS_INVALID_PARAMETER;
-	}
+	strupper_m(upper_name);
 
 	centry = wcache_fetch(cache, domain, "NSS/AN/%s", upper_name);
 
-	talloc_free(upper_name);
+	SAFE_FREE( upper_name );
 
 	if (!centry)
 		goto do_query;
@@ -1288,7 +1258,7 @@ NTSTATUS wcache_cached_creds_exist(struct winbindd_domain *domain, const struct 
 	struct winbind_cache *cache = get_cache(domain);
 	TDB_DATA data;
 	fstring key_str, tmp;
-	uint32_t rid;
+	uint32 rid;
 
 	if (!cache->tdb) {
 		return NT_STATUS_INTERNAL_DB_ERROR;
@@ -1319,13 +1289,14 @@ NTSTATUS wcache_cached_creds_exist(struct winbindd_domain *domain, const struct 
 NTSTATUS wcache_get_creds(struct winbindd_domain *domain, 
 			  TALLOC_CTX *mem_ctx, 
 			  const struct dom_sid *sid,
-			  const uint8_t **cached_nt_pass,
-			  const uint8_t **cached_salt)
+			  const uint8 **cached_nt_pass,
+			  const uint8 **cached_salt)
 {
 	struct winbind_cache *cache = get_cache(domain);
 	struct cache_entry *centry = NULL;
 	NTSTATUS status;
-	uint32_t rid;
+	time_t t;
+	uint32 rid;
 	fstring tmp;
 
 	if (!cache->tdb) {
@@ -1351,19 +1322,14 @@ NTSTATUS wcache_get_creds(struct winbindd_domain *domain,
 		return NT_STATUS_OBJECT_NAME_NOT_FOUND;
 	}
 
-	/*
-	 * We don't use the time element at this moment,
-	 * but we have to consume it, so that we don't
-	 * neet to change the disk format of the cache.
-	 */
-	(void)centry_time(centry);
+	t = centry_time(centry);
 
 	/* In the salted case this isn't actually the nt_hash itself,
 	   but the MD5 of the salt + nt_hash. Let the caller
 	   sort this out. It can tell as we only return the cached_salt
 	   if we are returning a salted cred. */
 
-	*cached_nt_pass = (const uint8_t *)centry_hash16(centry, mem_ctx);
+	*cached_nt_pass = (const uint8 *)centry_hash16(centry, mem_ctx);
 	if (*cached_nt_pass == NULL) {
 		fstring sidstr;
 
@@ -1380,7 +1346,7 @@ NTSTATUS wcache_get_creds(struct winbindd_domain *domain,
 
 	/* We only have 17 bytes more data in the salted cred case. */
 	if (centry->len - centry->ofs == 17) {
-		*cached_salt = (const uint8_t *)centry_hash16(centry, mem_ctx);
+		*cached_salt = (const uint8 *)centry_hash16(centry, mem_ctx);
 	} else {
 		*cached_salt = NULL;
 	}
@@ -1403,13 +1369,13 @@ NTSTATUS wcache_get_creds(struct winbindd_domain *domain,
 
 NTSTATUS wcache_save_creds(struct winbindd_domain *domain, 
 			   const struct dom_sid *sid,
-			   const uint8_t nt_pass[NT_HASH_LEN])
+			   const uint8 nt_pass[NT_HASH_LEN])
 {
 	struct cache_entry *centry;
 	fstring sid_string;
-	uint32_t rid;
-	uint8_t cred_salt[NT_HASH_LEN];
-	uint8_t salted_hash[NT_HASH_LEN];
+	uint32 rid;
+	uint8 cred_salt[NT_HASH_LEN];
+	uint8 salted_hash[NT_HASH_LEN];
 
 	if (is_null_sid(sid)) {
 		return NT_STATUS_INVALID_SID;
@@ -1447,7 +1413,7 @@ NTSTATUS wcache_save_creds(struct winbindd_domain *domain,
 /* Query display info. This is the basic user list fn */
 static NTSTATUS query_user_list(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wbint_userinfo **info)
 {
 	struct winbind_cache *cache = get_cache(domain);
@@ -1469,7 +1435,7 @@ do_fetch_cache:
 	if (*num_entries == 0)
 		goto do_cached;
 
-	(*info) = talloc_array(mem_ctx, struct wbint_userinfo, *num_entries);
+	(*info) = TALLOC_ARRAY(mem_ctx, struct wbint_userinfo, *num_entries);
 	if (! (*info)) {
 		smb_panic_fn("query_user_list out of memory");
 	}
@@ -1522,7 +1488,7 @@ do_query:
 		if (NT_STATUS_EQUAL(status, NT_STATUS_UNSUCCESSFUL)) {
 			DEBUG(3, ("query_user_list: flushing "
 				  "connection cache\n"));
-			invalidate_cm_connection(domain);
+			invalidate_cm_connection(&domain->conn);
 		}
 		if (NT_STATUS_EQUAL(status, NT_STATUS_IO_TIMEOUT) ||
 		    NT_STATUS_EQUAL(status, NT_STATUS_DOMAIN_CONTROLLER_NOT_FOUND)) {
@@ -1598,7 +1564,7 @@ skip_save:
 /* list all domain groups */
 static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wb_acct_info **info)
 {
 	struct winbind_cache *cache = get_cache(domain);
@@ -1621,7 +1587,7 @@ do_fetch_cache:
 	if (*num_entries == 0)
 		goto do_cached;
 
-	(*info) = talloc_array(mem_ctx, struct wb_acct_info, *num_entries);
+	(*info) = TALLOC_ARRAY(mem_ctx, struct wb_acct_info, *num_entries);
 	if (! (*info)) {
 		smb_panic_fn("enum_dom_groups out of memory");
 	}
@@ -1693,7 +1659,7 @@ skip_save:
 /* list all domain groups */
 static NTSTATUS enum_local_groups(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wb_acct_info **info)
 {
 	struct winbind_cache *cache = get_cache(domain);
@@ -1716,7 +1682,7 @@ do_fetch_cache:
 	if (*num_entries == 0)
 		goto do_cached;
 
-	(*info) = talloc_array(mem_ctx, struct wb_acct_info, *num_entries);
+	(*info) = TALLOC_ARRAY(mem_ctx, struct wb_acct_info, *num_entries);
 	if (! (*info)) {
 		smb_panic_fn("enum_dom_groups out of memory");
 	}
@@ -1815,10 +1781,6 @@ NTSTATUS wcache_name_to_sid(struct winbindd_domain *domain,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	if ((domain_name == NULL) || (domain_name[0] == '\0')) {
-		domain_name = domain->name;
-	}
-
 	centry = wcache_fetch(cache, domain, "NS/%s/%s", domain_name, uname);
 	TALLOC_FREE(uname);
 	if (centry == NULL) {
@@ -1898,10 +1860,8 @@ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
 
 		/* Only save the reverse mapping if this was not a UPN */
 		if (!strchr(name, '@')) {
-			if (!strupper_m(discard_const_p(char, domain_name))) {
-				return NT_STATUS_INVALID_PARAMETER;
-			}
-			(void)strlower_m(discard_const_p(char, name));
+			strupper_m(CONST_DISCARD(char *,domain_name));
+			strlower_m(CONST_DISCARD(char *,name));
 			wcache_save_sid_to_name(domain, status, sid, domain_name, name, *type);
 		}
 	}
@@ -1909,12 +1869,12 @@ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
 	return status;
 }
 
-static NTSTATUS wcache_sid_to_name(struct winbindd_domain *domain,
-				   const struct dom_sid *sid,
-				   TALLOC_CTX *mem_ctx,
-				   char **domain_name,
-				   char **name,
-				   enum lsa_SidType *type)
+NTSTATUS wcache_sid_to_name(struct winbindd_domain *domain,
+			    const struct dom_sid *sid,
+			    TALLOC_CTX *mem_ctx,
+			    char **domain_name,
+			    char **name,
+			    enum lsa_SidType *type)
 {
 	struct winbind_cache *cache = get_cache(domain);
 	struct cache_entry *centry;
@@ -2019,7 +1979,7 @@ static NTSTATUS sid_to_name(struct winbindd_domain *domain,
 static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 			      TALLOC_CTX *mem_ctx,
 			      const struct dom_sid *domain_sid,
-			      uint32_t *rids,
+			      uint32 *rids,
 			      size_t num_rids,
 			      char **domain_name,
 			      char ***names,
@@ -2045,8 +2005,8 @@ static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 		return NT_STATUS_OK;
 	}
 
-	*names = talloc_array(mem_ctx, char *, num_rids);
-	*types = talloc_array(mem_ctx, enum lsa_SidType, num_rids);
+	*names = TALLOC_ARRAY(mem_ctx, char *, num_rids);
+	*types = TALLOC_ARRAY(mem_ctx, enum lsa_SidType, num_rids);
 
 	if ((*names == NULL) || (*types == NULL)) {
 		result = NT_STATUS_NO_MEMORY;
@@ -2095,7 +2055,6 @@ static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 		} else {
 			/* something's definitely wrong */
 			result = centry->status;
-			centry_free(centry);
 			goto error;
 		}
 
@@ -2129,19 +2088,6 @@ static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 			!domain->online &&
 			old_status) {
 			have_mapped = have_unmapped = false;
-
-			*names = talloc_array(mem_ctx, char *, num_rids);
-			if (*names == NULL) {
-				result = NT_STATUS_NO_MEMORY;
-				goto error;
-			}
-
-			*types = talloc_array(mem_ctx, enum lsa_SidType,
-					      num_rids);
-			if (*types == NULL) {
-				result = NT_STATUS_NO_MEMORY;
-				goto error;
-			}
 
 			for (i=0; i<num_rids; i++) {
 				struct dom_sid sid;
@@ -2184,7 +2130,6 @@ static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 				} else {
 					/* something's definitely wrong */
 					result = centry->status;
-					centry_free(centry);
 					goto error;
 				}
 
@@ -2315,40 +2260,6 @@ NTSTATUS wcache_query_user(struct winbindd_domain *domain,
 	return status;
 }
 
-
-/**
-* @brief Query a fullname from the username cache (for further gecos processing)
-*
-* @param domain		A pointer to the winbindd_domain struct.
-* @param mem_ctx	The talloc context.
-* @param user_sid	The user sid.
-* @param full_name	A pointer to the full_name string.
-*
-* @return NTSTATUS code
-*/
-NTSTATUS wcache_query_user_fullname(struct winbindd_domain *domain,
-				    TALLOC_CTX *mem_ctx,
-				    const struct dom_sid *user_sid,
-				    const char **full_name)
-{
-	NTSTATUS status;
-	struct wbint_userinfo info;
-
-	status = wcache_query_user(domain, mem_ctx, user_sid, &info);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	}
-
-	if (info.full_name != NULL) {
-		*full_name = talloc_strdup(mem_ctx, info.full_name);
-		if (*full_name == NULL) {
-			return NT_STATUS_NO_MEMORY;
-		}
-	}
-
-	return NT_STATUS_OK;
-}
-
 /* Lookup user information from a rid */
 static NTSTATUS query_user(struct winbindd_domain *domain,
 			   TALLOC_CTX *mem_ctx,
@@ -2462,7 +2373,7 @@ NTSTATUS wcache_lookup_usergroups(struct winbindd_domain *domain,
 static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 				  TALLOC_CTX *mem_ctx,
 				  const struct dom_sid *user_sid,
-				  uint32_t *num_groups, struct dom_sid **user_gids)
+				  uint32 *num_groups, struct dom_sid **user_gids)
 {
 	struct cache_entry *centry = NULL;
 	NTSTATUS status;
@@ -2612,8 +2523,8 @@ NTSTATUS wcache_lookup_useraliases(struct winbindd_domain *domain,
 
 static NTSTATUS lookup_useraliases(struct winbindd_domain *domain,
 				   TALLOC_CTX *mem_ctx,
-				   uint32_t num_sids, const struct dom_sid *sids,
-				   uint32_t *num_aliases, uint32_t **alias_rids)
+				   uint32 num_sids, const struct dom_sid *sids,
+				   uint32 *num_aliases, uint32 **alias_rids)
 {
 	struct cache_entry *centry = NULL;
 	NTSTATUS status;
@@ -2718,7 +2629,7 @@ NTSTATUS wcache_lookup_groupmem(struct winbindd_domain *domain,
 
 	*sid_mem = talloc_array(mem_ctx, struct dom_sid, *num_names);
 	*names = talloc_array(mem_ctx, char *, *num_names);
-	*name_types = talloc_array(mem_ctx, uint32_t, *num_names);
+	*name_types = talloc_array(mem_ctx, uint32, *num_names);
 
 	if ((*sid_mem == NULL) || (*names == NULL) || (*name_types == NULL)) {
 		TALLOC_FREE(*sid_mem);
@@ -2747,9 +2658,9 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
 				const struct dom_sid *group_sid,
 				enum lsa_SidType type,
-				uint32_t *num_names,
+				uint32 *num_names,
 				struct dom_sid **sid_mem, char ***names,
-				uint32_t **name_types)
+				uint32 **name_types)
 {
 	struct cache_entry *centry = NULL;
 	NTSTATUS status;
@@ -2818,7 +2729,7 @@ skip_save:
 }
 
 /* find the sequence number for a domain */
-static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32_t *seq)
+static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32 *seq)
 {
 	refresh_sequence_number(domain, false);
 
@@ -2862,7 +2773,7 @@ static NTSTATUS trusted_domains(struct winbindd_domain *domain,
 	}
 
 do_fetch_cache:
-	trusts->array = talloc_zero_array(mem_ctx, struct netr_DomainTrust, num_domains);
+	trusts->array = TALLOC_ZERO_ARRAY(mem_ctx, struct netr_DomainTrust, num_domains);
 	if (!trusts->array) {
 		TALLOC_FREE(dom_list);
 		return NT_STATUS_NO_MEMORY;
@@ -3185,8 +3096,6 @@ bool wcache_invalidate_cache_noinit(void)
 
 bool init_wcache(void)
 {
-	char *db_path;
-
 	if (wcache == NULL) {
 		wcache = SMB_XMALLOC_P(struct winbind_cache);
 		ZERO_STRUCTP(wcache);
@@ -3195,18 +3104,13 @@ bool init_wcache(void)
 	if (wcache->tdb != NULL)
 		return true;
 
-	db_path = state_path("winbindd_cache.tdb");
-	if (db_path == NULL) {
-		return false;
-	}
-
 	/* when working offline we must not clear the cache on restart */
-	wcache->tdb = tdb_open_log(db_path,
+	wcache->tdb = tdb_open_log(cache_path("winbindd_cache.tdb"),
 				WINBINDD_CACHE_TDB_DEFAULT_HASH_SIZE, 
 				TDB_INCOMPATIBLE_HASH |
 					(lp_winbind_offline_logon() ? TDB_DEFAULT : (TDB_DEFAULT | TDB_CLEAR_IF_FIRST)),
 				O_RDWR|O_CREAT, 0600);
-	TALLOC_FREE(db_path);
+
 	if (wcache->tdb == NULL) {
 		DEBUG(0,("Failed to open winbindd_cache.tdb!\n"));
 		return false;
@@ -3224,7 +3128,7 @@ bool init_wcache(void)
 bool initialize_winbindd_cache(void)
 {
 	bool cache_bad = true;
-	uint32_t vers;
+	uint32 vers;
 
 	if (!init_wcache()) {
 		DEBUG(0,("initialize_winbindd_cache: init_wcache failed.\n"));
@@ -3238,8 +3142,6 @@ bool initialize_winbindd_cache(void)
 	}
 
 	if (cache_bad) {
-		char *db_path;
-
 		DEBUG(0,("initialize_winbindd_cache: clearing cache "
 			"and re-creating with version number %d\n",
 			WINBINDD_CACHE_VERSION ));
@@ -3247,19 +3149,12 @@ bool initialize_winbindd_cache(void)
 		tdb_close(wcache->tdb);
 		wcache->tdb = NULL;
 
-		db_path = state_path("winbindd_cache.tdb");
-		if (db_path == NULL) {
-			return false;
-		}
-
-		if (unlink(db_path) == -1) {
+		if (unlink(cache_path("winbindd_cache.tdb")) == -1) {
 			DEBUG(0,("initialize_winbindd_cache: unlink %s failed %s ",
-				db_path,
+				cache_path("winbindd_cache.tdb"),
 				strerror(errno) ));
-			TALLOC_FREE(db_path);
 			return false;
 		}
-		TALLOC_FREE(db_path);
 		if (!init_wcache()) {
 			DEBUG(0,("initialize_winbindd_cache: re-initialization "
 					"init_wcache failed.\n"));
@@ -3372,8 +3267,6 @@ static int traverse_fn_cleanup(TDB_CONTEXT *the_tdb, TDB_DATA kbuf,
 /* flush the cache */
 void wcache_flush_cache(void)
 {
-	char *db_path;
-
 	if (!wcache)
 		return;
 	if (wcache->tdb) {
@@ -3384,18 +3277,13 @@ void wcache_flush_cache(void)
 		return;
 	}
 
-	db_path = state_path("winbindd_cache.tdb");
-	if (db_path == NULL) {
-		return;
-	}
-
 	/* when working offline we must not clear the cache on restart */
-	wcache->tdb = tdb_open_log(db_path,
-				WINBINDD_CACHE_TDB_DEFAULT_HASH_SIZE,
+	wcache->tdb = tdb_open_log(cache_path("winbindd_cache.tdb"),
+				WINBINDD_CACHE_TDB_DEFAULT_HASH_SIZE, 
 				TDB_INCOMPATIBLE_HASH |
 				(lp_winbind_offline_logon() ? TDB_DEFAULT : (TDB_DEFAULT | TDB_CLEAR_IF_FIRST)),
 				O_RDWR|O_CREAT, 0600);
-	TALLOC_FREE(db_path);
+
 	if (!wcache->tdb) {
 		DEBUG(0,("Failed to open winbindd_cache.tdb!\n"));
 		return;
@@ -3494,7 +3382,7 @@ NTSTATUS wcache_remove_oldest_cached_creds(struct winbindd_domain *domain, const
 	ret = tdb_traverse(cache->tdb, traverse_fn_get_credlist, NULL);
 	if (ret == 0) {
 		return NT_STATUS_OK;
-	} else if ((ret < 0) || (wcache_cred_list == NULL)) {
+	} else if ((ret == -1) || (wcache_cred_list == NULL)) {
 		return NT_STATUS_OBJECT_NAME_NOT_FOUND;
 	}
 
@@ -3623,7 +3511,7 @@ static struct cache_entry *create_centry_validate(const char *kstr, TDB_DATA dat
 	struct cache_entry *centry;
 
 	centry = SMB_XMALLOC_P(struct cache_entry);
-	centry->data = (unsigned char *)smb_memdup(data.dptr, data.dsize);
+	centry->data = (unsigned char *)memdup(data.dptr, data.dsize);
 	if (!centry->data) {
 		SAFE_FREE(centry);
 		return NULL;
@@ -3808,13 +3696,13 @@ static int validate_ul(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf,
 		       struct tdb_validation_status *state)
 {
 	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
-	int32_t num_entries, i;
+	int32 num_entries, i;
 
 	if (!centry) {
 		return 1;
 	}
 
-	num_entries = (int32_t)centry_uint32(centry);
+	num_entries = (int32)centry_uint32(centry);
 
 	for (i=0; i< num_entries; i++) {
 		struct dom_sid sid;
@@ -3839,7 +3727,7 @@ static int validate_gl(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf,
 		       struct tdb_validation_status *state)
 {
 	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
-	int32_t num_entries, i;
+	int32 num_entries, i;
 
 	if (!centry) {
 		return 1;
@@ -3866,7 +3754,7 @@ static int validate_ug(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf,
 		       struct tdb_validation_status *state)
 {
 	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
-	int32_t num_groups, i;
+	int32 num_groups, i;
 
 	if (!centry) {
 		return 1;
@@ -3892,7 +3780,7 @@ static int validate_ua(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf,
 		       struct tdb_validation_status *state)
 {
 	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
-	int32_t num_aliases, i;
+	int32 num_aliases, i;
 
 	if (!centry) {
 		return 1;
@@ -3917,7 +3805,7 @@ static int validate_gm(TALLOC_CTX *mem_ctx, const char *keystr, TDB_DATA dbuf,
 		       struct tdb_validation_status *state)
 {
 	struct cache_entry *centry = create_centry_validate(keystr, dbuf, state);
-	int32_t num_names, i;
+	int32 num_names, i;
 
 	if (!centry) {
 		return 1;
@@ -4140,8 +4028,7 @@ static int cache_traverse_validate_fn(TDB_CONTEXT *the_tdb, TDB_DATA kbuf, TDB_D
 	struct tdb_validation_status *v_state = (struct tdb_validation_status *)state;
 
 	/* Paranoia check. */
-	if (strncmp("UA/", (const char *)kbuf.dptr, 3) == 0 ||
-	    strncmp("NDR/", (const char *)kbuf.dptr, 4) == 0) {
+	if (strncmp("UA/", (const char *)kbuf.dptr, 3) == 0) {
 		max_key_len = 1024 * 1024;
 	}
 	if (kbuf.dsize > max_key_len) {
@@ -4182,9 +4069,9 @@ static int cache_traverse_validate_fn(TDB_CONTEXT *the_tdb, TDB_DATA kbuf, TDB_D
 	}
 
 	DEBUG(0,("cache_traverse_validate_fn: unknown cache entry\nkey :\n"));
-	dump_data(0, (uint8_t *)kbuf.dptr, kbuf.dsize);
+	dump_data(0, (uint8 *)kbuf.dptr, kbuf.dsize);
 	DEBUG(0,("data :\n"));
-	dump_data(0, (uint8_t *)dbuf.dptr, dbuf.dsize);
+	dump_data(0, (uint8 *)dbuf.dptr, dbuf.dsize);
 	v_state->unknown_key = true;
 	v_state->success = false;
 	return 1; /* terminate. */
@@ -4269,7 +4156,7 @@ static bool wbcache_upgrade_v1_to_v2(TDB_CONTEXT *tdb)
 int winbindd_validate_cache(void)
 {
 	int ret = -1;
-	char *tdb_path = NULL;
+	const char *tdb_path = cache_path("winbindd_cache.tdb");
 	TDB_CONTEXT *tdb = NULL;
 	uint32_t vers_id;
 	bool ok;
@@ -4277,18 +4164,13 @@ int winbindd_validate_cache(void)
 	DEBUG(10, ("winbindd_validate_cache: replacing panic function\n"));
 	smb_panic_fn = validate_panic;
 
-	tdb_path = state_path("winbindd_cache.tdb");
-	if (tdb_path == NULL) {
-		goto done;
-	}
-
-	tdb = tdb_open_log(tdb_path,
+	tdb = tdb_open_log(tdb_path, 
 			   WINBINDD_CACHE_TDB_DEFAULT_HASH_SIZE,
 			   TDB_INCOMPATIBLE_HASH |
-			   ( lp_winbind_offline_logon()
-			     ? TDB_DEFAULT
+			   ( lp_winbind_offline_logon() 
+			     ? TDB_DEFAULT 
 			     : TDB_DEFAULT | TDB_CLEAR_IF_FIRST ),
-			   O_RDWR|O_CREAT,
+			   O_RDWR|O_CREAT, 
 			   0600);
 	if (!tdb) {
 		DEBUG(0, ("winbindd_validate_cache: "
@@ -4330,7 +4212,6 @@ int winbindd_validate_cache(void)
 	}
 
 done:
-	TALLOC_FREE(tdb_path);
 	DEBUG(10, ("winbindd_validate_cache: restoring panic function\n"));
 	smb_panic_fn = smb_panic;
 	return ret;
@@ -4343,15 +4224,11 @@ done:
 int winbindd_validate_cache_nobackup(void)
 {
 	int ret = -1;
-	char *tdb_path;
+	const char *tdb_path = cache_path("winbindd_cache.tdb");
 
 	DEBUG(10, ("winbindd_validate_cache: replacing panic function\n"));
 	smb_panic_fn = validate_panic;
 
-	tdb_path = state_path("winbindd_cache.tdb");
-	if (tdb_path == NULL) {
-		goto err_panic_restore;
-	}
 
 	if (wcache == NULL || wcache->tdb == NULL) {
 		ret = tdb_validate_open(tdb_path, cache_traverse_validate_fn);
@@ -4364,8 +4241,6 @@ int winbindd_validate_cache_nobackup(void)
 			   "successful.\n"));
 	}
 
-	TALLOC_FREE(tdb_path);
-err_panic_restore:
 	DEBUG(10, ("winbindd_validate_cache_nobackup: restoring panic "
 		   "function\n"));
 	smb_panic_fn = smb_panic;
@@ -4416,10 +4291,10 @@ static bool add_wbdomain_to_tdc_array( struct winbindd_domain *new_dom,
 
 	if ( !set_only ) {
 		if ( !*domains ) {
-			list = talloc_array( NULL, struct winbindd_tdc_domain, 1 );
+			list = TALLOC_ARRAY( NULL, struct winbindd_tdc_domain, 1 );
 			idx = 0;
 		} else {
-			list = talloc_realloc( *domains, *domains, 
+			list = TALLOC_REALLOC_ARRAY( *domains, *domains, 
 						     struct winbindd_tdc_domain,  
 						     (*num_domains)+1);
 			idx = *num_domains;		
@@ -4431,16 +4306,8 @@ static bool add_wbdomain_to_tdc_array( struct winbindd_domain *new_dom,
 	if ( !list )
 		return false;
 
-	list[idx].domain_name = talloc_strdup(list, new_dom->name);
-	if (list[idx].domain_name == NULL) {
-		return false;
-	}
-	if (new_dom->alt_name != NULL) {
-		list[idx].dns_name = talloc_strdup(list, new_dom->alt_name);
-		if (list[idx].dns_name == NULL) {
-			return false;
-		}
-	}
+	list[idx].domain_name = talloc_strdup( list, new_dom->name );
+	list[idx].dns_name = talloc_strdup( list, new_dom->alt_name );
 
 	if ( !is_null_sid( &new_dom->sid ) ) {
 		sid_copy( &list[idx].sid, &new_dom->sid );
@@ -4523,7 +4390,7 @@ static int pack_tdc_domains( struct winbindd_tdc_domain *domains,
 
 		len += tdb_pack( buffer+len, buflen-len, "fffddd",
 				 domains[i].domain_name,
-				 domains[i].dns_name ? domains[i].dns_name : "",
+				 domains[i].dns_name,
 				 sid_to_fstring(tmp, &domains[i].sid),
 				 domains[i].trust_flags,
 				 domains[i].trust_attribs,
@@ -4554,7 +4421,7 @@ static size_t unpack_tdc_domains( unsigned char *buf, int buflen,
 				  struct winbindd_tdc_domain **domains )
 {
 	fstring domain_name, dns_name, sid_string;	
-	uint32_t type, attribs, flags;
+	uint32 type, attribs, flags;
 	int num_domains;
 	int len = 0;
 	int i;
@@ -4567,16 +4434,14 @@ static size_t unpack_tdc_domains( unsigned char *buf, int buflen,
 		return 0;
 	}
 
-	list = talloc_array( NULL, struct winbindd_tdc_domain, num_domains );
+	list = TALLOC_ARRAY( NULL, struct winbindd_tdc_domain, num_domains );
 	if ( !list ) {
 		DEBUG(0,("unpack_tdc_domains: Failed to talloc() domain list!\n"));
 		return 0;		
 	}
 
 	for ( i=0; i<num_domains; i++ ) {
-		int this_len;
-
-		this_len = tdb_unpack( buf+len, buflen-len, "fffddd",
+		len += tdb_unpack( buf+len, buflen-len, "fffddd",
 				   domain_name,
 				   dns_name,
 				   sid_string,
@@ -4584,12 +4449,11 @@ static size_t unpack_tdc_domains( unsigned char *buf, int buflen,
 				   &attribs,
 				   &type );
 
-		if ( this_len == -1 ) {
+		if ( len == -1 ) {
 			DEBUG(5,("unpack_tdc_domains: Failed to unpack domain array\n"));
 			TALLOC_FREE( list );			
 			return 0;
 		}
-		len += this_len;
 
 		DEBUG(11,("unpack_tdc_domains: Unpacking domain %s (%s) "
 			  "SID %s, flags = 0x%x, attribs = 0x%x, type = 0x%x\n",
@@ -4597,10 +4461,7 @@ static size_t unpack_tdc_domains( unsigned char *buf, int buflen,
 			  flags, attribs, type));
 
 		list[i].domain_name = talloc_strdup( list, domain_name );
-		list[i].dns_name = NULL;
-		if (dns_name[0] != '\0') {
-			list[i].dns_name = talloc_strdup(list, dns_name);
-		}
+		list[i].dns_name = talloc_strdup( list, dns_name );
 		if ( !string_to_sid( &(list[i].sid), sid_string ) ) {			
 			DEBUG(10,("unpack_tdc_domains: no SID for domain %s\n",
 				  domain_name));
@@ -4647,7 +4508,7 @@ static bool wcache_tdc_store_list( struct winbindd_tdc_domain *domains, size_t n
 	SAFE_FREE( data.dptr );
 	SAFE_FREE( key.dptr );
 
-	return ( ret == 0 );
+	return ( ret != -1 );	
 }
 
 /*********************************************************************
@@ -4727,38 +4588,6 @@ bool wcache_tdc_add_domain( struct winbindd_domain *domain )
 	return ret;	
 }
 
-static struct winbindd_tdc_domain *wcache_tdc_dup_domain(
-	TALLOC_CTX *mem_ctx, const struct winbindd_tdc_domain *src)
-{
-	struct winbindd_tdc_domain *dst;
-
-	dst = talloc(mem_ctx, struct winbindd_tdc_domain);
-	if (dst == NULL) {
-		goto fail;
-	}
-	dst->domain_name = talloc_strdup(dst, src->domain_name);
-	if (dst->domain_name == NULL) {
-		goto fail;
-	}
-
-	dst->dns_name = NULL;
-	if (src->dns_name != NULL) {
-		dst->dns_name = talloc_strdup(dst, src->dns_name);
-		if (dst->dns_name == NULL) {
-			goto fail;
-		}
-	}
-
-	sid_copy(&dst->sid, &src->sid);
-	dst->trust_flags = src->trust_flags;
-	dst->trust_type = src->trust_type;
-	dst->trust_attribs = src->trust_attribs;
-	return dst;
-fail:
-	TALLOC_FREE(dst);
-	return NULL;
-}
-
 /*********************************************************************
  ********************************************************************/
 
@@ -4772,7 +4601,7 @@ struct winbindd_tdc_domain * wcache_tdc_fetch_domain( TALLOC_CTX *ctx, const cha
 	DEBUG(10,("wcache_tdc_fetch_domain: Searching for domain %s\n", name));
 
 	if ( !init_wcache() ) {
-		return NULL;
+		return false;
 	}
 
 	/* fetch the list */
@@ -4786,7 +4615,17 @@ struct winbindd_tdc_domain * wcache_tdc_fetch_domain( TALLOC_CTX *ctx, const cha
 			DEBUG(10,("wcache_tdc_fetch_domain: Found domain %s\n",
 				  name));
 
-			d = wcache_tdc_dup_domain(ctx, &dom_list[i]);
+			d = TALLOC_P( ctx, struct winbindd_tdc_domain );
+			if ( !d )
+				break;			
+
+			d->domain_name = talloc_strdup( d, dom_list[i].domain_name );
+			d->dns_name = talloc_strdup( d, dom_list[i].dns_name );
+			sid_copy( &d->sid, &dom_list[i].sid );
+			d->trust_flags   = dom_list[i].trust_flags;
+			d->trust_type    = dom_list[i].trust_type;
+			d->trust_attribs = dom_list[i].trust_attribs;
+
 			break;
 		}
 	}
@@ -4812,7 +4651,7 @@ struct winbindd_tdc_domain*
 		  sid_string_dbg(sid)));
 
 	if (!init_wcache()) {
-		return NULL;
+		return false;
 	}
 
 	/* fetch the list */
@@ -4820,13 +4659,25 @@ struct winbindd_tdc_domain*
 	wcache_tdc_fetch_list(&dom_list, &num_domains);
 
 	for (i = 0; i<num_domains; i++) {
-		if (dom_sid_equal(sid, &(dom_list[i].sid))) {
+		if (sid_equal(sid, &(dom_list[i].sid))) {
 			DEBUG(10, ("wcache_tdc_fetch_domainbysid: "
 				   "Found domain %s for SID %s\n",
 				   dom_list[i].domain_name,
 				   sid_string_dbg(sid)));
 
-			d = wcache_tdc_dup_domain(ctx, &dom_list[i]);
+			d = TALLOC_P(ctx, struct winbindd_tdc_domain);
+			if (!d)
+				break;
+
+			d->domain_name = talloc_strdup(d,
+						       dom_list[i].domain_name);
+
+			d->dns_name = talloc_strdup(d, dom_list[i].dns_name);
+			sid_copy(&d->sid, &dom_list[i].sid);
+			d->trust_flags = dom_list[i].trust_flags;
+			d->trust_type = dom_list[i].trust_type;
+			d->trust_attribs = dom_list[i].trust_attribs;
+
 			break;
 		}
 	}
@@ -4860,7 +4711,7 @@ static void wcache_save_user_pwinfo(struct winbindd_domain *domain,
 				    const char *homedir,
 				    const char *shell,
 				    const char *gecos,
-				    uint32_t gid)
+				    uint32 gid)
 {
 	struct cache_entry *centry;
 	fstring tmp;
@@ -4961,7 +4812,7 @@ struct winbindd_methods cache_methods = {
 	trusted_domains
 };
 
-static bool wcache_ndr_key(TALLOC_CTX *mem_ctx, const char *domain_name,
+static bool wcache_ndr_key(TALLOC_CTX *mem_ctx, char *domain_name,
 			   uint32_t opnum, const DATA_BLOB *req,
 			   TDB_DATA *pkey)
 {

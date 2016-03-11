@@ -27,7 +27,6 @@
 #include <ldb.h>
 #include "auth/credentials/credentials.h"
 #include "auth/gensec/gensec.h"
-#include "auth/gensec/gensec_internal.h" /* TODO: remove this */
 #include "auth/auth.h"
 #include "librpc/gen_ndr/ndr_netlogon.h"
 #include "auth/auth_sam.h"
@@ -142,6 +141,33 @@ static bool parse_ntlm_auth_domain_user(const char *domuser, char **domain,
 
 	return true;
 }
+
+/**
+ * Decode a base64 string into a DATA_BLOB - simple and slow algorithm
+ **/
+static DATA_BLOB base64_decode_data_blob(TALLOC_CTX *mem_ctx, const char *s)
+{
+	DATA_BLOB ret = data_blob_talloc(mem_ctx, s, strlen(s)+1);
+	ret.length = ldb_base64_decode((char *)ret.data);
+	return ret;
+}
+
+/**
+ * Encode a base64 string into a talloc()ed string caller to free.
+ **/
+static char *base64_encode_data_blob(TALLOC_CTX *mem_ctx, DATA_BLOB data)
+{
+	return ldb_base64_encode(mem_ctx, (const char *)data.data, data.length);
+}
+
+/**
+ * Decode a base64 string in-place - wrapper for the above
+ **/
+static void base64_decode_inplace(char *s)
+{
+	ldb_base64_decode(s);
+}
+
 
 
 /* Authenticate a user with a plaintext password */
@@ -265,7 +291,7 @@ static void manage_gensec_get_pw_request(enum stdio_helper_mode stdio_helper_mod
 	}
 
 	if (strlen(buf) > 3) {
-		in = base64_decode_data_blob(buf + 3);
+		in = base64_decode_data_blob(NULL, buf + 3);
 	} else {
 		in = data_blob(NULL, 0);
 	}
@@ -300,11 +326,10 @@ static void manage_gensec_get_pw_request(enum stdio_helper_mode stdio_helper_mod
 static const char *get_password(struct cli_credentials *credentials) 
 {
 	char *password = NULL;
-	void *cb = cli_credentials_callback_data_void(credentials);
-
+	
 	/* Ask for a password */
-	mux_printf((unsigned int)(uintptr_t)cb, "PW\n");
-	cli_credentials_set_callback_data(credentials, NULL);
+	mux_printf((unsigned int)(uintptr_t)credentials->priv_data, "PW\n");
+	credentials->priv_data = NULL;
 
 	manage_squid_request(cmdline_lp_ctx, NUM_HELPER_MODES /* bogus */, manage_gensec_get_pw_request, (void **)&password);
 	return password;
@@ -368,7 +393,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 	};
 	struct gensec_ntlm_state *state;
 	struct tevent_context *ev;
-	struct imessaging_context *msg;
+	struct messaging_context *msg;
 
 	NTSTATUS nt_status;
 	bool first = false;
@@ -408,7 +433,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 			mux_printf(mux_id, "OK\n");
 			return;
 		}
-		in = base64_decode_data_blob(buf + 3);
+		in = base64_decode_data_blob(NULL, buf + 3);
 	} else {
 		in = data_blob(NULL, 0);
 	}
@@ -451,7 +476,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 		case NTLMSSP_CLIENT_1:
 			/* setup the client side */
 
-			nt_status = gensec_client_start(NULL, &state->gensec_state,
+			nt_status = gensec_client_start(NULL, &state->gensec_state, ev, 
 							lpcfg_gensec_settings(NULL, lp_ctx));
 			if (!NT_STATUS_IS_OK(nt_status)) {
 				talloc_free(mem_ctx);
@@ -463,9 +488,9 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 		case SQUID_2_5_NTLMSSP:
 		{
 			const char *winbind_method[] = { "winbind", NULL };
-			struct auth4_context *auth_context;
+			struct auth_context *auth_context;
 
-			msg = imessaging_client_init(state, lp_ctx, ev);
+			msg = messaging_client_init(state, lpcfg_messaging_path(state, lp_ctx), ev);
 			if (!msg) {
 				talloc_free(mem_ctx);
 				exit(1);
@@ -483,7 +508,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 				exit(1);
 			}
 			
-			if (!NT_STATUS_IS_OK(gensec_server_start(state,
+			if (!NT_STATUS_IS_OK(gensec_server_start(state, ev, 
 								 lpcfg_gensec_settings(state, lp_ctx),
 								 auth_context, &state->gensec_state))) {
 				talloc_free(mem_ctx);
@@ -507,9 +532,8 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 		if (state->set_password) {
 			cli_credentials_set_password(creds, state->set_password, CRED_SPECIFIED);
 		} else {
-			void *cb = (void*)(uintptr_t)mux_id;
-			cli_credentials_set_callback_data(creds, cb);
 			cli_credentials_set_password_callback(creds, get_password);
+			creds->priv_data = (void*)(uintptr_t)mux_id;
 		}
 		if (opt_workstation) {
 			cli_credentials_set_workstation(creds, opt_workstation, CRED_SPECIFIED);
@@ -578,7 +602,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 		char *grouplist = NULL;
 		struct auth_session_info *session_info;
 
-		nt_status = gensec_session_info(state->gensec_state, mem_ctx, &session_info);
+		nt_status = gensec_session_info(state->gensec_state, &session_info); 
 		if (!NT_STATUS_IS_OK(nt_status)) {
 			DEBUG(1, ("gensec_session_info failed: %s\n", nt_errstr(nt_status)));
 			mux_printf(mux_id, "BH %s\n", nt_errstr(nt_status));
@@ -607,7 +631,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 	if (strncmp(buf, "GK", 2) == 0) {
 		char *base64_key;
 		DEBUG(10, ("Requested session key\n"));
-		nt_status = gensec_session_key(state->gensec_state, mem_ctx, &session_key);
+		nt_status = gensec_session_key(state->gensec_state, &session_key);
 		if(!NT_STATUS_IS_OK(nt_status)) {
 			DEBUG(1, ("gensec_session_key failed: %s\n", nt_errstr(nt_status)));
 			mux_printf(mux_id, "BH No session key\n");
@@ -635,7 +659,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 		return;
 	}
 
-	nt_status = gensec_update_ev(state->gensec_state, mem_ctx, ev, in, &out);
+	nt_status = gensec_update(state->gensec_state, mem_ctx, in, &out);
 	
 	/* don't leak 'bad password'/'no such user' info to the network client */
 	nt_status = nt_status_squash(nt_status);
@@ -674,7 +698,7 @@ static void manage_gensec_request(enum stdio_helper_mode stdio_helper_mode,
 	} else if /* OK */ (state->gensec_state->gensec_role == GENSEC_SERVER) {
 		struct auth_session_info *session_info;
 
-		nt_status = gensec_session_info(state->gensec_state, mem_ctx, &session_info);
+		nt_status = gensec_session_info(state->gensec_state, &session_info);
 		if (!NT_STATUS_IS_OK(nt_status)) {
 			reply_code = "BH Failed to retrive session info";
 			reply_arg = nt_errstr(nt_status);
@@ -796,6 +820,8 @@ static void manage_ntlm_server_1_request(enum stdio_helper_mode stdio_helper_mod
 				SAFE_FREE(error_string);
 			} else {
 				static char zeros[16];
+				char *hex_lm_key;
+				char *hex_user_session_key;
 
 				mux_printf(mux_id, "Authenticated: Yes\n");
 
@@ -803,22 +829,22 @@ static void manage_ntlm_server_1_request(enum stdio_helper_mode stdio_helper_mod
 				    && lm_key.length 
 				    && (memcmp(zeros, lm_key.data, 
 								lm_key.length) != 0)) {
-					char hex_lm_key[lm_key.length*2+1];
-					hex_encode_buf(hex_lm_key, lm_key.data,
-						       lm_key.length);
+					hex_encode(lm_key.data,
+						   lm_key.length,
+						   &hex_lm_key);
 					mux_printf(mux_id, "LANMAN-Session-Key: %s\n", hex_lm_key);
+					SAFE_FREE(hex_lm_key);
 				}
 
 				if (ntlm_server_1_user_session_key 
 				    && user_session_key.length 
 				    && (memcmp(zeros, user_session_key.data, 
 					       user_session_key.length) != 0)) {
-					char hex_user_session_key[
-						user_session_key.length*2+1];
-					hex_encode_buf(hex_user_session_key,
-						       user_session_key.data,
-						       user_session_key.length);
+					hex_encode(user_session_key.data, 
+						   user_session_key.length, 
+						   &hex_user_session_key);
 					mux_printf(mux_id, "User-Session-Key: %s\n", hex_user_session_key);
+					SAFE_FREE(hex_user_session_key);
 				}
 			}
 		}
@@ -1104,7 +1130,7 @@ int main(int argc, const char **argv)
 		return 1;
 	}
 
-	gensec_init();
+	gensec_init(cmdline_lp_ctx);
 
 	if (opt_domain == NULL) {
 		opt_domain = lpcfg_workgroup(cmdline_lp_ctx);
@@ -1138,13 +1164,7 @@ int main(int argc, const char **argv)
 	}
 
 	if (!opt_password) {
-		char pwd[256] = {0};
-		int rc;
-
-		rc = samba_getpass("Password: ", pwd, sizeof(pwd), false, false);
-		if (rc == 0) {
-			opt_password = smb_xstrdup(pwd);
-		}
+		opt_password = getpass("password: ");
 	}
 
 	{

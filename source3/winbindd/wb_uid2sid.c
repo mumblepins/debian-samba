@@ -19,13 +19,14 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "librpc/gen_ndr/ndr_winbind_c.h"
+#include "librpc/gen_ndr/ndr_wbint_c.h"
 #include "idmap_cache.h"
 #include "idmap.h"
 #include "../libcli/security/security.h"
 
 struct wb_uid2sid_state {
 	struct tevent_context *ev;
+	char *dom_name;
 	struct dom_sid sid;
 };
 
@@ -37,6 +38,7 @@ struct tevent_req *wb_uid2sid_send(TALLOC_CTX *mem_ctx,
 {
 	struct tevent_req *req, *subreq;
 	struct wb_uid2sid_state *state;
+	struct winbindd_domain *domain;
 	struct winbindd_child *child;
 	bool expired;
 
@@ -62,10 +64,21 @@ struct tevent_req *wb_uid2sid_send(TALLOC_CTX *mem_ctx,
 		}
 	}
 
+	state->dom_name = NULL;
+
+	for (domain = domain_list(); domain != NULL; domain = domain->next) {
+		if (domain->have_idmap_config
+		    && (uid >= domain->id_range_low)
+		    && (uid <= domain->id_range_high)) {
+			state->dom_name = domain->name;
+			break;
+		}
+	}
+
 	child = idmap_child();
 
 	subreq = dcerpc_wbint_Uid2Sid_send(
-		state, ev, child->binding_handle,
+		state, ev, child->binding_handle, state->dom_name,
 		uid, &state->sid);
 	if (tevent_req_nomem(subreq, req)) {
 		return tevent_req_post(req, ev);

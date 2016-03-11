@@ -51,7 +51,7 @@ static NET_API_STATUS test_netgroupenum(const char *hostname,
 		status = NetGroupEnum(hostname,
 				      level,
 				      &buffer,
-				      120, /*(uint32_t)-1, */
+				      120, //(uint32_t)-1,
 				      &entries_read,
 				      &total_entries,
 				      &resume_handle);
@@ -348,7 +348,7 @@ NET_API_STATUS netapitest_group(struct libnetapi_ctx *ctx,
 	printf("testing NetGroupSetInfo level 0\n");
 
 	status = NetGroupSetInfo(hostname, groupname, 0, (uint8_t *)&g0, &parm_err);
-	switch ((int)status) {
+	switch (status) {
 		case 0:
 			break;
 		case 50: /* not supported */

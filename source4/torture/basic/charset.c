@@ -23,7 +23,6 @@
 #include "libcli/libcli.h"
 #include "torture/util.h"
 #include "param/param.h"
-#include "torture/basic/proto.h"
 
 #define BASEDIR "\\chartest\\"
 
@@ -55,7 +54,7 @@ static NTSTATUS unicode_open(struct torture_context *tctx,
 	}
 	SSVAL(ucs_name, i*2, 0);
 
-	if (!convert_string_talloc_handle(ucs_name, lpcfg_iconv_handle(tctx->lp_ctx), CH_UTF16, CH_UNIX, ucs_name, (1+u_name_len)*2, (void **)&fname, &i)) {
+	if (!convert_string_talloc_convenience(ucs_name, lpcfg_iconv_convenience(tctx->lp_ctx), CH_UTF16, CH_UNIX, ucs_name, (1+u_name_len)*2, (void **)&fname, &i, false)) {
 		torture_comment(tctx, "Failed to convert UCS2 Name into unix - convert_string_talloc() failure\n");
 		talloc_free(ucs_name);
 		return NT_STATUS_NO_MEMORY;

@@ -19,11 +19,10 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "librpc/gen_ndr/ndr_winbind_c.h"
+#include "librpc/gen_ndr/ndr_wbint_c.h"
 
 struct winbindd_ping_dc_state {
-	const char *dcname;
-	NTSTATUS result;
+	uint8_t dummy;
 };
 
 static void winbindd_ping_dc_done(struct tevent_req *subreq);
@@ -47,45 +46,22 @@ struct tevent_req *winbindd_ping_dc_send(TALLOC_CTX *mem_ctx,
 		/* preserve old behavior, when no domain name is given */
 		domain = find_our_domain();
 	} else {
-		domain = find_domain_from_name_noinit(request->domain_name);
+		domain = find_domain_from_name(request->domain_name);
 	}
 	if (domain == NULL) {
 		tevent_req_nterror(req, NT_STATUS_NO_SUCH_DOMAIN);
 		return tevent_req_post(req, ev);
 	}
 	if (domain->internal) {
-		const char *d = lp_dnsdomain();
-		const char *n = lp_netbios_name();
-
 		/*
 		 * Internal domains are passdb based, we can always
 		 * contact them.
 		 */
-
-		if (d != NULL) {
-			char *h;
-			h = strlower_talloc(mem_ctx, n);
-			if (tevent_req_nomem(h, req)) {
-				return tevent_req_post(req, ev);
-			}
-
-			state->dcname = talloc_asprintf(state, "%s.%s", h, d);
-			if (tevent_req_nomem(state->dcname, req)) {
-				return tevent_req_post(req, ev);
-			}
-		} else {
-			state->dcname = talloc_strdup(state, n);
-			if (tevent_req_nomem(state->dcname, req)) {
-				return tevent_req_post(req, ev);
-			}
-		}
-
 		tevent_req_done(req);
 		return tevent_req_post(req, ev);
 	}
 
-	subreq = dcerpc_wbint_PingDc_send(state, ev, dom_child_handle(domain),
-					  &state->dcname);
+	subreq = dcerpc_wbint_PingDc_send(state, ev, dom_child_handle(domain));
 	if (tevent_req_nomem(subreq, req)) {
 		return tevent_req_post(req, ev);
 	}
@@ -102,7 +78,6 @@ static void winbindd_ping_dc_done(struct tevent_req *subreq)
 	NTSTATUS status, result;
 
 	status = dcerpc_wbint_PingDc_recv(subreq, state, &result);
-	state->result = result;
 	if (any_nt_status_not_ok(status, result, &status)) {
 		tevent_req_nterror(req, status);
 		return;
@@ -113,17 +88,5 @@ static void winbindd_ping_dc_done(struct tevent_req *subreq)
 NTSTATUS winbindd_ping_dc_recv(struct tevent_req *req,
 			       struct winbindd_response *presp)
 {
-	struct winbindd_ping_dc_state *state = tevent_req_data(
-		req, struct winbindd_ping_dc_state);
-
-	if (!NT_STATUS_IS_OK(state->result)) {
-		set_auth_errors(presp, state->result);
-	}
-
-	if (state->dcname) {
-		presp->extra_data.data = talloc_strdup(presp, state->dcname);
-		presp->length += strlen((char *)presp->extra_data.data) + 1;
-	}
-
 	return tevent_req_simple_recv_ntstatus(req);
 }

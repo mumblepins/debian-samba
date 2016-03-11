@@ -26,19 +26,22 @@
 #include "../libcli/util/ntstatus.h" /* for map_nt_error_from_tdb() */
 #include "../../lib/util/util_tdb.h"
 
+int tdb_chainlock_with_timeout( struct tdb_context *tdb, TDB_DATA key,
+				unsigned int timeout);
+int tdb_lock_bystring_with_timeout(struct tdb_context *tdb, const char *keyval,
+				   int timeout);
+int tdb_read_lock_bystring_with_timeout(TDB_CONTEXT *tdb, const char *keyval,
+					unsigned int timeout);
+
 int tdb_trans_store_bystring(TDB_CONTEXT *tdb, const char *keystr,
 			     TDB_DATA data, int flags);
 int tdb_trans_store(struct tdb_context *tdb, TDB_DATA key, TDB_DATA dbuf,
 		    int flag);
 int tdb_trans_delete(struct tdb_context *tdb, TDB_DATA key);
 
-/*
- * The tdb_unpack() and tdb_pack[_append]() helpers are deprecated. Consider
- * using idl/ndr for marshalling of complex data types instead.
- */
-int tdb_unpack(const uint8_t *buf, int bufsize, const char *fmt, ...);
-size_t tdb_pack(uint8_t *buf, int bufsize, const char *fmt, ...);
-bool tdb_pack_append(TALLOC_CTX *mem_ctx, uint8_t **buf, size_t *len,
+int tdb_unpack(const uint8 *buf, int bufsize, const char *fmt, ...);
+size_t tdb_pack(uint8 *buf, int bufsize, const char *fmt, ...);
+bool tdb_pack_append(TALLOC_CTX *mem_ctx, uint8 **buf, size_t *len,
 		     const char *fmt, ...);
 
 struct tdb_context *tdb_open_log(const char *name, int hash_size,
@@ -47,26 +50,5 @@ struct tdb_context *tdb_open_log(const char *name, int hash_size,
 NTSTATUS map_nt_error_from_tdb(enum TDB_ERROR err);
 
 int tdb_data_cmp(TDB_DATA t1, TDB_DATA t2);
-
-char *tdb_data_string(TALLOC_CTX *mem_ctx, TDB_DATA d);
-
-/****************************************************************************
- Lock a chain, with timeout.
-****************************************************************************/
-int tdb_chainlock_with_timeout( struct tdb_context *tdb, TDB_DATA key,
-				unsigned int timeout);
-
-/****************************************************************************
- Lock a chain by string, with timeout Return non-zero if lock failed.
-****************************************************************************/
-int tdb_lock_bystring_with_timeout(struct tdb_context *tdb, const char *keyval,
-				   int timeout);
-
-/****************************************************************************
- Readlock a chain by string, with timeout Return non-zero if lock failed.
-****************************************************************************/
-int tdb_read_lock_bystring_with_timeout(TDB_CONTEXT *tdb, const char *keyval,
-					unsigned int timeout);
-
 
 #endif /* __TDBUTIL_H__ */

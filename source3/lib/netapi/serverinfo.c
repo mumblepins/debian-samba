@@ -36,11 +36,11 @@ static WERROR NetServerGetInfo_l_101(struct libnetapi_ctx *ctx,
 	struct SERVER_INFO_101 i;
 
 	i.sv101_platform_id	= PLATFORM_ID_NT;
-	i.sv101_name		= lp_netbios_name();
-	i.sv101_version_major	= SAMBA_MAJOR_NBT_ANNOUNCE_VERSION;
-	i.sv101_version_minor	= SAMBA_MINOR_NBT_ANNOUNCE_VERSION;
+	i.sv101_name		= global_myname();
+	i.sv101_version_major	= lp_major_announce_version();
+	i.sv101_version_minor	= lp_minor_announce_version();
 	i.sv101_type		= lp_default_server_announce();
-	i.sv101_comment		= lp_server_string(ctx);
+	i.sv101_comment		= lp_serverstring();
 
 	*buffer = (uint8_t *)talloc_memdup(ctx, &i, sizeof(i));
 	if (!*buffer) {
@@ -58,7 +58,7 @@ static WERROR NetServerGetInfo_l_1005(struct libnetapi_ctx *ctx,
 {
 	struct SERVER_INFO_1005 info1005;
 
-	info1005.sv1005_comment = lp_server_string(ctx);
+	info1005.sv1005_comment = lp_serverstring();
 	*buffer = (uint8_t *)talloc_memdup(ctx, &info1005, sizeof(info1005));
 	if (!*buffer) {
 		return WERR_NOMEM;
@@ -503,7 +503,7 @@ WERROR NetServerGetInfo_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_get_binding_handle(ctx, r->in.server_name,
-					    &ndr_table_srvsvc,
+					    &ndr_table_srvsvc.syntax_id,
 					    &b);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -616,7 +616,7 @@ WERROR NetServerSetInfo_r(struct libnetapi_ctx *ctx,
 	struct dcerpc_binding_handle *b;
 
 	werr = libnetapi_get_binding_handle(ctx, r->in.server_name,
-					    &ndr_table_srvsvc,
+					    &ndr_table_srvsvc.syntax_id,
 					    &b);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -658,7 +658,7 @@ WERROR NetRemoteTOD_r(struct libnetapi_ctx *ctx,
 	struct dcerpc_binding_handle *b;
 
 	werr = libnetapi_get_binding_handle(ctx, r->in.server_name,
-					    &ndr_table_srvsvc,
+					    &ndr_table_srvsvc.syntax_id,
 					    &b);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;

@@ -24,7 +24,7 @@
 #include "../librpc/gen_ndr/svcctl.h"
 #include "nmbd/nmbd.h"
 
-extern uint16_t samba_nb_type; /* Samba's NetBIOS type. */
+extern uint16 samba_nb_type; /* Samba's NetBIOS type. */
 
 /****************************************************************************
   Fail to become a Logon server on a subnet.
@@ -46,10 +46,10 @@ workgroup %s on subnet %s\n", failname, subrec->subnet_name));
 		return;
 	}
 
-	if((servrec = find_server_in_workgroup( work, lp_netbios_name())) == NULL) {
+	if((servrec = find_server_in_workgroup( work, global_myname())) == NULL) {
 		DEBUG(0,("become_logon_server_fail: Error - cannot find server %s \
 in workgroup %s on subnet %s\n",
-			lp_netbios_name(), failname, subrec->subnet_name));
+			global_myname(), failname, subrec->subnet_name));
 		work->log_state = LOGON_NONE;
 		return;
 	}
@@ -72,7 +72,7 @@ workgroup %s on subnet %s. Couldn't register name %s.\n",
 static void become_logon_server_success(struct subnet_record *subrec,
                                         struct userdata_struct *userdata,
                                         struct nmb_name *registered_name,
-                                        uint16_t nb_flags,
+                                        uint16 nb_flags,
                                         int ttl, struct in_addr registered_ip)
 {
 	unstring reg_name;
@@ -87,10 +87,10 @@ workgroup %s on subnet %s\n", reg_name, subrec->subnet_name));
 		return;
 	}
 
-	if((servrec = find_server_in_workgroup( work, lp_netbios_name())) == NULL) {
+	if((servrec = find_server_in_workgroup( work, global_myname())) == NULL) {
 		DEBUG(0,("become_logon_server_success: Error - cannot find server %s \
 in workgroup %s on subnet %s\n",
-			lp_netbios_name(), reg_name, subrec->subnet_name));
+			global_myname(), reg_name, subrec->subnet_name));
 		work->log_state = LOGON_NONE;
 		return;
 	}

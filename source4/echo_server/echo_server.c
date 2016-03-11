@@ -25,14 +25,12 @@
 #include "param/param.h"
 /* This defines task_server_terminate */
 #include "smbd/process_model.h"
-/* We get load_interface_list from here */
+/* We get load_interfaces from here */
 #include "socket/netif.h"
 /* NTSTATUS-related stuff */
 #include "libcli/util/ntstatus.h"
 /* tsocket-related functions */
 #include "lib/tsocket/tsocket.h"
-
-NTSTATUS server_service_echo_init(void);
 
 /* Structure to hold an echo server socket */
 struct echo_socket {
@@ -157,9 +155,10 @@ static void echo_udp_call_sendto_done(struct tevent_req *subreq)
 {
 	struct echo_udp_call *call = tevent_req_callback_data(subreq,
 				     struct echo_udp_call);
+	ssize_t ret;
 	int sys_errno;
 
-	tdgram_sendto_queue_recv(subreq, &sys_errno);
+	ret = tdgram_sendto_queue_recv(subreq, &sys_errno);
 
 	/*
 	 * We don't actually care about the error, just get on with our life.
@@ -196,7 +195,7 @@ static NTSTATUS echo_add_socket(struct echo_server *echo,
 						address, port,
 						&echo_socket->local_address);
 	if (ret != 0) {
-		status = map_nt_error_from_unix_common(errno);
+		status = map_nt_error_from_unix(errno);
 		return status;
 	}
 
@@ -211,7 +210,7 @@ static NTSTATUS echo_add_socket(struct echo_server *echo,
 				     echo_udp_socket,
 				     &echo_udp_socket->dgram);
 	if (ret != 0) {
-		status = map_nt_error_from_unix_common(errno);
+		status = map_nt_error_from_unix(errno);
 		DEBUG(0, ("Failed to bind to %s:%u UDP - %s\n",
 			  address, port, nt_errstr(status)));
 		return status;
@@ -268,10 +267,10 @@ static NTSTATUS echo_startup_interfaces(struct echo_server *echo,
 		return NT_STATUS_INTERNAL_ERROR;
 	}
 
-	num_interfaces = iface_list_count(ifaces);
+	num_interfaces = iface_count(ifaces);
 
 	for(i=0; i<num_interfaces; i++) {
-		const char *address = talloc_strdup(tmp_ctx, iface_list_n_ip(ifaces, i));
+		const char *address = talloc_strdup(tmp_ctx, iface_n_ip(ifaces, i));
 
 		status = echo_add_socket(echo, model_ops, "echo", address, ECHO_SERVICE_PORT);
 		NT_STATUS_NOT_OK_RETURN(status);
@@ -302,14 +301,14 @@ static void echo_task_init(struct task_server *task)
 		task_server_terminate(task, "echo: Not starting echo server " \
 				      "for domain members", false);
 		return;
-	case ROLE_ACTIVE_DIRECTORY_DC:
+	case ROLE_DOMAIN_CONTROLLER:
 		/* Yes, we want to run the echo server */
 		break;
 	}
 
-	load_interface_list(task, task->lp_ctx, &ifaces);
+	load_interfaces(task, lpcfg_interfaces(task->lp_ctx), &ifaces);
 
-	if (iface_list_count(ifaces) == 0) {
+	if (iface_count(ifaces) == 0) {
 		task_server_terminate(task,
 				      "echo: No network interfaces configured",
 				      false);

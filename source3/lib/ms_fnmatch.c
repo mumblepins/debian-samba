@@ -166,7 +166,7 @@ int ms_fnmatch(const char *pattern, const char *string, bool translate_pattern,
 		if (is_case_sensitive) {
 			return strcmp(pattern, string);
 		} else {
-			return strcasecmp_m(pattern, string);
+			return StrCaseCmp(pattern, string);
 		}
 	}
 
@@ -228,4 +228,11 @@ int ms_fnmatch(const char *pattern, const char *string, bool translate_pattern,
 	TALLOC_FREE(p);
 	TALLOC_FREE(s);
 	return ret;
+}
+
+
+/* a generic fnmatch function - uses for non-CIFS pattern matching */
+int gen_fnmatch(const char *pattern, const char *string)
+{
+	return ms_fnmatch(pattern, string, true, False);
 }

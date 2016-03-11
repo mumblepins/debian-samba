@@ -1,11 +1,12 @@
 <samba:parameter name="create krb5 conf"
 	context="G"
-	type="boolean"
+	type="string"
+		 advanced="1" developer="0"
                  xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
 
 	<para>
-	Setting this parameter to <value type="example">no</value> prevents
+	Setting this paramter to <value type="example">no</value> prevents
 	winbind from creating custom krb5.conf files. Winbind normally does
 	this because the krb5 libraries are not AD-site-aware and thus would
 	pick any domain controller out of potentially very many. Winbind

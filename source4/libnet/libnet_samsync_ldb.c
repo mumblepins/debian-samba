@@ -161,22 +161,13 @@ static NTSTATUS samsync_ldb_handle_domain(TALLOC_CTX *mem_ctx,
 			/* Update the domain sid with the incoming
 			 * domain (found on LSA pipe, database sid may
 			 * be random) */
-			ret = samdb_msg_add_dom_sid(state->sam_ldb,
-						    mem_ctx,
-						    msg,
-						    "objectSid",
-						    state->dom_sid[database]);
-			if (ret != LDB_SUCCESS) {
-				return NT_STATUS_INTERNAL_ERROR;
-			}
+			samdb_msg_add_dom_sid(state->sam_ldb, mem_ctx, 
+					      msg, "objectSid", state->dom_sid[database]);
 		} else {
 			/* Well, we will have to use the one from the database */
 			state->dom_sid[database] = samdb_search_dom_sid(state->sam_ldb, state,
 									state->base_dn[database], 
 									"objectSid", NULL);
-			if (state->dom_sid[database] == NULL) {
-				return NT_STATUS_INTERNAL_ERROR;
-			}
 		}
 
 		if (state->samsync_state->domain_guid) {
@@ -188,10 +179,7 @@ static NTSTATUS samsync_ldb_handle_domain(TALLOC_CTX *mem_ctx,
 				return status;
 			}
 			
-			ret = ldb_msg_add_value(msg, "objectGUID", &v, NULL);
-			if (ret != LDB_SUCCESS) {
-				return NT_STATUS_INTERNAL_ERROR;
-			}
+			ldb_msg_add_value(msg, "objectGUID", &v, NULL);
 		}
 	} else if (database == SAM_DATABASE_BUILTIN) {
 		/* work out the builtin_dn - useful for so many calls its worth
@@ -665,7 +653,7 @@ static NTSTATUS samsync_ldb_handle_group_member(TALLOC_CTX *mem_ctx,
 						char **error_string) 
 {
 	uint32_t rid = delta->delta_id_union.rid;
-	struct netr_DELTA_GROUP_MEMBER *delta_group_member = delta->delta_union.group_member;
+	struct netr_DELTA_GROUP_MEMBER *group_member = delta->delta_union.group_member;
 	struct ldb_message *msg;
 	struct ldb_message **msgs;
 	int ret;
@@ -701,11 +689,11 @@ static NTSTATUS samsync_ldb_handle_group_member(TALLOC_CTX *mem_ctx,
 	
 	talloc_free(msgs);
 
-	for (i=0; i<delta_group_member->num_rids; i++) {
+	for (i=0; i<group_member->num_rids; i++) {
 		/* search for the group, by rid */
 		ret = gendb_search(state->sam_ldb, mem_ctx, state->base_dn[database], &msgs, attrs,
 				   "(&(objectClass=user)(objectSid=%s))", 
-				   ldap_encode_ndr_dom_sid(mem_ctx, dom_sid_add_rid(mem_ctx, state->dom_sid[database], delta_group_member->rids[i])));
+				   ldap_encode_ndr_dom_sid(mem_ctx, dom_sid_add_rid(mem_ctx, state->dom_sid[database], group_member->rids[i]))); 
 		
 		if (ret == -1) {
 			*error_string = talloc_asprintf(mem_ctx, "gendb_search failed: %s", ldb_errstring(state->sam_ldb));
@@ -976,22 +964,13 @@ static NTSTATUS samsync_ldb_handle_account(TALLOC_CTX *mem_ctx,
 	}
 
 	sidstr = dom_sid_string(msg, sid);
-	if (sidstr == NULL) {
-		TALLOC_FREE(msg);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(sidstr, msg);
 
 	dnstr = talloc_asprintf(msg, "sid=%s", sidstr);
-	if (dnstr == NULL) {
-		TALLOC_FREE(msg);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(dnstr, msg);
 
 	msg->dn = ldb_dn_new(msg, state->pdb, dnstr);
-	if (msg->dn == NULL) {
-		TALLOC_FREE(msg);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(msg->dn, msg);
 
 	for (i=0; i< account->privilege_entries; i++) {
 		ldb_msg_add_string(msg, "privilege", account->privilege_name[i].string);

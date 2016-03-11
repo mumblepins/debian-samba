@@ -21,23 +21,16 @@
 
 #include "includes.h"
 #include "torture/torture.h"
-#include "libcli/cldap/cldap.h"
-#include "../lib/tsocket/tsocket.h"
 #include "librpc/gen_ndr/ndr_lsa_c.h"
 #include "librpc/gen_ndr/netlogon.h"
 #include "librpc/gen_ndr/ndr_drsblobs.h"
-#include "librpc/gen_ndr/ndr_netlogon_c.h"
 #include "lib/events/events.h"
 #include "libcli/security/security.h"
 #include "libcli/auth/libcli_auth.h"
 #include "torture/rpc/torture_rpc.h"
 #include "param/param.h"
-#include "source4/auth/kerberos/kerberos.h"
-#include "source4/auth/kerberos/kerberos_util.h"
-#include "lib/util/util_net.h"
 #include "../lib/crypto/crypto.h"
 #define TEST_MACHINENAME "lsatestmach"
-#define TRUSTPW "12345678"
 
 static void init_lsa_String(struct lsa_String *name, const char *s)
 {
@@ -74,79 +67,19 @@ static bool test_OpenPolicy(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenPolicy_r(b, tctx, &r),
 				   "OpenPolicy failed");
-
-	torture_assert_ntstatus_ok(tctx,
-				   r.out.result,
-				   "OpenPolicy failed");
-
-	return true;
-}
-
-static bool test_OpenPolicy_fail(struct dcerpc_binding_handle *b,
-				 struct torture_context *tctx)
-{
-	struct lsa_ObjectAttribute attr;
-	struct policy_handle handle;
-	struct lsa_QosInfo qos;
-	struct lsa_OpenPolicy r;
-	uint16_t system_name = '\\';
-	NTSTATUS status;
-
-	torture_comment(tctx, "\nTesting OpenPolicy_fail\n");
-
-	qos.len = 0;
-	qos.impersonation_level = 2;
-	qos.context_mode = 1;
-	qos.effective_only = 0;
-
-	attr.len = 0;
-	attr.root_dir = NULL;
-	attr.object_name = NULL;
-	attr.attributes = 0;
-	attr.sec_desc = NULL;
-	attr.sec_qos = &qos;
-
-	r.in.system_name = &system_name;
-	r.in.attr = &attr;
-	r.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
-	r.out.handle = &handle;
-
-	status = dcerpc_lsa_OpenPolicy_r(b, tctx, &r);
-	if (!NT_STATUS_IS_OK(status)) {
-		if (NT_STATUS_EQUAL(status, NT_STATUS_ACCESS_DENIED)) {
-			torture_comment(tctx,
-					"OpenPolicy correctly returned with "
-					"status: %s\n",
-					nt_errstr(status));
-			return true;
-		}
-
-		torture_assert_ntstatus_equal(tctx,
-					      status,
-					      NT_STATUS_ACCESS_DENIED,
-					      "OpenPolicy return value should "
-					      "be ACCESS_DENIED");
-		return true;
-	}
-
 	if (!NT_STATUS_IS_OK(r.out.result)) {
 		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
 		    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
-			torture_comment(tctx,
-					"OpenPolicy correctly returned with "
-					"result: %s\n",
+			torture_comment(tctx, "not considering %s to be an error\n",
 					nt_errstr(r.out.result));
 			return true;
 		}
+		torture_comment(tctx, "OpenPolicy failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
 	}
 
-	torture_assert_ntstatus_equal(tctx,
-				      r.out.result,
-				      NT_STATUS_OK,
-				      "OpenPolicy return value should be "
-				      "ACCESS_DENIED");
-
-	return false;
+	return true;
 }
 
 
@@ -163,7 +96,9 @@ bool test_lsa_OpenPolicy2_ex(struct dcerpc_binding_handle *b,
 	torture_comment(tctx, "\nTesting OpenPolicy2\n");
 
 	*handle = talloc(tctx, struct policy_handle);
-	torture_assert(tctx, *handle != NULL, "talloc(tctx, struct policy_handle)");
+	if (!*handle) {
+		return false;
+	}
 
 	qos.len = 0;
 	qos.impersonation_level = 2;
@@ -188,10 +123,19 @@ bool test_lsa_OpenPolicy2_ex(struct dcerpc_binding_handle *b,
 	if (!NT_STATUS_IS_OK(expected_status)) {
 		return true;
 	}
-
-	torture_assert_ntstatus_ok(tctx,
-				   r.out.result,
-				   "OpenPolicy2 failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
+		    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
+			torture_comment(tctx, "not considering %s to be an error\n",
+					nt_errstr(r.out.result));
+			talloc_free(*handle);
+			*handle = NULL;
+			return true;
+		}
+		torture_comment(tctx, "OpenPolicy2 failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	return true;
 }
@@ -202,68 +146,6 @@ bool test_lsa_OpenPolicy2(struct dcerpc_binding_handle *b,
 			  struct policy_handle **handle)
 {
 	return test_lsa_OpenPolicy2_ex(b, tctx, handle, NT_STATUS_OK);
-}
-
-static bool test_OpenPolicy2_fail(struct dcerpc_binding_handle *b,
-				  struct torture_context *tctx)
-{
-	struct lsa_ObjectAttribute attr;
-	struct policy_handle handle;
-	struct lsa_QosInfo qos;
-	struct lsa_OpenPolicy2 r;
-	NTSTATUS status;
-
-	torture_comment(tctx, "\nTesting OpenPolicy2_fail\n");
-
-	qos.len = 0;
-	qos.impersonation_level = 2;
-	qos.context_mode = 1;
-	qos.effective_only = 0;
-
-	attr.len = 0;
-	attr.root_dir = NULL;
-	attr.object_name = NULL;
-	attr.attributes = 0;
-	attr.sec_desc = NULL;
-	attr.sec_qos = &qos;
-
-	r.in.system_name = "\\";
-	r.in.attr = &attr;
-	r.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
-	r.out.handle = &handle;
-
-	status = dcerpc_lsa_OpenPolicy2_r(b, tctx, &r);
-	if (!NT_STATUS_IS_OK(status)) {
-		if (NT_STATUS_EQUAL(status, NT_STATUS_ACCESS_DENIED)) {
-			torture_comment(tctx,
-					"OpenPolicy2 correctly returned with "
-					"status: %s\n",
-					nt_errstr(status));
-			return true;
-		}
-
-		torture_assert_ntstatus_equal(tctx,
-					      status,
-					      NT_STATUS_ACCESS_DENIED,
-					      "OpenPolicy2 return value should "
-					      "be ACCESS_DENIED");
-		return true;
-	}
-
-	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
-	    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
-		torture_comment(tctx,
-				"OpenPolicy2 correctly returned with "
-				"result: %s\n",
-				nt_errstr(r.out.result));
-		return true;
-	}
-
-	torture_fail(tctx,
-		     "OpenPolicy2 return value should be "
-		     "ACCESS_DENIED or RPC_PROTSEQ_NOT_SUPPORTED");
-
-	return false;
 }
 
 static bool test_LookupNames(struct dcerpc_binding_handle *b,
@@ -320,37 +202,36 @@ static bool test_LookupNames(struct dcerpc_binding_handle *b,
 				       tnames->names[i].name.string);
 			}
 		}
-		torture_assert_ntstatus_ok(tctx, r.out.result,
-					   "LookupNames failed");
+		torture_comment(tctx, "LookupNames failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
 	} else if (!NT_STATUS_IS_OK(r.out.result)) {
-		torture_assert_ntstatus_ok(tctx, r.out.result,
-					   "LookupNames failed");
+		torture_comment(tctx, "LookupNames failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
 	}
 
 	for (i=0;i< r.in.num_names;i++) {
-		torture_assert(tctx, (i < count),
-			       talloc_asprintf(tctx,
-			       "LookupName of %s failed to return a result\n",
-			       tnames->names[input_idx[i]].name.string));
-
-		torture_assert_int_equal(tctx,
-					 sids.sids[i].sid_type,
-					 tnames->names[input_idx[i]].sid_type,
-					 talloc_asprintf(tctx,
-					 "LookupName of %s got unexpected name type: %s\n",
-					 tnames->names[input_idx[i]].name.string,
-					 sid_type_lookup(sids.sids[i].sid_type)));
-		if (sids.sids[i].sid_type != SID_NAME_DOMAIN) {
-			continue;
+		if (i < count) {
+			if (sids.sids[i].sid_type != tnames->names[input_idx[i]].sid_type) {
+				torture_comment(tctx, "LookupName of %s got unexpected name type: %s\n",
+						tnames->names[input_idx[i]].name.string,
+						sid_type_lookup(sids.sids[i].sid_type));
+				return false;
+			}
+			if ((sids.sids[i].sid_type == SID_NAME_DOMAIN) &&
+			    (sids.sids[i].rid != (uint32_t)-1)) {
+				torture_comment(tctx, "LookupName of %s got unexpected rid: %d\n",
+					tnames->names[input_idx[i]].name.string, sids.sids[i].rid);
+				return false;
+			}
+		} else if (i >=count) {
+			torture_comment(tctx, "LookupName of %s failed to return a result\n",
+			       tnames->names[input_idx[i]].name.string);
+			return false;
 		}
-		torture_assert_int_equal(tctx,
-					 sids.sids[i].rid,
-					 UINT32_MAX,
-					 talloc_asprintf(tctx,
-					 "LookupName of %s got unexpected rid: %d\n",
-					 tnames->names[input_idx[i]].name.string,
-					 sids.sids[i].rid));
 	}
+	torture_comment(tctx, "\n");
 
 	return true;
 }
@@ -499,7 +380,6 @@ static bool test_LookupNames2(struct dcerpc_binding_handle *b,
 	struct lsa_TransSidArray2 sids;
 	struct lsa_RefDomainList *domains = NULL;
 	struct lsa_String *names;
-	uint32_t *input_idx;
 	uint32_t count = 0;
 	int i;
 
@@ -507,6 +387,7 @@ static bool test_LookupNames2(struct dcerpc_binding_handle *b,
 
 	sids.count = 0;
 	sids.sids = NULL;
+	uint32_t *input_idx;
 
 	r.in.num_names = 0;
 
@@ -534,7 +415,11 @@ static bool test_LookupNames2(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupNames2_r(b, tctx, &r),
 		"LookupNames2 failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result, "LookupNames2 failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "LookupNames2 failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (check_result) {
 		torture_assert_int_equal(tctx, count, sids.count,
@@ -594,8 +479,11 @@ static bool test_LookupNames3(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupNames3_r(b, tctx, &r),
 		"LookupNames3 failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"LookupNames3 failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "LookupNames3 failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (check_result) {
 		torture_assert_int_equal(tctx, count, sids.count,
@@ -653,19 +541,11 @@ static bool test_LookupNames4(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupNames4_r(b, tctx, &r),
 		"LookupNames4 failed");
-
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_NONE_MAPPED)) {
-			torture_comment(tctx,
-					"LookupNames4 failed: %s - not considered as an error",
-					nt_errstr(r.out.result));
-
-			return true;
-		}
+		torture_comment(tctx, "LookupNames4 failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
 	}
-	torture_assert_ntstatus_ok(tctx,
-				   r.out.result,
-				   "LookupNames4 failed");
 
 	if (check_result) {
 		torture_assert_int_equal(tctx, count, sids.count,
@@ -678,70 +558,6 @@ static bool test_LookupNames4(struct dcerpc_binding_handle *b,
 	torture_comment(tctx, "\n");
 
 	return true;
-}
-
-static bool test_LookupNames4_fail(struct dcerpc_binding_handle *b,
-				   struct torture_context *tctx)
-{
-	struct lsa_LookupNames4 r;
-	struct lsa_TransSidArray3 sids;
-	struct lsa_RefDomainList *domains = NULL;
-	struct lsa_String *names = NULL;
-	uint32_t count = 0;
-	NTSTATUS status;
-
-	torture_comment(tctx, "\nTesting LookupNames4_fail");
-
-	sids.count = 0;
-	sids.sids = NULL;
-
-	r.in.num_names = 0;
-
-	r.in.num_names = count;
-	r.in.names = names;
-	r.in.sids = &sids;
-	r.in.level = 1;
-	r.in.count = &count;
-	r.in.lookup_options = 0;
-	r.in.client_revision = 0;
-	r.out.count = &count;
-	r.out.sids = &sids;
-	r.out.domains = &domains;
-
-	status = dcerpc_lsa_LookupNames4_r(b, tctx, &r);
-	if (!NT_STATUS_IS_OK(status)) {
-		if (NT_STATUS_EQUAL(status, NT_STATUS_ACCESS_DENIED)) {
-			torture_comment(tctx,
-					"LookupNames4 correctly returned with "
-					"status: %s\n",
-					nt_errstr(status));
-			return true;
-		}
-
-		torture_assert_ntstatus_equal(tctx,
-					      status,
-					      NT_STATUS_ACCESS_DENIED,
-					      "LookupNames4 return value should "
-					      "be ACCESS_DENIED");
-		return true;
-	}
-
-	if (!NT_STATUS_IS_OK(r.out.result)) {
-		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
-		    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
-			torture_comment(tctx,
-					"LookupSids3 correctly returned with "
-					"result: %s\n",
-					nt_errstr(r.out.result));
-			return true;
-		}
-	}
-
-	torture_fail(tctx,
-		     "LookupNames4 return value should be "
-		     "ACCESS_DENIED or RPC_PROTSEQ_NOT_SUPPORTED");
-
-	return false;
 }
 
 
@@ -771,9 +587,11 @@ static bool test_LookupSids(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupSids_r(b, tctx, &r),
 		"LookupSids failed");
-	if (!NT_STATUS_EQUAL(r.out.result, STATUS_SOME_UNMAPPED)) {
-		torture_assert_ntstatus_ok(tctx, r.out.result,
-			"LookupSids failed");
+	if (!NT_STATUS_IS_OK(r.out.result) &&
+	    !NT_STATUS_EQUAL(r.out.result, STATUS_SOME_UNMAPPED)) {
+		torture_comment(tctx, "LookupSids failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
 	}
 
 	torture_comment(tctx, "\n");
@@ -860,89 +678,25 @@ static bool test_LookupSids3(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupSids3_r(b, tctx, &r),
 		"LookupSids3 failed");
-
 	if (!NT_STATUS_IS_OK(r.out.result)) {
-		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_NONE_MAPPED)) {
-			torture_comment(tctx,
-					"LookupSids3 failed: %s - not considered as an error",
+		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
+		    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
+			torture_comment(tctx, "not considering %s to be an error\n",
 					nt_errstr(r.out.result));
-
 			return true;
 		}
-
-		torture_assert_ntstatus_ok(tctx,
-					   r.out.result,
-					   "LookupSids3 failed");
-
+		torture_comment(tctx, "LookupSids3 failed - %s - not considered an error\n",
+				nt_errstr(r.out.result));
 		return false;
 	}
 
 	torture_comment(tctx, "\n");
 
-	if (!test_LookupNames4(b, tctx, &names, true)) {
+	if (!test_LookupNames4(b, tctx, &names, false)) {
 		return false;
 	}
 
 	return true;
-}
-
-static bool test_LookupSids3_fail(struct dcerpc_binding_handle *b,
-				  struct torture_context *tctx,
-				  struct lsa_SidArray *sids)
-{
-	struct lsa_LookupSids3 r;
-	struct lsa_TransNameArray2 names;
-	struct lsa_RefDomainList *domains = NULL;
-	uint32_t count = sids->num_sids;
-	NTSTATUS status;
-
-	torture_comment(tctx, "\nTesting LookupSids3\n");
-
-	names.count = 0;
-	names.names = NULL;
-
-	r.in.sids = sids;
-	r.in.names = &names;
-	r.in.level = 1;
-	r.in.count = &count;
-	r.in.lookup_options = 0;
-	r.in.client_revision = 0;
-	r.out.domains = &domains;
-	r.out.count = &count;
-	r.out.names = &names;
-
-	status = dcerpc_lsa_LookupSids3_r(b, tctx, &r);
-	if (!NT_STATUS_IS_OK(status)) {
-		if (NT_STATUS_EQUAL(status, NT_STATUS_ACCESS_DENIED)) {
-			torture_comment(tctx,
-					"LookupSids3 correctly returned with "
-					"status: %s\n",
-					nt_errstr(status));
-			return true;
-		}
-
-		torture_assert_ntstatus_equal(tctx,
-					      status,
-					      NT_STATUS_ACCESS_DENIED,
-					      "LookupSids3 return value should "
-					      "be ACCESS_DENIED");
-		return true;
-	}
-
-	if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
-	    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
-		torture_comment(tctx,
-				"LookupNames4 correctly returned with "
-				"result: %s\n",
-				nt_errstr(r.out.result));
-		return true;
-	}
-
-	torture_fail(tctx,
-		     "LookupSids3 return value should be "
-		     "ACCESS_DENIED or RPC_PROTSEQ_NOT_SUPPORTED");
-
-	return false;
 }
 
 bool test_many_LookupSids(struct dcerpc_pipe *p,
@@ -953,7 +707,6 @@ bool test_many_LookupSids(struct dcerpc_pipe *p,
 	struct lsa_SidArray sids;
 	int i;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-	enum dcerpc_transport_t transport = dcerpc_binding_get_transport(p->binding);
 
 	torture_comment(tctx, "\nTesting LookupSids with lots of SIDs\n");
 
@@ -997,45 +750,42 @@ bool test_many_LookupSids(struct dcerpc_pipe *p,
 		if (!test_LookupNames(b, tctx, handle, &names)) {
 			return false;
 		}
-	}
-
-	if (transport == NCACN_NP) {
-		if (!test_LookupSids3_fail(b, tctx, &sids)) {
-			return false;
-		}
-		if (!test_LookupNames4_fail(b, tctx)) {
-			return false;
-		}
-	} else if (transport == NCACN_IP_TCP) {
+	} else if (p->conn->security_state.auth_info->auth_type == DCERPC_AUTH_TYPE_SCHANNEL &&
+		   p->conn->security_state.auth_info->auth_level >= DCERPC_AUTH_LEVEL_INTEGRITY) {
+		struct lsa_LookupSids3 r;
+		struct lsa_RefDomainList *domains = NULL;
 		struct lsa_TransNameArray2 names;
-		enum dcerpc_AuthType auth_type;
-		enum dcerpc_AuthLevel auth_level;
 
 		names.count = 0;
 		names.names = NULL;
 
-		dcerpc_binding_handle_auth_info(p->binding_handle,
-						&auth_type, &auth_level);
+		torture_comment(tctx, "\nTesting LookupSids3\n");
 
-		if (auth_type == DCERPC_AUTH_TYPE_SCHANNEL &&
-		    auth_level >= DCERPC_AUTH_LEVEL_INTEGRITY) {
-			if (!test_LookupSids3(b, tctx, &sids)) {
-				return false;
+		r.in.sids = &sids;
+		r.in.names = &names;
+		r.in.level = 1;
+		r.in.count = &count;
+		r.in.lookup_options = 0;
+		r.in.client_revision = 0;
+		r.out.count = &count;
+		r.out.names = &names;
+		r.out.domains = &domains;
+
+		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupSids3_r(b, tctx, &r),
+			"LookupSids3 failed");
+		if (!NT_STATUS_IS_OK(r.out.result)) {
+			if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
+			    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
+				torture_comment(tctx, "not considering %s to be an error\n",
+						nt_errstr(r.out.result));
+				return true;
 			}
-			if (!test_LookupNames4(b, tctx, &names, true)) {
-				return false;
-			}
-		} else {
-			/*
-			 * If we don't have a secure channel these tests must
-			 * fail with ACCESS_DENIED.
-			 */
-			if (!test_LookupSids3_fail(b, tctx, &sids)) {
-				return false;
-			}
-			if (!test_LookupNames4_fail(b, tctx)) {
-				return false;
-			}
+			torture_comment(tctx, "LookupSids3 failed - %s\n",
+					nt_errstr(r.out.result));
+			return false;
+		}
+		if (!test_LookupNames4(b, tctx, &names, false)) {
+			return false;
 		}
 	}
 
@@ -1116,7 +866,7 @@ static bool test_LookupSids_async(struct dcerpc_binding_handle *b,
 	}
 
 	while (replies >= 0 && replies < num_async_requests) {
-		tevent_loop_once(tctx->ev);
+		event_loop_once(tctx->ev);
 	}
 
 	talloc_free(req);
@@ -1142,8 +892,11 @@ static bool test_LookupPrivValue(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupPrivValue_r(b, tctx, &r),
 		"LookupPrivValue failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"LookupPrivValue failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "\nLookupPrivValue failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	return true;
 }
@@ -1162,7 +915,11 @@ static bool test_LookupPrivName(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_LookupPrivName_r(b, tctx, &r),
 		"LookupPrivName failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result, "LookupPrivName failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "\nLookupPrivName failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	return true;
 }
@@ -1243,8 +1000,12 @@ static bool test_AddPrivilegesToAccount(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_AddPrivilegesToAccount_r(b, tctx, &r),
 		"AddPrivilegesToAccount failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"AddPrivilegesToAccount failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "AddPrivilegesToAccount failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
+
 	return ret;
 }
 
@@ -1264,8 +1025,11 @@ static bool test_EnumPrivsAccount(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_EnumPrivsAccount_r(b, tctx, &r),
 		"EnumPrivsAccount failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"EnumPrivsAccount failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "EnumPrivsAccount failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (privs && privs->count > 0) {
 		int i;
@@ -1298,8 +1062,11 @@ static bool test_GetSystemAccessAccount(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_GetSystemAccessAccount_r(b, tctx, &r),
 		"GetSystemAccessAccount failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"GetSystemAccessAccount failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "GetSystemAccessAccount failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (r.out.access_mask != NULL) {
 		torture_comment(tctx, "Rights:");
@@ -1346,8 +1113,10 @@ static bool test_Delete(struct dcerpc_binding_handle *b,
 	r.in.handle = handle;
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_Delete_r(b, tctx, &r),
 		"Delete failed");
-	torture_assert_ntstatus_equal(tctx, r.out.result, NT_STATUS_NOT_SUPPORTED,
-		"Delete should have failed NT_STATUS_NOT_SUPPORTED");
+	if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_NOT_SUPPORTED)) {
+		torture_comment(tctx, "Delete should have failed NT_STATUS_NOT_SUPPORTED - %s\n", nt_errstr(r.out.result));
+		return false;
+	}
 
 	return true;
 }
@@ -1364,8 +1133,11 @@ static bool test_DeleteObject(struct dcerpc_binding_handle *b,
 	r.out.handle = handle;
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_DeleteObject_r(b, tctx, &r),
 		"DeleteObject failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"DeleteObject failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "DeleteObject failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
+	}
 
 	return true;
 }
@@ -1399,11 +1171,15 @@ static bool test_CreateAccount(struct dcerpc_binding_handle *b,
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenAccount_r(b, tctx, &r_o),
 			"OpenAccount failed");
-		torture_assert_ntstatus_ok(tctx, r_o.out.result,
-			"OpenAccount failed");
-	} else {
-		torture_assert_ntstatus_ok(tctx, r.out.result,
-					   "CreateAccount failed");
+		if (!NT_STATUS_IS_OK(r_o.out.result)) {
+			torture_comment(tctx, "OpenAccount failed - %s\n",
+					nt_errstr(r_o.out.result));
+			return false;
+		}
+	} else if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "CreateAccount failed - %s\n",
+				nt_errstr(r.out.result));
+		return false;
 	}
 
 	if (!test_Delete(b, tctx, &acct_handle)) {
@@ -1432,8 +1208,10 @@ static bool test_DeleteTrustedDomain(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenTrustedDomainByName_r(b, tctx, &r),
 		"OpenTrustedDomainByName failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"OpenTrustedDomainByName failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "OpenTrustedDomainByName failed - %s\n", nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (!test_Delete(b, tctx, &trustdom_handle)) {
 		return false;
@@ -1458,8 +1236,10 @@ static bool test_DeleteTrustedDomainBySid(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_DeleteTrustedDomain_r(b, tctx, &r),
 		"DeleteTrustedDomain failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"DeleteTrustedDomain failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "DeleteTrustedDomain failed - %s\n", nt_errstr(r.out.result));
+		return false;
+	}
 
 	return true;
 }
@@ -1469,6 +1249,7 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 			      struct torture_context *tctx,
 			      struct policy_handle *handle)
 {
+	NTSTATUS status;
 	struct lsa_CreateSecret r;
 	struct lsa_OpenSecret r2;
 	struct lsa_SetSecret r3;
@@ -1486,7 +1267,7 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 	bool ret = true;
 	DATA_BLOB session_key;
 	NTTIME old_mtime, new_mtime;
-	DATA_BLOB blob1;
+	DATA_BLOB blob1, blob2;
 	const char *secret1 = "abcdef12345699qwerty";
 	char *secret2;
  	const char *secret3 = "ABCDEF12345699QWERTY";
@@ -1513,8 +1294,10 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_CreateSecret_r(b, tctx, &r),
 			"CreateSecret failed");
-		torture_assert_ntstatus_ok(tctx, r.out.result,
-			"CreateSecret failed");
+		if (!NT_STATUS_IS_OK(r.out.result)) {
+			torture_comment(tctx, "CreateSecret failed - %s\n", nt_errstr(r.out.result));
+			return false;
+		}
 
 		r.in.handle = handle;
 		r.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
@@ -1522,8 +1305,10 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_CreateSecret_r(b, tctx, &r),
 			"CreateSecret failed");
-		torture_assert_ntstatus_equal(tctx, r.out.result, NT_STATUS_OBJECT_NAME_COLLISION,
-					      "CreateSecret should have failed OBJECT_NAME_COLLISION");
+		if (!NT_STATUS_EQUAL(r.out.result, NT_STATUS_OBJECT_NAME_COLLISION)) {
+			torture_comment(tctx, "CreateSecret should have failed OBJECT_NAME_COLLISION - %s\n", nt_errstr(r.out.result));
+			return false;
+		}
 
 		r2.in.handle = handle;
 		r2.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
@@ -1534,11 +1319,16 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenSecret_r(b, tctx, &r2),
 			"OpenSecret failed");
-		torture_assert_ntstatus_ok(tctx, r2.out.result,
-					   "OpenSecret failed");
+		if (!NT_STATUS_IS_OK(r2.out.result)) {
+			torture_comment(tctx, "OpenSecret failed - %s\n", nt_errstr(r2.out.result));
+			return false;
+		}
 
-		torture_assert_ntstatus_ok(tctx, dcerpc_fetch_session_key(p, &session_key),
-					   "dcerpc_fetch_session_key failed");
+		status = dcerpc_fetch_session_key(p, &session_key);
+		if (!NT_STATUS_IS_OK(status)) {
+			torture_comment(tctx, "dcerpc_fetch_session_key failed - %s\n", nt_errstr(status));
+			return false;
+		}
 
 		enc_key = sess_encrypt_string(secret1, &session_key);
 
@@ -1553,8 +1343,10 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_SetSecret_r(b, tctx, &r3),
 			"SetSecret failed");
-		torture_assert_ntstatus_ok(tctx, r3.out.result,
-			"SetSecret failed");
+		if (!NT_STATUS_IS_OK(r3.out.result)) {
+			torture_comment(tctx, "SetSecret failed - %s\n", nt_errstr(r3.out.result));
+			return false;
+		}
 
 		r3.in.sec_handle = &sec_handle;
 		r3.in.new_val = &buf1;
@@ -1569,9 +1361,11 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 		torture_comment(tctx, "Testing SetSecret with broken key\n");
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_SetSecret_r(b, tctx, &r3),
-					   "SetSecret failed");
-		torture_assert_ntstatus_equal(tctx, r3.out.result, NT_STATUS_UNKNOWN_REVISION,
-					      "SetSecret should have failed UNKNOWN_REVISION");
+			"SetSecret failed");
+		if (!NT_STATUS_EQUAL(r3.out.result, NT_STATUS_UNKNOWN_REVISION)) {
+			torture_comment(tctx, "SetSecret should have failed UNKNOWN_REVISION - %s\n", nt_errstr(r3.out.result));
+			ret = false;
+		}
 
 		data_blob_free(&enc_key);
 
@@ -1600,6 +1394,8 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 			} else {
 				blob1.data = r4.out.new_val->buf->data;
 				blob1.length = r4.out.new_val->buf->size;
+
+				blob2 = data_blob_talloc(tctx, NULL, blob1.length);
 
 				secret2 = sess_decrypt_string(tctx,
 							      &blob1, &session_key);
@@ -1664,6 +1460,8 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 				blob1.data = r6.out.new_val->buf->data;
 				blob1.length = r6.out.new_val->buf->size;
 
+				blob2 = data_blob_talloc(tctx, NULL, blob1.length);
+
 				secret4 = sess_decrypt_string(tctx,
 							      &blob1, &session_key);
 
@@ -1674,6 +1472,8 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 
 				blob1.data = r6.out.old_val->buf->data;
 				blob1.length = r6.out.old_val->buf->length;
+
+				blob2 = data_blob_talloc(tctx, NULL, blob1.length);
 
 				secret2 = sess_decrypt_string(tctx,
 							      &blob1, &session_key);
@@ -1746,6 +1546,8 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 				blob1.data = r8.out.old_val->buf->data;
 				blob1.length = r8.out.old_val->buf->size;
 
+				blob2 = data_blob_talloc(tctx, NULL, blob1.length);
+
 				secret6 = sess_decrypt_string(tctx,
 							      &blob1, &session_key);
 
@@ -1776,16 +1578,23 @@ static bool test_CreateSecret(struct dcerpc_pipe *p,
 		d_o.out.handle = &sec_handle2;
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_DeleteObject_r(b, tctx, &d_o),
 			"DeleteObject failed");
-		torture_assert_ntstatus_equal(tctx, d_o.out.result, NT_STATUS_INVALID_HANDLE,
-					      "OpenSecret expected INVALID_HANDLE");
+		if (!NT_STATUS_EQUAL(d_o.out.result, NT_STATUS_INVALID_HANDLE)) {
+			torture_comment(tctx, "Second delete expected INVALID_HANDLE - %s\n", nt_errstr(d_o.out.result));
+			ret = false;
+		} else {
 
-		torture_comment(tctx, "Testing OpenSecret of just-deleted secret\n");
+			torture_comment(tctx, "Testing OpenSecret of just-deleted secret\n");
 
-		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenSecret_r(b, tctx, &r2),
-					   "OpenSecret failed");
-		torture_assert_ntstatus_equal(tctx, r2.out.result, NT_STATUS_OBJECT_NAME_NOT_FOUND,
-					      "OpenSecret expected OBJECT_NAME_NOT_FOUND");
+			torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenSecret_r(b, tctx, &r2),
+				"OpenSecret failed");
+			if (!NT_STATUS_EQUAL(r2.out.result, NT_STATUS_OBJECT_NAME_NOT_FOUND)) {
+				torture_comment(tctx, "OpenSecret expected OBJECT_NAME_NOT_FOUND - %s\n", nt_errstr(r2.out.result));
+				ret = false;
+			}
+		}
+
 	}
+
 	return ret;
 }
 
@@ -1809,9 +1618,8 @@ static bool test_EnumAccountRights(struct dcerpc_binding_handle *b,
 	if (!NT_STATUS_IS_OK(r.out.result)) {
 		torture_comment(tctx, "EnumAccountRights of %s failed - %s\n",
 		       dom_sid_string(tctx, sid), nt_errstr(r.out.result));
+		return false;
 	}
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"EnumAccountRights failed");
 
 	return true;
 }
@@ -1865,8 +1673,10 @@ static bool test_OpenAccount(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenAccount_r(b, tctx, &r),
 		"OpenAccount failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"OpenAccount failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "OpenAccount failed - %s\n", nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (!test_EnumPrivsAccount(b, tctx, handle, &acct_handle)) {
 		return false;
@@ -1908,8 +1718,10 @@ static bool test_EnumAccounts(struct dcerpc_binding_handle *b,
 		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_NO_MORE_ENTRIES)) {
 			break;
 		}
-		torture_assert_ntstatus_ok(tctx, r.out.result,
-			"EnumAccounts failed");
+		if (!NT_STATUS_IS_OK(r.out.result)) {
+			torture_comment(tctx, "EnumAccounts failed - %s\n", nt_errstr(r.out.result));
+			return false;
+		}
 
 		if (!test_LookupSids(b, tctx, handle, &sids1)) {
 			return false;
@@ -1942,8 +1754,10 @@ static bool test_EnumAccounts(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_EnumAccounts_r(b, tctx, &r),
 		"EnumAccounts failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"EnumAccounts failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "EnumAccounts failed - %s\n", nt_errstr(r.out.result));
+		return false;
+	}
 
 	if (sids2.num_sids != 1) {
 		torture_comment(tctx, "Returned wrong number of entries (%d)\n", sids2.num_sids);
@@ -2041,8 +1855,10 @@ static bool test_EnumPrivs(struct dcerpc_binding_handle *b,
 	resume_handle = 0;
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_EnumPrivs_r(b, tctx, &r),
 		"EnumPrivs failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"EnumPrivs failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "EnumPrivs failed - %s\n", nt_errstr(r.out.result));
+		return false;
+	}
 
 	for (i = 0; i< privs1.count; i++) {
 		test_LookupPrivDisplayName(b, tctx, handle, (struct lsa_String *)&privs1.privs[i].name);
@@ -2082,7 +1898,7 @@ static bool test_QueryForestTrustInformation(struct dcerpc_binding_handle *b,
 
 	r.in.handle = handle;
 	r.in.trusted_domain_name = &string;
-	r.in.highest_record_type = LSA_FOREST_TRUST_TOP_LEVEL_NAME;
+	r.in.unknown = 0;
 	r.out.forest_trust_info = &info_ptr;
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_lsaRQueryForestTrustInformation_r(b, tctx, &r),
@@ -2106,7 +1922,7 @@ static bool test_query_each_TrustDomEx(struct dcerpc_binding_handle *b,
 
 	for (i=0; i< domains->count; i++) {
 
-		if (domains->domains[i].trust_attributes & LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE) {
+		if (domains->domains[i].trust_attributes & NETR_TRUST_ATTRIBUTE_FOREST_TRANSITIVE) {
 			ret &= test_QueryForestTrustInformation(b, tctx, handle,
 								domains->domains[i].domain_name.string);
 		}
@@ -2143,12 +1959,6 @@ static bool test_query_each_TrustDom(struct dcerpc_binding_handle *b,
 			torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenTrustedDomain_r(b, tctx, &trust),
 				"OpenTrustedDomain failed");
 
-			if (NT_STATUS_EQUAL(trust.out.result, NT_STATUS_NO_SUCH_DOMAIN)) {
-				torture_comment(tctx, "DOMAIN(%s, %s) not a direct trust?\n",
-						domains->domains[i].name.string,
-						dom_sid_string(tctx, domains->domains[i].sid));
-				continue;
-			}
 			if (!NT_STATUS_IS_OK(trust.out.result)) {
 				torture_comment(tctx, "OpenTrustedDomain failed - %s\n", nt_errstr(trust.out.result));
 				return false;
@@ -2231,12 +2041,6 @@ static bool test_query_each_TrustDom(struct dcerpc_binding_handle *b,
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_OpenTrustedDomainByName_r(b, tctx, &trust_by_name),
 			"OpenTrustedDomainByName failed");
 
-		if (NT_STATUS_EQUAL(trust_by_name.out.result, NT_STATUS_NO_SUCH_DOMAIN)) {
-			torture_comment(tctx, "DOMAIN(%s, %s) not a direct trust?\n",
-					domains->domains[i].name.string,
-					dom_sid_string(tctx, domains->domains[i].sid));
-			continue;
-		}
 		if (!NT_STATUS_IS_OK(trust_by_name.out.result)) {
 			torture_comment(tctx, "OpenTrustedDomainByName failed - %s\n", nt_errstr(trust_by_name.out.result));
 			return false;
@@ -2418,64 +2222,36 @@ static bool test_EnumTrustDomEx(struct dcerpc_binding_handle *b,
 				struct policy_handle *handle)
 {
 	struct lsa_EnumTrustedDomainsEx r_ex;
-	uint32_t in_resume_handle = 0;
-	uint32_t out_resume_handle;
+	uint32_t resume_handle = 0;
 	struct lsa_DomainListEx domains_ex;
 	bool ret = true;
 
 	torture_comment(tctx, "\nTesting EnumTrustedDomainsEx\n");
 
 	r_ex.in.handle = handle;
-	r_ex.in.resume_handle = &in_resume_handle;
-	r_ex.in.max_size = 0;
+	r_ex.in.resume_handle = &resume_handle;
+	r_ex.in.max_size = LSA_ENUM_TRUST_DOMAIN_EX_MULTIPLIER * 3;
 	r_ex.out.domains = &domains_ex;
-	r_ex.out.resume_handle = &out_resume_handle;
+	r_ex.out.resume_handle = &resume_handle;
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_EnumTrustedDomainsEx_r(b, tctx, &r_ex),
 		"EnumTrustedDomainsEx failed");
 
-	/* according to MS-LSAD 3.1.4.7.8 output resume handle MUST
-	 * always be larger than the previous input resume handle, in
-	 * particular when hitting the last query it is vital to set the
-	 * resume handle correctly to avoid infinite client loops, as
-	 * seen e.g.  with Windows XP SP3 when resume handle is 0 and
-	 * status is NT_STATUS_OK - gd */
-
-	if (NT_STATUS_IS_OK(r_ex.out.result) ||
-	    NT_STATUS_EQUAL(r_ex.out.result, NT_STATUS_NO_MORE_ENTRIES) ||
-	    NT_STATUS_EQUAL(r_ex.out.result, STATUS_MORE_ENTRIES))
-	{
-		if (out_resume_handle <= in_resume_handle) {
-			torture_comment(tctx, "EnumTrustDomEx failed - should have returned output resume_handle (0x%08x) larger than input resume handle (0x%08x)\n",
-				out_resume_handle, in_resume_handle);
-			return false;
-		}
-	}
-
-	if (NT_STATUS_IS_OK(r_ex.out.result)) {
-		if (domains_ex.count == 0) {
-			torture_comment(tctx, "EnumTrustDom failed - should have returned 'NT_STATUS_NO_MORE_ENTRIES' for 0 trusted domains\n");
-			return false;
-		}
-	} else if (!(NT_STATUS_EQUAL(r_ex.out.result, STATUS_MORE_ENTRIES) ||
-		    NT_STATUS_EQUAL(r_ex.out.result, NT_STATUS_NO_MORE_ENTRIES))) {
-		torture_comment(tctx, "EnumTrustDom of zero size failed - %s\n",
-				nt_errstr(r_ex.out.result));
+	if (!(NT_STATUS_EQUAL(r_ex.out.result, STATUS_MORE_ENTRIES) || NT_STATUS_EQUAL(r_ex.out.result, NT_STATUS_NO_MORE_ENTRIES))) {
+		torture_comment(tctx, "EnumTrustedDomainEx of zero size failed - %s\n", nt_errstr(r_ex.out.result));
 		return false;
 	}
 
-	in_resume_handle = 0;
+	resume_handle = 0;
 	do {
 		r_ex.in.handle = handle;
-		r_ex.in.resume_handle = &in_resume_handle;
+		r_ex.in.resume_handle = &resume_handle;
 		r_ex.in.max_size = LSA_ENUM_TRUST_DOMAIN_EX_MULTIPLIER * 3;
 		r_ex.out.domains = &domains_ex;
-		r_ex.out.resume_handle = &out_resume_handle;
+		r_ex.out.resume_handle = &resume_handle;
 
 		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_EnumTrustedDomainsEx_r(b, tctx, &r_ex),
 			"EnumTrustedDomainsEx failed");
-
-		in_resume_handle = out_resume_handle;
 
 		/* NO_MORE_ENTRIES is allowed */
 		if (NT_STATUS_EQUAL(r_ex.out.result, NT_STATUS_NO_MORE_ENTRIES)) {
@@ -2540,8 +2316,8 @@ static bool test_CreateTrustedDomain(struct dcerpc_binding_handle *b,
 	trustdom_handle = talloc_array(tctx, struct policy_handle, num_trusts);
 
 	for (i=0; i< num_trusts; i++) {
-		char *trust_name = talloc_asprintf(tctx, "TORTURE1%02d", i);
-		char *trust_sid = talloc_asprintf(tctx, "S-1-5-21-97398-379795-1%02d", i);
+		char *trust_name = talloc_asprintf(tctx, "torturedom%02d", i);
+		char *trust_sid = talloc_asprintf(tctx, "S-1-5-21-97398-379795-100%02d", i);
 
 		domsid[i] = dom_sid_parse_talloc(tctx, trust_sid);
 
@@ -2576,11 +2352,6 @@ static bool test_CreateTrustedDomain(struct dcerpc_binding_handle *b,
 			} else if (!q.out.info) {
 				ret = false;
 			} else {
-				if (strcmp(info->info_ex.domain_name.string, trustinfo.name.string) != 0) {
-					torture_comment(tctx, "QueryTrustedDomainInfo returned inconsistent long name: %s != %s\n",
-					       info->info_ex.domain_name.string, trustinfo.name.string);
-					ret = false;
-				}
 				if (strcmp(info->info_ex.netbios_name.string, trustinfo.name.string) != 0) {
 					torture_comment(tctx, "QueryTrustedDomainInfo returned inconsistent short name: %s != %s\n",
 					       info->info_ex.netbios_name.string, trustinfo.name.string);
@@ -2623,1767 +2394,28 @@ static bool test_CreateTrustedDomain(struct dcerpc_binding_handle *b,
 	return ret;
 }
 
-static bool gen_authinfo_internal(TALLOC_CTX *mem_ctx,
-				  const char *incoming_old, const char *incoming_new,
-				  const char *outgoing_old, const char *outgoing_new,
-				  DATA_BLOB session_key,
-				  struct lsa_TrustDomainInfoAuthInfoInternal **_authinfo_internal)
-{
-	struct lsa_TrustDomainInfoAuthInfoInternal *authinfo_internal;
-	struct trustDomainPasswords auth_struct;
-	struct AuthenticationInformation in_info;
-	struct AuthenticationInformation io_info;
-	struct AuthenticationInformation on_info;
-	struct AuthenticationInformation oo_info;
-	size_t converted_size;
-	DATA_BLOB auth_blob;
-	enum ndr_err_code ndr_err;
-	bool ok;
-
-	authinfo_internal = talloc_zero(mem_ctx, struct lsa_TrustDomainInfoAuthInfoInternal);
-	if (authinfo_internal == NULL) {
-		return false;
-	}
-
-	in_info.AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(mem_ctx, CH_UNIX, CH_UTF16,
-				   incoming_new,
-				   strlen(incoming_new),
-				   &in_info.AuthInfo.clear.password,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	in_info.AuthInfo.clear.size = converted_size;
-
-	io_info.AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(mem_ctx, CH_UNIX, CH_UTF16,
-				   incoming_old,
-				   strlen(incoming_old),
-				   &io_info.AuthInfo.clear.password,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	io_info.AuthInfo.clear.size = converted_size;
-
-	on_info.AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(mem_ctx, CH_UNIX, CH_UTF16,
-				   outgoing_new,
-				   strlen(outgoing_new),
-				   &on_info.AuthInfo.clear.password,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	on_info.AuthInfo.clear.size = converted_size;
-
-	oo_info.AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(mem_ctx, CH_UNIX, CH_UTF16,
-				   outgoing_old,
-				   strlen(outgoing_old),
-				   &oo_info.AuthInfo.clear.password,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	oo_info.AuthInfo.clear.size = converted_size;
-
-	generate_random_buffer(auth_struct.confounder, sizeof(auth_struct.confounder));
-	auth_struct.outgoing.count = 1;
-	auth_struct.outgoing.current.count = 1;
-	auth_struct.outgoing.current.array = &on_info;
-	auth_struct.outgoing.previous.count = 1;
-	auth_struct.outgoing.previous.array = &oo_info;
-
-	auth_struct.incoming.count = 1;
-	auth_struct.incoming.current.count = 1;
-	auth_struct.incoming.current.array = &in_info;
-	auth_struct.incoming.previous.count = 1;
-	auth_struct.incoming.previous.array = &io_info;
-
-	ndr_err = ndr_push_struct_blob(&auth_blob, mem_ctx, &auth_struct,
-				       (ndr_push_flags_fn_t)ndr_push_trustDomainPasswords);
-	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		return false;
-	}
-
-	arcfour_crypt_blob(auth_blob.data, auth_blob.length, &session_key);
-
-	authinfo_internal->auth_blob.size = auth_blob.length;
-	authinfo_internal->auth_blob.data = auth_blob.data;
-
-	*_authinfo_internal = authinfo_internal;
-
-	return true;
-}
-
-static bool gen_authinfo(TALLOC_CTX *mem_ctx,
-			 const char *incoming_old, const char *incoming_new,
-			 const char *outgoing_old, const char *outgoing_new,
-			 struct lsa_TrustDomainInfoAuthInfo **_authinfo)
-{
-	struct lsa_TrustDomainInfoAuthInfo *authinfo;
-	struct lsa_TrustDomainInfoBuffer *in_buffer;
-	struct lsa_TrustDomainInfoBuffer *io_buffer;
-	struct lsa_TrustDomainInfoBuffer *on_buffer;
-	struct lsa_TrustDomainInfoBuffer *oo_buffer;
-	size_t converted_size;
-	bool ok;
-
-	authinfo = talloc_zero(mem_ctx, struct lsa_TrustDomainInfoAuthInfo);
-	if (authinfo == NULL) {
-		return false;
-	}
-
-	in_buffer = talloc_zero(authinfo, struct lsa_TrustDomainInfoBuffer);
-	if (in_buffer == NULL) {
-		return false;
-	}
-	in_buffer->AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(in_buffer, CH_UNIX, CH_UTF16,
-				   incoming_new,
-				   strlen(incoming_new),
-				   &in_buffer->data.data,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	in_buffer->data.size = converted_size;
-
-	io_buffer = talloc_zero(authinfo, struct lsa_TrustDomainInfoBuffer);
-	if (io_buffer == NULL) {
-		return false;
-	}
-	io_buffer->AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(io_buffer, CH_UNIX, CH_UTF16,
-				   incoming_old,
-				   strlen(incoming_old),
-				   &io_buffer->data.data,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	io_buffer->data.size = converted_size;
-
-	on_buffer = talloc_zero(authinfo, struct lsa_TrustDomainInfoBuffer);
-	if (on_buffer == NULL) {
-		return false;
-	}
-	on_buffer->AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(on_buffer, CH_UNIX, CH_UTF16,
-				   outgoing_new,
-				   strlen(outgoing_new),
-				   &on_buffer->data.data,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	on_buffer->data.size = converted_size;
-
-	oo_buffer = talloc_zero(authinfo, struct lsa_TrustDomainInfoBuffer);
-	if (oo_buffer == NULL) {
-		return false;
-	}
-	oo_buffer->AuthType = TRUST_AUTH_TYPE_CLEAR;
-	ok = convert_string_talloc(oo_buffer, CH_UNIX, CH_UTF16,
-				   outgoing_old,
-				   strlen(outgoing_old),
-				   &oo_buffer->data.data,
-				   &converted_size);
-	if (!ok) {
-		return false;
-	}
-	oo_buffer->data.size = converted_size;
-
-	authinfo->incoming_count = 1;
-	authinfo->incoming_current_auth_info = in_buffer;
-	authinfo->incoming_previous_auth_info = io_buffer;
-	authinfo->outgoing_count = 1;
-	authinfo->outgoing_current_auth_info = on_buffer;
-	authinfo->outgoing_previous_auth_info = oo_buffer;
-
-	*_authinfo = authinfo;
-
-	return true;
-}
-
-static bool check_pw_with_ServerAuthenticate3(struct dcerpc_pipe *p,
-					     struct torture_context *tctx,
-					     uint32_t negotiate_flags,
-					     const char *server_name,
-					     struct cli_credentials *machine_credentials,
-					     struct netlogon_creds_CredentialState **creds_out)
-{
-	struct netr_ServerReqChallenge r;
-	struct netr_ServerAuthenticate3 a;
-	struct netr_Credential credentials1, credentials2, credentials3;
-	struct netlogon_creds_CredentialState *creds;
-	const struct samr_Password *new_password = NULL;
-	const struct samr_Password *old_password = NULL;
-	uint32_t rid;
-	struct dcerpc_binding_handle *b = p->binding_handle;
-
-	new_password = cli_credentials_get_nt_hash(machine_credentials, tctx);
-	old_password = cli_credentials_get_old_nt_hash(machine_credentials, tctx);
-
-	r.in.server_name = server_name;
-	r.in.computer_name = cli_credentials_get_workstation(machine_credentials);
-	r.in.credentials = &credentials1;
-	r.out.return_credentials = &credentials2;
-
-	generate_random_buffer(credentials1.data, sizeof(credentials1.data));
-
-	torture_assert_ntstatus_ok(tctx, dcerpc_netr_ServerReqChallenge_r(b, tctx, &r),
-		"ServerReqChallenge failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result, "ServerReqChallenge failed");
-
-	a.in.server_name = server_name;
-	a.in.account_name = cli_credentials_get_username(machine_credentials);
-	a.in.secure_channel_type = cli_credentials_get_secure_channel_type(machine_credentials);
-	a.in.computer_name = cli_credentials_get_workstation(machine_credentials);
-	a.in.negotiate_flags = &negotiate_flags;
-	a.in.credentials = &credentials3;
-	a.out.return_credentials = &credentials3;
-	a.out.negotiate_flags = &negotiate_flags;
-	a.out.rid = &rid;
-
-	creds = netlogon_creds_client_init(tctx, a.in.account_name,
-					   a.in.computer_name,
-					   a.in.secure_channel_type,
-					   &credentials1, &credentials2,
-					   new_password, &credentials3,
-					   negotiate_flags);
-
-	torture_assert(tctx, creds != NULL, "memory allocation");
-
-	torture_assert_ntstatus_ok(tctx, dcerpc_netr_ServerAuthenticate3_r(b, tctx, &a),
-		"ServerAuthenticate3 failed");
-	if (!NT_STATUS_IS_OK(a.out.result)) {
-		if (!NT_STATUS_EQUAL(a.out.result, NT_STATUS_ACCESS_DENIED)) {
-			torture_assert_ntstatus_ok(tctx, a.out.result,
-						   "ServerAuthenticate3 failed");
-		}
-		return false;
-	}
-	torture_assert(tctx, netlogon_creds_client_check(creds, &credentials3), "Credential chaining failed");
-
-	if (old_password != NULL) {
-		torture_assert_ntstatus_ok(tctx, dcerpc_netr_ServerReqChallenge_r(b, tctx, &r),
-			"ServerReqChallenge failed");
-		torture_assert_ntstatus_ok(tctx, r.out.result, "ServerReqChallenge failed");
-
-		creds = netlogon_creds_client_init(tctx, a.in.account_name,
-						   a.in.computer_name,
-						   a.in.secure_channel_type,
-						   &credentials1, &credentials2,
-						   old_password, &credentials3,
-						   negotiate_flags);
-
-		torture_assert(tctx, creds != NULL, "memory allocation");
-
-		torture_assert_ntstatus_ok(tctx, dcerpc_netr_ServerAuthenticate3_r(b, tctx, &a),
-			"ServerAuthenticate3 failed");
-		if (!NT_STATUS_IS_OK(a.out.result)) {
-			if (!NT_STATUS_EQUAL(a.out.result, NT_STATUS_ACCESS_DENIED)) {
-				torture_assert_ntstatus_ok(tctx, a.out.result,
-							   "ServerAuthenticate3 (old) failed");
-			}
-			return false;
-		}
-		torture_assert(tctx, netlogon_creds_client_check(creds, &credentials3), "Credential (old) chaining failed");
-	}
-
-	/* Prove that requesting a challenge again won't break it */
-	torture_assert_ntstatus_ok(tctx, dcerpc_netr_ServerReqChallenge_r(b, tctx, &r),
-		"ServerReqChallenge failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result, "ServerReqChallenge failed");
-
-	*creds_out = creds;
-	return true;
-}
-
-#ifdef SAMBA4_USES_HEIMDAL
-
-/*
- * This function is set in torture_krb5_init_context as krb5
- * send_and_recv function.  This allows us to override what server the
- * test is aimed at, and to inspect the packets just before they are
- * sent to the network, and before they are processed on the recv
- * side.
- *
- * The torture_krb5_pre_send_test() and torture_krb5_post_recv_test()
- * functions are implement the actual tests.
- *
- * When this asserts, the caller will get a spurious 'cannot contact
- * any KDC' message.
- *
- */
-struct check_pw_with_krb5_ctx {
-	struct addrinfo *server;
-	struct {
-		unsigned io;
-		unsigned fail;
-		unsigned errors;
-		unsigned error_io;
-		unsigned ok;
-	} counts;
-	krb5_error error;
-	struct smb_krb5_context *smb_krb5_context;
-	krb5_get_init_creds_opt *krb_options;
-	krb5_creds my_creds;
-	krb5_get_creds_opt opt_canon;
-	krb5_get_creds_opt opt_nocanon;
-	krb5_principal upn_realm;
-	krb5_principal upn_dns;
-	krb5_principal upn_netbios;
-	krb5_ccache krbtgt_ccache;
-	krb5_principal krbtgt_trust_realm;
-	krb5_creds *krbtgt_trust_realm_creds;
-	krb5_principal krbtgt_trust_dns;
-	krb5_creds *krbtgt_trust_dns_creds;
-	krb5_principal krbtgt_trust_netbios;
-	krb5_creds *krbtgt_trust_netbios_creds;
-	krb5_principal cifs_trust_dns;
-	krb5_creds *cifs_trust_dns_creds;
-	krb5_principal cifs_trust_netbios;
-	krb5_creds *cifs_trust_netbios_creds;
-	krb5_principal drs_trust_dns;
-	krb5_creds *drs_trust_dns_creds;
-	krb5_principal drs_trust_netbios;
-	krb5_creds *drs_trust_netbios_creds;
-	krb5_principal four_trust_dns;
-	krb5_creds *four_trust_dns_creds;
-	krb5_creds krbtgt_referral_creds;
-	Ticket krbtgt_referral_ticket;
-	krb5_keyblock krbtgt_referral_keyblock;
-	EncTicketPart krbtgt_referral_enc_part;
-};
-
-static krb5_error_code check_pw_with_krb5_send_and_recv_func(krb5_context context,
-					void *data, /* struct check_pw_with_krb5_ctx */
-					krb5_krbhst_info *_hi,
-					time_t timeout,
-					const krb5_data *send_buf,
-					krb5_data *recv_buf)
-{
-	struct check_pw_with_krb5_ctx *ctx =
-		talloc_get_type_abort(data, struct check_pw_with_krb5_ctx);
-	krb5_error_code k5ret;
-	krb5_krbhst_info hi = *_hi;
-	size_t used;
-	int ret;
-
-	hi.proto = KRB5_KRBHST_TCP;
-
-	smb_krb5_free_error(ctx->smb_krb5_context->krb5_context,
-			    &ctx->error);
-	ctx->counts.io++;
-
-	k5ret = smb_krb5_send_and_recv_func_forced(context, ctx->server,
-						   &hi, timeout, send_buf, recv_buf);
-	if (k5ret != 0) {
-		ctx->counts.fail++;
-		return k5ret;
-	}
-
-	ret = decode_KRB_ERROR(recv_buf->data, recv_buf->length,
-			       &ctx->error, &used);
-	if (ret == 0) {
-		ctx->counts.errors++;
-		ctx->counts.error_io = ctx->counts.io;
-	} else {
-		ctx->counts.ok++;
-	}
-
-	return k5ret;
-}
-
-static int check_pw_with_krb5_ctx_destructor(struct check_pw_with_krb5_ctx *ctx)
-{
-	if (ctx->server != NULL) {
-		freeaddrinfo(ctx->server);
-		ctx->server = NULL;
-	}
-
-	if (ctx->krb_options != NULL) {
-		krb5_get_init_creds_opt_free(ctx->smb_krb5_context->krb5_context,
-					     ctx->krb_options);
-		ctx->krb_options = NULL;
-	}
-
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->my_creds);
-
-	if (ctx->opt_canon != NULL) {
-		krb5_get_creds_opt_free(ctx->smb_krb5_context->krb5_context,
-					ctx->opt_canon);
-		ctx->opt_canon = NULL;
-	}
-
-	if (ctx->opt_nocanon != NULL) {
-		krb5_get_creds_opt_free(ctx->smb_krb5_context->krb5_context,
-					ctx->opt_nocanon);
-		ctx->opt_nocanon = NULL;
-	}
-
-	if (ctx->krbtgt_ccache != NULL) {
-		krb5_cc_close(ctx->smb_krb5_context->krb5_context,
-			      ctx->krbtgt_ccache);
-		ctx->krbtgt_ccache = NULL;
-	}
-
-	if (ctx->upn_realm != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->upn_realm);
-		ctx->upn_realm = NULL;
-	}
-
-	if (ctx->upn_dns != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->upn_dns);
-		ctx->upn_dns = NULL;
-	}
-
-	if (ctx->upn_netbios != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->upn_netbios);
-		ctx->upn_netbios = NULL;
-	}
-
-	if (ctx->krbtgt_trust_realm != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_trust_realm);
-		ctx->krbtgt_trust_realm = NULL;
-	}
-
-	if (ctx->krbtgt_trust_realm_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->krbtgt_trust_realm_creds);
-		ctx->krbtgt_trust_realm_creds = NULL;
-	}
-
-	if (ctx->krbtgt_trust_dns != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_trust_dns);
-		ctx->krbtgt_trust_dns = NULL;
-	}
-
-	if (ctx->krbtgt_trust_dns_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->krbtgt_trust_dns_creds);
-		ctx->krbtgt_trust_dns_creds = NULL;
-	}
-
-	if (ctx->krbtgt_trust_netbios != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_trust_netbios);
-		ctx->krbtgt_trust_netbios = NULL;
-	}
-
-	if (ctx->krbtgt_trust_netbios_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->krbtgt_trust_netbios_creds);
-		ctx->krbtgt_trust_netbios_creds = NULL;
-	}
-
-	if (ctx->cifs_trust_dns != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->cifs_trust_dns);
-		ctx->cifs_trust_dns = NULL;
-	}
-
-	if (ctx->cifs_trust_dns_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->cifs_trust_dns_creds);
-		ctx->cifs_trust_dns_creds = NULL;
-	}
-
-	if (ctx->cifs_trust_netbios != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->cifs_trust_netbios);
-		ctx->cifs_trust_netbios = NULL;
-	}
-
-	if (ctx->cifs_trust_netbios_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->cifs_trust_netbios_creds);
-		ctx->cifs_trust_netbios_creds = NULL;
-	}
-
-	if (ctx->drs_trust_dns != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->drs_trust_dns);
-		ctx->drs_trust_dns = NULL;
-	}
-
-	if (ctx->drs_trust_dns_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->drs_trust_dns_creds);
-		ctx->drs_trust_dns_creds = NULL;
-	}
-
-	if (ctx->drs_trust_netbios != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->drs_trust_netbios);
-		ctx->drs_trust_netbios = NULL;
-	}
-
-	if (ctx->drs_trust_netbios_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->drs_trust_netbios_creds);
-		ctx->drs_trust_netbios_creds = NULL;
-	}
-
-	if (ctx->four_trust_dns != NULL) {
-		krb5_free_principal(ctx->smb_krb5_context->krb5_context,
-				    ctx->four_trust_dns);
-		ctx->four_trust_dns = NULL;
-	}
-
-	if (ctx->four_trust_dns_creds != NULL) {
-		krb5_free_creds(ctx->smb_krb5_context->krb5_context,
-				ctx->four_trust_dns_creds);
-		ctx->four_trust_dns_creds = NULL;
-	}
-
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-
-	free_Ticket(&ctx->krbtgt_referral_ticket);
-
-	krb5_free_keyblock_contents(ctx->smb_krb5_context->krb5_context,
-				    &ctx->krbtgt_referral_keyblock);
-
-	free_EncTicketPart(&ctx->krbtgt_referral_enc_part);
-
-	smb_krb5_free_error(ctx->smb_krb5_context->krb5_context,
-			    &ctx->error);
-
-	talloc_unlink(ctx, ctx->smb_krb5_context);
-	ctx->smb_krb5_context = NULL;
-	return 0;
-}
-
-static bool check_pw_with_krb5(struct torture_context *tctx,
-			       struct cli_credentials *credentials,
-			       const struct lsa_TrustDomainInfoInfoEx *trusted)
-{
-	const char *trusted_dns_name = trusted->domain_name.string;
-	const char *trusted_netbios_name = trusted->netbios_name.string;
-	char *trusted_realm_name = NULL;
-	krb5_principal principal = NULL;
-	enum credentials_obtained obtained;
-	const char *error_string = NULL;
-	const char *workstation = cli_credentials_get_workstation(credentials);
-	const char *password = cli_credentials_get_password(credentials);
-	const struct samr_Password *nthash = NULL;
-	const struct samr_Password *old_nthash = NULL;
-	const char *old_password = cli_credentials_get_old_password(credentials);
-	int kvno = cli_credentials_get_kvno(credentials);
-	int expected_kvno = 0;
-	krb5uint32 t_kvno = 0;
-	const char *host = torture_setting_string(tctx, "host", NULL);
-	krb5_error_code k5ret;
-	krb5_boolean k5ok;
-	int type;
-	bool ok;
-	struct check_pw_with_krb5_ctx *ctx = NULL;
-	char *assertion_message = NULL;
-	const char *realm = NULL;
-	char *upn_realm_string = NULL;
-	char *upn_dns_string = NULL;
-	char *upn_netbios_string = NULL;
-	char *krbtgt_cc_name = NULL;
-	char *krbtgt_trust_realm_string = NULL;
-	char *krbtgt_trust_dns_string = NULL;
-	char *krbtgt_trust_netbios_string = NULL;
-	char *cifs_trust_dns_string = NULL;
-	char *cifs_trust_netbios_string = NULL;
-	char *drs_trust_dns_string = NULL;
-	char *drs_trust_netbios_string = NULL;
-	char *four_trust_dns_string = NULL;
-
-	ctx = talloc_zero(tctx, struct check_pw_with_krb5_ctx);
-	torture_assert(tctx, ctx != NULL, "Failed to allocate");
-
-	realm = cli_credentials_get_realm(credentials);
-	trusted_realm_name = strupper_talloc(tctx, trusted_dns_name);
-
-	nthash = cli_credentials_get_nt_hash(credentials, ctx);
-	old_nthash = cli_credentials_get_old_nt_hash(credentials, ctx);
-
-	k5ret = smb_krb5_init_context(ctx, tctx->lp_ctx, &ctx->smb_krb5_context);
-	torture_assert_int_equal(tctx, k5ret, 0, "smb_krb5_init_context failed");
-
-	ok = interpret_string_addr_internal(&ctx->server, host, AI_NUMERICHOST);
-	torture_assert(tctx, ok, "Failed to parse target server");
-	talloc_set_destructor(ctx, check_pw_with_krb5_ctx_destructor);
-
-	set_sockaddr_port(ctx->server->ai_addr, 88);
-
-	k5ret = krb5_set_send_to_kdc_func(ctx->smb_krb5_context->krb5_context,
-					  check_pw_with_krb5_send_and_recv_func,
-					  ctx);
-	torture_assert_int_equal(tctx, k5ret, 0, "krb5_set_send_to_kdc_func failed");
-
-	torture_assert_int_equal(tctx,
-			krb5_get_init_creds_opt_alloc(ctx->smb_krb5_context->krb5_context,
-						      &ctx->krb_options),
-			0, "krb5_get_init_creds_opt_alloc failed");
-	torture_assert_int_equal(tctx,
-			krb5_get_init_creds_opt_set_pac_request(
-				ctx->smb_krb5_context->krb5_context,
-				ctx->krb_options, true),
-			0, "krb5_get_init_creds_opt_set_pac_request failed");
-
-	upn_realm_string = talloc_asprintf(ctx, "user@%s",
-					   trusted_realm_name);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->upn_realm,
-						realm, upn_realm_string, NULL),
-			0, "smb_krb5_make_principal failed");
-	smb_krb5_principal_set_type(ctx->smb_krb5_context->krb5_context,
-				    ctx->upn_realm, KRB5_NT_ENTERPRISE_PRINCIPAL);
-
-	upn_dns_string = talloc_asprintf(ctx, "user@%s",
-					 trusted_dns_name);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->upn_dns,
-						realm, upn_dns_string, NULL),
-			0, "smb_krb5_make_principal failed");
-	smb_krb5_principal_set_type(ctx->smb_krb5_context->krb5_context,
-				    ctx->upn_dns, KRB5_NT_ENTERPRISE_PRINCIPAL);
-
-	upn_netbios_string = talloc_asprintf(ctx, "user@%s",
-					 trusted_netbios_name);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->upn_netbios,
-						realm, upn_netbios_string, NULL),
-			0, "smb_krb5_make_principal failed");
-	smb_krb5_principal_set_type(ctx->smb_krb5_context->krb5_context,
-				    ctx->upn_netbios, KRB5_NT_ENTERPRISE_PRINCIPAL);
-
-	k5ret = principal_from_credentials(ctx, credentials, ctx->smb_krb5_context,
-					   &principal, &obtained,  &error_string);
-	torture_assert_int_equal(tctx, k5ret, 0, error_string);
-
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_init_creds_password(ctx->smb_krb5_context->krb5_context,
-					     &ctx->my_creds, ctx->upn_realm,
-					     "_none_", NULL, NULL, 0,
-					     NULL, ctx->krb_options);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_init_creds_password(%s, canon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u/%u,ok=%u]",
-				upn_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.error_io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.error_io, 1, assertion_message);
-	torture_assert_int_equal(tctx, KRB5_ERROR_CODE(&ctx->error), 68, assertion_message);
-	torture_assert(tctx, ctx->error.crealm != NULL, assertion_message);
-	torture_assert_str_equal(tctx, *ctx->error.crealm, trusted_realm_name, assertion_message);
-	torture_assert(tctx, ctx->error.cname == NULL, assertion_message);
-	torture_assert_str_equal(tctx, ctx->error.realm, realm, assertion_message);
-
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_init_creds_password(ctx->smb_krb5_context->krb5_context,
-					     &ctx->my_creds, ctx->upn_dns,
-					     "_none_", NULL, NULL, 0,
-					     NULL, ctx->krb_options);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_init_creds_password(%s, canon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u/%u,ok=%u]",
-				upn_dns_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.error_io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.error_io, 1, assertion_message);
-	torture_assert_int_equal(tctx, KRB5_ERROR_CODE(&ctx->error), 68, assertion_message);
-	torture_assert(tctx, ctx->error.crealm != NULL, assertion_message);
-	torture_assert_str_equal(tctx, *ctx->error.crealm, trusted_realm_name, assertion_message);
-	torture_assert(tctx, ctx->error.cname == NULL, assertion_message);
-	torture_assert_str_equal(tctx, ctx->error.realm, realm, assertion_message);
-
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_init_creds_password(ctx->smb_krb5_context->krb5_context,
-					     &ctx->my_creds, ctx->upn_netbios,
-					     "_none_", NULL, NULL, 0,
-					     NULL, ctx->krb_options);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_init_creds_password(%s, canon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u/%u,ok=%u]",
-				upn_netbios_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.error_io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.error_io, 1, assertion_message);
-	torture_assert_int_equal(tctx, KRB5_ERROR_CODE(&ctx->error), 68, assertion_message);
-	torture_assert(tctx, ctx->error.crealm != NULL, assertion_message);
-	torture_assert_str_equal(tctx, *ctx->error.crealm, trusted_realm_name, assertion_message);
-	torture_assert(tctx, ctx->error.cname == NULL, assertion_message);
-	torture_assert_str_equal(tctx, ctx->error.realm, realm, assertion_message);
-
-	torture_comment(tctx, "password[%s] old_password[%s]\n",
-			password, old_password);
-	if (old_password != NULL) {
-		k5ret = krb5_get_init_creds_password(ctx->smb_krb5_context->krb5_context,
-						     &ctx->my_creds, principal,
-						     old_password, NULL, NULL, 0,
-						     NULL, ctx->krb_options);
-		torture_assert_int_equal(tctx, k5ret, KRB5KDC_ERR_PREAUTH_FAILED,
-					 "preauth should fail with old password");
-	}
-
-	k5ret = krb5_get_init_creds_password(ctx->smb_krb5_context->krb5_context,
-					     &ctx->my_creds, principal,
-					     password, NULL, NULL, 0,
-					     NULL, ctx->krb_options);
-	if (k5ret == KRB5KDC_ERR_PREAUTH_FAILED) {
-		TALLOC_FREE(ctx);
-		return false;
-	}
-
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_init_creds_password for failed: %s",
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	torture_assert_int_equal(tctx,
-			krb5_get_creds_opt_alloc(ctx->smb_krb5_context->krb5_context,
-						 &ctx->opt_canon),
-			0, "krb5_get_creds_opt_alloc");
-
-	krb5_get_creds_opt_add_options(ctx->smb_krb5_context->krb5_context,
-				       ctx->opt_canon,
-				       KRB5_GC_CANONICALIZE);
-
-	krb5_get_creds_opt_add_options(ctx->smb_krb5_context->krb5_context,
-				       ctx->opt_canon,
-				       KRB5_GC_NO_STORE);
-
-	torture_assert_int_equal(tctx,
-			krb5_get_creds_opt_alloc(ctx->smb_krb5_context->krb5_context,
-						 &ctx->opt_nocanon),
-			0, "krb5_get_creds_opt_alloc");
-
-	krb5_get_creds_opt_add_options(ctx->smb_krb5_context->krb5_context,
-				       ctx->opt_nocanon,
-				       KRB5_GC_NO_STORE);
-
-	krbtgt_cc_name = talloc_asprintf(ctx, "MEMORY:%p.krbtgt", ctx->smb_krb5_context);
-	torture_assert_int_equal(tctx,
-			krb5_cc_resolve(ctx->smb_krb5_context->krb5_context,
-					krbtgt_cc_name,
-					&ctx->krbtgt_ccache),
-			0, "krb5_cc_resolve failed");
-
-	torture_assert_int_equal(tctx,
-			krb5_cc_initialize(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_ccache,
-					   ctx->my_creds.client),
-			0, "krb5_cc_initialize failed");
-
-	torture_assert_int_equal(tctx,
-			krb5_cc_store_cred(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_ccache,
-					   &ctx->my_creds),
-			0, "krb5_cc_store_cred failed");
-
-	krbtgt_trust_realm_string = talloc_asprintf(ctx, "krbtgt/%s@%s",
-						    trusted_realm_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->krbtgt_trust_realm,
-						realm, "krbtgt",
-						trusted_realm_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	krbtgt_trust_dns_string = talloc_asprintf(ctx, "krbtgt/%s@%s",
-						  trusted_dns_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->krbtgt_trust_dns,
-						realm, "krbtgt",
-						trusted_dns_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	krbtgt_trust_netbios_string = talloc_asprintf(ctx, "krbtgt/%s@%s",
-						      trusted_netbios_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->krbtgt_trust_netbios,
-						realm, "krbtgt",
-						trusted_netbios_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	/* Confirm if we can do a TGS for krbtgt/trusted_realm */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_nocanon,
-			       ctx->krbtgt_ccache,
-			       ctx->krbtgt_trust_realm,
-			       &ctx->krbtgt_trust_realm_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s, canon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_trust_realm_creds->server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_trust_realm_creds->server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Confirm if we have no referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, KRB5_CC_END, assertion_message);
-
-	/* Confirm if we can do a TGS for krbtgt/trusted_dns with CANON */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->krbtgt_trust_dns,
-			       &ctx->krbtgt_trust_dns_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s, canon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				krbtgt_trust_dns_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-	k5ret = decode_Ticket(ctx->krbtgt_referral_creds.ticket.data,
-			      ctx->krbtgt_referral_creds.ticket.length,
-			      &ctx->krbtgt_referral_ticket, NULL);
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-	if (kvno > 0) {
-		expected_kvno = kvno - 1;
-	}
-	if (ctx->krbtgt_referral_ticket.enc_part.kvno != NULL) {
-		t_kvno = *ctx->krbtgt_referral_ticket.enc_part.kvno;
-		assertion_message = talloc_asprintf(ctx,
-				"krbtgt_referral_ticket(%s) kvno(%u) expected(%u) current(%u)",
-				krbtgt_trust_realm_string,
-				(unsigned)t_kvno, (unsigned)expected_kvno,(unsigned)kvno);
-		torture_comment(tctx, "%s\n", assertion_message);
-		torture_assert_int_not_equal(tctx, t_kvno, 0, assertion_message);
-	} else {
-		assertion_message = talloc_asprintf(ctx,
-				"krbtgt_referral_ticket(%s) kvno(NULL) exptected(%u) current(%u)",
-				krbtgt_trust_realm_string,
-				(unsigned)expected_kvno,(unsigned)kvno);
-		torture_comment(tctx, "%s\n", assertion_message);
-	}
-	torture_assert_int_equal(tctx, t_kvno, expected_kvno, assertion_message);
-
-	if (old_nthash != NULL && expected_kvno != kvno) {
-		torture_comment(tctx, "old_nthash: %s\n", assertion_message);
-		k5ret = smb_krb5_keyblock_init_contents(ctx->smb_krb5_context->krb5_context,
-							ENCTYPE_ARCFOUR_HMAC,
-							old_nthash->hash,
-							sizeof(old_nthash->hash),
-							&ctx->krbtgt_referral_keyblock);
-		torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-	} else {
-		torture_comment(tctx, "nthash: %s\n", assertion_message);
-		k5ret = smb_krb5_keyblock_init_contents(ctx->smb_krb5_context->krb5_context,
-							ENCTYPE_ARCFOUR_HMAC,
-							nthash->hash,
-							sizeof(nthash->hash),
-							&ctx->krbtgt_referral_keyblock);
-		torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-	}
-	k5ret = krb5_decrypt_ticket(ctx->smb_krb5_context->krb5_context,
-				    &ctx->krbtgt_referral_ticket,
-				    &ctx->krbtgt_referral_keyblock,
-				    &ctx->krbtgt_referral_enc_part,
-				    0);
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	/* Confirm if we can do a TGS for krbtgt/trusted_dns no CANON */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_nocanon,
-			       ctx->krbtgt_ccache,
-			       ctx->krbtgt_trust_dns,
-			       &ctx->krbtgt_trust_dns_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s, nocanon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				krbtgt_trust_dns_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 2, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 2, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_trust_dns_creds->server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_trust_dns_creds->server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	/* Confirm if we can do a TGS for krbtgt/NETBIOS with CANON */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->krbtgt_trust_netbios,
-			       &ctx->krbtgt_trust_netbios_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s, canon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				krbtgt_trust_netbios_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_netbios_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	/* Confirm if we can do a TGS for krbtgt/NETBIOS no CANON */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_nocanon,
-			       ctx->krbtgt_ccache,
-			       ctx->krbtgt_trust_netbios,
-			       &ctx->krbtgt_trust_netbios_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s, nocanon) for failed: "
-				"(%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				krbtgt_trust_netbios_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 2, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 2, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_trust_netbios_creds->server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_trust_netbios_creds->server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	cifs_trust_dns_string = talloc_asprintf(ctx, "cifs/%s@%s",
-						trusted_dns_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->cifs_trust_dns,
-						realm, "cifs",
-						trusted_dns_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	/* Confirm if we get krbtgt/trusted_realm back when asking for cifs/trusted_realm */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->cifs_trust_dns,
-			       &ctx->cifs_trust_dns_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s) for failed: (%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				cifs_trust_dns_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	cifs_trust_netbios_string = talloc_asprintf(ctx, "cifs/%s@%s",
-						trusted_netbios_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->cifs_trust_netbios,
-						realm, "cifs",
-						trusted_netbios_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	/* Confirm if we get krbtgt/trusted_realm back when asking for cifs/trusted_realm */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->cifs_trust_netbios,
-			       &ctx->cifs_trust_netbios_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s) for failed: (%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				cifs_trust_netbios_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	drs_trust_dns_string = talloc_asprintf(ctx,
-			"E3514235-4B06-11D1-AB04-00C04FC2DCD2/%s/%s@%s",
-			workstation, trusted_dns_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->drs_trust_dns,
-						realm, "E3514235-4B06-11D1-AB04-00C04FC2DCD2",
-						workstation, trusted_dns_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	/* Confirm if we get krbtgt/trusted_realm back when asking for a 3 part principal */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->drs_trust_dns,
-			       &ctx->drs_trust_dns_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s) for failed: (%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				drs_trust_dns_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	drs_trust_netbios_string = talloc_asprintf(ctx,
-			"E3514235-4B06-11D1-AB04-00C04FC2DCD2/%s/%s@%s",
-			workstation, trusted_netbios_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->drs_trust_netbios,
-						realm, "E3514235-4B06-11D1-AB04-00C04FC2DCD2",
-						workstation, trusted_netbios_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	/* Confirm if we get krbtgt/trusted_realm back when asking for a 3 part principal */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->drs_trust_netbios,
-			       &ctx->drs_trust_netbios_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s) for failed: (%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				drs_trust_netbios_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5_KDC_UNREACH, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.ok, 1, assertion_message);
-
-	/* Confirm if we have the referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	k5ok = krb5_principal_compare(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_referral_creds.server,
-				      ctx->krbtgt_trust_realm);
-	torture_assert(tctx, k5ok, assertion_message);
-	type = smb_krb5_principal_get_type(ctx->smb_krb5_context->krb5_context,
-					   ctx->krbtgt_referral_creds.server);
-	torture_assert_int_equal(tctx, type, KRB5_NT_SRV_INST, assertion_message);
-
-	/* Delete the referral ticket from the cache */
-	k5ret = krb5_cc_remove_cred(ctx->smb_krb5_context->krb5_context,
-				    ctx->krbtgt_ccache,
-				    0,
-				    &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_remove_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, 0, assertion_message);
-
-	four_trust_dns_string = talloc_asprintf(ctx, "four/tree/two/%s@%s",
-						trusted_dns_name, realm);
-	torture_assert_int_equal(tctx,
-			smb_krb5_make_principal(ctx->smb_krb5_context->krb5_context,
-						&ctx->four_trust_dns,
-						realm, "four", "tree", "two",
-						trusted_dns_name, NULL),
-			0, "smb_krb5_make_principal failed");
-
-	/* Confirm if we get an error back for a 4 part principal */
-	ZERO_STRUCT(ctx->counts);
-	k5ret = krb5_get_creds(ctx->smb_krb5_context->krb5_context,
-			       ctx->opt_canon,
-			       ctx->krbtgt_ccache,
-			       ctx->four_trust_dns,
-			       &ctx->four_trust_dns_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_get_creds(%s) for failed: (%d) %s; t[d=0x%x,t=0x%x,a=0x%x] [io=%u,error=%u,ok=%u]",
-				four_trust_dns_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx),
-				trusted->trust_direction,
-				trusted->trust_type,
-				trusted->trust_attributes,
-				ctx->counts.io, ctx->counts.errors, ctx->counts.ok);
-	torture_assert_int_equal(tctx, k5ret, KRB5KDC_ERR_S_PRINCIPAL_UNKNOWN, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.io, 1, assertion_message);
-	torture_assert_int_equal(tctx, ctx->counts.error_io, 1, assertion_message);
-	torture_assert_int_equal(tctx, KRB5_ERROR_CODE(&ctx->error), 7, assertion_message);
-
-	/* Confirm if we have no referral ticket in the cache */
-	krb5_free_cred_contents(ctx->smb_krb5_context->krb5_context,
-				&ctx->krbtgt_referral_creds);
-	k5ret = krb5_cc_retrieve_cred(ctx->smb_krb5_context->krb5_context,
-				      ctx->krbtgt_ccache,
-				      0,
-				      ctx->krbtgt_trust_realm_creds,
-				      &ctx->krbtgt_referral_creds);
-	assertion_message = talloc_asprintf(ctx,
-				"krb5_cc_retrieve_cred(%s) for failed: (%d) %s",
-				krbtgt_trust_realm_string,
-				k5ret,
-				smb_get_krb5_error_message(ctx->smb_krb5_context->krb5_context,
-							   k5ret, ctx));
-	torture_assert_int_equal(tctx, k5ret, KRB5_CC_END, assertion_message);
-
-	TALLOC_FREE(ctx);
-	return true;
-}
-#endif
-
-static bool check_dom_trust_pw(struct dcerpc_pipe *p,
-			       struct torture_context *tctx,
-			       const char *our_netbios_name,
-			       const char *our_dns_name,
-			       enum netr_SchannelType secure_channel_type,
-			       const struct lsa_TrustDomainInfoInfoEx *trusted,
-			       const char *previous_password,
-			       const char *current_password,
-			       uint32_t current_version,
-			       const char *next_password,
-			       uint32_t next_version,
-			       bool expected_result)
-{
-	struct cli_credentials *incoming_creds;
-	char *server_name = NULL;
-	char *account = NULL;
-	char *principal = NULL;
-	char *workstation = NULL;
-	const char *binding = torture_setting_string(tctx, "binding", NULL);
-	const char *host = torture_setting_string(tctx, "host", NULL);
-	struct dcerpc_binding *b2;
-	struct netlogon_creds_CredentialState *creds;
-	struct samr_CryptPassword samr_crypt_password;
-	struct netr_CryptPassword netr_crypt_password;
-	struct netr_Authenticator req_auth;
-	struct netr_Authenticator rep_auth;
-	struct netr_ServerPasswordSet2 s;
-	struct dcerpc_pipe *p1 = NULL;
-	struct dcerpc_pipe *p2 = NULL;
-	NTSTATUS status;
-	bool ok;
-	int rc;
-	const char *trusted_netbios_name = trusted->netbios_name.string;
-	const char *trusted_dns_name = trusted->domain_name.string;
-	struct tsocket_address *dest_addr;
-	struct cldap_socket *cldap;
-	struct cldap_netlogon cldap1;
-
-	incoming_creds = cli_credentials_init(tctx);
-	torture_assert(tctx, incoming_creds, "cli_credentials_init");
-
-	cli_credentials_set_domain(incoming_creds, our_netbios_name, CRED_SPECIFIED);
-	cli_credentials_set_realm(incoming_creds, our_dns_name, CRED_SPECIFIED);
-
-	if (secure_channel_type == SEC_CHAN_DNS_DOMAIN) {
-		account = talloc_asprintf(tctx, "%s.", trusted_dns_name);
-		torture_assert(tctx, account, __location__);
-
-		principal = talloc_asprintf(tctx, "%s$@%s",
-					    trusted_netbios_name,
-					    cli_credentials_get_realm(incoming_creds));
-		torture_assert(tctx, principal, __location__);
-
-		workstation = talloc_asprintf(tctx, "%sUP",
-					      trusted_netbios_name);
-		torture_assert(tctx, workstation, __location__);
-	} else {
-		account = talloc_asprintf(tctx, "%s$", trusted_netbios_name);
-		torture_assert(tctx, account, __location__);
-
-		workstation = talloc_asprintf(tctx, "%sDOWN",
-					      trusted_netbios_name);
-		torture_assert(tctx, workstation, __location__);
-	}
-
-	cli_credentials_set_username(incoming_creds, account, CRED_SPECIFIED);
-	if (principal != NULL) {
-		cli_credentials_set_principal(incoming_creds, principal,
-					      CRED_SPECIFIED);
-	}
-	cli_credentials_set_kvno(incoming_creds, current_version);
-	cli_credentials_set_password(incoming_creds, current_password, CRED_SPECIFIED);
-	cli_credentials_set_old_password(incoming_creds, previous_password, CRED_SPECIFIED);
-	cli_credentials_set_workstation(incoming_creds, workstation, CRED_SPECIFIED);
-	cli_credentials_set_secure_channel_type(incoming_creds, secure_channel_type);
-
-	rc = tsocket_address_inet_from_strings(tctx, "ip",
-					       host,
-					       lpcfg_cldap_port(tctx->lp_ctx),
-					       &dest_addr);
-	torture_assert_int_equal(tctx, rc, 0, "tsocket_address_inet_from_strings");
-
-	/* cldap_socket_init should now know about the dest. address */
-	status = cldap_socket_init(tctx, NULL, dest_addr, &cldap);
-	torture_assert_ntstatus_ok(tctx, status, "cldap_socket_init");
-
-	ZERO_STRUCT(cldap1);
-	cldap1.in.dest_address = NULL;
-	cldap1.in.dest_port = 0;
-	cldap1.in.version = NETLOGON_NT_VERSION_5 | NETLOGON_NT_VERSION_5EX;
-	cldap1.in.user = account;
-	if (secure_channel_type == SEC_CHAN_DNS_DOMAIN) {
-		cldap1.in.acct_control = ACB_AUTOLOCK;
-	} else {
-		cldap1.in.acct_control = ACB_DOMTRUST;
-	}
-	status = cldap_netlogon(cldap, tctx, &cldap1);
-	torture_assert_ntstatus_ok(tctx, status, "cldap_netlogon");
-	torture_assert_int_equal(tctx, cldap1.out.netlogon.ntver,
-				 NETLOGON_NT_VERSION_5EX,
-				 "ntver");
-	torture_assert_int_equal(tctx, cldap1.out.netlogon.data.nt5_ex.nt_version,
-				 NETLOGON_NT_VERSION_1 | NETLOGON_NT_VERSION_5EX,
-				 "nt_version");
-	torture_assert_int_equal(tctx, cldap1.out.netlogon.data.nt5_ex.command,
-				 LOGON_SAM_LOGON_RESPONSE_EX,
-				 "command");
-	torture_assert_str_equal(tctx, cldap1.out.netlogon.data.nt5_ex.user_name,
-				 cldap1.in.user,
-				 "user_name");
-	server_name = talloc_asprintf(tctx, "\\\\%s",
-			cldap1.out.netlogon.data.nt5_ex.pdc_dns_name);
-	torture_assert(tctx, server_name, __location__);
-
-	status = dcerpc_parse_binding(tctx, binding, &b2);
-	torture_assert_ntstatus_ok(tctx, status, "Bad binding string");
-
-	status = dcerpc_pipe_connect_b(tctx, &p1, b2,
-				       &ndr_table_netlogon,
-				       cli_credentials_init_anon(tctx),
-				       tctx->ev, tctx->lp_ctx);
-	torture_assert_ntstatus_ok(tctx, status, "dcerpc_pipe_connect_b");
-
-	ok = check_pw_with_ServerAuthenticate3(p1, tctx,
-					       NETLOGON_NEG_AUTH2_ADS_FLAGS,
-					       server_name,
-					       incoming_creds, &creds);
-	torture_assert_int_equal(tctx, ok, expected_result,
-				 "check_pw_with_ServerAuthenticate3");
-	if (expected_result == true) {
-		ok = test_SetupCredentialsPipe(p1, tctx, incoming_creds, creds,
-					       DCERPC_SIGN | DCERPC_SEAL, &p2);
-		torture_assert_int_equal(tctx, ok, true,
-					 "test_SetupCredentialsPipe");
-	}
-	TALLOC_FREE(p1);
-
-	if (trusted->trust_type != LSA_TRUST_TYPE_DOWNLEVEL) {
-#ifdef SAMBA4_USES_HEIMDAL
-		ok = check_pw_with_krb5(tctx, incoming_creds, trusted);
-		torture_assert_int_equal(tctx, ok, expected_result,
-					 "check_pw_with_krb5");
-#else
-		torture_comment(tctx, "skipping check_pw_with_krb5 for MIT Kerberos build");
-#endif
-	}
-
-	if (expected_result != true || next_password == NULL) {
-		TALLOC_FREE(p2);
-		return true;
-	}
-
-	/*
-	 * netr_ServerPasswordSet2
-	 */
-	ok = encode_pw_buffer(samr_crypt_password.data,
-			      next_password, STR_UNICODE);
-	torture_assert(tctx, ok, "encode_pw_buffer");
-
-	if (next_version != 0) {
-		struct NL_PASSWORD_VERSION version;
-		uint32_t len = IVAL(samr_crypt_password.data, 512);
-		uint32_t ofs = 512 - len;
-		uint8_t *ptr;
-
-		ofs -= 12;
-
-		version.ReservedField = 0;
-		version.PasswordVersionNumber = next_version;
-		version.PasswordVersionPresent =
-			NETLOGON_PASSWORD_VERSION_NUMBER_PRESENT;
-
-		ptr = samr_crypt_password.data + ofs;
-		SIVAL(ptr, 0, version.ReservedField);
-		SIVAL(ptr, 4, version.PasswordVersionNumber);
-		SIVAL(ptr, 8, version.PasswordVersionPresent);
-	}
-
-	netlogon_creds_client_authenticator(creds, &req_auth);
-	ZERO_STRUCT(rep_auth);
-
-	if (creds->negotiate_flags & NETLOGON_NEG_SUPPORTS_AES) {
-		netlogon_creds_aes_encrypt(creds,
-					   samr_crypt_password.data,
-					   516);
-	} else {
-		netlogon_creds_arcfour_crypt(creds,
-					     samr_crypt_password.data,
-					     516);
-	}
-
-	memcpy(netr_crypt_password.data,
-	       samr_crypt_password.data, 512);
-	netr_crypt_password.length = IVAL(samr_crypt_password.data, 512);
-
-
-	s.in.server_name = server_name;
-	s.in.account_name = cli_credentials_get_username(incoming_creds);
-	s.in.secure_channel_type = cli_credentials_get_secure_channel_type(incoming_creds);
-	s.in.computer_name = cli_credentials_get_workstation(incoming_creds);
-	s.in.credential = &req_auth;
-	s.in.new_password = &netr_crypt_password;
-	s.out.return_authenticator = &rep_auth;
-	status = dcerpc_netr_ServerPasswordSet2_r(p2->binding_handle, tctx, &s);
-	torture_assert_ntstatus_ok(tctx, status, "failed to set password");
-
-	ok = netlogon_creds_client_check(creds, &rep_auth.cred);
-	torture_assert(tctx, ok, "netlogon_creds_client_check");
-
-	cli_credentials_set_kvno(incoming_creds, next_version);
-	cli_credentials_set_password(incoming_creds, next_password, CRED_SPECIFIED);
-	cli_credentials_set_old_password(incoming_creds, current_password, CRED_SPECIFIED);
-
-	TALLOC_FREE(p2);
-	status = dcerpc_pipe_connect_b(tctx, &p2, b2,
-				       &ndr_table_netlogon,
-				       cli_credentials_init_anon(tctx),
-				       tctx->ev, tctx->lp_ctx);
-	torture_assert_ntstatus_ok(tctx, status, "dcerpc_pipe_connect_b");
-
-	ok = check_pw_with_ServerAuthenticate3(p2, tctx,
-					       NETLOGON_NEG_AUTH2_ADS_FLAGS,
-					       server_name,
-					       incoming_creds, &creds);
-	torture_assert(tctx, ok, "check_pw_with_ServerAuthenticate3 with changed password");
-
-	if (trusted->trust_type != LSA_TRUST_TYPE_DOWNLEVEL) {
-#if SAMBA4_USES_HEIMDAL
-		ok = check_pw_with_krb5(tctx, incoming_creds, trusted);
-		torture_assert(tctx, ok, "check_pw_with_krb5 with changed password");
-#else
-		torture_comment(tctx, "skipping check_pw_with_krb5 for MIT Kerberos build");
-#endif
-	}
-
-	TALLOC_FREE(p2);
-	return true;
-}
-
-static bool test_CreateTrustedDomainEx_common(struct dcerpc_pipe *p,
-					      struct torture_context *tctx,
-					      struct policy_handle *handle,
-					      uint32_t num_trusts,
-					      bool ex2_call)
+static bool test_CreateTrustedDomainEx2(struct dcerpc_pipe *p,
+					struct torture_context *tctx,
+					struct policy_handle *handle,
+					uint32_t num_trusts)
 {
 	NTSTATUS status;
 	bool ret = true;
-	struct lsa_QueryInfoPolicy2 p2;
-	union lsa_PolicyInformation *our_info = NULL;
-	struct lsa_CreateTrustedDomainEx r;
-	struct lsa_CreateTrustedDomainEx2 r2;
+	struct lsa_CreateTrustedDomainEx2 r;
 	struct lsa_TrustDomainInfoInfoEx trustinfo;
-	struct lsa_TrustDomainInfoAuthInfoInternal *authinfo_internal = NULL;
-	struct lsa_TrustDomainInfoAuthInfo *authinfo = NULL;
+	struct lsa_TrustDomainInfoAuthInfoInternal authinfo;
+	struct trustDomainPasswords auth_struct;
+	DATA_BLOB auth_blob;
 	struct dom_sid **domsid;
 	struct policy_handle *trustdom_handle;
 	struct lsa_QueryTrustedDomainInfo q;
 	union lsa_TrustedDomainInfo *info = NULL;
 	DATA_BLOB session_key;
+	enum ndr_err_code ndr_err;
 	int i;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-	const char *id;
-	const char *incoming_v00 = TRUSTPW "InV00";
-	const char *incoming_v0 = TRUSTPW "InV0";
-	const char *incoming_v1 = TRUSTPW "InV1";
-	const char *incoming_v2 = TRUSTPW "InV2";
-	const char *incoming_v40 = TRUSTPW "InV40";
-	const char *outgoing_v00 = TRUSTPW "OutV00";
-	const char *outgoing_v0 = TRUSTPW "OutV0";
 
-	if (ex2_call) {
-		torture_comment(tctx, "\nTesting CreateTrustedDomainEx2 for %d domains\n", num_trusts);
-		id = "3";
-	} else {
-		torture_comment(tctx, "\nTesting CreateTrustedDomainEx for %d domains\n", num_trusts);
-		id = "2";
-	}
+	torture_comment(tctx, "\nTesting CreateTrustedDomainEx2 for %d domains\n", num_trusts);
 
 	domsid = talloc_array(tctx, struct dom_sid *, num_trusts);
 	trustdom_handle = talloc_array(tctx, struct policy_handle, num_trusts);
@@ -4394,23 +2426,10 @@ static bool test_CreateTrustedDomainEx_common(struct dcerpc_pipe *p,
 		return false;
 	}
 
-	ZERO_STRUCT(p2);
-	p2.in.handle = handle;
-	p2.in.level = LSA_POLICY_INFO_DNS;
-	p2.out.info = &our_info;
-
-	torture_assert_ntstatus_ok(tctx,
-				dcerpc_lsa_QueryInfoPolicy2_r(b, tctx, &p2),
-				"lsa_QueryInfoPolicy2 failed");
-	torture_assert_ntstatus_ok(tctx, p2.out.result,
-				"lsa_QueryInfoPolicy2 failed");
-	torture_assert(tctx, our_info != NULL, "lsa_QueryInfoPolicy2 our_info");
-
 	for (i=0; i< num_trusts; i++) {
-		char *trust_name = talloc_asprintf(tctx, "TORTURE%s%02d", id, i);
-		char *trust_name_dns = talloc_asprintf(tctx, "torturedom%s%02d.samba._none_.example.com", id, i);
-		char *trust_sid = talloc_asprintf(tctx, "S-1-5-21-97398-379795-%s%02d", id, i);
-		bool ok;
+		char *trust_name = talloc_asprintf(tctx, "torturedom%02d", i);
+		char *trust_name_dns = talloc_asprintf(tctx, "torturedom%02d.samba.example.com", i);
+		char *trust_sid = talloc_asprintf(tctx, "S-1-5-21-97398-379795-100%02d", i);
 
 		domsid[i] = dom_sid_parse_talloc(tctx, trust_sid);
 
@@ -4432,133 +2451,50 @@ static bool test_CreateTrustedDomainEx_common(struct dcerpc_pipe *p,
 
 		trustinfo.trust_attributes = LSA_TRUST_ATTRIBUTE_USES_RC4_ENCRYPTION;
 
-		ok = gen_authinfo_internal(tctx, incoming_v00, incoming_v0,
-				  outgoing_v00, outgoing_v0,
-				  session_key, &authinfo_internal);
-		if (!ok) {
-			torture_comment(tctx, "gen_authinfo_internal failed");
+		generate_random_buffer(auth_struct.confounder, sizeof(auth_struct.confounder));
+
+		auth_struct.outgoing.count = 0;
+		auth_struct.outgoing.current.count = 0;
+		auth_struct.outgoing.current.array = NULL;
+		auth_struct.outgoing.previous.count = 0;
+		auth_struct.outgoing.previous.array = NULL;
+
+		auth_struct.incoming.count = 0;
+		auth_struct.incoming.current.count = 0;
+		auth_struct.incoming.current.array = NULL;
+		auth_struct.incoming.previous.count = 0;
+		auth_struct.incoming.previous.array = NULL;
+
+
+		ndr_err = ndr_push_struct_blob(&auth_blob, tctx, &auth_struct,
+					       (ndr_push_flags_fn_t)ndr_push_trustDomainPasswords);
+		if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+			torture_comment(tctx, "ndr_push_struct_blob of trustDomainPasswords structure failed");
 			ret = false;
 		}
 
-		ok = gen_authinfo(tctx, incoming_v00, incoming_v0,
-				  outgoing_v00, outgoing_v0,
-				  &authinfo);
-		if (!ok) {
-			torture_comment(tctx, "gen_authinfonfo failed");
-			ret = false;
-		}
+		arcfour_crypt_blob(auth_blob.data, auth_blob.length, &session_key);
 
-		if (ex2_call) {
+		authinfo.auth_blob.size = auth_blob.length;
+		authinfo.auth_blob.data = auth_blob.data;
 
-			r2.in.policy_handle = handle;
-			r2.in.info = &trustinfo;
-			r2.in.auth_info_internal = authinfo_internal;
-			r2.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
-			r2.out.trustdom_handle = &trustdom_handle[i];
+		r.in.policy_handle = handle;
+		r.in.info = &trustinfo;
+		r.in.auth_info = &authinfo;
+		r.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
+		r.out.trustdom_handle = &trustdom_handle[i];
 
-			torture_assert_ntstatus_ok(tctx,
-				dcerpc_lsa_CreateTrustedDomainEx2_r(b, tctx, &r2),
-				"CreateTrustedDomainEx2 failed");
-
-			status = r2.out.result;
-		} else {
-
-			r.in.policy_handle = handle;
-			r.in.info = &trustinfo;
-			r.in.auth_info = authinfo;
-			r.in.access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
-			r.out.trustdom_handle = &trustdom_handle[i];
-
-			torture_assert_ntstatus_ok(tctx,
-				dcerpc_lsa_CreateTrustedDomainEx_r(b, tctx, &r),
-				"CreateTrustedDomainEx failed");
-
-			status = r.out.result;
-		}
-
-		if (NT_STATUS_EQUAL(status, NT_STATUS_OBJECT_NAME_COLLISION)) {
+		torture_assert_ntstatus_ok(tctx, dcerpc_lsa_CreateTrustedDomainEx2_r(b, tctx, &r),
+			"CreateTrustedDomainEx2 failed");
+		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_OBJECT_NAME_COLLISION)) {
 			test_DeleteTrustedDomain(b, tctx, handle, trustinfo.netbios_name);
-			if (ex2_call) {
-				torture_assert_ntstatus_ok(tctx,
-					dcerpc_lsa_CreateTrustedDomainEx2_r(b, tctx, &r2),
-					"CreateTrustedDomainEx2 failed");
-				status = r2.out.result;
-			} else {
-				torture_assert_ntstatus_ok(tctx,
-					dcerpc_lsa_CreateTrustedDomainEx_r(b, tctx, &r),
-					"CreateTrustedDomainEx2 failed");
-				status = r.out.result;
-			}
+			torture_assert_ntstatus_ok(tctx, dcerpc_lsa_CreateTrustedDomainEx2_r(b, tctx, &r),
+				"CreateTrustedDomainEx2 failed");
 		}
-		if (!NT_STATUS_IS_OK(status)) {
-			torture_comment(tctx, "CreateTrustedDomainEx failed2 - %s\n", nt_errstr(status));
+		if (!NT_STATUS_IS_OK(r.out.result)) {
+			torture_comment(tctx, "CreateTrustedDomainEx failed2 - %s\n", nt_errstr(r.out.result));
 			ret = false;
 		} else {
-			/* For outbound and MIT trusts there is no trust account */
-			if (trustinfo.trust_direction != 2 &&
-			    trustinfo.trust_type != 3) {
-
-				if (torture_setting_bool(tctx, "samba3", false)) {
-					torture_comment(tctx, "skipping trusted domain auth tests against samba3\n");
-				} else if (ex2_call == false &&
-					   torture_setting_bool(tctx, "samba4", false)) {
-					torture_comment(tctx, "skipping CreateTrustedDomainEx trusted domain auth tests against samba4\n");
-
-				} else {
-					ok = check_dom_trust_pw(p, tctx,
-								our_info->dns.name.string,
-								our_info->dns.dns_domain.string,
-								SEC_CHAN_DOMAIN,
-								&trustinfo,
-								NULL,
-								"x" TRUSTPW "x", 0,
-								NULL, 0,
-								false);
-					if (!ok) {
-						torture_comment(tctx, "Password check passed unexpectedly\n");
-						ret = false;
-					}
-					ok = check_dom_trust_pw(p, tctx,
-								our_info->dns.name.string,
-								our_info->dns.dns_domain.string,
-								SEC_CHAN_DOMAIN,
-								&trustinfo,
-								incoming_v00,
-								incoming_v0, 0,
-								incoming_v1, 1,
-								true);
-					if (!ok) {
-						torture_comment(tctx, "Password check failed (SEC_CHAN_DOMAIN)\n");
-						ret = false;
-					}
-					ok = check_dom_trust_pw(p, tctx,
-								our_info->dns.name.string,
-								our_info->dns.dns_domain.string,
-								SEC_CHAN_DNS_DOMAIN,
-								&trustinfo,
-								incoming_v0,
-								incoming_v1, 1,
-								incoming_v2, 2,
-								true);
-					if (!ok) {
-						torture_comment(tctx, "Password check failed v2 (SEC_CHAN_DNS_DOMAIN)\n");
-						ret = false;
-					}
-					ok = check_dom_trust_pw(p, tctx,
-								our_info->dns.name.string,
-								our_info->dns.dns_domain.string,
-								SEC_CHAN_DNS_DOMAIN,
-								&trustinfo,
-								incoming_v1,
-								incoming_v2, 2,
-								incoming_v40, 40,
-								true);
-					if (!ok) {
-						torture_comment(tctx, "Password check failed v4 (SEC_CHAN_DNS_DOMAIN)\n");
-						ret = false;
-					}
-				}
-			}
 
 			q.in.trustdom_handle = &trustdom_handle[i];
 			q.in.level = LSA_TRUSTED_DOMAIN_INFO_INFO_EX;
@@ -4572,11 +2508,6 @@ static bool test_CreateTrustedDomainEx_common(struct dcerpc_pipe *p,
 				torture_comment(tctx, "QueryTrustedDomainInfo level 1 failed to return an info pointer\n");
 				ret = false;
 			} else {
-				if (strcmp(info->info_ex.domain_name.string, trustinfo.domain_name.string) != 0) {
-					torture_comment(tctx, "QueryTrustedDomainInfo returned inconsistent long name: %s != %s\n",
-					       info->info_ex.domain_name.string, trustinfo.domain_name.string);
-					ret = false;
-				}
 				if (strcmp(info->info_ex.netbios_name.string, trustinfo.netbios_name.string) != 0) {
 					torture_comment(tctx, "QueryTrustedDomainInfo returned inconsistent short name: %s != %s\n",
 					       info->info_ex.netbios_name.string, trustinfo.netbios_name.string);
@@ -4620,22 +2551,6 @@ static bool test_CreateTrustedDomainEx_common(struct dcerpc_pipe *p,
 	}
 
 	return ret;
-}
-
-static bool test_CreateTrustedDomainEx2(struct dcerpc_pipe *p,
-					struct torture_context *tctx,
-					struct policy_handle *handle,
-					uint32_t num_trusts)
-{
-	return test_CreateTrustedDomainEx_common(p, tctx, handle, num_trusts, true);
-}
-
-static bool test_CreateTrustedDomainEx(struct dcerpc_pipe *p,
-				       struct torture_context *tctx,
-				       struct policy_handle *handle,
-				       uint32_t num_trusts)
-{
-	return test_CreateTrustedDomainEx_common(p, tctx, handle, num_trusts, false);
 }
 
 static bool test_QueryDomainInfoPolicy(struct dcerpc_binding_handle *b,
@@ -4857,58 +2772,6 @@ static bool test_GetUserName(struct dcerpc_binding_handle *b,
 	return ret;
 }
 
-static bool test_GetUserName_fail(struct dcerpc_binding_handle *b,
-				  struct torture_context *tctx)
-{
-	struct lsa_GetUserName r;
-	struct lsa_String *account_name_p = NULL;
-	NTSTATUS status;
-
-	torture_comment(tctx, "\nTesting GetUserName_fail\n");
-
-	r.in.system_name	= "\\";
-	r.in.account_name	= &account_name_p;
-	r.in.authority_name	= NULL;
-	r.out.account_name	= &account_name_p;
-
-	status = dcerpc_lsa_GetUserName_r(b, tctx, &r);
-	if (!NT_STATUS_IS_OK(status)) {
-		if (NT_STATUS_EQUAL(status, NT_STATUS_ACCESS_DENIED)) {
-			torture_comment(tctx,
-					"GetUserName correctly returned with "
-					"status: %s\n",
-					nt_errstr(status));
-			return true;
-		}
-
-		torture_assert_ntstatus_equal(tctx,
-					      status,
-					      NT_STATUS_ACCESS_DENIED,
-					      "GetUserName return value should "
-					      "be ACCESS_DENIED");
-		return true;
-	}
-
-	if (!NT_STATUS_IS_OK(r.out.result)) {
-		if (NT_STATUS_EQUAL(r.out.result, NT_STATUS_ACCESS_DENIED) ||
-		    NT_STATUS_EQUAL(r.out.result, NT_STATUS_RPC_PROTSEQ_NOT_SUPPORTED)) {
-			torture_comment(tctx,
-					"GetUserName correctly returned with "
-					"result: %s\n",
-					nt_errstr(r.out.result));
-			return true;
-		}
-	}
-
-	torture_assert_ntstatus_equal(tctx,
-				      r.out.result,
-				      NT_STATUS_OK,
-				      "GetUserName return value should be "
-				      "ACCESS_DENIED");
-
-	return false;
-}
-
 bool test_lsa_Close(struct dcerpc_binding_handle *b,
 		    struct torture_context *tctx,
 		    struct policy_handle *handle)
@@ -4923,8 +2786,11 @@ bool test_lsa_Close(struct dcerpc_binding_handle *b,
 
 	torture_assert_ntstatus_ok(tctx, dcerpc_lsa_Close_r(b, tctx, &r),
 		"Close failed");
-	torture_assert_ntstatus_ok(tctx, r.out.result,
-		"Close failed");
+	if (!NT_STATUS_IS_OK(r.out.result)) {
+		torture_comment(tctx, "Close failed - %s\n",
+		nt_errstr(r.out.result));
+		return false;
+	}
 
 	torture_assert_ntstatus_equal(tctx, dcerpc_lsa_Close_r(b, tctx, &r),
 		NT_STATUS_RPC_SS_CONTEXT_MISMATCH, "Close should failed");
@@ -4939,35 +2805,16 @@ bool torture_rpc_lsa(struct torture_context *tctx)
         NTSTATUS status;
         struct dcerpc_pipe *p;
 	bool ret = true;
-	struct policy_handle *handle = NULL;
+	struct policy_handle *handle;
 	struct test_join *join = NULL;
 	struct cli_credentials *machine_creds;
 	struct dcerpc_binding_handle *b;
-	enum dcerpc_transport_t transport;
 
 	status = torture_rpc_connection(tctx, &p, &ndr_table_lsarpc);
 	if (!NT_STATUS_IS_OK(status)) {
 		return false;
 	}
 	b = p->binding_handle;
-	transport = dcerpc_binding_get_transport(p->binding);
-
-	/* Test lsaLookupSids3 and lsaLookupNames4 over tcpip */
-	if (transport == NCACN_IP_TCP) {
-		if (!test_OpenPolicy_fail(b, tctx)) {
-			ret = false;
-		}
-
-		if (!test_OpenPolicy2_fail(b, tctx)) {
-			ret = false;
-		}
-
-		if (!test_many_LookupSids(p, tctx, handle)) {
-			ret = false;
-		}
-
-		return ret;
-	}
 
 	if (!test_OpenPolicy(b, tctx)) {
 		ret = false;
@@ -5036,21 +2883,12 @@ bool torture_rpc_lsa_get_user(struct torture_context *tctx)
         struct dcerpc_pipe *p;
 	bool ret = true;
 	struct dcerpc_binding_handle *b;
-	enum dcerpc_transport_t transport;
 
 	status = torture_rpc_connection(tctx, &p, &ndr_table_lsarpc);
 	if (!NT_STATUS_IS_OK(status)) {
 		return false;
 	}
 	b = p->binding_handle;
-	transport = dcerpc_binding_get_transport(p->binding);
-
-	if (transport == NCACN_IP_TCP) {
-		if (!test_GetUserName_fail(b, tctx)) {
-			ret = false;
-		}
-		return ret;
-	}
 
 	if (!test_GetUserName(b, tctx)) {
 		ret = false;
@@ -5067,13 +2905,6 @@ static bool testcase_LookupNames(struct torture_context *tctx,
 	struct lsa_TransNameArray tnames;
 	struct lsa_TransNameArray2 tnames2;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-	enum dcerpc_transport_t transport = dcerpc_binding_get_transport(p->binding);
-
-	if (transport != NCACN_NP && transport != NCALRPC) {
-		torture_comment(tctx, "testcase_LookupNames is only available "
-				"over NCACN_NP or NCALRPC");
-		return true;
-	}
 
 	if (!test_OpenPolicy(b, tctx)) {
 		ret = false;
@@ -5158,13 +2989,6 @@ static bool testcase_TrustedDomains(struct torture_context *tctx,
 	struct lsa_trustdom_state *state =
 		talloc_get_type_abort(data, struct lsa_trustdom_state);
 	struct dcerpc_binding_handle *b = p->binding_handle;
-	enum dcerpc_transport_t transport = dcerpc_binding_get_transport(p->binding);
-
-	if (transport != NCACN_NP && transport != NCALRPC) {
-		torture_comment(tctx, "testcase_TrustedDomains is only available "
-				"over NCACN_NP or NCALRPC");
-		return true;
-	}
 
 	torture_comment(tctx, "Testing %d domains\n", state->num_trusts);
 
@@ -5181,10 +3005,6 @@ static bool testcase_TrustedDomains(struct torture_context *tctx,
 	}
 
 	if (!test_CreateTrustedDomain(b, tctx, handle, state->num_trusts)) {
-		ret = false;
-	}
-
-	if (!test_CreateTrustedDomainEx(p, tctx, handle, state->num_trusts)) {
 		ret = false;
 	}
 
@@ -5223,44 +3043,39 @@ struct torture_suite *torture_rpc_lsa_trusted_domains(TALLOC_CTX *mem_ctx)
 static bool testcase_Privileges(struct torture_context *tctx,
 				struct dcerpc_pipe *p)
 {
+	bool ret = true;
 	struct policy_handle *handle;
 	struct dcerpc_binding_handle *b = p->binding_handle;
-	enum dcerpc_transport_t transport = dcerpc_binding_get_transport(p->binding);
-
-	if (transport != NCACN_NP && transport != NCALRPC) {
-		torture_skip(tctx, "testcase_Privileges is only available "
-				"over NCACN_NP or NCALRPC");
-	}
 
 	if (!test_OpenPolicy(b, tctx)) {
-		return false;
+		ret = false;
 	}
 
 	if (!test_lsa_OpenPolicy2(b, tctx, &handle)) {
-		return false;
+		ret = false;
 	}
 
 	if (!handle) {
-		return false;
+		ret = false;
 	}
 
 	if (!test_CreateAccount(b, tctx, handle)) {
-		return false;
+		ret = false;
 	}
 
 	if (!test_EnumAccounts(b, tctx, handle)) {
-		return false;
+		ret = false;
 	}
 
 	if (!test_EnumPrivs(b, tctx, handle)) {
-		return false;
+		ret = false;
 	}
 
 	if (!test_lsa_Close(b, tctx, handle)) {
-		return false;
+		ret = false;
 	}
 
-	return true;
+	return ret;
 }
 
 

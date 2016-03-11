@@ -321,8 +321,12 @@ void rep_freeaddrinfo(struct addrinfo *res)
 
 	for (;res; res = next) {
 		next = res->ai_next;
-		free(res->ai_canonname);
-		free(res->ai_addr);
+		if (res->ai_canonname) {
+			free(res->ai_canonname);
+		}
+		if (res->ai_addr) {
+			free(res->ai_addr);
+		}
 		free(res);
 	}
 }

@@ -76,6 +76,7 @@ struct dsdb_dn *dsdb_dn_parse(TALLOC_CTX *mem_ctx, struct ldb_context *ldb,
 {
 	struct dsdb_dn *dsdb_dn;
 	struct ldb_dn *dn;
+	const char *data;
 	size_t len;
 	TALLOC_CTX *tmp_ctx;
 	char *p1;
@@ -86,11 +87,6 @@ struct dsdb_dn *dsdb_dn_parse(TALLOC_CTX *mem_ctx, struct ldb_context *ldb,
 	char *dn_str;
 
 	enum dsdb_dn_format dn_format = dsdb_dn_oid_to_format(dn_oid);
-
-	if (dn_blob == NULL || dn_blob->data == NULL || dn_blob->length == 0) {
-		return NULL;
-	}
-
 	switch (dn_format) {
 	case DSDB_INVALID_DN:
 		return NULL;
@@ -117,15 +113,22 @@ struct dsdb_dn *dsdb_dn_parse(TALLOC_CTX *mem_ctx, struct ldb_context *ldb,
 		return NULL;
 	}
 
-	if (strlen((const char*)dn_blob->data) != dn_blob->length) {
+	if (dn_blob && dn_blob->data
+	    && (strlen((const char*)dn_blob->data) != dn_blob->length)) {
 		/* The RDN must not contain a character with value 0x0 */
 		return NULL;
 	}
-
+		
+	if (!dn_blob->data || dn_blob->length == 0) {
+		return NULL;
+	}
+		
 	tmp_ctx = talloc_new(mem_ctx);
 	if (tmp_ctx == NULL) {
 		return NULL;
 	}
+		
+	data = (const char *)dn_blob->data;
 
 	len = dn_blob->length - 2;
 	p1 = talloc_strndup(tmp_ctx, (const char *)dn_blob->data + 2, len);
@@ -211,7 +214,6 @@ struct dsdb_dn *dsdb_dn_parse(TALLOC_CTX *mem_ctx, struct ldb_context *ldb,
 		
 	dsdb_dn = dsdb_dn_construct(mem_ctx, dn, bval, dn_oid);
 		
-	talloc_free(tmp_ctx);
 	return dsdb_dn;
 
 failed:

@@ -20,19 +20,12 @@
 
 #include <Python.h>
 #include "includes.h"
-#include "system/filesys.h"
 #include <tdb.h>
-#include "lib/tdb_wrap/tdb_wrap.h"
+#include "lib/util/tdb_wrap.h"
 #include "librpc/ndr/libndr.h"
-#include "ntvfs/posix/posix_eadb.h"
+#include "lib/util/wrap_xattr.h"
+#include "ntvfs/posix/vfs_posix.h"
 #include "libcli/util/pyerrors.h"
-#include "param/pyparam.h"
-#include "lib/dbwrap/dbwrap.h"
-#include "lib/dbwrap/dbwrap_open.h"
-#include "lib/dbwrap/dbwrap_tdb.h"
-#include "source3/lib/xattr_tdb.h"
-
-void initxattr_tdb(void);
 
 static PyObject *py_is_xattr_supported(PyObject *self)
 {
@@ -44,11 +37,9 @@ static PyObject *py_wrap_setxattr(PyObject *self, PyObject *args)
 	char *filename, *attribute, *tdbname;
 	DATA_BLOB blob;
 	int blobsize;
-	int ret;
+	NTSTATUS status;
 	TALLOC_CTX *mem_ctx;
-	struct db_context *eadb = NULL;
-	struct file_id id;
-	struct stat sbuf;
+	struct tdb_wrap *eadb;
 
 	if (!PyArg_ParseTuple(args, "ssss#", &tdbname, &filename, &attribute, 
 						  &blob.data, &blobsize))
@@ -56,30 +47,18 @@ static PyObject *py_wrap_setxattr(PyObject *self, PyObject *args)
 
 	blob.length = blobsize;
 	mem_ctx = talloc_new(NULL);
-	eadb = db_open_tdb(mem_ctx, py_default_loadparm_context(mem_ctx), tdbname, 50000,
-			   TDB_DEFAULT, O_RDWR|O_CREAT, 0600, DBWRAP_LOCK_ORDER_2,
-			   DBWRAP_FLAG_NONE);
+	eadb = tdb_wrap_open(mem_ctx, tdbname, 50000,
+				TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 
 	if (eadb == NULL) {
 		PyErr_SetFromErrno(PyExc_IOError);
 		talloc_free(mem_ctx);
 		return NULL;
 	}
-
-	ret = stat(filename, &sbuf);
-	if (ret < 0) {
-		PyErr_SetFromErrno(PyExc_IOError);
-		talloc_free(mem_ctx);
-		return NULL;
-	}
-
-	ZERO_STRUCT(id);
-	id.devid = sbuf.st_dev;
-	id.inode = sbuf.st_ino;
-
-	ret = xattr_tdb_setattr(eadb, &id, attribute, blob.data, blob.length, 0);
-	if (ret < 0) {
-		PyErr_SetFromErrno(PyExc_TypeError);
+	status = push_xattr_blob_tdb_raw(eadb, mem_ctx, attribute, filename, -1,
+									 &blob);
+	if (!NT_STATUS_IS_OK(status)) {
+		PyErr_FromNTSTATUS(status);
 		talloc_free(mem_ctx);
 		return NULL;
 	}
@@ -92,48 +71,31 @@ static PyObject *py_wrap_getxattr(PyObject *self, PyObject *args)
 	char *filename, *attribute, *tdbname;
 	TALLOC_CTX *mem_ctx;
 	DATA_BLOB blob;
-	PyObject *ret_obj;
-	int ret;
-	ssize_t xattr_size;
-	struct db_context *eadb = NULL;
-	struct file_id id;
-	struct stat sbuf;
+	PyObject *ret;
+	NTSTATUS status;
+	struct tdb_wrap *eadb = NULL;
 
 	if (!PyArg_ParseTuple(args, "sss", &tdbname, &filename, &attribute))
 		return NULL;
 
 	mem_ctx = talloc_new(NULL);
-
-	eadb = db_open_tdb(mem_ctx, py_default_loadparm_context(mem_ctx), tdbname, 50000,
-			   TDB_DEFAULT, O_RDWR|O_CREAT, 0600, DBWRAP_LOCK_ORDER_2,
-			   DBWRAP_FLAG_NONE);
-
+	eadb = tdb_wrap_open(mem_ctx, tdbname, 50000,
+				TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 	if (eadb == NULL) {
 		PyErr_SetFromErrno(PyExc_IOError);
 		talloc_free(mem_ctx);
 		return NULL;
 	}
-
-	ret = stat(filename, &sbuf);
-	if (ret < 0) {
-		PyErr_SetFromErrno(PyExc_IOError);
+	status = pull_xattr_blob_tdb_raw(eadb, mem_ctx, attribute, filename, 
+									 -1, 100, &blob);
+	if (!NT_STATUS_IS_OK(status) || blob.length < 0) {
+		PyErr_FromNTSTATUS(status);
 		talloc_free(mem_ctx);
 		return NULL;
 	}
-
-	ZERO_STRUCT(id);
-	id.devid = sbuf.st_dev;
-	id.inode = sbuf.st_ino;
-
-	xattr_size = xattr_tdb_getattr(eadb, mem_ctx, &id, attribute, &blob);
-	if (xattr_size < 0) {
-		PyErr_SetFromErrno(PyExc_TypeError);
-		talloc_free(mem_ctx);
-		return NULL;
-	}
-	ret_obj = PyString_FromStringAndSize((char *)blob.data, xattr_size);
+	ret = PyString_FromStringAndSize((char *)blob.data, blob.length);
 	talloc_free(mem_ctx);
-	return ret_obj;
+	return ret;
 }
 
 static PyMethodDef py_xattr_methods[] = {

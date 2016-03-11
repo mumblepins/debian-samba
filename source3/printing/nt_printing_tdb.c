@@ -54,7 +54,7 @@ static TDB_DATA make_printer_tdbkey(TALLOC_CTX *ctx, const char *sharename )
 	TDB_DATA key;
 
 	fstrcpy(share, sharename);
-	(void)strlower_m(share);
+	strlower_m(share);
 
 	keystr = talloc_asprintf(ctx, "%s%s", PRINTERS_PREFIX, share);
 	key = string_term_tdb_data(keystr ? keystr : "");
@@ -74,7 +74,7 @@ static TDB_DATA make_printers_secdesc_tdbkey(TALLOC_CTX *ctx,
 	TDB_DATA key;
 
 	fstrcpy(share, sharename );
-	(void)strlower_m(share);
+	strlower_m(share);
 
 	keystr = talloc_asprintf(ctx, "%s%s", SECDESC_PREFIX, share);
 	key = string_term_tdb_data(keystr ? keystr : "");
@@ -93,7 +93,7 @@ static bool upgrade_to_version_3(void)
 	DEBUG(0,("upgrade_to_version_3: upgrading print tdb's to version 3\n"));
 
 	for (kbuf = tdb_firstkey(tdb_drivers); kbuf.dptr;
-	     newkey = tdb_nextkey(tdb_drivers, kbuf), free(kbuf.dptr), kbuf=newkey) {
+			newkey = tdb_nextkey(tdb_drivers, kbuf), free(kbuf.dptr), kbuf=newkey) {
 
 		dbuf = tdb_fetch(tdb_drivers, kbuf);
 
@@ -162,6 +162,7 @@ static int sec_desc_upg_fn( TDB_CONTEXT *the_tdb, TDB_DATA key,
 	struct security_descriptor *sec, *new_sec;
 	TALLOC_CTX *ctx = state;
 	int result, i;
+	uint32 sd_size;
 	size_t size_new_sec;
 
 	if (!data.dptr || data.dsize == 0) {
@@ -235,6 +236,9 @@ static int sec_desc_upg_fn( TDB_CONTEXT *the_tdb, TDB_DATA key,
 
 	/* store it back */
 
+	sd_size = ndr_size_security_descriptor(sd_store->sd, 0)
+		+ sizeof(struct sec_desc_buf);
+
 	status = marshall_sec_desc_buf(ctx, sd_store, &data.dptr, &data.dsize);
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(0,("sec_desc_upg_fn: Failed to parse new sec_desc for %s\n", key.dptr ));
@@ -245,7 +249,7 @@ static int sec_desc_upg_fn( TDB_CONTEXT *the_tdb, TDB_DATA key,
 
 	/* 0 to continue and non-zero to stop traversal */
 
-	return (result != 0);
+	return (result == -1);
 }
 
 /*******************************************************************
@@ -266,7 +270,7 @@ static bool upgrade_to_version_4(void)
 
 	talloc_destroy( ctx );
 
-	return ( result >= 0 );
+	return ( result != -1 );
 }
 
 /*******************************************************************
@@ -334,44 +338,22 @@ static bool upgrade_to_version_5(void)
 
 	talloc_destroy( ctx );
 
-	return ( result >= 0 );
+	return ( result != -1 );
 }
 
 bool nt_printing_tdb_upgrade(void)
 {
-	char *drivers_path;
-	char *printers_path;
-	char *forms_path;
-	bool drivers_exists;
-	bool printers_exists;
-	bool forms_exists;
+	const char *drivers_path = state_path("ntdrivers.tdb");
+	const char *printers_path = state_path("ntprinters.tdb");
+	const char *forms_path = state_path("ntforms.tdb");
+	bool drivers_exists = file_exist(drivers_path);
+	bool printers_exists = file_exist(printers_path);
+	bool forms_exists = file_exist(forms_path);
 	const char *vstring = "INFO/version";
 	int32_t vers_id;
-	bool ret;
-
-	drivers_path = state_path("ntdrivers.tdb");
-	if (drivers_path == NULL) {
-		ret = false;
-		goto err_out;
-	}
-	printers_path = state_path("ntprinters.tdb");
-	if (printers_path == NULL) {
-		ret = false;
-		goto err_drvdb_free;
-	}
-	forms_path = state_path("ntforms.tdb");
-	if (forms_path == NULL) {
-		ret = false;
-		goto err_prdb_free;
-	}
-
-	drivers_exists = file_exist(drivers_path);
-	printers_exists = file_exist(printers_path);
-	forms_exists = file_exist(forms_path);
 
 	if (!drivers_exists && !printers_exists && !forms_exists) {
-		ret = true;
-		goto err_formsdb_free;
+		return true;
 	}
 
 	tdb_drivers = tdb_open_log(drivers_path,
@@ -383,8 +365,7 @@ bool nt_printing_tdb_upgrade(void)
 		DEBUG(0,("nt_printing_init: Failed to open nt drivers "
 			 "database %s (%s)\n",
 			 drivers_path, strerror(errno)));
-		ret = false;
-		goto err_formsdb_free;
+		return false;
 	}
 
 	tdb_printers = tdb_open_log(printers_path,
@@ -396,8 +377,7 @@ bool nt_printing_tdb_upgrade(void)
 		DEBUG(0,("nt_printing_init: Failed to open nt printers "
 			 "database %s (%s)\n",
 			 printers_path, strerror(errno)));
-		ret = false;
-		goto err_drvdb_close;
+		return false;
 	}
 
 	tdb_forms = tdb_open_log(forms_path,
@@ -409,8 +389,7 @@ bool nt_printing_tdb_upgrade(void)
 		DEBUG(0,("nt_printing_init: Failed to open nt forms "
 			 "database %s (%s)\n",
 			 forms_path, strerror(errno)));
-		ret = false;
-		goto err_prdb_close;
+		return false;
 	}
 
 	/* Samba upgrade */
@@ -425,8 +404,7 @@ bool nt_printing_tdb_upgrade(void)
 		if ((vers_id == NTDRIVERS_DATABASE_VERSION_1) ||
 		    (IREV(vers_id) == NTDRIVERS_DATABASE_VERSION_1)) {
 			if (!upgrade_to_version_3()) {
-				ret = false;
-				goto err_formsdb_close;
+				return false;
 			}
 
 			tdb_store_int32(tdb_drivers, vstring, NTDRIVERS_DATABASE_VERSION_3);
@@ -446,8 +424,7 @@ bool nt_printing_tdb_upgrade(void)
 
 		if (vers_id == NTDRIVERS_DATABASE_VERSION_3) {
 			if (!upgrade_to_version_4()) {
-				ret = false;
-				goto err_formsdb_close;
+				return false;
 			}
 			tdb_store_int32(tdb_drivers, vstring, NTDRIVERS_DATABASE_VERSION_4);
 			vers_id = NTDRIVERS_DATABASE_VERSION_4;
@@ -455,8 +432,7 @@ bool nt_printing_tdb_upgrade(void)
 
 		if (vers_id == NTDRIVERS_DATABASE_VERSION_4 ) {
 			if (!upgrade_to_version_5()) {
-				ret = false;
-				goto err_formsdb_close;
+				return false;
 			}
 			tdb_store_int32(tdb_drivers, vstring, NTDRIVERS_DATABASE_VERSION_5);
 			vers_id = NTDRIVERS_DATABASE_VERSION_5;
@@ -464,33 +440,24 @@ bool nt_printing_tdb_upgrade(void)
 
 		if (vers_id != NTDRIVERS_DATABASE_VERSION_5) {
 			DEBUG(0,("nt_printing_init: Unknown printer database version [%d]\n", vers_id));
-			ret = false;
-			goto err_formsdb_close;
+			return false;
 		}
 	}
-	ret = true;
 
-err_formsdb_close:
-	if (tdb_forms) {
-		tdb_close(tdb_forms);
-		tdb_forms = NULL;
-	}
-err_prdb_close:
-	if (tdb_printers) {
-		tdb_close(tdb_printers);
-		tdb_printers = NULL;
-	}
-err_drvdb_close:
 	if (tdb_drivers) {
 		tdb_close(tdb_drivers);
 		tdb_drivers = NULL;
 	}
-err_formsdb_free:
-	talloc_free(forms_path);
-err_prdb_free:
-	talloc_free(printers_path);
-err_drvdb_free:
-	talloc_free(drivers_path);
-err_out:
-	return ret;
+
+	if (tdb_printers) {
+		tdb_close(tdb_printers);
+		tdb_printers = NULL;
+	}
+
+	if (tdb_forms) {
+		tdb_close(tdb_forms);
+		tdb_forms = NULL;
+	}
+
+	return true;
 }

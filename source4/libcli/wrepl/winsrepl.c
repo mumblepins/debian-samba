@@ -136,8 +136,8 @@ NTSTATUS wrepl_socket_split_stream(struct wrepl_socket *wrepl_socket,
 const char *wrepl_best_ip(struct loadparm_context *lp_ctx, const char *peer_ip)
 {
 	struct interface *ifaces;
-	load_interface_list(lp_ctx, lp_ctx, &ifaces);
-	return iface_list_best_ip(ifaces, peer_ip);
+	load_interfaces(lp_ctx, lpcfg_interfaces(lp_ctx), &ifaces);
+	return iface_best_ip(ifaces, peer_ip);
 }
 
 struct wrepl_connect_state {
@@ -181,7 +181,7 @@ struct tevent_req *wrepl_connect_send(TALLOC_CTX *mem_ctx,
 						our_ip, 0,
 						&state->local_address);
 	if (ret != 0) {
-		NTSTATUS status = map_nt_error_from_unix_common(errno);
+		NTSTATUS status = map_nt_error_from_unix(errno);
 		tevent_req_nterror(req, status);
 		return tevent_req_post(req, ev);
 	}
@@ -190,7 +190,7 @@ struct tevent_req *wrepl_connect_send(TALLOC_CTX *mem_ctx,
 						peer_ip, WINS_REPLICATION_PORT,
 						&state->remote_address);
 	if (ret != 0) {
-		NTSTATUS status = map_nt_error_from_unix_common(errno);
+		NTSTATUS status = map_nt_error_from_unix(errno);
 		tevent_req_nterror(req, status);
 		return tevent_req_post(req, ev);
 	}
@@ -201,7 +201,7 @@ struct tevent_req *wrepl_connect_send(TALLOC_CTX *mem_ctx,
 			      wrepl_connect_trigger,
 			      NULL);
 	if (!ok) {
-		tevent_req_oom(req);
+		tevent_req_nomem(NULL, req);
 		return tevent_req_post(req, ev);
 	}
 
@@ -250,7 +250,7 @@ static void wrepl_connect_done(struct tevent_req *subreq)
 	ret = tstream_inet_tcp_connect_recv(subreq, &sys_errno,
 					    state, &state->stream, NULL);
 	if (ret != 0) {
-		NTSTATUS status = map_nt_error_from_unix_common(sys_errno);
+		NTSTATUS status = map_nt_error_from_unix(sys_errno);
 		tevent_req_nterror(req, status);
 		return;
 	}
@@ -359,7 +359,7 @@ struct tevent_req *wrepl_request_send(TALLOC_CTX *mem_ctx,
 	}
 
 	if (wrepl_socket->stream == NULL) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
@@ -382,7 +382,7 @@ struct tevent_req *wrepl_request_send(TALLOC_CTX *mem_ctx,
 			      wrepl_request_trigger,
 			      NULL);
 	if (!ok) {
-		tevent_req_oom(req);
+		tevent_req_nomem(NULL, req);
 		return tevent_req_post(req, ev);
 	}
 
@@ -408,7 +408,7 @@ static void wrepl_request_trigger(struct tevent_req *req,
 	struct tevent_req *subreq;
 
 	if (state->caller.wrepl_socket->stream == NULL) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return;
 	}
 
@@ -443,14 +443,14 @@ static void wrepl_request_writev_done(struct tevent_req *subreq)
 	ret = tstream_writev_recv(subreq, &sys_errno);
 	TALLOC_FREE(subreq);
 	if (ret == -1) {
-		NTSTATUS status = map_nt_error_from_unix_common(sys_errno);
+		NTSTATUS status = map_nt_error_from_unix(sys_errno);
 		TALLOC_FREE(state->caller.wrepl_socket->stream);
 		tevent_req_nterror(req, status);
 		return;
 	}
 
 	if (state->caller.wrepl_socket->stream == NULL) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return;
 	}
 
@@ -494,7 +494,7 @@ static void wrepl_request_disconnect_done(struct tevent_req *subreq)
 	ret = tstream_disconnect_recv(subreq, &sys_errno);
 	TALLOC_FREE(subreq);
 	if (ret == -1) {
-		NTSTATUS status = map_nt_error_from_unix_common(sys_errno);
+		NTSTATUS status = map_nt_error_from_unix(sys_errno);
 		TALLOC_FREE(state->caller.wrepl_socket->stream);
 		tevent_req_nterror(req, status);
 		return;

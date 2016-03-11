@@ -34,6 +34,7 @@ int main(int argc, const char **argv)
 	const char *hostname = NULL;
 	const char *sharename = NULL;
 	const char *path = NULL;
+	uint32_t level = 0;
 	uint32_t parm_err = 0;
 
 	struct SHARE_INFO_2 i2;
@@ -75,6 +76,10 @@ int main(int argc, const char **argv)
 		goto out;
 	}
 	path = poptGetArg(pc);
+
+	if (poptPeekArg(pc)) {
+		level = atoi(poptGetArg(pc));
+	}
 
 	/* NetShareAdd */
 

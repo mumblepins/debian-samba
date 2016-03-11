@@ -18,7 +18,6 @@
 */
 
 #include "includes.h"
-#include "system/filesys.h"
 #include "auth/credentials/credentials.h"
 #include "auth/gensec/gensec.h"
 #include "auth/auth.h"
@@ -89,13 +88,7 @@ this any more it probably doesn't matter
 ****************************************************************************/
 static void reply_coreplus(struct smbsrv_request *req, uint16_t choice)
 {
-	uint16_t raw;
-	if (lpcfg_async_smb_echo_handler(req->smb_conn->lp_ctx)) {
-		raw = 0;
-	} else {
-		raw = (lpcfg_read_raw(req->smb_conn->lp_ctx)?1:0) |
-		      (lpcfg_write_raw(req->smb_conn->lp_ctx)?2:0);
-	}
+	uint16_t raw = (lpcfg_readraw(req->smb_conn->lp_ctx)?1:0) | (lpcfg_writeraw(req->smb_conn->lp_ctx)?2:0);
 
 	smbsrv_setup_reply(req, 13, 0);
 
@@ -126,18 +119,14 @@ static void reply_coreplus(struct smbsrv_request *req, uint16_t choice)
 ****************************************************************************/
 static void reply_lanman1(struct smbsrv_request *req, uint16_t choice)
 {
+	int raw = (lpcfg_readraw(req->smb_conn->lp_ctx)?1:0) | (lpcfg_writeraw(req->smb_conn->lp_ctx)?2:0);
 	int secword=0;
 	time_t t = req->request_time.tv_sec;
-	uint16_t raw;
 
-	if (lpcfg_async_smb_echo_handler(req->smb_conn->lp_ctx)) {
-		raw = 0;
-	} else {
-		raw = (lpcfg_read_raw(req->smb_conn->lp_ctx)?1:0) |
-		      (lpcfg_write_raw(req->smb_conn->lp_ctx)?2:0);
-	}
+	req->smb_conn->negotiate.encrypted_passwords = lpcfg_encrypted_passwords(req->smb_conn->lp_ctx);
 
-	req->smb_conn->negotiate.encrypted_passwords = lpcfg_encrypt_passwords(req->smb_conn->lp_ctx);
+	if (lpcfg_security(req->smb_conn->lp_ctx) != SEC_SHARE)
+		secword |= NEGOTIATE_SECURITY_USER_LEVEL;
 
 	if (req->smb_conn->negotiate.encrypted_passwords)
 		secword |= NEGOTIATE_SECURITY_CHALLENGE_RESPONSE;
@@ -153,10 +142,10 @@ static void reply_lanman1(struct smbsrv_request *req, uint16_t choice)
 	SSVAL(req->out.vwv, VWV(0), choice);
 	SSVAL(req->out.vwv, VWV(1), secword); 
 	SSVAL(req->out.vwv, VWV(2), req->smb_conn->negotiate.max_recv);
-	SSVAL(req->out.vwv, VWV(3), lpcfg_max_mux(req->smb_conn->lp_ctx));
+	SSVAL(req->out.vwv, VWV(3), lpcfg_maxmux(req->smb_conn->lp_ctx));
 	SSVAL(req->out.vwv, VWV(4), 1);
 	SSVAL(req->out.vwv, VWV(5), raw); 
-	SIVAL(req->out.vwv, VWV(6), req->smb_conn->connection->server_id.pid);
+	SIVAL(req->out.vwv, VWV(6), req->smb_conn->connection->server_id.id);
 	srv_push_dos_date(req->smb_conn, req->out.vwv, VWV(8), t);
 	SSVAL(req->out.vwv, VWV(10), req->smb_conn->negotiate.zone_offset/60);
 	SIVAL(req->out.vwv, VWV(11), 0); /* reserved */
@@ -188,18 +177,15 @@ static void reply_lanman1(struct smbsrv_request *req, uint16_t choice)
 ****************************************************************************/
 static void reply_lanman2(struct smbsrv_request *req, uint16_t choice)
 {
+	int raw = (lpcfg_readraw(req->smb_conn->lp_ctx)?1:0) | (lpcfg_writeraw(req->smb_conn->lp_ctx)?2:0);
 	int secword=0;
 	time_t t = req->request_time.tv_sec;
-	uint16_t raw;
-	if (lpcfg_async_smb_echo_handler(req->smb_conn->lp_ctx)) {
-		raw = 0;
-	} else {
-		raw = (lpcfg_read_raw(req->smb_conn->lp_ctx)?1:0) |
-		      (lpcfg_write_raw(req->smb_conn->lp_ctx)?2:0);
-	}
 
-	req->smb_conn->negotiate.encrypted_passwords = lpcfg_encrypt_passwords(req->smb_conn->lp_ctx);
+	req->smb_conn->negotiate.encrypted_passwords = lpcfg_encrypted_passwords(req->smb_conn->lp_ctx);
   
+	if (lpcfg_security(req->smb_conn->lp_ctx) != SEC_SHARE)
+		secword |= NEGOTIATE_SECURITY_USER_LEVEL;
+
 	if (req->smb_conn->negotiate.encrypted_passwords)
 		secword |= NEGOTIATE_SECURITY_CHALLENGE_RESPONSE;
 
@@ -210,10 +196,10 @@ static void reply_lanman2(struct smbsrv_request *req, uint16_t choice)
 	SSVAL(req->out.vwv, VWV(0), choice);
 	SSVAL(req->out.vwv, VWV(1), secword); 
 	SSVAL(req->out.vwv, VWV(2), req->smb_conn->negotiate.max_recv);
-	SSVAL(req->out.vwv, VWV(3), lpcfg_max_mux(req->smb_conn->lp_ctx));
+	SSVAL(req->out.vwv, VWV(3), lpcfg_maxmux(req->smb_conn->lp_ctx));
 	SSVAL(req->out.vwv, VWV(4), 1);
 	SSVAL(req->out.vwv, VWV(5), raw); 
-	SIVAL(req->out.vwv, VWV(6), req->smb_conn->connection->server_id.pid);
+	SIVAL(req->out.vwv, VWV(6), req->smb_conn->connection->server_id.id);
 	srv_push_dos_date(req->smb_conn, req->out.vwv, VWV(8), t);
 	SSVAL(req->out.vwv, VWV(10), req->smb_conn->negotiate.zone_offset/60);
 	SIVAL(req->out.vwv, VWV(11), 0);
@@ -252,26 +238,6 @@ static void reply_nt1_orig(struct smbsrv_request *req)
 	DEBUG(3,("not using extended security (SPNEGO or NTLMSSP)\n"));
 }
 
-/*
-  try to determine if the filesystem supports large files
-*/
-static bool large_file_support(const char *path)
-{
-	int fd;
-	ssize_t ret;
-	char c;
-
-	fd = open(path, O_RDWR|O_CREAT, 0600);
-	unlink(path);
-	if (fd == -1) {
-		/* have to assume large files are OK */
-		return true;
-	}
-	ret = pread(fd, &c, 1, ((uint64_t)1)<<32);
-	close(fd);
-	return ret == 0;
-}
-
 /****************************************************************************
  Reply for the nt protocol.
 ****************************************************************************/
@@ -291,30 +257,34 @@ static void reply_nt1(struct smbsrv_request *req, uint16_t choice)
 		CAP_NT_FIND | CAP_LOCK_AND_READ | 
 		CAP_LEVEL_II_OPLOCKS | CAP_NT_SMBS | CAP_RPC_REMOTE_APIS;
 
-	req->smb_conn->negotiate.encrypted_passwords = lpcfg_encrypt_passwords(req->smb_conn->lp_ctx);
+	req->smb_conn->negotiate.encrypted_passwords = lpcfg_encrypted_passwords(req->smb_conn->lp_ctx);
 
 	/* do spnego in user level security if the client
 	   supports it and we can do encrypted passwords */
 	
 	if (req->smb_conn->negotiate.encrypted_passwords && 
+	    (lpcfg_security(req->smb_conn->lp_ctx) != SEC_SHARE) &&
 	    lpcfg_use_spnego(req->smb_conn->lp_ctx) &&
 	    (req->flags2 & FLAGS2_EXTENDED_SECURITY)) {
 		negotiate_spnego = true; 
 		capabilities |= CAP_EXTENDED_SECURITY;
 	}
 	
+	if (lpcfg_unix_extensions(req->smb_conn->lp_ctx)) {
+		capabilities |= CAP_UNIX;
+	}
+	
 	if (lpcfg_large_readwrite(req->smb_conn->lp_ctx)) {
 		capabilities |= CAP_LARGE_READX | CAP_LARGE_WRITEX | CAP_W2K_SMBS;
 	}
 
-	large_test_path = lpcfg_lock_path(req, req->smb_conn->lp_ctx, "large_test.dat");
+	large_test_path = lock_path(req, req->smb_conn->lp_ctx, "large_test.dat");
 	if (large_file_support(large_test_path)) {
 		capabilities |= CAP_LARGE_FILES;
 	}
 
-	if (!lpcfg_async_smb_echo_handler(req->smb_conn->lp_ctx) &&
-	    lpcfg_read_raw(req->smb_conn->lp_ctx) &&
-	    lpcfg_write_raw(req->smb_conn->lp_ctx)) {
+	if (lpcfg_readraw(req->smb_conn->lp_ctx) &&
+	    lpcfg_writeraw(req->smb_conn->lp_ctx)) {
 		capabilities |= CAP_RAW_MODE;
 	}
 	
@@ -331,7 +301,9 @@ static void reply_nt1(struct smbsrv_request *req, uint16_t choice)
 		capabilities |= CAP_DFS;
 	}
 	
-	secword |= NEGOTIATE_SECURITY_USER_LEVEL;
+	if (lpcfg_security(req->smb_conn->lp_ctx) != SEC_SHARE) {
+		secword |= NEGOTIATE_SECURITY_USER_LEVEL;
+	}
 
 	if (req->smb_conn->negotiate.encrypted_passwords) {
 		secword |= NEGOTIATE_SECURITY_CHALLENGE_RESPONSE;
@@ -356,12 +328,11 @@ static void reply_nt1(struct smbsrv_request *req, uint16_t choice)
 	   this is the one and only SMB packet that is malformed in
 	   the specification - all the command words after the secword
 	   are offset by 1 byte */
-	SSVAL(req->out.vwv+1, VWV(1), lpcfg_max_mux(req->smb_conn->lp_ctx));
+	SSVAL(req->out.vwv+1, VWV(1), lpcfg_maxmux(req->smb_conn->lp_ctx));
 	SSVAL(req->out.vwv+1, VWV(2), 1); /* num vcs */
 	SIVAL(req->out.vwv+1, VWV(3), req->smb_conn->negotiate.max_recv);
 	SIVAL(req->out.vwv+1, VWV(5), 0x10000); /* raw size. full 64k */
-	SIVAL(req->out.vwv+1, VWV(7), req->smb_conn->connection->server_id.pid); /* session key */
-
+	SIVAL(req->out.vwv+1, VWV(7), req->smb_conn->connection->server_id.id); /* session key */
 	SIVAL(req->out.vwv+1, VWV(9), capabilities);
 	push_nttime(req->out.vwv+1, VWV(11), nttime);
 	SSVALS(req->out.vwv+1,VWV(15), req->smb_conn->negotiate.zone_offset/60);
@@ -387,10 +358,8 @@ static void reply_nt1(struct smbsrv_request *req, uint16_t choice)
 		nt_status = cli_credentials_set_machine_account(server_credentials, req->smb_conn->lp_ctx);
 		if (!NT_STATUS_IS_OK(nt_status)) {
 			DEBUG(10, ("Failed to obtain server credentials, perhaps a standalone server?: %s\n", nt_errstr(nt_status)));
-			/*
-			 * We keep the server_credentials as anonymous
-			 * this is required for the spoolss.notify test
-			 */
+			talloc_free(server_credentials);
+			server_credentials = NULL;
 		}
 
 		nt_status = samba_server_gensec_start(req,
@@ -413,12 +382,16 @@ static void reply_nt1(struct smbsrv_request *req, uint16_t choice)
 		}
 		req->smb_conn->negotiate.server_credentials = talloc_reparent(req, req->smb_conn, server_credentials);
 
+		gensec_set_target_service(gensec_security, "cifs");
+
+		gensec_set_credentials(gensec_security, server_credentials);
+
 		oid = GENSEC_OID_SPNEGO;
 		nt_status = gensec_start_mech_by_oid(gensec_security, oid);
 		
 		if (NT_STATUS_IS_OK(nt_status)) {
 			/* Get and push the proposed OID list into the packets */
-			nt_status = gensec_update_ev(gensec_security, req, req->smb_conn->connection->event.ctx, null_data_blob, &blob);
+			nt_status = gensec_update(gensec_security, req, null_data_blob, &blob);
 
 			if (!NT_STATUS_IS_OK(nt_status) && !NT_STATUS_EQUAL(nt_status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
 				DEBUG(1, ("Failed to get SPNEGO to give us the first token: %s\n", nt_errstr(nt_status)));
@@ -491,7 +464,7 @@ static const struct {
 	void (*proto_reply_fn)(struct smbsrv_request *req, uint16_t choice);
 	int protocol_level;
 } supported_protocols[] = {
-	{"SMB 2.002",			"SMB2",		reply_smb2,	PROTOCOL_SMB2_02},
+	{"SMB 2.002",			"SMB2",		reply_smb2,	PROTOCOL_SMB2},
 	{"NT LANMAN 1.0",		"NT1",		reply_nt1,	PROTOCOL_NT1},
 	{"NT LM 0.12",			"NT1",		reply_nt1,	PROTOCOL_NT1},
 	{"LANMAN2.1",			"LANMAN2",	reply_lanman2,	PROTOCOL_LANMAN2},
@@ -515,7 +488,7 @@ void smbsrv_reply_negprot(struct smbsrv_request *req)
 	int protocol;
 	uint8_t *p;
 	uint32_t protos_count = 0;
-	const char **protos = NULL;
+	char **protos = NULL;
 
 	if (req->smb_conn->negotiate.done_negprot) {
 		smbsrv_terminate_connection(req->smb_conn, "multiple negprot's are not permitted");
@@ -527,13 +500,13 @@ void smbsrv_reply_negprot(struct smbsrv_request *req)
 	while (true) {
 		size_t len;
 
-		protos = talloc_realloc(req, protos, const char *, protos_count + 1);
+		protos = talloc_realloc(req, protos, char *, protos_count + 1);
 		if (!protos) {
 			smbsrv_terminate_connection(req->smb_conn, nt_errstr(NT_STATUS_NO_MEMORY));
 			return;
 		}
 		protos[protos_count] = NULL;
-		len = req_pull_ascii4(&req->in.bufinfo, &protos[protos_count], p, STR_ASCII|STR_TERMINATE);
+		len = req_pull_ascii4(&req->in.bufinfo, (const char **)&protos[protos_count], p, STR_ASCII|STR_TERMINATE);
 		p += len;
 		if (len == 0 || !protos[protos_count]) break;
 
@@ -545,9 +518,9 @@ void smbsrv_reply_negprot(struct smbsrv_request *req)
 	for (protocol = 0; supported_protocols[protocol].proto_name; protocol++) {
 		int i;
 
-		if (supported_protocols[protocol].protocol_level > lpcfg_server_max_protocol(req->smb_conn->lp_ctx))
+		if (supported_protocols[protocol].protocol_level > lpcfg_srv_maxprotocol(req->smb_conn->lp_ctx))
 			continue;
-		if (supported_protocols[protocol].protocol_level < lpcfg_server_min_protocol(req->smb_conn->lp_ctx))
+		if (supported_protocols[protocol].protocol_level < lpcfg_srv_minprotocol(req->smb_conn->lp_ctx))
 			continue;
 
 		for (i = 0; i < protos_count; i++) {

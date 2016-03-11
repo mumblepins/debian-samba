@@ -23,7 +23,6 @@
 #include "param/share.h"
 #include "param/param.h"
 #include "torture/torture.h"
-#include "torture/local/proto.h"
 
 static bool test_list_empty(struct torture_context *tctx, 
 			    const void *tcase_data, 

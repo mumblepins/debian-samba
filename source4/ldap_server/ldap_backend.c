@@ -23,7 +23,6 @@
 #include "../lib/util/dlinklist.h"
 #include "auth/credentials/credentials.h"
 #include "auth/gensec/gensec.h"
-#include "auth/gensec/gensec_internal.h" /* TODO: remove this */
 #include "param/param.h"
 #include "smbd/service_stream.h"
 #include "dsdb/samdb/samdb.h"
@@ -170,8 +169,12 @@ static int map_ldb_error(TALLOC_CTX *mem_ctx, int ldb_err,
 	}
 
 	*errstring = talloc_asprintf(mem_ctx, "%08X: %s", W_ERROR_V(err),
-		add_err_string != NULL ? add_err_string : ldb_strerror(ldb_err));
-
+		ldb_strerror(ldb_err));
+	if (add_err_string != NULL) {
+		*errstring = talloc_asprintf(mem_ctx, "%s - %s", *errstring,
+					     add_err_string);
+	}
+	
 	/* result is 1:1 for now */
 	return ldb_err;
 }
@@ -192,8 +195,8 @@ NTSTATUS ldapsrv_backend_Init(struct ldapsrv_connection *conn)
 
 	if (conn->server_credentials) {
 		char **sasl_mechs = NULL;
-		const struct gensec_security_ops * const *backends = gensec_security_all();
-		const struct gensec_security_ops **ops
+		struct gensec_security_ops **backends = gensec_security_all();
+		struct gensec_security_ops **ops
 			= gensec_use_kerberos_mechs(conn, backends, conn->server_credentials);
 		unsigned int i, j = 0;
 		for (i = 0; ops && ops[i]; i++) {
@@ -225,9 +228,6 @@ NTSTATUS ldapsrv_backend_Init(struct ldapsrv_connection *conn)
 
 		ldb_set_opaque(conn->ldb, "supportedSASLMechanisms", sasl_mechs);
 	}
-
-	ldb_set_opaque(conn->ldb, "remoteAddress",
-		       conn->connection->remote_address);
 
 	return NT_STATUS_OK;
 }
@@ -285,7 +285,7 @@ static NTSTATUS ldapsrv_unwilling(struct ldapsrv_call *call, int error)
 static int ldapsrv_add_with_controls(struct ldapsrv_call *call,
 				     const struct ldb_message *message,
 				     struct ldb_control **controls,
-				     struct ldb_result *res)
+				     void *context)
 {
 	struct ldb_context *ldb = call->conn->ldb;
 	struct ldb_request *req;
@@ -299,16 +299,11 @@ static int ldapsrv_add_with_controls(struct ldapsrv_call *call,
 	ret = ldb_build_add_req(&req, ldb, ldb,
 					message,
 					controls,
-					res,
+					context,
 					ldb_modify_default_callback,
 					NULL);
 
 	if (ret != LDB_SUCCESS) return ret;
-
-	if (call->conn->global_catalog) {
-		return ldb_error(ldb, LDB_ERR_UNWILLING_TO_PERFORM, "modify forbidden on global catalog port");
-	}
-	ldb_request_add_control(req, DSDB_CONTROL_NO_GLOBAL_CATALOG, false, NULL);
 
 	ret = ldb_transaction_start(ldb);
 	if (ret != LDB_SUCCESS) {
@@ -341,7 +336,7 @@ static int ldapsrv_add_with_controls(struct ldapsrv_call *call,
 static int ldapsrv_mod_with_controls(struct ldapsrv_call *call,
 				     const struct ldb_message *message,
 				     struct ldb_control **controls,
-				     struct ldb_result *res)
+				     void *context)
 {
 	struct ldb_context *ldb = call->conn->ldb;
 	struct ldb_request *req;
@@ -355,18 +350,13 @@ static int ldapsrv_mod_with_controls(struct ldapsrv_call *call,
 	ret = ldb_build_mod_req(&req, ldb, ldb,
 					message,
 					controls,
-					res,
+					context,
 					ldb_modify_default_callback,
 					NULL);
 
 	if (ret != LDB_SUCCESS) {
 		return ret;
 	}
-
-	if (call->conn->global_catalog) {
-		return ldb_error(ldb, LDB_ERR_UNWILLING_TO_PERFORM, "modify forbidden on global catalog port");
-	}
-	ldb_request_add_control(req, DSDB_CONTROL_NO_GLOBAL_CATALOG, false, NULL);
 
 	ret = ldb_transaction_start(ldb);
 	if (ret != LDB_SUCCESS) {
@@ -399,7 +389,7 @@ static int ldapsrv_mod_with_controls(struct ldapsrv_call *call,
 static int ldapsrv_del_with_controls(struct ldapsrv_call *call,
 				     struct ldb_dn *dn,
 				     struct ldb_control **controls,
-				     struct ldb_result *res)
+				     void *context)
 {
 	struct ldb_context *ldb = call->conn->ldb;
 	struct ldb_request *req;
@@ -408,16 +398,11 @@ static int ldapsrv_del_with_controls(struct ldapsrv_call *call,
 	ret = ldb_build_del_req(&req, ldb, ldb,
 					dn,
 					controls,
-					res,
+					context,
 					ldb_modify_default_callback,
 					NULL);
 
 	if (ret != LDB_SUCCESS) return ret;
-
-	if (call->conn->global_catalog) {
-		return ldb_error(ldb, LDB_ERR_UNWILLING_TO_PERFORM, "modify forbidden on global catalog port");
-	}
-	ldb_request_add_control(req, DSDB_CONTROL_NO_GLOBAL_CATALOG, false, NULL);
 
 	ret = ldb_transaction_start(ldb);
 	if (ret != LDB_SUCCESS) {
@@ -450,7 +435,7 @@ static int ldapsrv_rename_with_controls(struct ldapsrv_call *call,
 					struct ldb_dn *olddn,
 					struct ldb_dn *newdn,
 					struct ldb_control **controls,
-					struct ldb_result *res)
+					void *context)
 {
 	struct ldb_context *ldb = call->conn->ldb;
 	struct ldb_request *req;
@@ -459,17 +444,12 @@ static int ldapsrv_rename_with_controls(struct ldapsrv_call *call,
 	ret = ldb_build_rename_req(&req, ldb, ldb,
 					olddn,
 					newdn,
-					controls,
-					res,
+					NULL,
+					context,
 					ldb_modify_default_callback,
 					NULL);
 
 	if (ret != LDB_SUCCESS) return ret;
-
-	if (call->conn->global_catalog) {
-		return ldb_error(ldb, LDB_ERR_UNWILLING_TO_PERFORM, "modify forbidden on global catalog port");
-	}
-	ldb_request_add_control(req, DSDB_CONTROL_NO_GLOBAL_CATALOG, false, NULL);
 
 	ret = ldb_transaction_start(ldb);
 	if (ret != LDB_SUCCESS) {
@@ -602,8 +582,6 @@ static NTSTATUS ldapsrv_SearchRequest(struct ldapsrv_call *call)
 			search_options->search_options = LDB_SEARCH_OPTION_PHANTOM_ROOT;
 			ldb_request_add_control(lreq, LDB_CONTROL_SEARCH_OPTIONS_OID, false, search_options);
 		}
-	} else {
-		ldb_request_add_control(lreq, DSDB_CONTROL_NO_GLOBAL_CATALOG, false, NULL);
 	}
 
 	extended_dn_control = ldb_request_get_control(lreq, LDB_CONTROL_EXTENDED_DN_OID);
@@ -1166,9 +1144,6 @@ NTSTATUS ldapsrv_do_call(struct ldapsrv_call *call)
 {
 	unsigned int i;
 	struct ldap_message *msg = call->request;
-	struct ldb_context *samdb = call->conn->ldb;
-	NTSTATUS status;
-	time_t *lastts;
 	/* Check for undecoded critical extensions */
 	for (i=0; msg->controls && msg->controls[i]; i++) {
 		if (!msg->controls_decoded[i] && 
@@ -1187,11 +1162,9 @@ NTSTATUS ldapsrv_do_call(struct ldapsrv_call *call)
 	case LDAP_TAG_SearchRequest:
 		return ldapsrv_SearchRequest(call);
 	case LDAP_TAG_ModifyRequest:
-		status = ldapsrv_ModifyRequest(call);
-		break;
+		return ldapsrv_ModifyRequest(call);
 	case LDAP_TAG_AddRequest:
-		status = ldapsrv_AddRequest(call);
-		break;
+		return ldapsrv_AddRequest(call);
 	case LDAP_TAG_DelRequest:
 		return ldapsrv_DelRequest(call);
 	case LDAP_TAG_ModifyDNRequest:
@@ -1205,22 +1178,4 @@ NTSTATUS ldapsrv_do_call(struct ldapsrv_call *call)
 	default:
 		return ldapsrv_unwilling(call, LDAP_PROTOCOL_ERROR);
 	}
-
-	if (NT_STATUS_IS_OK(status)) {
-		lastts = (time_t *)ldb_get_opaque(samdb, DSDB_OPAQUE_LAST_SCHEMA_UPDATE_MSG_OPAQUE_NAME);
-		if (lastts && !*lastts) {
-			DEBUG(10, ("Schema update now was requested, "
-				"fullfilling the request ts = %d\n",
-				(int)*lastts));
-			/*
-			* Just requesting the schema will do the trick
-			* as the delay for reload is experied, we will have a reload
-			* from the schema as expected as we are not yet in a transaction!
-			*/
-			dsdb_get_schema(samdb, NULL);
-			*lastts = time(NULL);
-			ldb_set_opaque(samdb, DSDB_OPAQUE_LAST_SCHEMA_UPDATE_MSG_OPAQUE_NAME, lastts);
-		}
-	}
-	return status;
 }

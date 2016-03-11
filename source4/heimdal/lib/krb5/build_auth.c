@@ -41,12 +41,10 @@ make_etypelist(krb5_context context,
     krb5_error_code ret;
     krb5_authdata ad;
     u_char *buf;
-    size_t len = 0;
+    size_t len;
     size_t buf_size;
 
-    ret = _krb5_init_etype(context, KRB5_PDU_NONE,
-			   &etypes.len, &etypes.val,
-			   NULL);
+    ret = krb5_init_etype(context, &etypes.len, &etypes.val, NULL);
     if (ret)
 	return ret;
 
@@ -113,7 +111,7 @@ _krb5_build_authenticator (krb5_context context,
     Authenticator auth;
     u_char *buf = NULL;
     size_t buf_size;
-    size_t len = 0;
+    size_t len;
     krb5_error_code ret;
     krb5_crypto crypto;
 

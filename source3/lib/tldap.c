@@ -189,7 +189,7 @@ bool tldap_context_setattr(struct tldap_context *ld,
 	struct tldap_ctx_attribute *tmp, *attr;
 	char *tmpname;
 	int num_attrs;
-	void **pptr = (void **)discard_const_p(void,_pptr);
+	void **pptr = (void **)_pptr;
 
 	attr = tldap_context_findattr(ld, name);
 	if (attr != NULL) {
@@ -356,33 +356,33 @@ struct tldap_msg_state {
 	uint8_t *inbuf;
 };
 
-static bool tldap_push_controls(struct asn1_data *data,
+static void tldap_push_controls(struct asn1_data *data,
 				struct tldap_control *sctrls,
 				int num_sctrls)
 {
 	int i;
 
 	if ((sctrls == NULL) || (num_sctrls == 0)) {
-		return true;
+		return;
 	}
 
-	if (!asn1_push_tag(data, ASN1_CONTEXT(0))) return false;
+	asn1_push_tag(data, ASN1_CONTEXT(0));
 
 	for (i=0; i<num_sctrls; i++) {
 		struct tldap_control *c = &sctrls[i];
-		if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) return false;
-		if (!asn1_write_OctetString(data, c->oid, strlen(c->oid))) return false;
+		asn1_push_tag(data, ASN1_SEQUENCE(0));
+		asn1_write_OctetString(data, c->oid, strlen(c->oid));
 		if (c->critical) {
-			if (!asn1_write_BOOLEAN(data, true)) return false;
+			asn1_write_BOOLEAN(data, true);
 		}
 		if (c->value.data != NULL) {
-			if (!asn1_write_OctetString(data, c->value.data,
-					       c->value.length)) return false;
+			asn1_write_OctetString(data, c->value.data,
+					       c->value.length);
 		}
-		if (!asn1_pop_tag(data)) return false; /* ASN1_SEQUENCE(0) */
+		asn1_pop_tag(data); /* ASN1_SEQUENCE(0) */
 	}
 
-	return asn1_pop_tag(data); /* ASN1_CONTEXT(0) */
+	asn1_pop_tag(data); /* ASN1_CONTEXT(0) */
 }
 
 static void tldap_msg_sent(struct tevent_req *subreq);
@@ -415,16 +415,9 @@ static struct tevent_req *tldap_msg_send(TALLOC_CTX *mem_ctx,
 		return tevent_req_post(req, ev);
 	}
 
-	if (!tldap_push_controls(data, sctrls, num_sctrls)) {
-		tevent_req_error(req, TLDAP_ENCODING_ERROR);
-		return tevent_req_post(req, ev);
-	}
+	tldap_push_controls(data, sctrls, num_sctrls);
 
-
-	if (!asn1_pop_tag(data)) {
-		tevent_req_error(req, TLDAP_ENCODING_ERROR);
-		return tevent_req_post(req, ev);
-	}
+	asn1_pop_tag(data);
 
 	if (!asn1_blob(data, &blob)) {
 		tevent_req_error(req, TLDAP_ENCODING_ERROR);
@@ -450,8 +443,6 @@ static void tldap_msg_unset_pending(struct tevent_req *req)
 	struct tldap_context *ld = state->ld;
 	int num_pending = talloc_array_length(ld->pending);
 	int i;
-
-	tevent_req_set_cleanup_fn(req, NULL);
 
 	if (num_pending == 1) {
 		TALLOC_FREE(ld->pending);
@@ -488,17 +479,10 @@ static void tldap_msg_unset_pending(struct tevent_req *req)
 	return;
 }
 
-static void tldap_msg_cleanup(struct tevent_req *req,
-			      enum tevent_req_state req_state)
+static int tldap_msg_destructor(struct tevent_req *req)
 {
-	switch (req_state) {
-	case TEVENT_REQ_USER_ERROR:
-	case TEVENT_REQ_RECEIVED:
-		tldap_msg_unset_pending(req);
-		return;
-	default:
-		return;
-	}
+	tldap_msg_unset_pending(req);
+	return 0;
 }
 
 static bool tldap_msg_set_pending(struct tevent_req *req)
@@ -520,7 +504,7 @@ static bool tldap_msg_set_pending(struct tevent_req *req)
 	}
 	pending[num_pending] = req;
 	ld->pending = pending;
-	tevent_req_set_cleanup_fn(req, tldap_msg_cleanup);
+	talloc_set_destructor(req, tldap_msg_destructor);
 
 	if (num_pending > 0) {
 		return true;
@@ -557,7 +541,7 @@ static void tldap_msg_sent(struct tevent_req *subreq)
 	}
 
 	if (!tldap_msg_set_pending(req)) {
-		tevent_req_oom(req);
+		tevent_req_nomem(NULL, req);
 		return;
 	}
 }
@@ -634,6 +618,7 @@ static void tldap_msg_received(struct tevent_req *subreq)
 	state->inbuf = talloc_move(state, &inbuf);
 	state->data = talloc_move(state, &data);
 
+	talloc_set_destructor(req, NULL);
 	tldap_msg_unset_pending(req);
 	num_pending = talloc_array_length(ld->pending);
 
@@ -665,8 +650,8 @@ static void tldap_msg_received(struct tevent_req *subreq)
  fail:
 	while (talloc_array_length(ld->pending) > 0) {
 		req = ld->pending[0];
-		state = tevent_req_data(req, struct tldap_msg_state);
-		tevent_req_defer_callback(req, state->ev);
+		talloc_set_destructor(req, NULL);
+		tldap_msg_destructor(req);
 		tevent_req_error(req, status);
 	}
 }
@@ -726,21 +711,17 @@ static struct tevent_req *tldap_req_create(TALLOC_CTX *mem_ctx,
 	ZERO_STRUCTP(state);
 	state->out = asn1_init(state);
 	if (state->out == NULL) {
-		goto err;
+		TALLOC_FREE(req);
+		return NULL;
 	}
 	state->result = NULL;
 	state->id = tldap_next_msgid(ld);
 
-	if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto err;
-	if (!asn1_write_Integer(state->out, state->id)) goto err;
+	asn1_push_tag(state->out, ASN1_SEQUENCE(0));
+	asn1_write_Integer(state->out, state->id);
 
 	*pstate = state;
 	return req;
-
-  err:
-
-	TALLOC_FREE(req);
-	return NULL;
 }
 
 static void tldap_save_msg(struct tldap_context *ld, struct tevent_req *req)
@@ -797,7 +778,6 @@ static bool tldap_decode_response(struct tldap_req_state *state)
 	ok &= asn1_read_OctetString_talloc(msg, data, &msg->res_matcheddn);
 	ok &= asn1_read_OctetString_talloc(msg, data,
 					   &msg->res_diagnosticmessage);
-	if (!ok) return ok;
 	if (asn1_peek_tag(data, ASN1_CONTEXT(3))) {
 		ok &= asn1_start_tag(data, ASN1_CONTEXT(3));
 		ok &= asn1_read_OctetString_talloc(msg, data,
@@ -835,26 +815,29 @@ struct tevent_req *tldap_sasl_bind_send(TALLOC_CTX *mem_ctx,
 		dn = "";
 	}
 
-	if (!asn1_push_tag(state->out, TLDAP_REQ_BIND)) goto err;
-	if (!asn1_write_Integer(state->out, ld->ld_version)) goto err;
-	if (!asn1_write_OctetString(state->out, dn, strlen(dn))) goto err;
+	asn1_push_tag(state->out, TLDAP_REQ_BIND);
+	asn1_write_Integer(state->out, ld->ld_version);
+	asn1_write_OctetString(state->out, dn, (dn != NULL) ? strlen(dn) : 0);
 
 	if (mechanism == NULL) {
-		if (!asn1_push_tag(state->out, ASN1_CONTEXT_SIMPLE(0))) goto err;
-		if (!asn1_write(state->out, creds->data, creds->length)) goto err;
-		if (!asn1_pop_tag(state->out)) goto err;
+		asn1_push_tag(state->out, ASN1_CONTEXT_SIMPLE(0));
+		asn1_write(state->out, creds->data, creds->length);
+		asn1_pop_tag(state->out);
 	} else {
-		if (!asn1_push_tag(state->out, ASN1_CONTEXT(3))) goto err;
-		if (!asn1_write_OctetString(state->out, mechanism,
-				       strlen(mechanism))) goto err;
+		asn1_push_tag(state->out, ASN1_CONTEXT(3));
+		asn1_write_OctetString(state->out, mechanism,
+				       strlen(mechanism));
 		if ((creds != NULL) && (creds->data != NULL)) {
-			if (!asn1_write_OctetString(state->out, creds->data,
-					       creds->length)) goto err;
+			asn1_write_OctetString(state->out, creds->data,
+					       creds->length);
 		}
-		if (!asn1_pop_tag(state->out)) goto err;
+		asn1_pop_tag(state->out);
 	}
 
-	if (!asn1_pop_tag(state->out)) goto err;
+	if (!asn1_pop_tag(state->out)) {
+		tevent_req_error(req, TLDAP_ENCODING_ERROR);
+		return tevent_req_post(req, ev);
+	}
 
 	subreq = tldap_msg_send(state, ev, ld, state->id, state->out,
 				sctrls, num_sctrls);
@@ -863,11 +846,6 @@ struct tevent_req *tldap_sasl_bind_send(TALLOC_CTX *mem_ctx,
 	}
 	tevent_req_set_callback(subreq, tldap_sasl_bind_done, req);
 	return req;
-
-  err:
-
-	tevent_req_error(req, TLDAP_ENCODING_ERROR);
-	return tevent_req_post(req, ev);
 }
 
 static void tldap_sasl_bind_done(struct tevent_req *subreq)
@@ -923,7 +901,7 @@ int tldap_sasl_bind(struct tldap_context *ld,
 	struct tevent_req *req;
 	int result;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		result = TLDAP_NO_MEMORY;
 		goto fail;
@@ -957,10 +935,10 @@ struct tevent_req *tldap_simple_bind_send(TALLOC_CTX *mem_ctx,
 	DATA_BLOB cred;
 
 	if (passwd != NULL) {
-		cred.data = discard_const_p(uint8_t, passwd);
+		cred.data = (uint8_t *)passwd;
 		cred.length = strlen(passwd);
 	} else {
-		cred.data = discard_const_p(uint8_t, "");
+		cred.data = (uint8_t *)"";
 		cred.length = 0;
 	}
 	return tldap_sasl_bind_send(mem_ctx, ev, ld, dn, NULL, &cred, NULL, 0,
@@ -978,10 +956,10 @@ int tldap_simple_bind(struct tldap_context *ld, const char *dn,
 	DATA_BLOB cred;
 
 	if (passwd != NULL) {
-		cred.data = discard_const_p(uint8_t, passwd);
+		cred.data = (uint8_t *)passwd;
 		cred.length = strlen(passwd);
 	} else {
-		cred.data = discard_const_p(uint8_t, "");
+		cred.data = (uint8_t *)"";
 		cred.length = 0;
 	}
 	return tldap_sasl_bind(ld, dn, NULL, &cred, NULL, 0, NULL, 0);
@@ -1245,25 +1223,25 @@ static bool tldap_push_filter_int(struct tldap_context *ld,
 	switch (*s) {
 	case '&':
 		tldap_debug(ld, TLDAP_DEBUG_TRACE, "Filter op: AND\n");
-		if (!asn1_push_tag(data, TLDAP_FILTER_AND)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_AND);
 		s++;
 		break;
 
 	case '|':
 		tldap_debug(ld, TLDAP_DEBUG_TRACE, "Filter op: OR\n");
-		if (!asn1_push_tag(data, TLDAP_FILTER_OR)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_OR);
 		s++;
 		break;
 
 	case '!':
 		tldap_debug(ld, TLDAP_DEBUG_TRACE, "Filter op: NOT\n");
-		if (!asn1_push_tag(data, TLDAP_FILTER_NOT)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_NOT);
 		s++;
 		ret = tldap_push_filter_int(ld, data, &s);
 		if (!ret) {
 			return false;
 		}
-		if (!asn1_pop_tag(data)) return false;
+		asn1_pop_tag(data);
 		goto done;
 
 	case '(':
@@ -1290,7 +1268,7 @@ static bool tldap_push_filter_int(struct tldap_context *ld,
 
 	if (*s == ')') {
 		/* RFC 4526: empty and/or */
-		if (!asn1_pop_tag(data)) return false;
+		asn1_pop_tag(data);
 		goto done;
 	}
 
@@ -1302,7 +1280,7 @@ static bool tldap_push_filter_int(struct tldap_context *ld,
 
 		if (*s == ')') {
 			/* end of list, return */
-			if (!asn1_pop_tag(data)) return false;
+			asn1_pop_tag(data);
 			break;
 		}
 	}
@@ -1315,7 +1293,7 @@ done:
 	}
 	s++;
 
-	if (asn1_has_error(data)) {
+	if (data->has_error) {
 		return false;
 	}
 
@@ -1355,19 +1333,19 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 
 	switch (*e) {
 	case '<':
-		if (!asn1_push_tag(data, TLDAP_FILTER_LE)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_LE);
 		break;
 
 	case '>':
-		if (!asn1_push_tag(data, TLDAP_FILTER_GE)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_GE);
 		break;
 
 	case '~':
-		if (!asn1_push_tag(data, TLDAP_FILTER_APX)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_APX);
 		break;
 
 	case ':':
-		if (!asn1_push_tag(data, TLDAP_FILTER_EXT)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_EXT);
 		write_octect = false;
 
 		type = NULL;
@@ -1392,15 +1370,12 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 			dn++;
 
 			rule = strchr(dn, ':');
-			if (rule == NULL) {
-				return false;
-			}
 			if ((rule == dn + 1) || rule + 1 == e) {
 				/* malformed filter, contains "::" */
 				return false;
 			}
 
-			if (strncasecmp_m(dn, "dn:", 3) != 0) {
+			if (StrnCaseCmp(dn, "dn:", 3) != 0) {
 				if (rule == e) {
 					rule = dn;
 					dn = NULL;
@@ -1439,9 +1414,9 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 			if (!ret) {
 				return false;
 			}
-			if (!asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(1))) return false;
-			if (!asn1_write(data, rule, e - rule)) return false;
-			if (!asn1_pop_tag(data)) return false;
+			asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(1));
+			asn1_write(data, rule, e - rule);
+			asn1_pop_tag(data);
 		}
 
 		/* check and add type */
@@ -1450,9 +1425,9 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 			if (!ret) {
 				return false;
 			}
-			if (!asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(2))) return false;
-			if (!asn1_write(data, type, type_len)) return false;
-			if (!asn1_pop_tag(data)) return false;
+			asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(2));
+			asn1_write(data, type, type_len);
+			asn1_pop_tag(data);
 		}
 
 		uval = tldap_get_val(tmpctx, val, _s);
@@ -1465,13 +1440,13 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 			return false;
 		}
 
-		if (!asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(3))) return false;
-		if (!asn1_write(data, uval, uval_len)) return false;
-		if (!asn1_pop_tag(data)) return false;
+		asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(3));
+		asn1_write(data, uval, uval_len);
+		asn1_pop_tag(data);
 
-		if (!asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(4))) return false;
-		if (!asn1_write_uint8(data, dn?1:0)) return false;
-		if (!asn1_pop_tag(data)) return false;
+		asn1_push_tag(data, ASN1_CONTEXT_SIMPLE(4));
+		asn1_write_uint8(data, dn?1:0);
+		asn1_pop_tag(data);
 		break;
 
 	default:
@@ -1484,8 +1459,8 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 
 		if (strncmp(val, "*)", 2) == 0) {
 			/* presence */
-			if (!asn1_push_tag(data, TLDAP_FILTER_PRES)) return false;
-			if (!asn1_write(data, s, e - s)) return false;
+			asn1_push_tag(data, TLDAP_FILTER_PRES);
+			asn1_write(data, s, e - s);
 			*_s = val + 1;
 			write_octect = false;
 			break;
@@ -1497,8 +1472,8 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 		}
 		if (*star == '*') {
 			/* substring */
-			if (!asn1_push_tag(data, TLDAP_FILTER_SUB)) return false;
-			if (!asn1_write_OctetString(data, s, e - s)) return false;
+			asn1_push_tag(data, TLDAP_FILTER_SUB);
+			asn1_write_OctetString(data, s, e - s);
 			ret = tldap_push_filter_substring(ld, data, val, &s);
 			if (!ret) {
 				return false;
@@ -1509,7 +1484,7 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 		}
 
 		/* if nothing else, then it is just equality */
-		if (!asn1_push_tag(data, TLDAP_FILTER_EQ)) return false;
+		asn1_push_tag(data, TLDAP_FILTER_EQ);
 		write_octect = true;
 		break;
 	}
@@ -1525,14 +1500,15 @@ static bool tldap_push_filter_basic(struct tldap_context *ld,
 			return false;
 		}
 
-		if (!asn1_write_OctetString(data, s, e - s)) return false;
-		if (!asn1_write_OctetString(data, uval, uval_len)) return false;
+		asn1_write_OctetString(data, s, e - s);
+		asn1_write_OctetString(data, uval, uval_len);
 	}
 
-	if (asn1_has_error(data)) {
+	if (data->has_error) {
 		return false;
 	}
-	return asn1_pop_tag(data);
+	asn1_pop_tag(data);
+	return true;
 }
 
 static bool tldap_push_filter_substring(struct tldap_context *ld,
@@ -1556,7 +1532,7 @@ static bool tldap_push_filter_substring(struct tldap_context *ld,
 			  any     [1] LDAPString,
 			  final   [2] LDAPString } }
 	*/
-	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) return false;
+	asn1_push_tag(data, ASN1_SEQUENCE(0));
 
 	do {
 		ret = tldap_find_first_star(val, &star);
@@ -1601,21 +1577,21 @@ static bool tldap_push_filter_substring(struct tldap_context *ld,
 		switch (*star) {
 		case '*':
 			if (initial) {
-				if (!asn1_push_tag(data, TLDAP_SUB_INI)) return false;
+				asn1_push_tag(data, TLDAP_SUB_INI);
 				initial = false;
 			} else {
-				if (!asn1_push_tag(data, TLDAP_SUB_ANY)) return false;
+				asn1_push_tag(data, TLDAP_SUB_ANY);
 			}
 			break;
 		case ')':
-			if (!asn1_push_tag(data, TLDAP_SUB_FIN)) return false;
+			asn1_push_tag(data, TLDAP_SUB_FIN);
 			break;
 		default:
 			/* ?? */
 			return false;
 		}
-		if (!asn1_write(data, chunk, chunk_len)) return false;
-		if (!asn1_pop_tag(data)) return false;
+		asn1_write(data, chunk, chunk_len);
+		asn1_pop_tag(data);
 
 		val = star + 1;
 
@@ -1624,7 +1600,8 @@ static bool tldap_push_filter_substring(struct tldap_context *ld,
 	*_s = star;
 
 	/* end of sequence */
-	return asn1_pop_tag(data);
+	asn1_pop_tag(data);
+	return true;
 }
 
 /* NOTE: although openldap libraries allow for spaces in some places, mosly
@@ -1677,24 +1654,24 @@ struct tevent_req *tldap_search_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	if (!asn1_push_tag(state->out, TLDAP_REQ_SEARCH)) goto encoding_error;
-	if (!asn1_write_OctetString(state->out, base, strlen(base))) goto encoding_error;
-	if (!asn1_write_enumerated(state->out, scope)) goto encoding_error;
-	if (!asn1_write_enumerated(state->out, deref)) goto encoding_error;
-	if (!asn1_write_Integer(state->out, sizelimit)) goto encoding_error;
-	if (!asn1_write_Integer(state->out, timelimit)) goto encoding_error;
-	if (!asn1_write_BOOLEAN(state->out, attrsonly)) goto encoding_error;
+	asn1_push_tag(state->out, TLDAP_REQ_SEARCH);
+	asn1_write_OctetString(state->out, base, strlen(base));
+	asn1_write_enumerated(state->out, scope);
+	asn1_write_enumerated(state->out, deref);
+	asn1_write_Integer(state->out, sizelimit);
+	asn1_write_Integer(state->out, timelimit);
+	asn1_write_BOOLEAN(state->out, attrsonly);
 
 	if (!tldap_push_filter(ld, state->out, filter)) {
 		goto encoding_error;
 	}
 
-	if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto encoding_error;
+	asn1_push_tag(state->out, ASN1_SEQUENCE(0));
 	for (i=0; i<num_attrs; i++) {
-		if (!asn1_write_OctetString(state->out, attrs[i], strlen(attrs[i]))) goto encoding_error;
+		asn1_write_OctetString(state->out, attrs[i], strlen(attrs[i]));
 	}
-	if (!asn1_pop_tag(state->out)) goto encoding_error;
-	if (!asn1_pop_tag(state->out)) goto encoding_error;
+	asn1_pop_tag(state->out);
+	asn1_pop_tag(state->out);
 
 	subreq = tldap_msg_send(state, ev, ld, state->id, state->out,
 				sctrls, num_sctrls);
@@ -1725,11 +1702,11 @@ static void tldap_search_done(struct tevent_req *subreq)
 	switch (state->result->type) {
 	case TLDAP_RES_SEARCH_ENTRY:
 	case TLDAP_RES_SEARCH_REFERENCE:
+		tevent_req_notify_callback(req);
 		if (!tldap_msg_set_pending(subreq)) {
-			tevent_req_oom(req);
+			tevent_req_nomem(NULL, req);
 			return;
 		}
-		tevent_req_notify_callback(req);
 		break;
 	case TLDAP_RES_SEARCH_RESULT:
 		TALLOC_FREE(subreq);
@@ -1847,7 +1824,7 @@ int tldap_search(struct tldap_context *ld,
 	state.mem_ctx = mem_ctx;
 	state.rc = TLDAP_SUCCESS;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		state.rc = TLDAP_NO_MEMORY;
 		goto fail;
@@ -1902,12 +1879,11 @@ static bool tldap_parse_search_entry(struct tldap_message *msg)
 {
 	int num_attribs = 0;
 
-	if (!asn1_start_tag(msg->data, msg->type)) return false;
+	asn1_start_tag(msg->data, msg->type);
 
 	/* dn */
 
-	if (!asn1_read_OctetString_talloc(msg, msg->data, &msg->dn)) return false;
-
+	asn1_read_OctetString_talloc(msg, msg->data, &msg->dn);
 	if (msg->dn == NULL) {
 		return false;
 	}
@@ -1923,7 +1899,7 @@ static bool tldap_parse_search_entry(struct tldap_message *msg)
 		return false;
 	}
 
-	if (!asn1_start_tag(msg->data, ASN1_SEQUENCE(0))) return false;
+	asn1_start_tag(msg->data, ASN1_SEQUENCE(0));
 	while (asn1_peek_tag(msg->data, ASN1_SEQUENCE(0))) {
 		struct tldap_attribute *attrib;
 		int num_values = 0;
@@ -1933,14 +1909,14 @@ static bool tldap_parse_search_entry(struct tldap_message *msg)
 		if (attrib->values == NULL) {
 			return false;
 		}
-		if (!asn1_start_tag(msg->data, ASN1_SEQUENCE(0))) return false;
-		if (!asn1_read_OctetString_talloc(msg->attribs, msg->data,
-					     &attrib->name)) return false;
-		if (!asn1_start_tag(msg->data, ASN1_SET)) return false;
+		asn1_start_tag(msg->data, ASN1_SEQUENCE(0));
+		asn1_read_OctetString_talloc(msg->attribs, msg->data,
+					     &attrib->name);
+		asn1_start_tag(msg->data, ASN1_SET);
 
 		while (asn1_peek_tag(msg->data, ASN1_OCTET_STRING)) {
-			if (!asn1_read_OctetString(msg->data, msg,
-					      &attrib->values[num_values])) return false;
+			asn1_read_OctetString(msg->data, msg,
+					      &attrib->values[num_values]);
 
 			attrib->values = talloc_realloc(
 				msg->attribs, attrib->values, DATA_BLOB,
@@ -1954,8 +1930,8 @@ static bool tldap_parse_search_entry(struct tldap_message *msg)
 						DATA_BLOB, num_values);
 		attrib->num_values = num_values;
 
-		if (!asn1_end_tag(msg->data)) return false; /* ASN1_SET */
-		if (!asn1_end_tag(msg->data)) return false; /* ASN1_SEQUENCE(0) */
+		asn1_end_tag(msg->data); /* ASN1_SET */
+		asn1_end_tag(msg->data); /* ASN1_SEQUENCE(0) */
 		msg->attribs = talloc_realloc(
 			msg, msg->attribs, struct tldap_attribute,
 			num_attribs + 2);
@@ -1966,7 +1942,11 @@ static bool tldap_parse_search_entry(struct tldap_message *msg)
 	}
 	msg->attribs = talloc_realloc(
 		msg, msg->attribs, struct tldap_attribute, num_attribs);
-	return asn1_end_tag(msg->data);
+	asn1_end_tag(msg->data);
+	if (msg->data->has_error) {
+		return false;
+	}
+	return true;
 }
 
 bool tldap_entry_dn(struct tldap_message *msg, char **dn)
@@ -1996,7 +1976,6 @@ static bool tldap_decode_controls(struct tldap_req_state *state)
 	struct asn1_data *data = msg->data;
 	struct tldap_control *sctrls = NULL;
 	int num_controls = 0;
-	bool ret = false;
 
 	msg->res_sctrls = NULL;
 
@@ -2004,7 +1983,7 @@ static bool tldap_decode_controls(struct tldap_req_state *state)
 		return true;
 	}
 
-	if (!asn1_start_tag(data, ASN1_CONTEXT(0))) goto out;
+	asn1_start_tag(data, ASN1_CONTEXT(0));
 
 	while (asn1_peek_tag(data, ASN1_SEQUENCE(0))) {
 		struct tldap_control *c;
@@ -2013,43 +1992,39 @@ static bool tldap_decode_controls(struct tldap_req_state *state)
 		sctrls = talloc_realloc(msg, sctrls, struct tldap_control,
 					num_controls + 1);
 		if (sctrls == NULL) {
-			goto out;
+			return false;
 		}
 		c = &sctrls[num_controls];
 
-		if (!asn1_start_tag(data, ASN1_SEQUENCE(0))) goto out;
-		if (!asn1_read_OctetString_talloc(msg, data, &oid)) goto out;
-		if (asn1_has_error(data) || (oid == NULL)) {
-			goto out;
+		asn1_start_tag(data, ASN1_SEQUENCE(0));
+		asn1_read_OctetString_talloc(msg, data, &oid);
+		if ((data->has_error) || (oid == NULL)) {
+			return false;
 		}
 		c->oid = oid;
 		if (asn1_peek_tag(data, ASN1_BOOLEAN)) {
-			if (!asn1_read_BOOLEAN(data, &c->critical)) goto out;
+			asn1_read_BOOLEAN(data, &c->critical);
 		} else {
 			c->critical = false;
 		}
 		c->value = data_blob_null;
 		if (asn1_peek_tag(data, ASN1_OCTET_STRING) &&
 		    !asn1_read_OctetString(data, msg, &c->value)) {
-			goto out;
+			return false;
 		}
-		if (!asn1_end_tag(data)) goto out; /* ASN1_SEQUENCE(0) */
+		asn1_end_tag(data); /* ASN1_SEQUENCE(0) */
 
 		num_controls += 1;
 	}
 
-	if (!asn1_end_tag(data)) goto out; 	/* ASN1_CONTEXT(0) */
+	asn1_end_tag(data); 	/* ASN1_CONTEXT(0) */
 
-	ret = true;
-
- out:
-
-	if (ret == false) {
+	if (data->has_error) {
 		TALLOC_FREE(sctrls);
-	} else {
-		msg->res_sctrls = sctrls;
+		return false;
 	}
-	return ret;
+	msg->res_sctrls = sctrls;
+	return true;
 }
 
 static void tldap_simple_done(struct tevent_req *subreq, int type)
@@ -2115,27 +2090,27 @@ struct tevent_req *tldap_add_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	if (!asn1_push_tag(state->out, TLDAP_REQ_ADD)) goto err;
-	if (!asn1_write_OctetString(state->out, dn, strlen(dn))) goto err;
-	if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto err;
+	asn1_push_tag(state->out, TLDAP_REQ_ADD);
+	asn1_write_OctetString(state->out, dn, strlen(dn));
+	asn1_push_tag(state->out, ASN1_SEQUENCE(0));
 
 	for (i=0; i<num_attributes; i++) {
 		struct tldap_mod *attrib = &attributes[i];
-		if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto err;
-		if (!asn1_write_OctetString(state->out, attrib->attribute,
-				       strlen(attrib->attribute))) goto err;
-		if (!asn1_push_tag(state->out, ASN1_SET)) goto err;
+		asn1_push_tag(state->out, ASN1_SEQUENCE(0));
+		asn1_write_OctetString(state->out, attrib->attribute,
+				       strlen(attrib->attribute));
+		asn1_push_tag(state->out, ASN1_SET);
 		for (j=0; j<attrib->num_values; j++) {
-			if (!asn1_write_OctetString(state->out,
+			asn1_write_OctetString(state->out,
 					       attrib->values[j].data,
-					       attrib->values[j].length)) goto err;
+					       attrib->values[j].length);
 		}
-		if (!asn1_pop_tag(state->out)) goto err;
-		if (!asn1_pop_tag(state->out)) goto err;
+		asn1_pop_tag(state->out);
+		asn1_pop_tag(state->out);
 	}
 
-	if (!asn1_pop_tag(state->out)) goto err;
-	if (!asn1_pop_tag(state->out)) goto err;
+	asn1_pop_tag(state->out);
+	asn1_pop_tag(state->out);
 
 	subreq = tldap_msg_send(state, ev, ld, state->id, state->out,
 				sctrls, num_sctrls);
@@ -2144,11 +2119,6 @@ struct tevent_req *tldap_add_send(TALLOC_CTX *mem_ctx,
 	}
 	tevent_req_set_callback(subreq, tldap_add_done, req);
 	return req;
-
-  err:
-
-	tevent_req_error(req, TLDAP_ENCODING_ERROR);
-	return tevent_req_post(req, ev);
 }
 
 static void tldap_add_done(struct tevent_req *subreq)
@@ -2171,7 +2141,7 @@ int tldap_add(struct tldap_context *ld, const char *dn,
 	struct tevent_req *req;
 	int result;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		result = TLDAP_NO_MEMORY;
 		goto fail;
@@ -2217,30 +2187,30 @@ struct tevent_req *tldap_modify_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	if (!asn1_push_tag(state->out, TLDAP_REQ_MODIFY)) goto err;
-	if (!asn1_write_OctetString(state->out, dn, strlen(dn))) goto err;
-	if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto err;
+	asn1_push_tag(state->out, TLDAP_REQ_MODIFY);
+	asn1_write_OctetString(state->out, dn, strlen(dn));
+	asn1_push_tag(state->out, ASN1_SEQUENCE(0));
 
 	for (i=0; i<num_mods; i++) {
 		struct tldap_mod *mod = &mods[i];
-		if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto err;
-		if (!asn1_write_enumerated(state->out, mod->mod_op)) goto err;
-		if (!asn1_push_tag(state->out, ASN1_SEQUENCE(0))) goto err;
-		if (!asn1_write_OctetString(state->out, mod->attribute,
-				       strlen(mod->attribute))) goto err;
-		if (!asn1_push_tag(state->out, ASN1_SET)) goto err;
+		asn1_push_tag(state->out, ASN1_SEQUENCE(0));
+		asn1_write_enumerated(state->out, mod->mod_op),
+		asn1_push_tag(state->out, ASN1_SEQUENCE(0));
+		asn1_write_OctetString(state->out, mod->attribute,
+				       strlen(mod->attribute));
+		asn1_push_tag(state->out, ASN1_SET);
 		for (j=0; j<mod->num_values; j++) {
-			if (!asn1_write_OctetString(state->out,
+			asn1_write_OctetString(state->out,
 					       mod->values[j].data,
-					       mod->values[j].length)) goto err;
+					       mod->values[j].length);
 		}
-		if (!asn1_pop_tag(state->out)) goto err;
-		if (!asn1_pop_tag(state->out)) goto err;
-		if (!asn1_pop_tag(state->out)) goto err;
+		asn1_pop_tag(state->out);
+		asn1_pop_tag(state->out);
+		asn1_pop_tag(state->out);
 	}
 
-	if (!asn1_pop_tag(state->out)) goto err;
-	if (!asn1_pop_tag(state->out)) goto err;
+	asn1_pop_tag(state->out);
+	asn1_pop_tag(state->out);
 
 	subreq = tldap_msg_send(state, ev, ld, state->id, state->out,
 				sctrls, num_sctrls);
@@ -2249,11 +2219,6 @@ struct tevent_req *tldap_modify_send(TALLOC_CTX *mem_ctx,
 	}
 	tevent_req_set_callback(subreq, tldap_modify_done, req);
 	return req;
-
-  err:
-
-	tevent_req_error(req, TLDAP_ENCODING_ERROR);
-	return tevent_req_post(req, ev);
 }
 
 static void tldap_modify_done(struct tevent_req *subreq)
@@ -2276,7 +2241,7 @@ int tldap_modify(struct tldap_context *ld, const char *dn,
 	struct tevent_req *req;
 	int result;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		result = TLDAP_NO_MEMORY;
 		goto fail;
@@ -2320,9 +2285,9 @@ struct tevent_req *tldap_delete_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	if (!asn1_push_tag(state->out, TLDAP_REQ_DELETE)) goto err;
-	if (!asn1_write(state->out, dn, strlen(dn))) goto err;
-	if (!asn1_pop_tag(state->out)) goto err;
+	asn1_push_tag(state->out, TLDAP_REQ_DELETE);
+	asn1_write(state->out, dn, strlen(dn));
+	asn1_pop_tag(state->out);
 
 	subreq = tldap_msg_send(state, ev, ld, state->id, state->out,
 				sctrls, num_sctrls);
@@ -2331,11 +2296,6 @@ struct tevent_req *tldap_delete_send(TALLOC_CTX *mem_ctx,
 	}
 	tevent_req_set_callback(subreq, tldap_delete_done, req);
 	return req;
-
-  err:
-
-	tevent_req_error(req, TLDAP_ENCODING_ERROR);
-	return tevent_req_post(req, ev);
 }
 
 static void tldap_delete_done(struct tevent_req *subreq)
@@ -2357,7 +2317,7 @@ int tldap_delete(struct tldap_context *ld, const char *dn,
 	struct tevent_req *req;
 	int result;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		result = TLDAP_NO_MEMORY;
 		goto fail;

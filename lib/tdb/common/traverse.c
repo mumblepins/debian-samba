@@ -1,4 +1,4 @@
- /*
+ /* 
    Unix SMB/CIFS implementation.
 
    trivial database library
@@ -37,7 +37,7 @@ static tdb_off_t tdb_next_lock(struct tdb_context *tdb, struct tdb_traverse_lock
 	int want_next = (tlock->off != 0);
 
 	/* Lock each chain from the start one. */
-	for (; tlock->hash < tdb->hash_size; tlock->hash++) {
+	for (; tlock->hash < tdb->header.hash_size; tlock->hash++) {
 		if (!tlock->off && tlock->hash != 0) {
 			/* this is an optimisation for the common case where
 			   the hash chain is empty, which is particularly
@@ -68,7 +68,7 @@ static tdb_off_t tdb_next_lock(struct tdb_context *tdb, struct tdb_traverse_lock
 			   system (testing using ldbtest).
 			*/
 			tdb->methods->next_hash_chain(tdb, &tlock->hash);
-			if (tlock->hash == tdb->hash_size) {
+			if (tlock->hash == tdb->header.hash_size) {
 				continue;
 			}
 		}
@@ -117,7 +117,7 @@ static tdb_off_t tdb_next_lock(struct tdb_context *tdb, struct tdb_traverse_lock
 			/* Try to clean dead ones from old traverses */
 			current = tlock->off;
 			tlock->off = rec->next;
-			if (!(tdb->read_only || tdb->traverse_read) &&
+			if (!(tdb->read_only || tdb->traverse_read) && 
 			    tdb_do_delete(tdb, current, rec) != 0)
 				goto fail;
 		}
@@ -140,7 +140,7 @@ static tdb_off_t tdb_next_lock(struct tdb_context *tdb, struct tdb_traverse_lock
    if fn is NULL then it is not called
    a non-zero return value from fn() indicates that the traversal should stop
   */
-static int tdb_traverse_internal(struct tdb_context *tdb,
+static int tdb_traverse_internal(struct tdb_context *tdb, 
 				 tdb_traverse_func fn, void *private_data,
 				 struct tdb_traverse_lock *tl)
 {
@@ -149,7 +149,7 @@ static int tdb_traverse_internal(struct tdb_context *tdb,
 	int ret = 0, count = 0;
 	tdb_off_t off;
 
-	/* This was in the initialization, above, but the IRIX compiler
+	/* This was in the initializaton, above, but the IRIX compiler
 	 * did not like it.  crh
 	 */
 	tl->next = tdb->travlocks.next;
@@ -165,7 +165,7 @@ static int tdb_traverse_internal(struct tdb_context *tdb,
 		}
 		count++;
 		/* now read the full record */
-		key.dptr = tdb_alloc_read(tdb, tl->off + sizeof(rec),
+		key.dptr = tdb_alloc_read(tdb, tl->off + sizeof(rec), 
 					  rec.key_len + rec.data_len);
 		if (!key.dptr) {
 			ret = -1;
@@ -210,9 +210,9 @@ out:
 
 
 /*
-  a read style traverse - temporarily marks the db read only
+  a write style traverse - temporarily marks the db read only
 */
-_PUBLIC_ int tdb_traverse_read(struct tdb_context *tdb,
+_PUBLIC_ int tdb_traverse_read(struct tdb_context *tdb, 
 		      tdb_traverse_func fn, void *private_data)
 {
 	struct tdb_traverse_lock tl = { NULL, 0, 0, F_RDLCK };
@@ -239,31 +239,19 @@ _PUBLIC_ int tdb_traverse_read(struct tdb_context *tdb,
   prevent deadlocks
 
   WARNING: The data buffer given to the callback fn does NOT meet the
-  alignment guarantees malloc gives you.
+  alignment restrictions malloc gives you.
 */
-_PUBLIC_ int tdb_traverse(struct tdb_context *tdb,
+_PUBLIC_ int tdb_traverse(struct tdb_context *tdb, 
 		 tdb_traverse_func fn, void *private_data)
 {
 	struct tdb_traverse_lock tl = { NULL, 0, 0, F_WRLCK };
-	enum tdb_lock_flags lock_flags;
 	int ret;
 
 	if (tdb->read_only || tdb->traverse_read) {
 		return tdb_traverse_read(tdb, fn, private_data);
 	}
 
-	lock_flags = TDB_LOCK_WAIT;
-
-	if (tdb->allrecord_lock.count != 0) {
-		/*
-		 * This avoids a deadlock between tdb_lockall() and
-		 * tdb_traverse(). See
-		 * https://bugzilla.samba.org/show_bug.cgi?id=11381
-		 */
-		lock_flags = TDB_LOCK_NOWAIT;
-	}
-
-	if (tdb_transaction_lock(tdb, F_WRLCK, lock_flags)) {
+	if (tdb_transaction_lock(tdb, F_WRLCK, TDB_LOCK_WAIT)) {
 		return -1;
 	}
 

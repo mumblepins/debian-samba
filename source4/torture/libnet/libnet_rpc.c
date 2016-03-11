@@ -26,7 +26,6 @@
 #include "librpc/gen_ndr/ndr_samr.h"
 #include "librpc/gen_ndr/ndr_srvsvc.h"
 #include "torture/rpc/torture_rpc.h"
-#include "torture/libnet/proto.h"
 #include "param/param.h"
 
 
@@ -139,16 +138,13 @@ bool torture_rpc_connect_srv(struct torture_context *torture)
 	const enum libnet_RpcConnect_level level = LIBNET_RPC_CONNECT_SERVER;
 	NTSTATUS status;
 	struct dcerpc_binding *binding;
-	const char *host;
 
 	status = torture_rpc_binding(torture, &binding);
 	if (!NT_STATUS_IS_OK(status)) {
 		return false;
 	}
 
-	host = dcerpc_binding_get_string_option(binding, "host");
-
-	return torture_rpc_connect(torture, level, NULL, host);
+	return torture_rpc_connect(torture, level, NULL, binding->host);
 }
 
 

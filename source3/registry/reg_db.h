@@ -21,14 +21,9 @@
 #define _REG_DB_H
 
 #define REG_TDB_FLAGS   TDB_SEQNUM
-#define REG_DBWRAP_FLAGS DBWRAP_FLAG_NONE
 
-#define REGDB_VERSION_V1    1  /* first db version with write support */
-#define REGDB_VERSION_V2    2  /* version 2 with normalized keys */
-#define REGDB_VERSION_V3    3  /* different definition of key existence, */
-                               /* sorted subkeys cache removed. */
-
-#define REGDB_CODE_VERSION REGDB_VERSION_V3
+#define REGVER_V1       1       /* first db version with write support */
+#define REGVER_V2       2       /* version 2 with normalized keys */
 
 #define REG_VALUE_PREFIX    "SAMBA_REGVAL"
 #define REG_SECDESC_PREFIX  "SAMBA_SECDESC"

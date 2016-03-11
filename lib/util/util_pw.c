@@ -28,23 +28,56 @@
 #include "system/passwd.h"
 #include "lib/util/util_pw.h"
 
+/**************************************************************************
+ Wrappers for setpwent(), getpwent() and endpwent()
+****************************************************************************/
+
+void sys_setpwent(void)
+{
+	setpwent();
+}
+
+struct passwd *sys_getpwent(void)
+{
+	return getpwent();
+}
+
+void sys_endpwent(void)
+{
+	endpwent();
+}
+
+/**************************************************************************
+ Wrappers for getpwnam(), getpwuid(), getgrnam(), getgrgid()
+****************************************************************************/
+
+struct passwd *sys_getpwnam(const char *name)
+{
+	return getpwnam(name);
+}
+
+struct passwd *sys_getpwuid(uid_t uid)
+{
+	return getpwuid(uid);
+}
+
+struct group *sys_getgrnam(const char *name)
+{
+	return getgrnam(name);
+}
+
+struct group *sys_getgrgid(gid_t gid)
+{
+	return getgrgid(gid);
+}
+
 struct passwd *tcopy_passwd(TALLOC_CTX *mem_ctx,
 			    const struct passwd *from)
 {
-	struct passwd *ret;
-	size_t len = 0;
+	struct passwd *ret = talloc_zero(mem_ctx, struct passwd);
 
-	len += strlen(from->pw_name)+1;
-	len += strlen(from->pw_passwd)+1;
-	len += strlen(from->pw_gecos)+1;
-	len += strlen(from->pw_dir)+1;
-	len += strlen(from->pw_shell)+1;
-
-	ret = talloc_pooled_object(mem_ctx, struct passwd, 5, len);
-
-	if (ret == NULL) {
+	if (ret == NULL)
 		return NULL;
-	}
 
 	ret->pw_name = talloc_strdup(ret, from->pw_name);
 	ret->pw_passwd = talloc_strdup(ret, from->pw_passwd);
@@ -61,7 +94,7 @@ struct passwd *getpwnam_alloc(TALLOC_CTX *mem_ctx, const char *name)
 {
 	struct passwd *temp;
 
-	temp = getpwnam(name);
+	temp = sys_getpwnam(name);
 	
 	if (!temp) {
 #if 0
@@ -83,7 +116,7 @@ struct passwd *getpwuid_alloc(TALLOC_CTX *mem_ctx, uid_t uid)
 {
 	struct passwd *temp;
 
-	temp = getpwuid(uid);
+	temp = sys_getpwuid(uid);
 	
 	if (!temp) {
 #if 0

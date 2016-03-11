@@ -46,7 +46,7 @@ static void cli_echo_done(struct tevent_req *req)
 	*done -= 1;
 }
 
-static void write_andx_done(struct tevent_req *req)
+static void cli_close_done(struct tevent_req *req)
 {
 	int *done = (int *)tevent_req_callback_data_void(req);
 	NTSTATUS status;
@@ -54,7 +54,7 @@ static void write_andx_done(struct tevent_req *req)
 
 	status = cli_write_andx_recv(req, &written);
 	TALLOC_FREE(req);
-	printf("cli_write_andx returned %s\n", nt_errstr(status));
+	printf("close returned %s\n", nt_errstr(status));
 	*done -= 1;
 }
 
@@ -68,11 +68,11 @@ bool run_async_echo(int dummy)
 	NTSTATUS status;
 	bool ret = false;
 	int i, num_reqs;
-	uint8_t buf[65536];
+	uint8_t buf[32768];
 
 	printf("Starting ASYNC_ECHO\n");
 
-	ev = samba_tevent_context_init(talloc_tos());
+	ev = tevent_context_init(talloc_tos());
 	if (ev == NULL) {
 		printf("tevent_context_init failed\n");
 		goto fail;
@@ -82,7 +82,7 @@ bool run_async_echo(int dummy)
 		printf("torture_open_connection failed\n");
 		goto fail;
 	}
-	status = cli_rpc_pipe_open_noauth(cli, &ndr_table_rpcecho,
+	status = cli_rpc_pipe_open_noauth(cli, &ndr_table_rpcecho.syntax_id,
 					  &p);
 	if (!NT_STATUS_IS_OK(status)) {
 		printf("Could not open echo pipe: %s\n", nt_errstr(status));
@@ -111,17 +111,15 @@ bool run_async_echo(int dummy)
 	memset(buf, 0, sizeof(buf));
 
 	for (i=0; i<10; i++) {
-		req = cli_write_andx_send(ev, ev, cli, 4711, 0, buf, 0,
-					  sizeof(buf));
+		req = cli_write_andx_send(ev, ev, cli, 4711, 0, buf, 0, sizeof(buf));
 		if (req == NULL) {
-			printf("cli_write_andx_send failed\n");
+			printf("cli_close_send failed\n");
 			goto fail;
 		}
-		tevent_req_set_callback(req, write_andx_done, &num_reqs);
+		tevent_req_set_callback(req, cli_close_done, &num_reqs);
 		num_reqs += 1;
 
-		req = cli_echo_send(ev, ev, cli, 1,
-				    data_blob_const("hello", 5));
+		req = cli_echo_send(ev, ev, cli, 1, data_blob_const("hello", 5));
 		if (req == NULL) {
 			printf("cli_echo_send failed\n");
 			goto fail;

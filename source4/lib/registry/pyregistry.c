@@ -22,7 +22,7 @@
 #include "includes.h"
 #include "libcli/util/pyerrors.h"
 #include "lib/registry/registry.h"
-#include <pytalloc.h>
+#include "lib/talloc/pytalloc.h"
 #include "lib/events/events.h"
 #include "auth/credentials/pycredentials.h"
 #include "param/pyparam.h"
@@ -31,11 +31,9 @@ extern PyTypeObject PyRegistryKey;
 extern PyTypeObject PyRegistry;
 extern PyTypeObject PyHiveKey;
 
-void initregistry(void);
-
-/*#define PyRegistryKey_AsRegistryKey(obj) pytalloc_get_type(obj, struct registry_key)*/
-#define PyRegistry_AsRegistryContext(obj) ((struct registry_context *)pytalloc_get_ptr(obj))
-#define PyHiveKey_AsHiveKey(obj) ((struct hive_key*)pytalloc_get_ptr(obj))
+/*#define PyRegistryKey_AsRegistryKey(obj) py_talloc_get_type(obj, struct registry_key)*/
+#define PyRegistry_AsRegistryContext(obj) ((struct registry_context *)py_talloc_get_ptr(obj))
+#define PyHiveKey_AsHiveKey(obj) ((struct hive_key*)py_talloc_get_ptr(obj))
 
 
 static PyObject *py_get_predefined_key_by_name(PyObject *self, PyObject *args)
@@ -49,9 +47,9 @@ static PyObject *py_get_predefined_key_by_name(PyObject *self, PyObject *args)
 		return NULL;
 
 	result = reg_get_predefined_key_by_name(ctx, name, &key);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
-	return pytalloc_steal(&PyRegistryKey, key);
+	return py_talloc_steal(&PyRegistryKey, key);
 }
 
 static PyObject *py_key_del_abs(PyObject *self, PyObject *args)
@@ -64,7 +62,7 @@ static PyObject *py_key_del_abs(PyObject *self, PyObject *args)
 		return NULL;
 
 	result = reg_key_del_abs(ctx, path);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE;
 }
@@ -80,9 +78,9 @@ static PyObject *py_get_predefined_key(PyObject *self, PyObject *args)
 		return NULL;
 
 	result = reg_get_predefined_key(ctx, hkey, &key);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
-	return pytalloc_steal(&PyRegistryKey, key);
+	return py_talloc_steal(&PyRegistryKey, key);
 }
 
 static PyObject *py_diff_apply(PyObject *self, PyObject *args)
@@ -94,7 +92,7 @@ static PyObject *py_diff_apply(PyObject *self, PyObject *args)
 		return NULL;
 
 	result = reg_diff_apply(ctx, filename);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE; 
 }
@@ -127,7 +125,7 @@ static PyObject *py_mount_hive(PyObject *self, PyObject *args)
 	SMB_ASSERT(ctx != NULL);
 
 	result = reg_mount_hive(ctx, PyHiveKey_AsHiveKey(py_hivekey), hkey, elements);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE;
 }
@@ -137,8 +135,8 @@ static PyObject *registry_new(PyTypeObject *type, PyObject *args, PyObject *kwar
 	WERROR result;
 	struct registry_context *ctx;
 	result = reg_open_local(NULL, &ctx);
-	PyErr_WERROR_NOT_OK_RAISE(result);
-	return pytalloc_steal(&PyRegistry, ctx);
+	PyErr_WERROR_IS_ERR_RAISE(result);
+	return py_talloc_steal(&PyRegistry, ctx);
 }
 
 static PyMethodDef registry_methods[] = {
@@ -160,7 +158,7 @@ PyTypeObject PyRegistry = {
 	.tp_name = "Registry",
 	.tp_methods = registry_methods,
 	.tp_new = registry_new,
-	.tp_basicsize = sizeof(pytalloc_Object),
+	.tp_basicsize = sizeof(py_talloc_Object),
 	.tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
@@ -175,7 +173,7 @@ static PyObject *py_hive_key_del(PyObject *self, PyObject *args)
 
 	result = hive_key_del(NULL, key, name);
 
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE; 
 }
@@ -186,7 +184,7 @@ static PyObject *py_hive_key_flush(PyObject *self)
 	struct hive_key *key = PyHiveKey_AsHiveKey(self);
 
 	result = hive_key_flush(key);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE;
 }
@@ -202,7 +200,7 @@ static PyObject *py_hive_key_del_value(PyObject *self, PyObject *args)
 
 	result = hive_key_del_value(NULL, key, name);
 
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE; 
 }
@@ -212,21 +210,18 @@ static PyObject *py_hive_key_set_value(PyObject *self, PyObject *args)
 	char *name;
 	uint32_t type;
 	DATA_BLOB value;
-	int value_length = 0;
 	WERROR result;
 	struct hive_key *key = PyHiveKey_AsHiveKey(self);
 
-	if (!PyArg_ParseTuple(args, "siz#", &name, &type, &value.data, &value_length)) {
+	if (!PyArg_ParseTuple(args, "siz#", &name, &type, &value.data, &value.length))
 		return NULL;
-	}
-	value.length = value_length;
 
 	if (value.data != NULL)
 		result = hive_key_set_value(key, name, type, value);
 	else
 		result = hive_key_del_value(NULL, key, name);
 
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
 	Py_RETURN_NONE; 
 }
@@ -288,25 +283,25 @@ static PyObject *py_open_hive(PyTypeObject *type, PyObject *args, PyObject *kwar
 	session_info = NULL;
 
 	result = reg_open_hive(NULL, location, session_info, credentials,
-	                       samba_tevent_context_init(NULL),
+	                       tevent_context_init(NULL),
 	                       lp_ctx, &hive_key);
 	talloc_free(mem_ctx);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
-	return pytalloc_steal(&PyHiveKey, hive_key);
+	return py_talloc_steal(&PyHiveKey, hive_key);
 }
 
 PyTypeObject PyHiveKey = {
 	.tp_name = "HiveKey",
 	.tp_methods = hive_key_methods,
 	.tp_new = hive_new,
-	.tp_basicsize = sizeof(pytalloc_Object),
+	.tp_basicsize = sizeof(py_talloc_Object),
 	.tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
 PyTypeObject PyRegistryKey = {
 	.tp_name = "RegistryKey",
-	.tp_basicsize = sizeof(pytalloc_Object),
+	.tp_basicsize = sizeof(py_talloc_Object),
 	.tp_flags = Py_TPFLAGS_DEFAULT,
 };
 
@@ -357,7 +352,37 @@ static PyObject *py_open_samba(PyObject *self, PyObject *args, PyObject *kwargs)
 		return NULL;
 	}
 
-	return pytalloc_steal(&PyRegistry, reg_ctx);
+	return py_talloc_steal(&PyRegistry, reg_ctx);
+}
+
+static PyObject *py_open_directory(PyObject *self, PyObject *args)
+{
+	char *location;
+	WERROR result;
+	struct hive_key *key;
+
+	if (!PyArg_ParseTuple(args, "s", &location))
+		return NULL;
+
+	result = reg_open_directory(NULL, location, &key);
+	PyErr_WERROR_IS_ERR_RAISE(result);
+
+	return py_talloc_steal(&PyHiveKey, key);
+}
+
+static PyObject *py_create_directory(PyObject *self, PyObject *args)
+{
+	char *location;
+	WERROR result;
+	struct hive_key *key;
+
+	if (!PyArg_ParseTuple(args, "s", &location))
+		return NULL;
+
+	result = reg_create_directory(NULL, location, &key);
+	PyErr_WERROR_IS_ERR_RAISE(result);
+
+	return py_talloc_steal(&PyHiveKey, key);
 }
 
 static PyObject *py_open_ldb_file(PyObject *self, PyObject *args, PyObject *kwargs)
@@ -403,9 +428,9 @@ static PyObject *py_open_ldb_file(PyObject *self, PyObject *args, PyObject *kwar
 	result = reg_open_ldb_file(NULL, location, session_info, credentials,
 				   s4_event_context_init(NULL), lp_ctx, &key);
 	talloc_free(mem_ctx);
-	PyErr_WERROR_NOT_OK_RAISE(result);
+	PyErr_WERROR_IS_ERR_RAISE(result);
 
-	return pytalloc_steal(&PyHiveKey, key);
+	return py_talloc_steal(&PyHiveKey, key);
 }
 
 static PyObject *py_str_regtype(PyObject *self, PyObject *args)
@@ -434,6 +459,8 @@ static PyObject *py_get_predef_name(PyObject *self, PyObject *args)
 
 static PyMethodDef py_registry_methods[] = {
 	{ "open_samba", (PyCFunction)py_open_samba, METH_VARARGS|METH_KEYWORDS, "open_samba() -> reg" },
+	{ "open_directory", py_open_directory, METH_VARARGS, "open_dir(location) -> key" },
+	{ "create_directory", py_create_directory, METH_VARARGS, "create_dir(location) -> key" },
 	{ "open_ldb", (PyCFunction)py_open_ldb_file, METH_VARARGS|METH_KEYWORDS, "open_ldb(location, session_info=None, credentials=None, loadparm_context=None) -> key" },
 	{ "open_hive", (PyCFunction)py_open_hive, METH_VARARGS|METH_KEYWORDS, "open_hive(location, session_info=None, credentials=None, loadparm_context=None) -> key" },
 	{ "str_regtype", py_str_regtype, METH_VARARGS, "str_regtype(int) -> str" },
@@ -444,7 +471,7 @@ static PyMethodDef py_registry_methods[] = {
 void initregistry(void)
 {
 	PyObject *m;
-	PyTypeObject *talloc_type = pytalloc_GetObjectType();
+	PyTypeObject *talloc_type = PyTalloc_GetObjectType();
 
 	if (talloc_type == NULL)
 		return;

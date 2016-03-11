@@ -40,7 +40,7 @@ int main(int argc, const char *argv[])
 		POPT_TABLEEND
 	};
 
-	smb_init_locale();
+	load_case_tables();
 
 	pc = poptGetContext(NULL, argc, argv, long_options,
 			    POPT_CONTEXT_KEEP_FIRST);
@@ -56,10 +56,10 @@ int main(int argc, const char *argv[])
 		fprintf(stderr, "ERROR: missing sequence string\n");
 		return 1;
 	}
-
+	
 	lp_set_cmdline("log level", "0");
 
-	if (!lp_load_global(config_file)) {
+	if (!lp_load(config_file,false,true,false,true)) {
 		fprintf(stderr,"Error loading services.\n");
 		return 1;
 	}

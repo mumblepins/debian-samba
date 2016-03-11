@@ -65,10 +65,9 @@ krb5_rd_cred(krb5_context context,
     EncKrbCredPart enc_krb_cred_part;
     krb5_data enc_krb_cred_part_data;
     krb5_crypto crypto;
-    size_t i;
+    int i;
 
     memset(&enc_krb_cred_part, 0, sizeof(enc_krb_cred_part));
-    krb5_data_zero(&enc_krb_cred_part_data);
 
     if ((auth_context->flags &
 	 (KRB5_AUTH_CONTEXT_RET_TIME | KRB5_AUTH_CONTEXT_RET_SEQUENCE)) &&
@@ -119,7 +118,7 @@ krb5_rd_cred(krb5_context context,
 					     KRB5_KU_KRB_CRED,
 					     &cred.enc_part,
 					     &enc_krb_cred_part_data);
-
+	
 	    krb5_crypto_destroy(context, crypto);
 	}
 
@@ -135,13 +134,13 @@ krb5_rd_cred(krb5_context context,
 
 	    if (ret)
 		goto out;
-
+	
 	    ret = krb5_decrypt_EncryptedData(context,
 					     crypto,
 					     KRB5_KU_KRB_CRED,
 					     &cred.enc_part,
 					     &enc_krb_cred_part_data);
-
+	
 	    krb5_crypto_destroy(context, crypto);
 	}
 	if (ret)
@@ -196,7 +195,7 @@ krb5_rd_cred(krb5_context context,
 				      auth_context->local_port);
 	    if (ret)
 		goto out;
-
+	
 	    ret = compare_addrs(context, a, enc_krb_cred_part.r_address,
 				N_("receiver address is wrong "
 				   "in received creds", ""));
@@ -300,9 +299,9 @@ krb5_rd_cred(krb5_context context,
 	    krb5_copy_addresses (context,
 				 kci->caddr,
 				 &creds->addresses);
-
+	
 	(*ret_creds)[i] = creds;
-
+	
     }
     (*ret_creds)[i] = NULL;
 

@@ -28,11 +28,9 @@
 
 /** @brief Ping winbindd to see if the daemon is running
  *
- * @param *ctx       wbclient Context
- *
  * @return #wbcErr
  **/
-wbcErr wbcCtxPing(struct wbcContext *ctx)
+wbcErr wbcPing(void)
 {
 	struct winbindd_request request;
 	struct winbindd_response response;
@@ -42,12 +40,7 @@ wbcErr wbcCtxPing(struct wbcContext *ctx)
 	ZERO_STRUCT(request);
 	ZERO_STRUCT(response);
 
-	return wbcRequestResponse(ctx, WINBINDD_PING, &request, &response);
-}
-
-wbcErr wbcPing(void)
-{
-	return wbcCtxPing(NULL);
+	return wbcRequestResponse(WINBINDD_PING, &request, &response);
 }
 
 static void wbcInterfaceDetailsDestructor(void *ptr)
@@ -67,8 +60,7 @@ static void wbcInterfaceDetailsDestructor(void *ptr)
  * @return #wbcErr
  */
 
-wbcErr wbcCtxInterfaceDetails(struct wbcContext *ctx,
-			      struct wbcInterfaceDetails **_details)
+wbcErr wbcInterfaceDetails(struct wbcInterfaceDetails **_details)
 {
 	wbcErr wbc_status = WBC_ERR_UNKNOWN_FAILURE;
 	struct wbcInterfaceDetails *info;
@@ -87,13 +79,12 @@ wbcErr wbcCtxInterfaceDetails(struct wbcContext *ctx,
 	BAIL_ON_PTR_ERROR(info, wbc_status);
 
 	/* first the interface version */
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_INTERFACE_VERSION,
-					NULL, &response);
+	wbc_status = wbcRequestResponse(WINBINDD_INTERFACE_VERSION, NULL, &response);
 	BAIL_ON_WBC_ERROR(wbc_status);
 	info->interface_version = response.data.interface_version;
 
 	/* then the samba version and the winbind separator */
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_INFO, NULL, &response);
+	wbc_status = wbcRequestResponse(WINBINDD_INFO, NULL, &response);
 	BAIL_ON_WBC_ERROR(wbc_status);
 
 	info->winbind_version = strdup(response.data.info.samba_version);
@@ -101,22 +92,20 @@ wbcErr wbcCtxInterfaceDetails(struct wbcContext *ctx,
 	info->winbind_separator = response.data.info.winbind_separator;
 
 	/* then the local netbios name */
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_NETBIOS_NAME,
-					NULL, &response);
+	wbc_status = wbcRequestResponse(WINBINDD_NETBIOS_NAME, NULL, &response);
 	BAIL_ON_WBC_ERROR(wbc_status);
 
 	info->netbios_name = strdup(response.data.netbios_name);
 	BAIL_ON_PTR_ERROR(info->netbios_name, wbc_status);
 
 	/* then the local workgroup name */
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_DOMAIN_NAME,
-					NULL, &response);
+	wbc_status = wbcRequestResponse(WINBINDD_DOMAIN_NAME, NULL, &response);
 	BAIL_ON_WBC_ERROR(wbc_status);
 
 	info->netbios_domain = strdup(response.data.domain_name);
 	BAIL_ON_PTR_ERROR(info->netbios_domain, wbc_status);
 
-	wbc_status = wbcCtxDomainInfo(ctx, info->netbios_domain, &domain);
+	wbc_status = wbcDomainInfo(info->netbios_domain, &domain);
 	if (wbc_status == WBC_ERR_DOMAIN_NOT_FOUND) {
 		/* maybe it's a standalone server */
 		domain = NULL;
@@ -143,11 +132,6 @@ done:
 	return wbc_status;
 }
 
-wbcErr wbcInterfaceDetails(struct wbcInterfaceDetails **_details)
-{
-	return wbcCtxInterfaceDetails(NULL, _details);
-}
-
 static void wbcDomainInfoDestructor(void *ptr)
 {
 	struct wbcDomainInfo *i = (struct wbcDomainInfo *)ptr;
@@ -163,9 +147,7 @@ static void wbcDomainInfoDestructor(void *ptr)
  * @return #wbcErr
  */
 
-wbcErr wbcCtxDomainInfo(struct wbcContext *ctx,
-			const char *domain,
-			struct wbcDomainInfo **dinfo)
+wbcErr wbcDomainInfo(const char *domain, struct wbcDomainInfo **dinfo)
 {
 	struct winbindd_request request;
 	struct winbindd_response response;
@@ -185,7 +167,7 @@ wbcErr wbcCtxDomainInfo(struct wbcContext *ctx,
 	strncpy(request.domain_name, domain,
 		sizeof(request.domain_name)-1);
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_DOMAIN_INFO,
+	wbc_status = wbcRequestResponse(WINBINDD_DOMAIN_INFO,
 					&request,
 					&response);
 	BAIL_ON_WBC_ERROR(wbc_status);
@@ -221,15 +203,9 @@ wbcErr wbcCtxDomainInfo(struct wbcContext *ctx,
 	return wbc_status;
 }
 
-wbcErr wbcDomainInfo(const char *domain, struct wbcDomainInfo **dinfo)
-{
-	return wbcCtxDomainInfo(NULL, domain, dinfo);
-}
-
 /* Get the list of current DCs */
-wbcErr wbcCtxDcInfo(struct wbcContext *ctx,
-		    const char *domain, size_t *num_dcs,
-		    const char ***dc_names, const char ***dc_ips)
+wbcErr wbcDcInfo(const char *domain, size_t *num_dcs,
+		 const char ***dc_names, const char ***dc_ips)
 {
 	struct winbindd_request request;
 	struct winbindd_response response;
@@ -250,7 +226,7 @@ wbcErr wbcCtxDcInfo(struct wbcContext *ctx,
 			sizeof(request.domain_name) - 1);
 	}
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_DC_INFO,
+	wbc_status = wbcRequestResponse(WINBINDD_DC_INFO,
 					&request, &response);
 	BAIL_ON_WBC_ERROR(wbc_status);
 
@@ -314,15 +290,8 @@ done:
 	return wbc_status;
 }
 
-wbcErr wbcDcInfo(const char *domain, size_t *num_dcs,
-		 const char ***dc_names, const char ***dc_ips)
-{
-	return wbcCtxDcInfo(NULL, domain, num_dcs, dc_names, dc_ips);
-}
-
 /* Resolve a NetbiosName via WINS */
-wbcErr wbcCtxResolveWinsByName(struct wbcContext *ctx,
-			       const char *name, char **ip)
+wbcErr wbcResolveWinsByName(const char *name, char **ip)
 {
 	struct winbindd_request request;
 	struct winbindd_response response;
@@ -337,7 +306,7 @@ wbcErr wbcCtxResolveWinsByName(struct wbcContext *ctx,
 	strncpy(request.data.winsreq, name,
 		sizeof(request.data.winsreq)-1);
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_WINS_BYNAME,
+	wbc_status = wbcRequestResponse(WINBINDD_WINS_BYNAME,
 					&request,
 					&response);
 	BAIL_ON_WBC_ERROR(wbc_status);
@@ -354,14 +323,8 @@ wbcErr wbcCtxResolveWinsByName(struct wbcContext *ctx,
 	return wbc_status;
 }
 
-wbcErr wbcResolveWinsByName(const char *name, char **ip)
-{
-	return wbcCtxResolveWinsByName(NULL, name, ip);
-}
-
 /* Resolve an IP address via WINS into a NetbiosName */
-wbcErr wbcCtxResolveWinsByIP(struct wbcContext *ctx,
-			     const char *ip, char **name)
+wbcErr wbcResolveWinsByIP(const char *ip, char **name)
 {
 	struct winbindd_request request;
 	struct winbindd_response response;
@@ -376,7 +339,7 @@ wbcErr wbcCtxResolveWinsByIP(struct wbcContext *ctx,
 	strncpy(request.data.winsreq, ip,
 		sizeof(request.data.winsreq)-1);
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_WINS_BYIP,
+	wbc_status = wbcRequestResponse(WINBINDD_WINS_BYIP,
 					&request,
 					&response);
 	BAIL_ON_WBC_ERROR(wbc_status);
@@ -391,11 +354,6 @@ wbcErr wbcCtxResolveWinsByIP(struct wbcContext *ctx,
 
  done:
 	return wbc_status;
-}
-
-wbcErr wbcResolveWinsByIP(const char *ip, char **name)
-{
-	return wbcCtxResolveWinsByIP(NULL, ip, name);
 }
 
 /**
@@ -508,7 +466,12 @@ static wbcErr process_domain_info_string(struct wbcDomainInfo *info,
 	}
 
 	/* Online/Offline status */
+
 	r = s;
+	if (r == NULL) {
+		wbc_status = WBC_ERR_INVALID_RESPONSE;
+		BAIL_ON_WBC_ERROR(wbc_status);
+	}
 	if ( strcmp(r, "Offline") == 0) {
 		info->domain_flags |= WBC_DOMINFO_DOMAIN_OFFLINE;
 	}
@@ -531,8 +494,7 @@ static void wbcDomainInfoListDestructor(void *ptr)
 }
 
 /* Enumerate the domain trusts known by Winbind */
-wbcErr wbcCtxListTrusts(struct wbcContext *ctx,
-			struct wbcDomainInfo **domains, size_t *num_domains)
+wbcErr wbcListTrusts(struct wbcDomainInfo **domains, size_t *num_domains)
 {
 	struct winbindd_response response;
 	wbcErr wbc_status = WBC_ERR_UNKNOWN_FAILURE;
@@ -548,7 +510,7 @@ wbcErr wbcCtxListTrusts(struct wbcContext *ctx,
 
 	/* Send request */
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_LIST_TRUSTDOM,
+	wbc_status = wbcRequestResponse(WINBINDD_LIST_TRUSTDOM,
 					NULL,
 					&response);
 	BAIL_ON_WBC_ERROR(wbc_status);
@@ -602,11 +564,6 @@ wbcErr wbcCtxListTrusts(struct wbcContext *ctx,
 	return wbc_status;
 }
 
-wbcErr wbcListTrusts(struct wbcDomainInfo **domains, size_t *num_domains)
-{
-	return wbcCtxListTrusts(NULL, domains, num_domains);
-}
-
 static void wbcDomainControllerInfoDestructor(void *ptr)
 {
 	struct wbcDomainControllerInfo *i =
@@ -615,9 +572,9 @@ static void wbcDomainControllerInfoDestructor(void *ptr)
 }
 
 /* Enumerate the domain trusts known by Winbind */
-wbcErr wbcCtxLookupDomainController(struct wbcContext *ctx,
-				    const char *domain, uint32_t flags,
-				    struct wbcDomainControllerInfo **dc_info)
+wbcErr wbcLookupDomainController(const char *domain,
+				 uint32_t flags,
+				struct wbcDomainControllerInfo **dc_info)
 {
 	wbcErr wbc_status = WBC_ERR_UNKNOWN_FAILURE;
 	struct winbindd_request request;
@@ -646,7 +603,7 @@ wbcErr wbcCtxLookupDomainController(struct wbcContext *ctx,
 
 	/* Send request */
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_DSGETDCNAME,
+	wbc_status = wbcRequestResponse(WINBINDD_DSGETDCNAME,
 					&request,
 					&response);
 	BAIL_ON_WBC_ERROR(wbc_status);
@@ -662,23 +619,17 @@ done:
 	return wbc_status;
 }
 
-wbcErr wbcLookupDomainController(const char *domain, uint32_t flags,
-				 struct wbcDomainControllerInfo **dc_info)
-{
-	return wbcCtxLookupDomainController(NULL, domain, flags, dc_info);
-}
-
 static void wbcDomainControllerInfoExDestructor(void *ptr)
 {
 	struct wbcDomainControllerInfoEx *i =
 		(struct wbcDomainControllerInfoEx *)ptr;
-	free(discard_const_p(char, i->dc_unc));
-	free(discard_const_p(char, i->dc_address));
-	free(discard_const_p(char, i->domain_guid));
-	free(discard_const_p(char, i->domain_name));
-	free(discard_const_p(char, i->forest_name));
-	free(discard_const_p(char, i->dc_site_name));
-	free(discard_const_p(char, i->client_site_name));
+	free((char *)(i->dc_unc));
+	free((char *)(i->dc_address));
+	free((char *)(i->domain_guid));
+	free((char *)(i->domain_name));
+	free((char *)(i->forest_name));
+	free((char *)(i->dc_site_name));
+	free((char *)(i->client_site_name));
 }
 
 static wbcErr wbc_create_domain_controller_info_ex(const struct winbindd_response *resp,
@@ -742,12 +693,11 @@ done:
 }
 
 /* Get extended domain controller information */
-wbcErr wbcCtxLookupDomainControllerEx(struct wbcContext *ctx,
-				      const char *domain,
-				      struct wbcGuid *guid,
-				      const char *site,
-				      uint32_t flags,
-				      struct wbcDomainControllerInfoEx **dc_info)
+wbcErr wbcLookupDomainControllerEx(const char *domain,
+				   struct wbcGuid *guid,
+				   const char *site,
+				   uint32_t flags,
+				   struct wbcDomainControllerInfoEx **dc_info)
 {
 	wbcErr wbc_status = WBC_ERR_UNKNOWN_FAILURE;
 	struct winbindd_request request;
@@ -787,7 +737,7 @@ wbcErr wbcCtxLookupDomainControllerEx(struct wbcContext *ctx,
 
 	/* Send request */
 
-	wbc_status = wbcRequestResponse(ctx, WINBINDD_DSGETDCNAME,
+	wbc_status = wbcRequestResponse(WINBINDD_DSGETDCNAME,
 					&request,
 					&response);
 	BAIL_ON_WBC_ERROR(wbc_status);
@@ -803,22 +753,12 @@ done:
 	return wbc_status;
 }
 
-wbcErr wbcLookupDomainControllerEx(const char *domain,
-				   struct wbcGuid *guid,
-				   const char *site,
-				   uint32_t flags,
-				   struct wbcDomainControllerInfoEx **dc_info)
-{
-	return wbcCtxLookupDomainControllerEx(NULL, domain, guid, site,
-					      flags, dc_info);
-}
-
 static void wbcNamedBlobDestructor(void *ptr)
 {
 	struct wbcNamedBlob *b = (struct wbcNamedBlob *)ptr;
 
 	while (b->name != NULL) {
-		free(discard_const_p(char, b->name));
+		free((char *)(b->name));
 		free(b->blob.data);
 		b += 1;
 	}

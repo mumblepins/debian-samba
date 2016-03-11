@@ -27,7 +27,6 @@
 #include "ntvfs/sysdep/sys_lease.h"
 #include "../lib/util/dlinklist.h"
 #include "param/param.h"
-#include "lib/util/samba_modules.h"
 
 /* list of registered backends */
 static struct sys_lease_ops *backends;
@@ -41,14 +40,13 @@ static uint32_t num_backends;
 _PUBLIC_ struct sys_lease_context *sys_lease_context_create(struct share_config *scfg,
 							    TALLOC_CTX *mem_ctx,
 							    struct tevent_context *ev,
-							    struct imessaging_context *msg,
+							    struct messaging_context *msg,
 							    sys_lease_send_break_fn break_send)
 {
 	struct sys_lease_context *ctx;
 	const char *bname;
 	int i;
 	NTSTATUS status;
-	TALLOC_CTX * tmp_ctx;
 
 	if (num_backends == 0) {
 		return NULL;
@@ -63,16 +61,11 @@ _PUBLIC_ struct sys_lease_context *sys_lease_context_create(struct share_config 
 		return NULL;
 	}
 
-	tmp_ctx = talloc_new(ctx);
-	if (tmp_ctx == NULL) {
-		return NULL;
-	}
-
 	ctx->event_ctx = ev;
 	ctx->msg_ctx = msg;
 	ctx->break_send = break_send;
 
-	bname = share_string_option(tmp_ctx, scfg, LEASE_BACKEND, NULL);
+	bname = share_string_option(scfg, LEASE_BACKEND, NULL);
 	if (!bname) {
 		talloc_free(ctx);
 		return NULL;
@@ -96,7 +89,6 @@ _PUBLIC_ struct sys_lease_context *sys_lease_context_create(struct share_config 
 		return NULL;
 	}
 
-	TALLOC_FREE(tmp_ctx);
 	return ctx;
 }
 

@@ -10,8 +10,8 @@ bld.SAMBA_MODULE('service_cldap',
 
 
 bld.SAMBA_SUBSYSTEM('CLDAPD',
-	source='rootdse.c',
+	source='netlogon.c rootdse.c',
 	autoproto='proto.h',
-	deps='cli_cldap ldbsamba'
+	deps='LIBCLI_CLDAP ldbsamba'
 	)
 

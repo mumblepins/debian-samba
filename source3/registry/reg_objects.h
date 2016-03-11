@@ -47,6 +47,8 @@ int regsubkey_ctr_numkeys( struct regsubkey_ctr *ctr );
 char* regsubkey_ctr_specific_key( struct regsubkey_ctr *ctr, uint32_t key_index );
 WERROR regval_ctr_init(TALLOC_CTX *mem_ctx, struct regval_ctr **ctr);
 int regval_ctr_numvals(struct regval_ctr *ctr);
+struct regval_blob* dup_registry_value(struct regval_blob *val);
+void free_registry_value(struct regval_blob *val);
 uint8_t* regval_data_p(struct regval_blob *val);
 uint32_t regval_size(struct regval_blob *val);
 char* regval_name(struct regval_blob *val);
@@ -69,6 +71,8 @@ struct regval_blob* regval_ctr_getvalue(struct regval_ctr *ctr,
 					const char *name);
 int regval_ctr_get_seqnum(struct regval_ctr *ctr);
 WERROR regval_ctr_set_seqnum(struct regval_ctr *ctr, int seqnum);
+uint32_t regval_dword(struct regval_blob *val);
+const char *regval_sz(struct regval_blob *val);
 
 
 #endif /* _REG_OBJECTS_H */

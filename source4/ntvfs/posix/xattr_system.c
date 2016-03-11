@@ -21,6 +21,7 @@
 
 #include "includes.h"
 #include "vfs_posix.h"
+#include "../lib/util/wrap_xattr.h"
 
 /*
   pull a xattr as a blob, from either a file or a file descriptor
@@ -42,9 +43,9 @@ NTSTATUS pull_xattr_blob_system(struct pvfs_state *pvfs,
 
 again:
 	if (fd != -1) {
-		ret = fgetxattr(fd, attr_name, blob->data, estimated_size);
+		ret = wrap_fgetxattr(fd, attr_name, blob->data, estimated_size);
 	} else {
-		ret = getxattr(fname, attr_name, blob->data, estimated_size);
+		ret = wrap_getxattr(fname, attr_name, blob->data, estimated_size);
 	}
 	if (ret == -1 && errno == ERANGE) {
 		estimated_size *= 2;
@@ -103,9 +104,9 @@ NTSTATUS push_xattr_blob_system(struct pvfs_state *pvfs,
 	int ret;
 
 	if (fd != -1) {
-		ret = fsetxattr(fd, attr_name, blob->data, blob->length, 0);
+		ret = wrap_fsetxattr(fd, attr_name, blob->data, blob->length, 0);
 	} else {
-		ret = setxattr(fname, attr_name, blob->data, blob->length, 0);
+		ret = wrap_setxattr(fname, attr_name, blob->data, blob->length, 0);
 	}
 	if (ret == -1) {
 		return pvfs_map_errno(pvfs, errno);
@@ -124,9 +125,9 @@ NTSTATUS delete_xattr_system(struct pvfs_state *pvfs, const char *attr_name,
 	int ret;
 
 	if (fd != -1) {
-		ret = fremovexattr(fd, attr_name);
+		ret = wrap_fremovexattr(fd, attr_name);
 	} else {
-		ret = removexattr(fname, attr_name);
+		ret = wrap_removexattr(fname, attr_name);
 	}
 	if (ret == -1) {
 		return pvfs_map_errno(pvfs, errno);

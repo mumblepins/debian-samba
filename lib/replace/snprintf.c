@@ -445,10 +445,6 @@ static int dopr(char *buffer, size_t maxlen, const char *format, va_list args_in
 					ch = *format++;
 				}
 				break;
-			case 'j':
-				cnk->cflags = DP_C_LLONG;
-				ch = *format++;
-				break;
 			case 'L':
 				cnk->cflags = DP_C_LDOUBLE;
 				ch = *format++;
@@ -1191,7 +1187,7 @@ static int add_cnk_list_entry(struct pr_chunk_x **list,
 	return max;
 }
 
- int rep_vsnprintf (char *str, size_t count, const char *fmt, va_list args)
+ int vsnprintf (char *str, size_t count, const char *fmt, va_list args)
 {
 	return dopr(str, count, fmt, args);
 }
@@ -1204,7 +1200,7 @@ static int add_cnk_list_entry(struct pr_chunk_x **list,
  * that doesn't work properly according to the autoconf test.
  */
 #if !defined(HAVE_SNPRINTF) || !defined(HAVE_C99_VSNPRINTF)
- int rep_snprintf(char *str,size_t count,const char *fmt,...)
+ int snprintf(char *str,size_t count,const char *fmt,...)
 {
 	size_t ret;
 	va_list ap;
@@ -1217,7 +1213,7 @@ static int add_cnk_list_entry(struct pr_chunk_x **list,
 #endif
 
 #ifndef HAVE_C99_VSNPRINTF
- int rep_printf(const char *fmt, ...)
+ int printf(const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
@@ -1238,7 +1234,7 @@ static int add_cnk_list_entry(struct pr_chunk_x **list,
 #endif
 
 #ifndef HAVE_C99_VSNPRINTF
- int rep_fprintf(FILE *stream, const char *fmt, ...)
+ int fprintf(FILE *stream, const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
@@ -1260,8 +1256,8 @@ static int add_cnk_list_entry(struct pr_chunk_x **list,
 
 #endif 
 
-#if !defined(HAVE_VASPRINTF) || !defined(HAVE_C99_VSNPRINTF)
- int rep_vasprintf(char **ptr, const char *format, va_list ap)
+#ifndef HAVE_VASPRINTF
+ int vasprintf(char **ptr, const char *format, va_list ap)
 {
 	int ret;
 	va_list ap2;
@@ -1282,8 +1278,9 @@ static int add_cnk_list_entry(struct pr_chunk_x **list,
 }
 #endif
 
-#if !defined(HAVE_ASPRINTF) || !defined(HAVE_C99_VSNPRINTF)
- int rep_asprintf(char **ptr, const char *format, ...)
+
+#ifndef HAVE_ASPRINTF
+ int asprintf(char **ptr, const char *format, ...)
 {
 	va_list ap;
 	int ret;

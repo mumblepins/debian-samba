@@ -20,7 +20,6 @@
 #include "utils/net.h"
 #include "session.h"
 #include "messages.h"
-#include "lib/conn_tdb.h"
 
 int net_status_usage(struct net_context *c, int argc, const char **argv)
 {
@@ -34,7 +33,6 @@ int net_status_usage(struct net_context *c, int argc, const char **argv)
 static int show_session(const char *key, struct sessionid *session,
 			void *private_data)
 {
-	struct server_id_buf tmp;
 	bool *parseable = (bool *)private_data;
 
 	if (!process_exists(session->pid)) {
@@ -43,13 +41,13 @@ static int show_session(const char *key, struct sessionid *session,
 
 	if (*parseable) {
 		d_printf("%s\\%s\\%s\\%s\\%s\n",
-			 server_id_str_buf(session->pid, &tmp),
+			 procid_str_static(&session->pid),
 			 uidtoname(session->uid),
 			 gidtoname(session->gid),
 			 session->remote_machine, session->hostname);
 	} else {
 		d_printf("%7s   %-12s  %-12s  %-12s (%s)\n",
-			 server_id_str_buf(session->pid, &tmp),
+			 procid_str_static(&session->pid),
 			 uidtoname(session->uid),
 			 gidtoname(session->gid),
 			 session->remote_machine, session->hostname);
@@ -92,13 +90,12 @@ static int net_status_sessions(struct net_context *c, int argc, const char **arg
 	return 0;
 }
 
-static int show_share(const struct connections_key *key,
+static int show_share(struct db_record *rec,
+		      const struct connections_key *key,
 		      const struct connections_data *crec,
 		      void *state)
 {
-	struct server_id_buf tmp;
-
-	if (crec->cnum == TID_FIELD_INVALID)
+	if (crec->cnum == -1)
 		return 0;
 
 	if (!process_exists(crec->pid)) {
@@ -106,7 +103,7 @@ static int show_share(const struct connections_key *key,
 	}
 
 	d_printf("%-10.10s   %s   %-12s  %s",
-	       crec->servicename, server_id_str_buf(crec->pid, &tmp),
+	       crec->servicename, procid_str_static(&crec->pid),
 	       crec->machine,
 	       time_to_asc(crec->start));
 
@@ -142,11 +139,10 @@ static int show_share_parseable(const struct connections_key *key,
 				void *state)
 {
 	struct sessionids *ids = (struct sessionids *)state;
-	struct server_id_buf tmp;
 	int i;
 	bool guest = true;
 
-	if (crec->cnum == TID_FIELD_INVALID)
+	if (crec->cnum == -1)
 		return 0;
 
 	if (!process_exists(crec->pid)) {
@@ -155,14 +151,14 @@ static int show_share_parseable(const struct connections_key *key,
 
 	for (i=0; i<ids->num_entries; i++) {
 		struct server_id id = ids->entries[i].pid;
-		if (serverid_equal(&id, &crec->pid)) {
+		if (procid_equal(&id, &crec->pid)) {
 			guest = false;
 			break;
 		}
 	}
 
 	d_printf("%s\\%s\\%s\\%s\\%s\\%s\\%s",
-		 crec->servicename, server_id_str_buf(crec->pid, &tmp),
+		 crec->servicename,procid_str_static(&crec->pid),
 		 guest ? "" : uidtoname(ids->entries[i].uid),
 		 guest ? "" : gidtoname(ids->entries[i].gid),
 		 crec->machine,
@@ -208,7 +204,7 @@ static int net_status_shares(struct net_context *c, int argc, const char **argv)
 		           "-------------------------------------"
 			   "------------------\n"));
 
-		connections_forall_read(show_share, NULL);
+		connections_forall(show_share, NULL);
 
 		return 0;
 	}

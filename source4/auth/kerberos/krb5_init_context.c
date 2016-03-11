@@ -22,7 +22,6 @@
 
 #include "includes.h"
 #include "system/kerberos.h"
-#include "system/gssapi.h"
 #include <tevent.h>
 #include "auth/kerberos/kerberos.h"
 #include "lib/socket/socket.h"
@@ -31,7 +30,7 @@
 #include "param/param.h"
 #include "libcli/resolve/resolve.h"
 #include "../lib/tsocket/tsocket.h"
-#include "krb5_init_context.h"
+
 /*
   context structure for operations on cldap packets
 */
@@ -47,41 +46,29 @@ struct smb_krb5_socket {
 	struct packet_context *packet;
 
 	size_t partial_read;
-#ifdef SAMBA4_USES_HEIMDAL
+
 	krb5_krbhst_info *hi;
-#endif
 };
 
 static krb5_error_code smb_krb5_context_destroy(struct smb_krb5_context *ctx)
 {
-#ifdef SAMBA4_USES_HEIMDAL
-	if (ctx->pvt_log_data) {
-		/* Otherwise krb5_free_context will try and close what we
-		 * have already free()ed */
-		krb5_set_warn_dest(ctx->krb5_context, NULL);
-		krb5_closelog(ctx->krb5_context,
-				(krb5_log_facility *)ctx->pvt_log_data);
-	}
-#endif
+	/* Otherwise krb5_free_context will try and close what we have already free()ed */
+	krb5_set_warn_dest(ctx->krb5_context, NULL);
+	krb5_closelog(ctx->krb5_context, ctx->logf);
 	krb5_free_context(ctx->krb5_context);
 	return 0;
 }
 
-#ifdef SAMBA4_USES_HEIMDAL
 /* We never close down the DEBUG system, and no need to unreference the use */
 static void smb_krb5_debug_close(void *private_data) {
 	return;
 }
-#endif
 
-#ifdef SAMBA4_USES_HEIMDAL
 static void smb_krb5_debug_wrapper(const char *timestr, const char *msg, void *private_data)
 {
 	DEBUG(3, ("Kerberos: %s\n", msg));
 }
-#endif
 
-#ifdef SAMBA4_USES_HEIMDAL
 /*
   handle recv events on a smb_krb5 socket
 */
@@ -117,7 +104,7 @@ static void smb_krb5_socket_recv(struct smb_krb5_socket *smb_krb5)
 		return;
 	}
 
-	DEBUG(4,("Received smb_krb5 packet of length %d\n",
+	DEBUG(2,("Received smb_krb5 packet of length %d\n",
 		 (int)blob.length));
 
 	talloc_steal(smb_krb5, blob.data);
@@ -210,36 +197,52 @@ static void smb_krb5_socket_handler(struct tevent_context *ev, struct tevent_fd 
 	}
 }
 
-static krb5_error_code smb_krb5_send_and_recv_func_int(krb5_context context,
-						       struct tevent_context *ev,
-						       krb5_krbhst_info *hi,
-						       struct addrinfo *ai,
-						       krb5_send_to_kdc_func func,
-						       void *data,
-						       time_t timeout,
-						       const krb5_data *send_buf,
-						       krb5_data *recv_buf)
+
+krb5_error_code smb_krb5_send_and_recv_func(krb5_context context,
+					    void *data,
+					    krb5_krbhst_info *hi,
+					    time_t timeout,
+					    const krb5_data *send_buf,
+					    krb5_data *recv_buf)
 {
 	krb5_error_code ret;
 	NTSTATUS status;
 	const char *name;
-	struct addrinfo *a;
+	struct addrinfo *ai, *a;
 	struct smb_krb5_socket *smb_krb5;
 
 	DATA_BLOB send_blob;
 
-	TALLOC_CTX *frame = talloc_stackframe();
-	if (frame == NULL) {
+	struct tevent_context *ev;
+	TALLOC_CTX *tmp_ctx = talloc_new(NULL);
+	if (!tmp_ctx) {
 		return ENOMEM;
+	}
+
+	if (!data) {
+		/* If no event context was available, then create one for this loop */
+		ev = tevent_context_init(tmp_ctx);
+		if (!ev) {
+			talloc_free(tmp_ctx);
+			return ENOMEM;
+		}
+	} else {
+		ev = talloc_get_type_abort(data, struct tevent_context);
 	}
 
 	send_blob = data_blob_const(send_buf->data, send_buf->length);
 
+	ret = krb5_krbhst_get_addrinfo(context, hi, &ai);
+	if (ret) {
+		talloc_free(tmp_ctx);
+		return ret;
+	}
+
 	for (a = ai; a; a = a->ai_next) {
 		struct socket_address *remote_addr;
-		smb_krb5 = talloc(frame, struct smb_krb5_socket);
+		smb_krb5 = talloc(tmp_ctx, struct smb_krb5_socket);
 		if (!smb_krb5) {
-			TALLOC_FREE(frame);
+			talloc_free(tmp_ctx);
 			return ENOMEM;
 		}
 		smb_krb5->hi = hi;
@@ -254,7 +257,7 @@ static krb5_error_code smb_krb5_send_and_recv_func_int(krb5_context context,
 			break;
 #endif
 		default:
-			TALLOC_FREE(frame);
+			talloc_free(tmp_ctx);
 			return EINVAL;
 		}
 
@@ -267,7 +270,7 @@ static krb5_error_code smb_krb5_send_and_recv_func_int(krb5_context context,
 			status = socket_create(name, SOCKET_TYPE_STREAM, &smb_krb5->sock, 0);
 			break;
 		case KRB5_KRBHST_HTTP:
-			TALLOC_FREE(frame);
+			talloc_free(tmp_ctx);
 			return EINVAL;
 		}
 		if (!NT_STATUS_IS_OK(status)) {
@@ -335,29 +338,27 @@ static krb5_error_code smb_krb5_send_and_recv_func_int(krb5_context context,
 			packet_send(smb_krb5->packet, smb_krb5->request);
 			break;
 		case KRB5_KRBHST_HTTP:
-			TALLOC_FREE(frame);
+			talloc_free(tmp_ctx);
 			return EINVAL;
 		}
 		while ((NT_STATUS_IS_OK(smb_krb5->status)) && !smb_krb5->reply.length) {
 			if (tevent_loop_once(ev) != 0) {
-				TALLOC_FREE(frame);
+				talloc_free(tmp_ctx);
 				return EINVAL;
 			}
 
-                        if (func) {
-				/* After each and every event loop, reset the
-				 * send_to_kdc pointers to what they were when
-				 * we entered this loop.  That way, if a
-				 * nested event has invalidated them, we put
-				 * it back before we return to the heimdal
-				 * code */
-				ret = krb5_set_send_to_kdc_func(context,
-								func,
-								data);
-				if (ret != 0) {
-					TALLOC_FREE(frame);
-					return ret;
-				}
+			/* After each and every event loop, reset the
+			 * send_to_kdc pointers to what they were when
+			 * we entered this loop.  That way, if a
+			 * nested event has invalidated them, we put
+			 * it back before we return to the heimdal
+			 * code */
+			ret = krb5_set_send_to_kdc_func(context,
+							smb_krb5_send_and_recv_func,
+							data);
+			if (ret != 0) {
+				talloc_free(tmp_ctx);
+				return ret;
 			}
 		}
 		if (NT_STATUS_EQUAL(smb_krb5->status, NT_STATUS_IO_TIMEOUT)) {
@@ -381,88 +382,19 @@ static krb5_error_code smb_krb5_send_and_recv_func_int(krb5_context context,
 
 		ret = krb5_data_copy(recv_buf, smb_krb5->reply.data, smb_krb5->reply.length);
 		if (ret) {
-			TALLOC_FREE(frame);
+			talloc_free(tmp_ctx);
 			return ret;
 		}
 		talloc_free(smb_krb5);
 
 		break;
 	}
-	TALLOC_FREE(frame);
+	talloc_free(tmp_ctx);
 	if (a) {
 		return 0;
 	}
 	return KRB5_KDC_UNREACH;
 }
-
-krb5_error_code smb_krb5_send_and_recv_func(krb5_context context,
-					    void *data,
-					    krb5_krbhst_info *hi,
-					    time_t timeout,
-					    const krb5_data *send_buf,
-					    krb5_data *recv_buf)
-{
-	krb5_error_code ret;
-	struct addrinfo *ai;
-
-	struct tevent_context *ev;
-	TALLOC_CTX *frame = talloc_stackframe();
-	if (frame == NULL) {
-		return ENOMEM;
-	}
-
-	if (data == NULL) {
-		/* If no event context was available, then create one for this loop */
-		ev = samba_tevent_context_init(frame);
-		if (ev == NULL) {
-			TALLOC_FREE(frame);
-			return ENOMEM;
-		}
-	} else {
-		ev = talloc_get_type_abort(data, struct tevent_context);
-	}
-
-	ret = krb5_krbhst_get_addrinfo(context, hi, &ai);
-	if (ret) {
-		TALLOC_FREE(frame);
-		return ret;
-	}
-
-	ret = smb_krb5_send_and_recv_func_int(context, ev, hi, ai, smb_krb5_send_and_recv_func, data, timeout, send_buf, recv_buf);
-	TALLOC_FREE(frame);
-	return ret;
-}
-
-krb5_error_code smb_krb5_send_and_recv_func_forced(krb5_context context,
-						   void *data, /* struct addrinfo */
-						   krb5_krbhst_info *hi,
-						   time_t timeout,
-						   const krb5_data *send_buf,
-						   krb5_data *recv_buf)
-{
-	krb5_error_code k5ret;
-	struct addrinfo *ai = data;
-
-	struct tevent_context *ev;
-	TALLOC_CTX *frame = talloc_stackframe();
-	if (frame == NULL) {
-		return ENOMEM;
-	}
-
-	/* no event context is passed in, create one for this loop */
-	ev = samba_tevent_context_init(frame);
-	if (ev == NULL) {
-		TALLOC_FREE(frame);
-		return ENOMEM;
-	}
-
-	/* No need to pass in send_and_recv functions, we won't nest on this private event loop */
-	k5ret = smb_krb5_send_and_recv_func_int(context, ev, hi, ai, NULL, NULL,
-						timeout, send_buf, recv_buf);
-	TALLOC_FREE(frame);
-	return k5ret;
-}
-#endif
 
 krb5_error_code
 smb_krb5_init_context_basic(TALLOC_CTX *tmp_ctx,
@@ -470,10 +402,8 @@ smb_krb5_init_context_basic(TALLOC_CTX *tmp_ctx,
 			    krb5_context *_krb5_context)
 {
 	krb5_error_code ret;
-#ifdef SAMBA4_USES_HEIMDAL
 	char **config_files;
 	const char *config_file, *realm;
-#endif
 	krb5_context krb5_ctx;
 
 	initialize_krb5_error_table();
@@ -485,18 +415,14 @@ smb_krb5_init_context_basic(TALLOC_CTX *tmp_ctx,
 		return ret;
 	}
 
-	/* The MIT Kerberos build relies on using the system krb5.conf file.
-	 * If you really want to use another file please set KRB5_CONFIG
-	 * accordingly. */
-#ifdef SAMBA4_USES_HEIMDAL
-	config_file = lpcfg_config_path(tmp_ctx, lp_ctx, "krb5.conf");
+	config_file = config_path(tmp_ctx, lp_ctx, "krb5.conf");
 	if (!config_file) {
 		krb5_free_context(krb5_ctx);
 		return ENOMEM;
 	}
 
 	/* Use our local krb5.conf file by default */
-	ret = krb5_prepend_config_files_default(config_file, &config_files);
+	ret = krb5_prepend_config_files_default(config_file == NULL?"":config_file, &config_files);
 	if (ret) {
 		DEBUG(1,("krb5_prepend_config_files_default failed (%s)\n",
 			 smb_get_krb5_error_message(krb5_ctx, ret, tmp_ctx)));
@@ -523,21 +449,18 @@ smb_krb5_init_context_basic(TALLOC_CTX *tmp_ctx,
 			return ret;
 		}
 	}
-#endif
+
 	*_krb5_context = krb5_ctx;
 	return 0;
 }
 
 krb5_error_code smb_krb5_init_context(void *parent_ctx,
+				      struct tevent_context *ev,
 				      struct loadparm_context *lp_ctx,
 				      struct smb_krb5_context **smb_krb5_context)
 {
 	krb5_error_code ret;
 	TALLOC_CTX *tmp_ctx;
-	krb5_context kctx;
-#ifdef SAMBA4_USES_HEIMDAL
-	krb5_log_facility *logf;
-#endif
 
 	initialize_krb5_error_table();
 
@@ -549,53 +472,60 @@ krb5_error_code smb_krb5_init_context(void *parent_ctx,
 		return ENOMEM;
 	}
 
-	ret = smb_krb5_init_context_basic(tmp_ctx, lp_ctx, &kctx);
+	ret = smb_krb5_init_context_basic(tmp_ctx, lp_ctx,
+					  &(*smb_krb5_context)->krb5_context);
 	if (ret) {
 		DEBUG(1,("smb_krb5_context_init_basic failed (%s)\n",
 			 error_message(ret)));
 		talloc_free(tmp_ctx);
 		return ret;
 	}
-	(*smb_krb5_context)->krb5_context = kctx;
 
-	talloc_set_destructor(*smb_krb5_context, smb_krb5_context_destroy);
-
-#ifdef SAMBA4_USES_HEIMDAL
 	/* TODO: Should we have a different name here? */
-	ret = krb5_initlog(kctx, "Samba", &logf);
+	ret = krb5_initlog((*smb_krb5_context)->krb5_context, "Samba", &(*smb_krb5_context)->logf);
 
 	if (ret) {
 		DEBUG(1,("krb5_initlog failed (%s)\n",
-			 smb_get_krb5_error_message(kctx, ret, tmp_ctx)));
+			 smb_get_krb5_error_message((*smb_krb5_context)->krb5_context, ret, tmp_ctx)));
+		krb5_free_context((*smb_krb5_context)->krb5_context);
 		talloc_free(tmp_ctx);
 		return ret;
 	}
-	(*smb_krb5_context)->pvt_log_data = logf;
 
-	ret = krb5_addlog_func(kctx, logf, 0 /* min */, -1 /* max */,
-			       smb_krb5_debug_wrapper,
-				smb_krb5_debug_close, NULL);
+	talloc_set_destructor(*smb_krb5_context, smb_krb5_context_destroy);
+
+	ret = krb5_addlog_func((*smb_krb5_context)->krb5_context, (*smb_krb5_context)->logf, 0 /* min */, -1 /* max */,
+			       smb_krb5_debug_wrapper, smb_krb5_debug_close, NULL);
 	if (ret) {
 		DEBUG(1,("krb5_addlog_func failed (%s)\n",
-			 smb_get_krb5_error_message(kctx, ret, tmp_ctx)));
+			 smb_get_krb5_error_message((*smb_krb5_context)->krb5_context, ret, tmp_ctx)));
 		talloc_free(tmp_ctx);
 		return ret;
 	}
-	krb5_set_warn_dest(kctx, logf);
+	krb5_set_warn_dest((*smb_krb5_context)->krb5_context, (*smb_krb5_context)->logf);
+
+	/* Set use of our socket lib */
+	if (ev) {
+		struct tevent_context *previous_ev;
+		ret = smb_krb5_context_set_event_ctx(*smb_krb5_context,
+						     ev, &previous_ev);
+		if (ret) {
+			talloc_free(tmp_ctx);
+			return ret;
+		}
+	}
+
+	talloc_steal(parent_ctx, *smb_krb5_context);
+	talloc_free(tmp_ctx);
 
 	/* Set options in kerberos */
 
-	krb5_set_dns_canonicalize_hostname(kctx,
-			lpcfg_parm_bool(lp_ctx, NULL, "krb5",
-					"set_dns_canonicalize", false));
-#endif
-	talloc_steal(parent_ctx, *smb_krb5_context);
-	talloc_free(tmp_ctx);
+	krb5_set_dns_canonicalize_hostname((*smb_krb5_context)->krb5_context,
+					   lpcfg_parm_bool(lp_ctx, NULL, "krb5", "set_dns_canonicalize", false));
 
 	return 0;
 }
 
-#ifdef SAMBA4_USES_HEIMDAL
 krb5_error_code smb_krb5_context_set_event_ctx(struct smb_krb5_context *smb_krb5_context,
 					       struct tevent_context *ev,
 					       struct tevent_context **previous_ev)
@@ -649,4 +579,3 @@ krb5_error_code smb_krb5_context_remove_event_ctx(struct smb_krb5_context *smb_k
 	}
 	return 0;
 }
-#endif

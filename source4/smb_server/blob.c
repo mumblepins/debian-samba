@@ -180,7 +180,7 @@ NTSTATUS smbsrv_blob_append_string(TALLOC_CTX *mem_ctx,
 				   int default_flags,
 				   int flags)
 {
-	ssize_t ret;
+	size_t ret;
 	uint32_t offset;
 	const int max_bytes_per_char = 3;
 
@@ -292,26 +292,6 @@ NTSTATUS smbsrv_push_passthru_fsinfo(TALLOC_CTX *mem_ctx,
 
 		return NT_STATUS_OK;
 	}
-
-	case RAW_QFS_SECTOR_SIZE_INFORMATION:
-		BLOB_CHECK(smbsrv_blob_grow_data(mem_ctx, blob, 28));
-		SIVAL(blob->data,  0,
-		      fsinfo->sector_size_info.out.logical_bytes_per_sector);
-		SIVAL(blob->data,  4,
-		     fsinfo->sector_size_info.out.phys_bytes_per_sector_atomic);
-		SIVAL(blob->data,  8,
-		      fsinfo->sector_size_info.out.phys_bytes_per_sector_perf);
-		SIVAL(blob->data, 12,
-		      fsinfo->sector_size_info.out.fs_effective_phys_bytes_per_sector_atomic);
-		SIVAL(blob->data, 16,
-		      fsinfo->sector_size_info.out.flags);
-		SIVAL(blob->data, 20,
-		      fsinfo->sector_size_info.out.byte_off_sector_align);
-		SIVAL(blob->data, 24,
-		      fsinfo->sector_size_info.out.byte_off_partition_align);
-
-		return NT_STATUS_OK;
-
 	default:
 		return NT_STATUS_INVALID_LEVEL;
 	}
@@ -644,12 +624,6 @@ NTSTATUS smbsrv_pull_passthru_sfileinfo(TALLOC_CTX *mem_ctx,
 		st->position_information.in.position = BVAL(blob->data, 0);
 
 		return NT_STATUS_OK;
-
-	case RAW_SFILEINFO_FULL_EA_INFORMATION:
-		return ea_pull_list_chained(blob,
-					    mem_ctx,
-					&st->full_ea_information.in.eas.num_eas,
-					&st->full_ea_information.in.eas.eas);
 
 	case RAW_SFILEINFO_MODE_INFORMATION:
 		BLOB_CHECK_MIN_SIZE(blob, 4);

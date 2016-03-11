@@ -110,7 +110,7 @@ must be defined in the <smbconfsection name="global"/> section of the &smb.conf;
 <indexterm><primary>rights</primary></indexterm>
 <indexterm><primary>privileges</primary></indexterm>
 <indexterm><primary>manage privileges</primary></indexterm>
-Currently, the rights supported in Samba are listed in <link linkend="rp-privs"/>.
+Currently, the rights supported in Samba-3 are listed in <link linkend="rp-privs"/>.
 The remainder of this chapter explains how to manage and use these privileges on Samba servers.
 </para>
 
@@ -333,9 +333,13 @@ mailing lists.
 <indexterm><primary>global right</primary></indexterm>
 <indexterm><primary>administrative rights</primary></indexterm>
 <indexterm><primary>printers admin</primary></indexterm>
-		Administrative rights to printers are only controlled exclusively
-		by this right and the security descriptor associated with the
-		printer object in the registry.
+		This privilege operates identically to the <smbconfoption name="printer admin"/>
+		option in the &smb.conf; file (see section 5 man page for &smb.conf;)
+		except that it is a global right (not on a per-printer basis). 
+		Eventually the smb.conf option will be deprecated and administrative
+		rights to printers will be controlled exclusively by this right and
+		the security descriptor associated with the printer object in the
+		<filename>ntprinters.tdb</filename> file.
 		</para></listitem>
 	</varlistentry>
 

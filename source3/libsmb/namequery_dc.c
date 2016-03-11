@@ -26,7 +26,6 @@
 #include "libads/sitename_cache.h"
 #include "ads.h"
 #include "../librpc/gen_ndr/nbt.h"
-#include "lib/param/loadparm.h"
 
 /**********************************************************************
  Is this our primary domain ?
@@ -64,13 +63,13 @@ static bool ads_dc_name(const char *domain,
 		realm = lp_realm();
 	}
 
-	sitename = sitename_fetch(talloc_tos(), realm);
+	sitename = sitename_fetch(realm);
 
 	/* Try this 3 times then give up. */
 	for( i =0 ; i < 3; i++) {
 		ads = ads_init(realm, domain, NULL);
 		if (!ads) {
-			TALLOC_FREE(sitename);
+			SAFE_FREE(sitename);
 			return False;
 		}
 
@@ -83,7 +82,7 @@ static bool ads_dc_name(const char *domain,
 #endif
 
 		if (!ads->config.realm) {
-			TALLOC_FREE(sitename);
+			SAFE_FREE(sitename);
 			ads_destroy(&ads);
 			return False;
 		}
@@ -93,8 +92,8 @@ static bool ads_dc_name(const char *domain,
 		   to ensure we only find servers in our site. */
 
 		if (stored_sitename_changed(realm, sitename)) {
-			TALLOC_FREE(sitename);
-			sitename = sitename_fetch(talloc_tos(), realm);
+			SAFE_FREE(sitename);
+			sitename = sitename_fetch(realm);
 			ads_destroy(&ads);
 			/* Ensure we don't cache the DC we just connected to. */
 			namecache_delete(realm, 0x1C);
@@ -112,12 +111,14 @@ static bool ads_dc_name(const char *domain,
 				create_local_private_krb5_conf_for_domain(realm,
 									domain,
 									sitename,
-									&ads->ldap.ss);
+									&ads->ldap.ss,
+									ads->config.ldap_server_name);
 			} else {
 				create_local_private_krb5_conf_for_domain(realm,
 									domain,
 									NULL,
-									&ads->ldap.ss);
+									&ads->ldap.ss,
+									ads->config.ldap_server_name);
 			}
 		}
 #endif
@@ -127,18 +128,14 @@ static bool ads_dc_name(const char *domain,
 	if (i == 3) {
 		DEBUG(1,("ads_dc_name: sitename (now \"%s\") keeps changing ???\n",
 			sitename ? sitename : ""));
-		TALLOC_FREE(sitename);
-		ads_destroy(&ads);
+		SAFE_FREE(sitename);
 		return False;
 	}
 
-	TALLOC_FREE(sitename);
+	SAFE_FREE(sitename);
 
 	fstrcpy(srv_name, ads->config.ldap_server_name);
-	if (!strupper_m(srv_name)) {
-		ads_destroy(&ads);
-		return false;
-	}
+	strupper_m(srv_name);
 #ifdef HAVE_ADS
 	*dc_ss = ads->ldap.ss;
 #else

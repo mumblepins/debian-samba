@@ -17,23 +17,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "config.h"
 #include <errno.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <signal.h>
 #include <assert.h>
 #include <fcntl.h>
-#include "system/time.h"
-#include "system/filesys.h"
-#include "replace.h"
+#include <sys/time.h>
 
 #include "pthreadpool.h"
 #include "lib/util/dlinklist.h"
 
 struct pthreadpool_job {
+	struct pthreadpool_job *next;
 	int id;
 	void (*fn)(void *private_data);
 	void *private_data;
@@ -56,13 +55,9 @@ struct pthreadpool {
 	pthread_cond_t condvar;
 
 	/*
-	 * Array of jobs
+	 * List of work jobs
 	 */
-	size_t jobs_array_len;
-	struct pthreadpool_job *jobs;
-
-	size_t head;
-	size_t num_jobs;
+	struct pthreadpool_job *jobs, *last_job;
 
 	/*
 	 * pipe for signalling
@@ -116,21 +111,9 @@ int pthreadpool_init(unsigned max_threads, struct pthreadpool **presult)
 		return ENOMEM;
 	}
 
-	pool->jobs_array_len = 4;
-	pool->jobs = calloc(
-		pool->jobs_array_len, sizeof(struct pthreadpool_job));
-
-	if (pool->jobs == NULL) {
-		free(pool);
-		return ENOMEM;
-	}
-
-	pool->head = pool->num_jobs = 0;
-
 	ret = pipe(pool->sig_pipe);
 	if (ret == -1) {
 		int err = errno;
-		free(pool->jobs);
 		free(pool);
 		return err;
 	}
@@ -139,7 +122,6 @@ int pthreadpool_init(unsigned max_threads, struct pthreadpool **presult)
 	if (ret != 0) {
 		close(pool->sig_pipe[0]);
 		close(pool->sig_pipe[1]);
-		free(pool->jobs);
 		free(pool);
 		return ret;
 	}
@@ -149,12 +131,12 @@ int pthreadpool_init(unsigned max_threads, struct pthreadpool **presult)
 		pthread_mutex_destroy(&pool->mutex);
 		close(pool->sig_pipe[0]);
 		close(pool->sig_pipe[1]);
-		free(pool->jobs);
 		free(pool);
 		return ret;
 	}
 
 	pool->shutdown = 0;
+	pool->jobs = pool->last_job = NULL;
 	pool->num_threads = 0;
 	pool->num_exited = 0;
 	pool->exited = NULL;
@@ -167,7 +149,6 @@ int pthreadpool_init(unsigned max_threads, struct pthreadpool **presult)
 		pthread_mutex_destroy(&pool->mutex);
 		close(pool->sig_pipe[0]);
 		close(pool->sig_pipe[1]);
-		free(pool->jobs);
 		free(pool);
 		return ret;
 	}
@@ -205,11 +186,16 @@ static void pthreadpool_parent(void)
 	int ret;
 	struct pthreadpool *pool;
 
-	for (pool = DLIST_TAIL(pthreadpools);
-	     pool != NULL;
-	     pool = DLIST_PREV(pool)) {
+	pool = DLIST_TAIL(pthreadpools);
+
+	while (1) {
 		ret = pthread_mutex_unlock(&pool->mutex);
 		assert(ret == 0);
+
+		if (pool == pthreadpools) {
+			break;
+		}
+		pool = pool->prev;
 	}
 
 	ret = pthread_mutex_unlock(&pthreadpools_mutex);
@@ -221,10 +207,9 @@ static void pthreadpool_child(void)
 	int ret;
 	struct pthreadpool *pool;
 
-	for (pool = DLIST_TAIL(pthreadpools);
-	     pool != NULL;
-	     pool = DLIST_PREV(pool)) {
+	pool = DLIST_TAIL(pthreadpools);
 
+	while (1) {
 		close(pool->sig_pipe[0]);
 		close(pool->sig_pipe[1]);
 
@@ -238,11 +223,22 @@ static void pthreadpool_child(void)
 		pool->exited = NULL;
 
 		pool->num_idle = 0;
-		pool->head = 0;
-		pool->num_jobs = 0;
+
+		while (pool->jobs != NULL) {
+			struct pthreadpool_job *job;
+			job = pool->jobs;
+			pool->jobs = job->next;
+			free(job);
+		}
+		pool->last_job = NULL;
 
 		ret = pthread_mutex_unlock(&pool->mutex);
 		assert(ret == 0);
+
+		if (pool == pthreadpools) {
+			break;
+		}
+		pool = pool->prev;
 	}
 
 	ret = pthread_mutex_unlock(&pthreadpools_mutex);
@@ -288,26 +284,25 @@ static void pthreadpool_join_children(struct pthreadpool *pool)
  * Fetch a finished job number from the signal pipe
  */
 
-int pthreadpool_finished_jobs(struct pthreadpool *pool, int *jobids,
-			      unsigned num_jobids)
+int pthreadpool_finished_job(struct pthreadpool *pool, int *jobid)
 {
-	ssize_t to_read, nread;
+	int ret_jobid;
+	ssize_t nread;
 
 	nread = -1;
 	errno = EINTR;
 
-	to_read = sizeof(int) * num_jobids;
-
 	while ((nread == -1) && (errno == EINTR)) {
-		nread = read(pool->sig_pipe[0], jobids, to_read);
+		nread = read(pool->sig_pipe[0], &ret_jobid, sizeof(int));
 	}
 	if (nread == -1) {
-		return -errno;
+		return errno;
 	}
-	if ((nread % sizeof(int)) != 0) {
-		return -EINVAL;
+	if (nread != sizeof(int)) {
+		return EINVAL;
 	}
-	return nread / sizeof(int);
+	*jobid = ret_jobid;
+	return 0;
 }
 
 /*
@@ -323,7 +318,7 @@ int pthreadpool_destroy(struct pthreadpool *pool)
 		return ret;
 	}
 
-	if ((pool->num_jobs != 0) || pool->shutdown) {
+	if ((pool->jobs != NULL) || pool->shutdown) {
 		ret = pthread_mutex_unlock(&pool->mutex);
 		assert(ret == 0);
 		return EBUSY;
@@ -338,8 +333,8 @@ int pthreadpool_destroy(struct pthreadpool *pool)
 
 		if (pool->num_idle > 0) {
 			/*
-			 * Wake the idle threads. They will find
-			 * pool->shutdown to be set and exit themselves
+			 * Wake the idle threads. They will find pool->quit to
+			 * be set and exit themselves
 			 */
 			ret = pthread_cond_broadcast(&pool->condvar);
 			if (ret != 0) {
@@ -395,7 +390,6 @@ int pthreadpool_destroy(struct pthreadpool *pool)
 	pool->sig_pipe[1] = -1;
 
 	free(pool->exited);
-	free(pool->jobs);
 	free(pool);
 
 	return 0;
@@ -411,7 +405,7 @@ static void pthreadpool_server_exit(struct pthreadpool *pool)
 	pool->num_threads -= 1;
 
 	exited = (pthread_t *)realloc(
-		pool->exited, sizeof(pthread_t) * (pool->num_exited + 1));
+		pool->exited, sizeof(pthread_t *) * (pool->num_exited + 1));
 
 	if (exited == NULL) {
 		/* lost a thread status */
@@ -421,61 +415,6 @@ static void pthreadpool_server_exit(struct pthreadpool *pool)
 
 	pool->exited[pool->num_exited] = pthread_self();
 	pool->num_exited += 1;
-}
-
-static bool pthreadpool_get_job(struct pthreadpool *p,
-				struct pthreadpool_job *job)
-{
-	if (p->num_jobs == 0) {
-		return false;
-	}
-	*job = p->jobs[p->head];
-	p->head = (p->head+1) % p->jobs_array_len;
-	p->num_jobs -= 1;
-	return true;
-}
-
-static bool pthreadpool_put_job(struct pthreadpool *p,
-				int id,
-				void (*fn)(void *private_data),
-				void *private_data)
-{
-	struct pthreadpool_job *job;
-
-	if (p->num_jobs == p->jobs_array_len) {
-		struct pthreadpool_job *tmp;
-		size_t new_len = p->jobs_array_len * 2;
-
-		tmp = realloc(
-			p->jobs, sizeof(struct pthreadpool_job) * new_len);
-		if (tmp == NULL) {
-			return false;
-		}
-		p->jobs = tmp;
-
-		/*
-		 * We just doubled the jobs array. The array implements a FIFO
-		 * queue with a modulo-based wraparound, so we have to memcpy
-		 * the jobs that are logically at the queue end but physically
-		 * before the queue head into the reallocated area. The new
-		 * space starts at the current jobs_array_len, and we have to
-		 * copy everything before the current head job into the new
-		 * area.
-		 */
-		memcpy(&p->jobs[p->jobs_array_len], p->jobs,
-		       sizeof(struct pthreadpool_job) * p->head);
-
-		p->jobs_array_len = new_len;
-	}
-
-	job = &p->jobs[(p->head + p->num_jobs) % p->jobs_array_len];
-	job->id = id;
-	job->fn = fn;
-	job->private_data = private_data;
-
-	p->num_jobs += 1;
-
-	return true;
 }
 
 static void *pthreadpool_server(void *arg)
@@ -489,18 +428,20 @@ static void *pthreadpool_server(void *arg)
 	}
 
 	while (1) {
+		struct timeval tv;
 		struct timespec ts;
-		struct pthreadpool_job job;
+		struct pthreadpool_job *job;
 
 		/*
 		 * idle-wait at most 1 second. If nothing happens in that
 		 * time, exit this thread.
 		 */
 
-		clock_gettime(CLOCK_REALTIME, &ts);
-		ts.tv_sec += 1;
+		gettimeofday(&tv, NULL);
+		ts.tv_sec = tv.tv_sec + 1;
+		ts.tv_nsec = tv.tv_usec*1000;
 
-		while ((pool->num_jobs == 0) && (pool->shutdown == 0)) {
+		while ((pool->jobs == NULL) && (pool->shutdown == 0)) {
 
 			pool->num_idle += 1;
 			res = pthread_cond_timedwait(
@@ -509,7 +450,7 @@ static void *pthreadpool_server(void *arg)
 
 			if (res == ETIMEDOUT) {
 
-				if (pool->num_jobs == 0) {
+				if (pool->jobs == NULL) {
 					/*
 					 * we timed out and still no work for
 					 * us. Exit.
@@ -524,9 +465,19 @@ static void *pthreadpool_server(void *arg)
 			assert(res == 0);
 		}
 
-		if (pthreadpool_get_job(pool, &job)) {
+		job = pool->jobs;
+
+		if (job != NULL) {
 			ssize_t written;
-			int sig_pipe = pool->sig_pipe[1];
+
+			/*
+			 * Ok, there's work for us to do, remove the job from
+			 * the pthreadpool list
+			 */
+			pool->jobs = job->next;
+			if (pool->last_job == job) {
+				pool->last_job = NULL;
+			}
 
 			/*
 			 * Do the work with the mutex unlocked
@@ -535,12 +486,16 @@ static void *pthreadpool_server(void *arg)
 			res = pthread_mutex_unlock(&pool->mutex);
 			assert(res == 0);
 
-			job.fn(job.private_data);
+			job->fn(job->private_data);
+
+			written = write(pool->sig_pipe[1], &job->id,
+					sizeof(int));
+
+			free(job);
 
 			res = pthread_mutex_lock(&pool->mutex);
 			assert(res == 0);
 
-			written = write(sig_pipe, &job.id, sizeof(job.id));
 			if (written != sizeof(int)) {
 				pthreadpool_server_exit(pool);
 				pthread_mutex_unlock(&pool->mutex);
@@ -548,7 +503,7 @@ static void *pthreadpool_server(void *arg)
 			}
 		}
 
-		if ((pool->num_jobs == 0) && (pool->shutdown != 0)) {
+		if ((pool->jobs == NULL) && (pool->shutdown != 0)) {
 			/*
 			 * No more work to do and we're asked to shut down, so
 			 * exit
@@ -572,12 +527,24 @@ static void *pthreadpool_server(void *arg)
 int pthreadpool_add_job(struct pthreadpool *pool, int job_id,
 			void (*fn)(void *private_data), void *private_data)
 {
+	struct pthreadpool_job *job;
 	pthread_t thread_id;
 	int res;
 	sigset_t mask, omask;
 
+	job = (struct pthreadpool_job *)malloc(sizeof(struct pthreadpool_job));
+	if (job == NULL) {
+		return ENOMEM;
+	}
+
+	job->fn = fn;
+	job->private_data = private_data;
+	job->id = job_id;
+	job->next = NULL;
+
 	res = pthread_mutex_lock(&pool->mutex);
 	if (res != 0) {
+		free(job);
 		return res;
 	}
 
@@ -588,6 +555,7 @@ int pthreadpool_add_job(struct pthreadpool *pool, int job_id,
 		 */
 		res = pthread_mutex_unlock(&pool->mutex);
 		assert(res == 0);
+		free(job);
 		return EINVAL;
 	}
 
@@ -599,10 +567,13 @@ int pthreadpool_add_job(struct pthreadpool *pool, int job_id,
 	/*
 	 * Add job to the end of the queue
 	 */
-	if (!pthreadpool_put_job(pool, job_id, fn, private_data)) {
-		pthread_mutex_unlock(&pool->mutex);
-		return ENOMEM;
+	if (pool->jobs == NULL) {
+		pool->jobs = job;
 	}
+	else {
+		pool->last_job->next = job;
+	}
+	pool->last_job = job;
 
 	if (pool->num_idle > 0) {
 		/*

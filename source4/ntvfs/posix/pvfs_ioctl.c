@@ -21,7 +21,7 @@
 
 #include "includes.h"
 #include "vfs_posix.h"
-#include "../libcli/smb/smb_constants.h"
+#include "libcli/raw/ioctl.h"
 
 /*
   old ioctl interface 

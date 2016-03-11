@@ -27,6 +27,7 @@
 #include "../librpc/gen_ndr/ndr_netlogon_c.h"
 #include "../libds/common/flags.h"
 #include "ads.h"
+#include "secrets.h"
 #include "../libcli/ldap/ldap_ndr.h"
 #include "../libcli/security/security.h"
 #include "../libds/common/flag_mapping.h"
@@ -38,185 +39,6 @@
 #define DBGC_CLASS DBGC_WINBIND
 
 extern struct winbindd_methods reconnect_methods;
-extern struct winbindd_methods msrpc_methods;
-
-#define WINBIND_CCACHE_NAME "MEMORY:winbind_ccache"
-
-/**
- * Check if cached connection can be reused. If the connection cannot
- * be reused the ADS_STRUCT is freed and the pointer is set to NULL.
- */
-static void ads_cached_connection_reuse(ADS_STRUCT **adsp)
-{
-
-	ADS_STRUCT *ads = *adsp;
-
-	if (ads != NULL) {
-		time_t expire;
-		time_t now = time(NULL);
-
-		expire = MIN(ads->auth.tgt_expire, ads->auth.tgs_expire);
-
-		DEBUG(7, ("Current tickets expire in %d seconds (at %d, time "
-			  "is now %d)\n", (uint32_t)expire - (uint32_t)now,
-			  (uint32_t) expire, (uint32_t) now));
-
-		if ( ads->config.realm && (expire > now)) {
-			return;
-		} else {
-			/* we own this ADS_STRUCT so make sure it goes away */
-			DEBUG(7,("Deleting expired krb5 credential cache\n"));
-			ads->is_mine = True;
-			ads_destroy( &ads );
-			ads_kdestroy(WINBIND_CCACHE_NAME);
-			*adsp = NULL;
-		}
-	}
-}
-
-/**
- * @brief Establish a connection to a DC
- *
- * @param[out]   adsp             ADS_STRUCT that will be created
- * @param[in]    target_realm     Realm of domain to connect to
- * @param[in]    target_dom_name  'workgroup' name of domain to connect to
- * @param[in]    ldap_server      DNS name of server to connect to
- * @param[in]    password         Our machine acount secret
- * @param[in]    auth_realm       Realm of local domain for creating krb token
- * @param[in]    renewable        Renewable ticket time
- *
- * @return ADS_STATUS
- */
-static ADS_STATUS ads_cached_connection_connect(ADS_STRUCT **adsp,
-						const char *target_realm,
-						const char *target_dom_name,
-						const char *ldap_server,
-						char *password,
-						char *auth_realm,
-						time_t renewable)
-{
-	ADS_STRUCT *ads;
-	ADS_STATUS status;
-	struct sockaddr_storage dc_ss;
-	fstring dc_name;
-
-	if (auth_realm == NULL) {
-		return ADS_ERROR_NT(NT_STATUS_UNSUCCESSFUL);
-	}
-
-	/* we don't want this to affect the users ccache */
-	setenv("KRB5CCNAME", WINBIND_CCACHE_NAME, 1);
-
-	ads = ads_init(target_realm, target_dom_name, ldap_server);
-	if (!ads) {
-		DEBUG(1,("ads_init for domain %s failed\n", target_dom_name));
-		return ADS_ERROR(LDAP_NO_MEMORY);
-	}
-
-	SAFE_FREE(ads->auth.password);
-	SAFE_FREE(ads->auth.realm);
-
-	ads->auth.renewable = renewable;
-	ads->auth.password = password;
-
-	ads->auth.realm = SMB_STRDUP(auth_realm);
-	if (!strupper_m(ads->auth.realm)) {
-		ads_destroy(&ads);
-		return ADS_ERROR_NT(NT_STATUS_INTERNAL_ERROR);
-	}
-
-	/* Setup the server affinity cache.  We don't reaally care
-	   about the name.  Just setup affinity and the KRB5_CONFIG
-	   file. */
-	get_dc_name(ads->server.workgroup, ads->server.realm, dc_name, &dc_ss);
-
-	status = ads_connect(ads);
-	if (!ADS_ERR_OK(status)) {
-		DEBUG(1,("ads_connect for domain %s failed: %s\n",
-			 target_dom_name, ads_errstr(status)));
-		ads_destroy(&ads);
-		return status;
-	}
-
-	/* set the flag that says we don't own the memory even
-	   though we do so that ads_destroy() won't destroy the
-	   structure we pass back by reference */
-
-	ads->is_mine = False;
-
-	*adsp = ads;
-
-	return status;
-}
-
-ADS_STATUS ads_idmap_cached_connection(ADS_STRUCT **adsp, const char *dom_name)
-{
-	char *ldap_server, *realm, *password;
-	struct winbindd_domain *wb_dom;
-	ADS_STATUS status;
-
-	ads_cached_connection_reuse(adsp);
-	if (*adsp != NULL) {
-		return ADS_SUCCESS;
-	}
-
-	/*
-	 * At this point we only have the NetBIOS domain name.
-	 * Check if we can get server nam and realm from SAF cache
-	 * and the domain list.
-	 */
-	ldap_server = saf_fetch(talloc_tos(), dom_name);
-	DEBUG(10, ("ldap_server from saf cache: '%s'\n",
-		   ldap_server ? ldap_server : ""));
-
-	wb_dom = find_domain_from_name(dom_name);
-	if (wb_dom == NULL) {
-		DEBUG(10, ("could not find domain '%s'\n", dom_name));
-		return ADS_ERROR_NT(NT_STATUS_UNSUCCESSFUL);
-	}
-
-	DEBUG(10, ("find_domain_from_name found realm '%s' for "
-			  " domain '%s'\n", wb_dom->alt_name, dom_name));
-
-	if (!get_trust_pw_clear(dom_name, &password, NULL, NULL)) {
-		TALLOC_FREE(ldap_server);
-		return ADS_ERROR_NT(NT_STATUS_CANT_ACCESS_DOMAIN_INFO);
-	}
-
-	if (IS_DC) {
-		SMB_ASSERT(wb_dom->alt_name != NULL);
-		realm = SMB_STRDUP(wb_dom->alt_name);
-	} else {
-		struct winbindd_domain *our_domain = wb_dom;
-
-		/* always give preference to the alt_name in our
-		   primary domain if possible */
-
-		if (!wb_dom->primary) {
-			our_domain = find_our_domain();
-		}
-
-		if (our_domain->alt_name != NULL) {
-			realm = SMB_STRDUP(our_domain->alt_name);
-		} else {
-			realm = SMB_STRDUP(lp_realm());
-		}
-	}
-
-	status = ads_cached_connection_connect(
-		adsp,			/* Returns ads struct. */
-		wb_dom->alt_name,	/* realm to connect to. */
-		dom_name,		/* 'workgroup' name for ads_init */
-		ldap_server,		/* DNS name to connect to. */
-		password,		/* password for auth realm. */
-		realm,			/* realm used for krb5 ticket. */
-		0);			/* renewable ticket time. */
-
-	SAFE_FREE(realm);
-	TALLOC_FREE(ldap_server);
-
-	return status;
-}
 
 /*
   return our ads connections structure for a domain. We keep the connection
@@ -224,29 +46,65 @@ ADS_STATUS ads_idmap_cached_connection(ADS_STRUCT **adsp, const char *dom_name)
 */
 static ADS_STRUCT *ads_cached_connection(struct winbindd_domain *domain)
 {
+	ADS_STRUCT *ads;
 	ADS_STATUS status;
-	char *password, *realm;
+	fstring dc_name;
+	struct sockaddr_storage dc_ss;
 
 	DEBUG(10,("ads_cached_connection\n"));
-	ads_cached_connection_reuse((ADS_STRUCT **)&domain->private_data);
 
 	if (domain->private_data) {
-		return (ADS_STRUCT *)domain->private_data;
+
+		time_t expire;
+		time_t now = time(NULL);
+
+		/* check for a valid structure */
+		ads = (ADS_STRUCT *)domain->private_data;
+
+		expire = MIN(ads->auth.tgt_expire, ads->auth.tgs_expire);
+
+		DEBUG(7, ("Current tickets expire in %d seconds (at %d, time is now %d)\n",
+			  (uint32)expire-(uint32)now, (uint32) expire, (uint32) now));
+
+		if ( ads->config.realm && (expire > now)) {
+			return ads;
+		} else {
+			/* we own this ADS_STRUCT so make sure it goes away */
+			DEBUG(7,("Deleting expired krb5 credential cache\n"));
+			ads->is_mine = True;
+			ads_destroy( &ads );
+			ads_kdestroy("MEMORY:winbind_ccache");
+			domain->private_data = NULL;
+		}
+	}
+
+	/* we don't want this to affect the users ccache */
+	setenv("KRB5CCNAME", "MEMORY:winbind_ccache", 1);
+
+	ads = ads_init(domain->alt_name, domain->name, NULL);
+	if (!ads) {
+		DEBUG(1,("ads_init for domain %s failed\n", domain->name));
+		return NULL;
 	}
 
 	/* the machine acct password might have change - fetch it every time */
 
-	if (!get_trust_pw_clear(domain->name, &password, NULL, NULL)) {
-		return NULL;
-	}
+	SAFE_FREE(ads->auth.password);
+	SAFE_FREE(ads->auth.realm);
 
 	if ( IS_DC ) {
-		SMB_ASSERT(domain->alt_name != NULL);
-		realm = SMB_STRDUP(domain->alt_name);
+
+		if ( !pdb_get_trusteddom_pw( domain->name, &ads->auth.password, NULL, NULL ) ) {
+			ads_destroy( &ads );
+			return NULL;
+		}
+		ads->auth.realm = SMB_STRDUP( ads->server.realm );
+		strupper_m( ads->auth.realm );
 	}
 	else {
 		struct winbindd_domain *our_domain = domain;
 
+		ads->auth.password = secrets_fetch_machine_password(lp_workgroup(), NULL, NULL);
 
 		/* always give preference to the alt_name in our
 		   primary domain if possible */
@@ -254,22 +112,28 @@ static ADS_STRUCT *ads_cached_connection(struct winbindd_domain *domain)
 		if ( !domain->primary )
 			our_domain = find_our_domain();
 
-		if (our_domain->alt_name != NULL) {
-			realm = SMB_STRDUP( our_domain->alt_name );
+		if ( our_domain->alt_name[0] != '\0' ) {
+			ads->auth.realm = SMB_STRDUP( our_domain->alt_name );
+			strupper_m( ads->auth.realm );
 		}
 		else
-			realm = SMB_STRDUP( lp_realm() );
+			ads->auth.realm = SMB_STRDUP( lp_realm() );
 	}
 
-	status = ads_cached_connection_connect(
-					(ADS_STRUCT **)&domain->private_data,
-					domain->alt_name,
-					domain->name, NULL,
-					password, realm,
-					WINBINDD_PAM_AUTH_KRB5_RENEW_TIME);
-	SAFE_FREE(realm);
+	ads->auth.renewable = WINBINDD_PAM_AUTH_KRB5_RENEW_TIME;
 
-	if (!ADS_ERR_OK(status)) {
+	/* Setup the server affinity cache.  We don't reaally care
+	   about the name.  Just setup affinity and the KRB5_CONFIG
+	   file. */
+
+	get_dc_name( ads->server.workgroup, ads->server.realm, dc_name, &dc_ss );
+
+	status = ads_connect(ads);
+	if (!ADS_ERR_OK(status) || !ads->config.realm) {
+		DEBUG(1,("ads_connect for domain %s failed: %s\n",
+			 domain->name, ads_errstr(status)));
+		ads_destroy(&ads);
+
 		/* if we get ECONNREFUSED then it might be a NT4
                    server, fall back to MSRPC */
 		if (status.error_type == ENUM_ADS_ERROR_SYSTEM &&
@@ -281,13 +145,21 @@ static ADS_STRUCT *ads_cached_connection(struct winbindd_domain *domain)
 		return NULL;
 	}
 
-	return (ADS_STRUCT *)domain->private_data;
+	/* set the flag that says we don't own the memory even
+	   though we do so that ads_destroy() won't destroy the
+	   structure we pass back by reference */
+
+	ads->is_mine = False;
+
+	domain->private_data = (void *)ads;
+	return ads;
 }
+
 
 /* Query display info for a realm. This is the basic user list fn */
 static NTSTATUS query_user_list(struct winbindd_domain *domain,
 			       TALLOC_CTX *mem_ctx,
-			       uint32_t *num_entries,
+			       uint32 *num_entries, 
 			       struct wbint_userinfo **pinfo)
 {
 	ADS_STRUCT *ads = NULL;
@@ -319,9 +191,9 @@ static NTSTATUS query_user_list(struct winbindd_domain *domain,
 	if (!ADS_ERR_OK(rc)) {
 		DEBUG(1,("query_user_list ads_search: %s\n", ads_errstr(rc)));
 		status = ads_ntstatus(rc);
-		goto done;
 	} else if (!res) {
 		DEBUG(1,("query_user_list ads_search returned NULL res\n"));
+
 		goto done;
 	}
 
@@ -331,7 +203,7 @@ static NTSTATUS query_user_list(struct winbindd_domain *domain,
 		goto done;
 	}
 
-	(*pinfo) = talloc_zero_array(mem_ctx, struct wbint_userinfo, count);
+	(*pinfo) = TALLOC_ZERO_ARRAY(mem_ctx, struct wbint_userinfo, count);
 	if (!*pinfo) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
@@ -341,8 +213,8 @@ static NTSTATUS query_user_list(struct winbindd_domain *domain,
 
 	for (msg = ads_first_entry(ads, res); msg; msg = ads_next_entry(ads, msg)) {
 		struct wbint_userinfo *info = &((*pinfo)[count]);
-		uint32_t group;
-		uint32_t atype;
+		uint32 group;
+		uint32 atype;
 
 		if (!ads_pull_uint32(ads, msg, "sAMAccountType", &atype) ||
 		    ds_atype_map(atype) != SID_NAME_USER) {
@@ -351,10 +223,7 @@ static NTSTATUS query_user_list(struct winbindd_domain *domain,
 		}
 
 		info->acct_name = ads_pull_username(ads, mem_ctx, msg);
-		info->full_name = ads_pull_string(ads, mem_ctx, msg, "displayName");
-		if (info->full_name == NULL) {
-			info->full_name = ads_pull_string(ads, mem_ctx, msg, "name");
-		}
+		info->full_name = ads_pull_string(ads, mem_ctx, msg, "name");
 		info->homedir = NULL;
 		info->shell = NULL;
 		info->primary_gid = (gid_t)-1;
@@ -411,7 +280,7 @@ done:
 /* list all domain groups */
 static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wb_acct_info **info)
 {
 	ADS_STRUCT *ads = NULL;
@@ -490,7 +359,7 @@ static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 		goto done;
 	}
 
-	(*info) = talloc_zero_array(mem_ctx, struct wb_acct_info, count);
+	(*info) = TALLOC_ZERO_ARRAY(mem_ctx, struct wb_acct_info, count);
 	if (!*info) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
@@ -501,7 +370,7 @@ static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 	for (msg = ads_first_entry(ads, res); msg; msg = ads_next_entry(ads, msg)) {
 		char *name, *gecos;
 		struct dom_sid sid;
-		uint32_t rid;
+		uint32 rid;
 
 		name = ads_pull_username(ads, mem_ctx, msg);
 		gecos = ads_pull_string(ads, mem_ctx, msg, "name");
@@ -537,7 +406,7 @@ done:
 /* list all domain local groups */
 static NTSTATUS enum_local_groups(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wb_acct_info **info)
 {
 	/*
@@ -564,8 +433,9 @@ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
 			    struct dom_sid *sid,
 			    enum lsa_SidType *type)
 {
-	return msrpc_methods.name_to_sid(domain, mem_ctx, domain_name, name,
-					 flags, sid, type);
+	return reconnect_methods.name_to_sid(domain, mem_ctx,
+					     domain_name, name, flags,
+					     sid, type);
 }
 
 /* convert a domain SID to a user or group name - use rpc methods */
@@ -576,23 +446,23 @@ static NTSTATUS sid_to_name(struct winbindd_domain *domain,
 			    char **name,
 			    enum lsa_SidType *type)
 {
-	return msrpc_methods.sid_to_name(domain, mem_ctx, sid,
-					 domain_name, name, type);
+	return reconnect_methods.sid_to_name(domain, mem_ctx, sid,
+					     domain_name, name, type);
 }
 
 /* convert a list of rids to names - use rpc methods */
 static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 			      TALLOC_CTX *mem_ctx,
 			      const struct dom_sid *sid,
-			      uint32_t *rids,
+			      uint32 *rids,
 			      size_t num_rids,
 			      char **domain_name,
 			      char ***names,
 			      enum lsa_SidType **types)
 {
-	return msrpc_methods.rids_to_names(domain, mem_ctx, sid,
-					   rids, num_rids,
-					   domain_name, names, types);
+	return reconnect_methods.rids_to_names(domain, mem_ctx, sid,
+					       rids, num_rids,
+					       domain_name, names, types);
 }
 
 /* If you are looking for "dn_lookup": Yes, it used to be here!
@@ -613,12 +483,12 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 	LDAPMessage *msg = NULL;
 	char *ldap_exp;
 	char *sidstr;
-	uint32_t group_rid;
+	uint32 group_rid;
 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
 	struct netr_SamInfo3 *user = NULL;
 	gid_t gid = -1;
 	int ret;
-	char *full_name;
+	char *ads_name;
 
 	DEBUG(3,("ads: query_user\n"));
 
@@ -627,7 +497,7 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 
 	/* try netsamlogon cache first */
 
-	if ( (user = netsamlogon_cache_get( mem_ctx, sid )) != NULL )
+	if ( (user = netsamlogon_cache_get( mem_ctx, sid )) != NULL ) 
 	{
 		DEBUG(5,("query_user: Cache lookup succeeded for %s\n", 
 			 sid_string_dbg(sid)));
@@ -644,14 +514,6 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 		info->primary_gid = gid;
 
 		TALLOC_FREE(user);
-
-		if (info->full_name == NULL) {
-			/* this might fail so we dont check the return code */
-			wcache_query_user_fullname(domain,
-						   mem_ctx,
-						   sid,
-						   &info->full_name);
-		}
 
 		return NT_STATUS_OK;
 	}
@@ -730,10 +592,7 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 	 * nss_get_info_cached call. nss_get_info_cached might destroy
 	 * the ads struct, potentially invalidating the ldap message.
 	 */
-	full_name = ads_pull_string(ads, mem_ctx, msg, "displayName");
-	if (full_name == NULL) {
-		full_name = ads_pull_string(ads, mem_ctx, msg, "name");
-	}
+	ads_name = ads_pull_string(ads, mem_ctx, msg, "name");
 
 	ads_msgfree(ads, msg);
 	msg = NULL;
@@ -749,9 +608,9 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 	}
 
 	if (info->full_name == NULL) {
-		info->full_name = full_name;
+		info->full_name = ads_name;
 	} else {
-		TALLOC_FREE(full_name);
+		TALLOC_FREE(ads_name);
 	}
 
 	status = NT_STATUS_OK;
@@ -926,7 +785,7 @@ static NTSTATUS lookup_usergroups_memberof(struct winbindd_domain *domain,
 		goto done;
 	}
 
-	group_sids = talloc_zero_array(mem_ctx, struct dom_sid, num_strings + 1);
+	group_sids = TALLOC_ZERO_ARRAY(mem_ctx, struct dom_sid, num_strings + 1);
 	if (!group_sids) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
@@ -989,7 +848,7 @@ done:
 static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 				  TALLOC_CTX *mem_ctx,
 				  const struct dom_sid *sid,
-				  uint32_t *p_num_groups, struct dom_sid **user_sids)
+				  uint32 *p_num_groups, struct dom_sid **user_sids)
 {
 	ADS_STRUCT *ads = NULL;
 	const char *attrs[] = {"tokenGroups", "primaryGroupID", NULL};
@@ -1000,7 +859,7 @@ static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 	struct dom_sid *sids;
 	int i;
 	struct dom_sid primary_group;
-	uint32_t primary_group_rid;
+	uint32 primary_group_rid;
 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL;
 	uint32_t num_groups = 0;
 
@@ -1125,7 +984,7 @@ static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 		}
 	}
 
-	*p_num_groups = (uint32_t)num_groups;
+	*p_num_groups = (uint32)num_groups;
 	status = (*user_sids != NULL) ? NT_STATUS_OK : NT_STATUS_NO_MEMORY;
 
 	DEBUG(3,("ads lookup_usergroups (tokenGroups) succeeded for sid=%s\n",
@@ -1139,91 +998,13 @@ done:
 /* Lookup aliases a user is member of - use rpc methods */
 static NTSTATUS lookup_useraliases(struct winbindd_domain *domain,
 				   TALLOC_CTX *mem_ctx,
-				   uint32_t num_sids, const struct dom_sid *sids,
-				   uint32_t *num_aliases, uint32_t **alias_rids)
+				   uint32 num_sids, const struct dom_sid *sids,
+				   uint32 *num_aliases, uint32 **alias_rids)
 {
-	return msrpc_methods.lookup_useraliases(domain, mem_ctx, num_sids, sids,
-						num_aliases, alias_rids);
-}
-
-static NTSTATUS add_primary_group_members(
-	ADS_STRUCT *ads, TALLOC_CTX *mem_ctx, uint32_t rid,
-	char ***all_members, size_t *num_all_members)
-{
-	char *filter;
-	NTSTATUS status = NT_STATUS_NO_MEMORY;
-	ADS_STATUS rc;
-	const char *attrs[] = { "dn", NULL };
-	LDAPMessage *res = NULL;
-	LDAPMessage *msg;
-	char **members;
-	size_t num_members;
-	ads_control args;
-
-	filter = talloc_asprintf(
-		mem_ctx, "(&(objectCategory=user)(primaryGroupID=%u))",
-		(unsigned)rid);
-	if (filter == NULL) {
-		goto done;
-	}
-
-	args.control = ADS_EXTENDED_DN_OID;
-	args.val = ADS_EXTENDED_DN_HEX_STRING;
-	args.critical = True;
-
-	rc = ads_do_search_all_args(ads, ads->config.bind_path,
-				    LDAP_SCOPE_SUBTREE, filter, attrs, &args,
-				    &res);
-
-	if (!ADS_ERR_OK(rc)) {
-		status = ads_ntstatus(rc);
-		DEBUG(1,("%s: ads_search: %s\n", __func__, ads_errstr(rc)));
-		goto done;
-	}
-	if (res == NULL) {
-		DEBUG(1,("%s: ads_search returned NULL res\n", __func__));
-		goto done;
-	}
-
-	num_members = ads_count_replies(ads, res);
-
-	DEBUG(10, ("%s: Got %ju primary group members\n", __func__,
-		   (uintmax_t)num_members));
-
-	if (num_members == 0) {
-		status = NT_STATUS_OK;
-		goto done;
-	}
-
-	members = talloc_realloc(mem_ctx, *all_members, char *,
-				 *num_all_members + num_members);
-	if (members == NULL) {
-		DEBUG(1, ("%s: talloc_realloc failed\n", __func__));
-		goto done;
-	}
-	*all_members = members;
-
-	for (msg = ads_first_entry(ads, res); msg != NULL;
-	     msg = ads_next_entry(ads, msg)) {
-		char *dn;
-
-		dn = ads_get_dn(ads, members, msg);
-		if (dn == NULL) {
-			DEBUG(1, ("%s: ads_get_dn failed\n", __func__));
-			continue;
-		}
-
-		members[*num_all_members] = dn;
-		*num_all_members += 1;
-	}
-
-	status = NT_STATUS_OK;
-done:
-	if (res != NULL) {
-		ads_msgfree(ads, res);
-	}
-	TALLOC_FREE(filter);
-	return status;
+	return reconnect_methods.lookup_useraliases(domain, mem_ctx,
+						    num_sids, sids,
+						    num_aliases,
+						    alias_rids);
 }
 
 /*
@@ -1233,9 +1014,9 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
 				const struct dom_sid *group_sid,
 				enum lsa_SidType type,
-				uint32_t *num_names,
+				uint32 *num_names,
 				struct dom_sid **sid_mem, char ***names,
-				uint32_t **name_types)
+				uint32 **name_types)
 {
 	ADS_STATUS rc;
 	ADS_STRUCT *ads = NULL;
@@ -1250,9 +1031,8 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 	char **names_nocache = NULL;
 	enum lsa_SidType *name_types_nocache = NULL;
 	char **domains_nocache = NULL;     /* only needed for rpccli_lsa_lookup_sids */
-	uint32_t num_nocache = 0;
+	uint32 num_nocache = 0;
 	TALLOC_CTX *tmp_ctx = NULL;
-	uint32_t rid;
 
 	DEBUG(10,("ads: lookup_groupmem %s sid=%s\n", domain->name,
 		  sid_string_dbg(group_sid)));
@@ -1263,12 +1043,6 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 	if (!tmp_ctx) {
 		DEBUG(1, ("ads: lookup_groupmem: talloc failed\n"));
 		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	if (!sid_peek_rid(group_sid, &rid)) {
-		DEBUG(1, ("%s: sid_peek_rid failed\n", __func__));
-		status = NT_STATUS_INVALID_PARAMETER;
 		goto done;
 	}
 
@@ -1314,17 +1088,6 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 
 	DEBUG(10, ("ads lookup_groupmem: got %d sids via extended dn call\n", (int)num_members));
 
-	status = add_primary_group_members(ads, mem_ctx, rid,
-					   &members, &num_members);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(10, ("%s: add_primary_group_members failed: %s\n",
-			   __func__, nt_errstr(status)));
-		goto done;
-	}
-
-	DEBUG(10, ("%s: Got %d sids after adding primary group members\n",
-		   __func__, (int)num_members));
-
 	/* Now that we have a list of sids, we need to get the
 	 * lists of names and name_types belonging to these sids.
 	 * even though conceptually not quite clean,  we use the
@@ -1338,10 +1101,10 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 	 * cache. Only the rest is passed to the lsa_lookup_sids call. */
 
 	if (num_members) {
-		(*sid_mem) = talloc_zero_array(mem_ctx, struct dom_sid, num_members);
-		(*names) = talloc_zero_array(mem_ctx, char *, num_members);
-		(*name_types) = talloc_zero_array(mem_ctx, uint32_t, num_members);
-		(sid_mem_nocache) = talloc_zero_array(tmp_ctx, struct dom_sid, num_members);
+		(*sid_mem) = TALLOC_ZERO_ARRAY(mem_ctx, struct dom_sid, num_members);
+		(*names) = TALLOC_ZERO_ARRAY(mem_ctx, char *, num_members);
+		(*name_types) = TALLOC_ZERO_ARRAY(mem_ctx, uint32, num_members);
+		(sid_mem_nocache) = TALLOC_ZERO_ARRAY(tmp_ctx, struct dom_sid, num_members);
 
 		if ((members == NULL) || (*sid_mem == NULL) ||
 		    (*names == NULL) || (*name_types == NULL) ||
@@ -1480,7 +1243,7 @@ done:
 }
 
 /* find the sequence number for a domain */
-static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32_t *seq)
+static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32 *seq)
 {
 	ADS_STRUCT *ads = NULL;
 	ADS_STATUS rc;
@@ -1513,7 +1276,7 @@ static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32_t *seq)
 			ads = (ADS_STRUCT *)domain->private_data;
 			ads->is_mine = True;
 			ads_destroy(&ads);
-			ads_kdestroy(WINBIND_CCACHE_NAME);
+			ads_kdestroy("MEMORY:winbind_ccache");
 			domain->private_data = NULL;
 		}
 	}
@@ -1525,7 +1288,7 @@ static NTSTATUS lockout_policy(struct winbindd_domain *domain,
 			       TALLOC_CTX *mem_ctx,
 			       struct samr_DomInfo12 *policy)
 {
-	return msrpc_methods.lockout_policy(domain, mem_ctx, policy);
+	return reconnect_methods.lockout_policy(domain, mem_ctx, policy);
 }
 
 /* find the password policy of a domain - use rpc methods */
@@ -1533,7 +1296,7 @@ static NTSTATUS password_policy(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
 				struct samr_DomInfo1 *policy)
 {
-	return msrpc_methods.password_policy(domain, mem_ctx, policy);
+	return reconnect_methods.password_policy(domain, mem_ctx, policy);
 }
 
 /* get a list of trusted domains */
@@ -1544,7 +1307,7 @@ static NTSTATUS trusted_domains(struct winbindd_domain *domain,
 	NTSTATUS 		result = NT_STATUS_UNSUCCESSFUL;
 	WERROR werr;
 	int			i;
-	uint32_t		flags;
+	uint32			flags;	
 	struct rpc_pipe_client *cli;
 	int ret_count;
 	struct dcerpc_binding_handle *b;
@@ -1609,7 +1372,7 @@ static NTSTATUS trusted_domains(struct winbindd_domain *domain,
 		 */
 
 		if ((trust->trust_attributes
-		     == LSA_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN) &&
+		     == NETR_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN) &&
 		    !domain->primary )
 		{
 			DEBUG(10,("trusted_domains: Skipping external trusted "
@@ -1621,9 +1384,8 @@ static NTSTATUS trusted_domains(struct winbindd_domain *domain,
 
 		/* add to the trusted domain cache */
 
-		d.name = discard_const_p(char, trust->netbios_name);
-		d.alt_name = discard_const_p(char, trust->dns_name);
-
+		fstrcpy(d.name, trust->netbios_name);
+		fstrcpy(d.alt_name, trust->dns_name);
 		if (trust->sid) {
 			sid_copy(&d.sid, trust->sid);
 		} else {

@@ -26,6 +26,7 @@
 
 #include "includes.h"
 #include "system/filesys.h"
+#include <tdb.h>
 #include "messaging/messaging.h"
 #include "lib/messaging/irpc.h"
 #include "libcli/libcli.h"
@@ -37,26 +38,26 @@ static const struct brlock_ops *ops;
 /*
   set the brl backend ops
 */
-void brlock_set_ops(const struct brlock_ops *new_ops)
+void brl_set_ops(const struct brlock_ops *new_ops)
 {
 	ops = new_ops;
 }
 
 /*
   Open up the brlock database. Close it down using talloc_free(). We
-  need the imessaging_ctx to allow for pending lock notifications.
+  need the messaging_ctx to allow for pending lock notifications.
 */
-struct brl_context *brlock_init(TALLOC_CTX *mem_ctx, struct server_id server, 
+struct brl_context *brl_init(TALLOC_CTX *mem_ctx, struct server_id server, 
 			     struct loadparm_context *lp_ctx,
-			     struct imessaging_context *imessaging_ctx)
+			     struct messaging_context *messaging_ctx)
 {
 	if (ops == NULL) {
 		brl_tdb_init_ops();
 	}
-	return ops->brl_init(mem_ctx, server, lp_ctx, imessaging_ctx);
+	return ops->brl_init(mem_ctx, server, lp_ctx, messaging_ctx);
 }
 
-struct brl_handle *brlock_create_handle(TALLOC_CTX *mem_ctx, struct ntvfs_handle *ntvfs, DATA_BLOB *file_key)
+struct brl_handle *brl_create_handle(TALLOC_CTX *mem_ctx, struct ntvfs_handle *ntvfs, DATA_BLOB *file_key)
 {
 	return ops->brl_create_handle(mem_ctx, ntvfs, file_key);
 }
@@ -68,7 +69,7 @@ struct brl_handle *brlock_create_handle(TALLOC_CTX *mem_ctx, struct ntvfs_handle
   someone else closing an overlapping lock range) a messaging
   notification is sent, identified by the notify_ptr
 */
-NTSTATUS brlock_lock(struct brl_context *brl,
+NTSTATUS brl_lock(struct brl_context *brl,
 		  struct brl_handle *brlh,
 		  uint32_t smbpid,
 		  uint64_t start, uint64_t size, 
@@ -82,7 +83,7 @@ NTSTATUS brlock_lock(struct brl_context *brl,
 /*
  Unlock a range of bytes.
 */
-NTSTATUS brlock_unlock(struct brl_context *brl,
+NTSTATUS brl_unlock(struct brl_context *brl,
 		    struct brl_handle *brlh, 
 		    uint32_t smbpid,
 		    uint64_t start, uint64_t size)
@@ -95,7 +96,7 @@ NTSTATUS brlock_unlock(struct brl_context *brl,
   given up trying to establish a lock or when they have succeeded in
   getting it. In either case they no longer need to be notified.
 */
-NTSTATUS brlock_remove_pending(struct brl_context *brl,
+NTSTATUS brl_remove_pending(struct brl_context *brl,
 			    struct brl_handle *brlh, 
 			    void *notify_ptr)
 {
@@ -106,7 +107,7 @@ NTSTATUS brlock_remove_pending(struct brl_context *brl,
 /*
   Test if we are allowed to perform IO on a region of an open file
 */
-NTSTATUS brlock_locktest(struct brl_context *brl,
+NTSTATUS brl_locktest(struct brl_context *brl,
 		      struct brl_handle *brlh,
 		      uint32_t smbpid, 
 		      uint64_t start, uint64_t size, 
@@ -119,7 +120,7 @@ NTSTATUS brlock_locktest(struct brl_context *brl,
 /*
  Remove any locks associated with a open file.
 */
-NTSTATUS brlock_close(struct brl_context *brl,
+NTSTATUS brl_close(struct brl_context *brl,
 		   struct brl_handle *brlh)
 {
 	return ops->brl_close(brl, brlh);
@@ -128,7 +129,7 @@ NTSTATUS brlock_close(struct brl_context *brl,
 /*
  Get a number of locks associated with a open file.
 */
-NTSTATUS brlock_count(struct brl_context *brl,
+NTSTATUS brl_count(struct brl_context *brl,
 		   struct brl_handle *brlh,
 		   int *count)
 {

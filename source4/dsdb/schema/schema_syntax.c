@@ -209,7 +209,7 @@ static WERROR dsdb_syntax_BOOL_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ctx,
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -229,11 +229,9 @@ static WERROR dsdb_syntax_BOOL_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ctx,
 		blobs[i] = data_blob_talloc(blobs, NULL, 4);
 		W_ERROR_HAVE_NO_MEMORY(blobs[i].data);
 
-		if (in->values[i].length >= 4 &&
-		    strncmp("TRUE", (const char *)in->values[i].data, in->values[i].length) == 0) {
+		if (strcmp("TRUE", (const char *)in->values[i].data) == 0) {
 			SIVAL(blobs[i].data, 0, 0x00000001);
-		} else if (in->values[i].length >= 5 &&
-			   strncmp("FALSE", (const char *)in->values[i].data, in->values[i].length) == 0) {
+		} else if (strcmp("FALSE", (const char *)in->values[i].data) == 0) {
 			SIVAL(blobs[i].data, 0, 0x00000000);
 		} else {
 			return WERR_FOOBAR;
@@ -250,27 +248,22 @@ static WERROR dsdb_syntax_BOOL_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
-		if (in->values[i].length == 0) {
+		int t, f;
+
+		t = strncmp("TRUE",
+			    (const char *)in->values[i].data,
+			    in->values[i].length);
+		f = strncmp("FALSE",
+			    (const char *)in->values[i].data,
+			    in->values[i].length);
+
+		if (t != 0 && f != 0) {
 			return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
 		}
-
-		if (in->values[i].length >= 4 &&
-		    strncmp("TRUE",
-			    (const char *)in->values[i].data,
-			    in->values[i].length) == 0) {
-			continue;
-		}
-		if (in->values[i].length >= 5 &&
-		    strncmp("FALSE",
-			    (const char *)in->values[i].data,
-			    in->values[i].length) == 0) {
-			continue;
-		}
-		return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
 	}
 
 	return WERR_OK;
@@ -325,7 +318,7 @@ static WERROR dsdb_syntax_INT32_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ctx
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -364,7 +357,7 @@ static WERROR dsdb_syntax_INT32_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -452,7 +445,7 @@ static WERROR dsdb_syntax_INT64_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ctx
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -489,7 +482,7 @@ static WERROR dsdb_syntax_INT64_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -557,11 +550,6 @@ static WERROR dsdb_syntax_NTTIME_UTC_drsuapi_to_ldb(const struct dsdb_syntax_ctx
 		}
 
 		v = BVAL(in->value_ctr.values[i].blob->data, 0);
-		if (v == 0) {
-			/* special case for 1601 zero timestamp */
-			out->values[i] = data_blob_string_const("16010101000000.0Z");
-			continue;
-		}
 		v *= 10000000;
 		t = nt_time_to_unix(v);
 
@@ -592,7 +580,7 @@ static WERROR dsdb_syntax_NTTIME_UTC_ldb_to_drsuapi(const struct dsdb_syntax_ctx
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -615,11 +603,6 @@ static WERROR dsdb_syntax_NTTIME_UTC_ldb_to_drsuapi(const struct dsdb_syntax_ctx
 		blobs[i] = data_blob_talloc(blobs, NULL, 8);
 		W_ERROR_HAVE_NO_MEMORY(blobs[i].data);
 
-		if (ldb_val_string_cmp(&in->values[i], "16010101000000.0Z") == 0) {
-			SBVALS(blobs[i].data, 0, 0);
-			continue;
-		}
-
 		t = ldb_string_utc_to_time((const char *)in->values[i].data);
 		unix_to_nt_time(&v, t);
 		v /= 10000000;
@@ -637,7 +620,7 @@ static WERROR dsdb_syntax_NTTIME_UTC_validate_ldb(const struct dsdb_syntax_ctx *
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -650,8 +633,9 @@ static WERROR dsdb_syntax_NTTIME_UTC_validate_ldb(const struct dsdb_syntax_ctx *
 		}
 		memcpy(buf, in->values[i].data, in->values[i].length);
 
+		errno = 0;
 		t = ldb_string_utc_to_time(buf);
-		if (t == 0) {
+		if (errno != 0) {
 			return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
 		}
 
@@ -706,11 +690,6 @@ static WERROR dsdb_syntax_NTTIME_drsuapi_to_ldb(const struct dsdb_syntax_ctx *ct
 		}
 
 		v = BVAL(in->value_ctr.values[i].blob->data, 0);
-		if (v == 0) {
-			/* special case for 1601 zero timestamp */
-			out->values[i] = data_blob_string_const("16010101000000.0Z");
-			continue;
-		}
 		v *= 10000000;
 		t = nt_time_to_unix(v);
 
@@ -733,7 +712,7 @@ static WERROR dsdb_syntax_NTTIME_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ct
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -757,11 +736,6 @@ static WERROR dsdb_syntax_NTTIME_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ct
 		blobs[i] = data_blob_talloc(blobs, NULL, 8);
 		W_ERROR_HAVE_NO_MEMORY(blobs[i].data);
 
-		if (ldb_val_string_cmp(&in->values[i], "16010101000000.0Z") == 0) {
-			SBVALS(blobs[i].data, 0, 0);
-			continue;
-		}
-
 		ret = ldb_val_to_time(&in->values[i], &t);
 		if (ret != LDB_SUCCESS) {
 			return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
@@ -782,7 +756,7 @@ static WERROR dsdb_syntax_NTTIME_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -801,7 +775,7 @@ static WERROR dsdb_syntax_NTTIME_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 		}
 
 		if (attr->rangeUpper) {
-			if ((int32_t)t > (int32_t)*attr->rangeUpper) {
+			if ((int32_t)t > (int32_t)*attr->rangeLower) {
 				return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
 			}
 		}
@@ -836,7 +810,7 @@ static WERROR dsdb_syntax_DATA_BLOB_drsuapi_to_ldb(const struct dsdb_syntax_ctx 
 		}
 
 		out->values[i] = data_blob_dup_talloc(out->values,
-						      *in->value_ctr.values[i].blob);
+						      in->value_ctr.values[i].blob);
 		W_ERROR_HAVE_NO_MEMORY(out->values[i].data);
 	}
 
@@ -853,7 +827,7 @@ static WERROR dsdb_syntax_DATA_BLOB_ldb_to_drsuapi(const struct dsdb_syntax_ctx 
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -870,7 +844,7 @@ static WERROR dsdb_syntax_DATA_BLOB_ldb_to_drsuapi(const struct dsdb_syntax_ctx 
 	for (i=0; i < in->num_values; i++) {
 		out->value_ctr.values[i].blob	= &blobs[i];
 
-		blobs[i] = data_blob_dup_talloc(blobs, in->values[i]);
+		blobs[i] = data_blob_dup_talloc(blobs, &in->values[i]);
 		W_ERROR_HAVE_NO_MEMORY(blobs[i].data);
 	}
 
@@ -882,7 +856,7 @@ static WERROR dsdb_syntax_DATA_BLOB_validate_one_val(const struct dsdb_syntax_ct
 						     const struct ldb_val *val)
 {
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	if (attr->rangeLower) {
@@ -908,7 +882,7 @@ static WERROR dsdb_syntax_DATA_BLOB_validate_ldb(const struct dsdb_syntax_ctx *c
 	WERROR status;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -1054,12 +1028,10 @@ static WERROR _dsdb_syntax_OID_attr_drsuapi_to_ldb(const struct dsdb_syntax_ctx 
 		const char *str;
 
 		if (in->value_ctr.values[i].blob == NULL) {
-			DEBUG(0, ("Attribute has no value\n"));
 			return WERR_FOOBAR;
 		}
 
 		if (in->value_ctr.values[i].blob->length != 4) {
-			DEBUG(0, ("Attribute has a value with 0 length\n"));
 			return WERR_FOOBAR;
 		}
 
@@ -1094,14 +1066,8 @@ static WERROR _dsdb_syntax_OID_oid_drsuapi_to_ldb(const struct dsdb_syntax_ctx *
 						  struct ldb_message_element *out)
 {
 	unsigned int i;
-	const struct dsdb_schema_prefixmap *prefixmap;
 
-	if (ctx->pfm_remote != NULL) {
-		prefixmap = ctx->pfm_remote;
-	} else {
-		prefixmap = ctx->schema->prefixmap;
-	}
-	SMB_ASSERT(prefixmap);
+	SMB_ASSERT(ctx->pfm_remote);
 
 	out->flags	= 0;
 	out->name	= talloc_strdup(mem_ctx, attr->lDAPDisplayName);
@@ -1126,7 +1092,7 @@ static WERROR _dsdb_syntax_OID_oid_drsuapi_to_ldb(const struct dsdb_syntax_ctx *
 
 		attid = IVAL(in->value_ctr.values[i].blob->data, 0);
 
-		status = dsdb_schema_pfm_oid_from_attid(prefixmap, attid,
+		status = dsdb_schema_pfm_oid_from_attid(ctx->pfm_remote, attid,
 							out->values, &oid);
 		if (!W_ERROR_IS_OK(status)) {
 			DEBUG(0,(__location__ ": Error: Unknown ATTID 0x%08X\n",
@@ -1266,7 +1232,6 @@ static WERROR _dsdb_syntax_OID_attr_ldb_to_drsuapi(const struct dsdb_syntax_ctx 
 
 		obj_attr = dsdb_attribute_by_lDAPDisplayName(ctx->schema, (const char *)in->values[i].data);
 		if (!obj_attr) {
-			DEBUG(0, ("Unable to find attribute %s in the schema\n", (const char *)in->values[i].data));
 			return WERR_FOOBAR;
 		}
 		SIVAL(blobs[i].data, 0, obj_attr->attributeID_id);
@@ -1369,7 +1334,7 @@ static WERROR dsdb_syntax_OID_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ctx,
 					     struct drsuapi_DsReplicaAttribute *out)
 {
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	switch (attr->attributeID_id) {
@@ -1414,11 +1379,6 @@ static WERROR _dsdb_syntax_OID_validate_numericoid(const struct dsdb_syntax_ctx 
 		char *oid_out;
 		const char *oid = (const char*)in->values[i].data;
 
-		if (in->values[i].length == 0) {
-			talloc_free(tmp_ctx);
-			return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
-		}
-
 		if (!ber_write_OID_String(tmp_ctx, &blob, oid)) {
 			DEBUG(0,("ber_write_OID_String() failed for %s\n", oid));
 			talloc_free(tmp_ctx);
@@ -1452,7 +1412,7 @@ static WERROR dsdb_syntax_OID_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 	TALLOC_CTX *tmp_ctx;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	switch (attr->attributeID_id) {
@@ -1510,7 +1470,6 @@ static WERROR dsdb_syntax_UNICODE_drsuapi_to_ldb(const struct dsdb_syntax_ctx *c
 	W_ERROR_HAVE_NO_MEMORY(out->values);
 
 	for (i=0; i < out->num_values; i++) {
-		size_t converted_size = 0;
 		char *str;
 
 		if (in->value_ctr.values[i].blob == NULL) {
@@ -1525,11 +1484,11 @@ static WERROR dsdb_syntax_UNICODE_drsuapi_to_ldb(const struct dsdb_syntax_ctx *c
 					   CH_UTF16, CH_UNIX,
 					   in->value_ctr.values[i].blob->data,
 					   in->value_ctr.values[i].blob->length,
-					   (void **)&str, &converted_size)) {
+					   (void **)&str, NULL, false)) {
 			return WERR_FOOBAR;
 		}
 
-		out->values[i] = data_blob_const(str, converted_size);
+		out->values[i] = data_blob_string_const(str);
 	}
 
 	return WERR_OK;
@@ -1545,7 +1504,7 @@ static WERROR dsdb_syntax_UNICODE_ldb_to_drsuapi(const struct dsdb_syntax_ctx *c
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -1565,7 +1524,7 @@ static WERROR dsdb_syntax_UNICODE_ldb_to_drsuapi(const struct dsdb_syntax_ctx *c
 		if (!convert_string_talloc(blobs,
 					   CH_UNIX, CH_UTF16,
 					   in->values[i].data, in->values[i].length,
-					   (void **)&blobs[i].data, &blobs[i].length)) {
+					   (void **)&blobs[i].data, &blobs[i].length, false)) {
 			return WERR_FOOBAR;
 		}
 	}
@@ -1582,7 +1541,7 @@ static WERROR dsdb_syntax_UNICODE_validate_one_val(const struct dsdb_syntax_ctx 
 	bool ok;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	ok = convert_string_talloc(ctx->ldb,
@@ -1590,7 +1549,7 @@ static WERROR dsdb_syntax_UNICODE_validate_one_val(const struct dsdb_syntax_ctx 
 				   val->data,
 				   val->length,
 				   (void **)&dst,
-				   &size);
+				   &size, false);
 	TALLOC_FREE(dst);
 	if (!ok) {
 		return WERR_DS_INVALID_ATTRIBUTE_SYNTAX;
@@ -1619,7 +1578,7 @@ static WERROR dsdb_syntax_UNICODE_validate_ldb(const struct dsdb_syntax_ctx *ctx
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -1758,7 +1717,7 @@ static WERROR dsdb_syntax_DN_ldb_to_drsuapi(const struct dsdb_syntax_ctx *ctx,
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -1840,7 +1799,7 @@ static WERROR dsdb_syntax_DN_validate_one_val(const struct dsdb_syntax_ctx *ctx,
 	W_ERROR_HAVE_NO_MEMORY(tmp_ctx);
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	dsdb_dn = dsdb_dn_parse(tmp_ctx, ctx->ldb, val,
@@ -1923,7 +1882,7 @@ static WERROR dsdb_syntax_DN_validate_ldb(const struct dsdb_syntax_ctx *ctx,
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -2009,20 +1968,19 @@ static WERROR dsdb_syntax_DN_BINARY_drsuapi_to_ldb(const struct dsdb_syntax_ctx 
 			W_ERROR_HAVE_NO_MEMORY(dn);
 		}
 
-		if (!GUID_all_zero(&id3.guid)) {
-			status = GUID_to_ndr_blob(&id3.guid, tmp_ctx, &guid_blob);
-			if (!NT_STATUS_IS_OK(status)) {
-				talloc_free(tmp_ctx);
-				return ntstatus_to_werror(status);
-			}
-
-			ret = ldb_dn_set_extended_component(dn, "GUID", &guid_blob);
-			if (ret != LDB_SUCCESS) {
-				talloc_free(tmp_ctx);
-				return WERR_FOOBAR;
-			}
-			talloc_free(guid_blob.data);
+		status = GUID_to_ndr_blob(&id3.guid, tmp_ctx, &guid_blob);
+		if (!NT_STATUS_IS_OK(status)) {
+			talloc_free(tmp_ctx);
+			return ntstatus_to_werror(status);
 		}
+
+		ret = ldb_dn_set_extended_component(dn, "GUID", &guid_blob);
+		if (ret != LDB_SUCCESS) {
+			talloc_free(tmp_ctx);
+			return WERR_FOOBAR;
+		}
+
+		talloc_free(guid_blob.data);
 
 		if (id3.__ndr_size_sid) {
 			DATA_BLOB sid_blob;
@@ -2065,7 +2023,7 @@ static WERROR dsdb_syntax_DN_BINARY_ldb_to_drsuapi(const struct dsdb_syntax_ctx 
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -2144,7 +2102,7 @@ static WERROR dsdb_syntax_DN_BINARY_validate_ldb(const struct dsdb_syntax_ctx *c
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -2214,7 +2172,7 @@ static WERROR dsdb_syntax_DN_STRING_validate_ldb(const struct dsdb_syntax_ctx *c
 	unsigned int i;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	for (i=0; i < in->num_values; i++) {
@@ -2269,7 +2227,6 @@ static WERROR dsdb_syntax_PRESENTATION_ADDRESS_drsuapi_to_ldb(const struct dsdb_
 
 	for (i=0; i < out->num_values; i++) {
 		size_t len;
-		size_t converted_size = 0;
 		char *str;
 
 		if (in->value_ctr.values[i].blob == NULL) {
@@ -2289,7 +2246,7 @@ static WERROR dsdb_syntax_PRESENTATION_ADDRESS_drsuapi_to_ldb(const struct dsdb_
 		if (!convert_string_talloc(out->values, CH_UTF16, CH_UNIX,
 					   in->value_ctr.values[i].blob->data+4,
 					   in->value_ctr.values[i].blob->length-4,
-					   (void **)&str, &converted_size)) {
+					   (void **)&str, NULL, false)) {
 			return WERR_FOOBAR;
 		}
 
@@ -2309,7 +2266,7 @@ static WERROR dsdb_syntax_PRESENTATION_ADDRESS_ldb_to_drsuapi(const struct dsdb_
 	DATA_BLOB *blobs;
 
 	if (attr->attributeID_id == DRSUAPI_ATTID_INVALID) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	out->attid			= dsdb_attribute_get_attid(attr,
@@ -2332,7 +2289,7 @@ static WERROR dsdb_syntax_PRESENTATION_ADDRESS_ldb_to_drsuapi(const struct dsdb_
 		if (!convert_string_talloc(blobs, CH_UNIX, CH_UTF16,
 					   in->values[i].data,
 					   in->values[i].length,
-					   (void **)&data, &ret)) {
+					   (void **)&data, &ret, false)) {
 			return WERR_FOOBAR;
 		}
 
@@ -2371,8 +2328,7 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.ldb_to_drsuapi		= dsdb_syntax_BOOL_ldb_to_drsuapi,
 		.validate_ldb		= dsdb_syntax_BOOL_validate_ldb,
 		.equality               = "booleanMatch",
-		.comment                = "Boolean",
-		.auto_normalise		= true
+		.comment                = "Boolean"
 	},{
 		.name			= "Integer",
 		.ldap_oid		= LDB_SYNTAX_INTEGER,
@@ -2383,8 +2339,7 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.validate_ldb		= dsdb_syntax_INT32_validate_ldb,
 		.equality               = "integerMatch",
 		.comment                = "Integer",
-		.ldb_syntax		= LDB_SYNTAX_SAMBA_INT32,
-		.auto_normalise		= true
+		.ldb_syntax		= LDB_SYNTAX_SAMBA_INT32
 	},{
 		.name			= "String(Octet)",
 		.ldap_oid		= LDB_SYNTAX_OCTET_STRING,
@@ -2395,7 +2350,6 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.validate_ldb		= dsdb_syntax_DATA_BLOB_validate_ldb,
 		.equality               = "octetStringMatch",
 		.comment                = "Octet String",
-		.userParameters         = true
 	},{
 		.name			= "String(Sid)",
 		.ldap_oid		= LDB_SYNTAX_OCTET_STRING,
@@ -2426,8 +2380,7 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.drsuapi_to_ldb		= dsdb_syntax_INT32_drsuapi_to_ldb,
 		.ldb_to_drsuapi		= dsdb_syntax_INT32_ldb_to_drsuapi,
 		.validate_ldb		= dsdb_syntax_INT32_validate_ldb,
-		.ldb_syntax		= LDB_SYNTAX_SAMBA_INT32,
-		.auto_normalise		= true
+		.ldb_syntax		= LDB_SYNTAX_SAMBA_INT32
 	},{
 	/* not used in w2k3 forest */
 		.name			= "String(Numeric)",
@@ -2483,7 +2436,6 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.validate_ldb		= dsdb_syntax_NTTIME_UTC_validate_ldb,
 		.equality               = "generalizedTimeMatch",
 		.comment                = "UTC Time",
-		.auto_normalise		= true
 	},{
 		.name			= "String(Generalized-Time)",
 		.ldap_oid		= "1.3.6.1.4.1.1466.115.121.1.24",
@@ -2494,7 +2446,7 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.validate_ldb		= dsdb_syntax_NTTIME_validate_ldb,
 		.equality               = "generalizedTimeMatch",
 		.comment                = "Generalized Time",
-		.auto_normalise		= true
+		.ldb_syntax             = LDB_SYNTAX_UTC_TIME,
 	},{
 	/* not used in w2k3 schema */
 		.name			= "String(Case Sensitive)",
@@ -2533,7 +2485,6 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 		.equality               = "integerMatch",
 		.comment                = "Large Integer",
 		.ldb_syntax             = LDB_SYNTAX_INTEGER,
-		.auto_normalise		= true
 	},{
 		.name			= "String(NT-Sec-Desc)",
 		.ldap_oid		= LDB_SYNTAX_SAMBA_SECURITY_DESCRIPTOR,
@@ -2605,7 +2556,7 @@ static const struct dsdb_syntax dsdb_syntaxes[] = {
 	},{
 	/* not used in w2k3 schema */
 		.name			= "Object(Access-Point)",
-		.ldap_oid		= DSDB_SYNTAX_ACCESS_POINT,
+		.ldap_oid		= "1.3.6.1.4.1.1466.115.121.1.2",
 		.oMSyntax		= 127,
 		.oMObjectClass		= OMOBJECTCLASS("\x2b\x0c\x02\x87\x73\x1c\x00\x85\x3e"),
 		.attributeSyntax_oid	= "2.5.5.14",
@@ -2666,16 +2617,6 @@ const struct dsdb_syntax *dsdb_syntax_for_attribute(const struct dsdb_attribute 
 	unsigned int i;
 
 	for (i=0; i < ARRAY_SIZE(dsdb_syntaxes); i++) {
-		/*
-		 * We must pretend that userParamters was declared
-		 * binary string, so we can store the 'UTF16' (not
-		 * really string) structure as given over SAMR to samba
-		 */
-		if (dsdb_syntaxes[i].userParameters &&
-		    (strcasecmp(attr->lDAPDisplayName, "userParameters") == 0))
-		{
-			return &dsdb_syntaxes[i];
-		}
 		if (attr->oMSyntax != dsdb_syntaxes[i].oMSyntax) continue;
 
 		if (attr->oMObjectClass.length != dsdb_syntaxes[i].oMObjectClass.length) continue;
@@ -2717,7 +2658,7 @@ WERROR dsdb_attribute_drsuapi_to_ldb(struct ldb_context *ldb,
 		if (!dsdb_syntax_attid_from_remote_attid(&syntax_ctx, mem_ctx, in->attid, &attid_local)) {
 			DEBUG(0,(__location__ ": Can't find local ATTID for 0x%08X\n",
 				 in->attid));
-			return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+			return WERR_FOOBAR;
 		}
 		break;
 	case DSDB_ATTID_TYPE_INTID:
@@ -2734,7 +2675,7 @@ WERROR dsdb_attribute_drsuapi_to_ldb(struct ldb_context *ldb,
 	sa = dsdb_attribute_by_attributeID_id(schema, attid_local);
 	if (!sa) {
 		DEBUG(1,(__location__ ": Unknown attributeID_id 0x%08X\n", in->attid));
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	return sa->syntax->drsuapi_to_ldb(&syntax_ctx, sa, in, mem_ctx, out);
@@ -2751,7 +2692,7 @@ WERROR dsdb_attribute_ldb_to_drsuapi(struct ldb_context *ldb,
 
 	sa = dsdb_attribute_by_lDAPDisplayName(schema, in->name);
 	if (!sa) {
-		return WERR_DS_ATT_NOT_DEF_IN_SCHEMA;
+		return WERR_FOOBAR;
 	}
 
 	/* use default syntax conversion context */

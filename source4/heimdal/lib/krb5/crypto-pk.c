@@ -110,7 +110,7 @@ encode_uvinfo(krb5_context context, krb5_const_principal p, krb5_data *data)
 {
     KRB5PrincipalName pn;
     krb5_error_code ret;
-    size_t size = 0;
+    size_t size;
 
     pn.principalName = p->name;
     pn.realm = p->realm;
@@ -143,7 +143,7 @@ encode_otherinfo(krb5_context context,
     PkinitSuppPubInfo pubinfo;
     krb5_error_code ret;
     krb5_data pub;
-    size_t size = 0;
+    size_t size;
 
     krb5_data_zero(other);
     memset(&otherinfo, 0, sizeof(otherinfo));
@@ -192,8 +192,6 @@ encode_otherinfo(krb5_context context,
     return 0;
 }
 
-
-
 krb5_error_code
 _krb5_pk_kdf(krb5_context context,
 	     const struct AlgorithmIdentifier *ai,
@@ -213,17 +211,10 @@ _krb5_pk_kdf(krb5_context context,
     size_t keylen, offset;
     uint32_t counter;
     unsigned char *keydata;
-    unsigned char shaoutput[SHA512_DIGEST_LENGTH];
-    const EVP_MD *md;
+    unsigned char shaoutput[SHA_DIGEST_LENGTH];
     EVP_MD_CTX *m;
 
-    if (der_heim_oid_cmp(&asn1_oid_id_pkinit_kdf_ah_sha1, &ai->algorithm) == 0) {
-        md = EVP_sha1();
-    } else if (der_heim_oid_cmp(&asn1_oid_id_pkinit_kdf_ah_sha256, &ai->algorithm) == 0) {
-        md = EVP_sha256();
-    } else if (der_heim_oid_cmp(&asn1_oid_id_pkinit_kdf_ah_sha512, &ai->algorithm) == 0) {
-        md = EVP_sha512();
-    } else {
+    if (der_heim_oid_cmp(&asn1_oid_id_pkinit_kdf_ah_sha1, &ai->algorithm) != 0) {
 	krb5_set_error_message(context, KRB5_PROG_ETYPE_NOSUPP,
 			       N_("KDF not supported", ""));
 	return KRB5_PROG_ETYPE_NOSUPP;
@@ -273,7 +264,7 @@ _krb5_pk_kdf(krb5_context context,
     do {
 	unsigned char cdata[4];
 
-	EVP_DigestInit_ex(m, md, NULL);
+	EVP_DigestInit_ex(m, EVP_sha1(), NULL);
 	_krb5_put_int(cdata, counter, 4);
 	EVP_DigestUpdate(m, cdata, 4);
 	EVP_DigestUpdate(m, dhdata, dhsize);
@@ -283,9 +274,9 @@ _krb5_pk_kdf(krb5_context context,
 
 	memcpy((unsigned char *)keydata + offset,
 	       shaoutput,
-	       min(keylen - offset, EVP_MD_CTX_size(m)));
+	       min(keylen - offset, sizeof(shaoutput)));
 
-	offset += EVP_MD_CTX_size(m);
+	offset += sizeof(shaoutput);
 	counter++;
     } while(offset < keylen);
     memset(shaoutput, 0, sizeof(shaoutput));

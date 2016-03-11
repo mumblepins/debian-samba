@@ -24,7 +24,7 @@
 #include "system/filesys.h"
 #include "nmbd/nmbd.h"
 
-uint16_t samba_nb_type = 0; /* samba's NetBIOS name type */
+uint16 samba_nb_type = 0; /* samba's NetBIOS name type */
 
 
 /**************************************************************************
@@ -33,7 +33,7 @@ uint16_t samba_nb_type = 0; /* samba's NetBIOS name type */
 
 void set_samba_nb_type(void)
 {
-	if( lp_we_are_a_wins_server() || wins_srv_count() ) {
+	if( lp_wins_support() || wins_srv_count() ) {
 		samba_nb_type = NB_HFLAG;               /* samba is a 'hybrid' node type. */
 	} else {
 		samba_nb_type = NB_BFLAG;           /* samba is broadcast-only node type. */
@@ -44,7 +44,7 @@ void set_samba_nb_type(void)
  Convert a NetBIOS name to upper case.
 ***************************************************************************/
 
-static bool upcase_name( struct nmb_name *target, const struct nmb_name *source )
+static void upcase_name( struct nmb_name *target, const struct nmb_name *source )
 {
 	int i;
 	unstring targ;
@@ -55,15 +55,11 @@ static bool upcase_name( struct nmb_name *target, const struct nmb_name *source 
 	}
 
 	pull_ascii_nstring(targ, sizeof(targ), target->name);
-	if (!strupper_m( targ )) {
-		return false;
-	}
+	strupper_m( targ );
 	push_ascii_nstring( target->name, targ);
 
 	pull_ascii(scope, target->scope, 64, -1, STR_TERMINATE);
-	if (!strupper_m( scope )) {
-		return false;
-	}
+	strupper_m( scope );
 	push_ascii(target->scope, scope, 64, STR_TERMINATE);
 
 	/* fudge... We're using a byte-by-byte compare, so we must be sure that
@@ -76,7 +72,6 @@ static bool upcase_name( struct nmb_name *target, const struct nmb_name *source 
 	for( i = strlen( target->scope ); i < sizeof( target->scope ); i++ ) {
 		target->scope[i] = '\0';
 	}
-	return true;
 }
 
 /**************************************************************************
@@ -109,9 +104,7 @@ struct name_record *find_name_on_subnet(struct subnet_record *subrec,
 	struct nmb_name uc_name;
 	struct name_record *name_ret;
 
-	if (!upcase_name( &uc_name, nmbname )) {
-		return NULL;
-	}
+	upcase_name( &uc_name, nmbname );
 	
 	if (subrec == wins_server_subnet) {
 		return find_name_on_wins_subnet(&uc_name, self_only);
@@ -191,7 +184,7 @@ void update_name_ttl( struct name_record *namerec, int ttl )
 bool add_name_to_subnet( struct subnet_record *subrec,
 			const char *name,
 			int type,
-			uint16_t nb_flags,
+			uint16 nb_flags,
 			int ttl,
 			enum name_source source,
 			int num_ips,
@@ -223,11 +216,7 @@ bool add_name_to_subnet( struct subnet_record *subrec,
 	namerec->subnet = subrec;
 
 	make_nmb_name(&namerec->name, name, type);
-	if (!upcase_name(&namerec->name, NULL )) {
-		SAFE_FREE(namerec->data.ip);
-		SAFE_FREE(namerec);
-		return False;
-	}
+	upcase_name(&namerec->name, NULL );
 
 	/* Enter the name as active. */
 	namerec->data.nb_flags = nb_flags | NB_ACTIVE;
@@ -286,7 +275,7 @@ ttl=%d nb_flags=%2x to subnet %s\n",
 
 void standard_success_register(struct subnet_record *subrec, 
                              struct userdata_struct *userdata,
-                             struct nmb_name *nmbname, uint16_t nb_flags, int ttl,
+                             struct nmb_name *nmbname, uint16 nb_flags, int ttl,
                              struct in_addr registered_ip)
 {
 	struct name_record *namerec;
@@ -642,24 +631,17 @@ static void dump_subnet_namelist( struct subnet_record *subrec, XFILE *fp)
 
 void dump_all_namelists(void)
 {
-	XFILE *fp;
+	XFILE *fp; 
 	struct subnet_record *subrec;
-	char *dump_path;
 
-	dump_path = lock_path("namelist.debug");
-	if (dump_path == NULL) {
-		DEBUG(0, ("out of memory!\n"));
-		return;
-	}
-
-	fp = x_fopen(dump_path, (O_WRONLY | O_CREAT | O_TRUNC), 0644);
-	TALLOC_FREE(dump_path);
-	if (!fp) {
+	fp = x_fopen(lock_path("namelist.debug"),O_WRONLY|O_CREAT|O_TRUNC, 0644);
+     
+	if (!fp) { 
 		DEBUG(0,("dump_all_namelists: Can't open file %s. Error was %s\n",
 			"namelist.debug",strerror(errno)));
 		return;
 	}
-
+      
 	for (subrec = FIRST_SUBNET; subrec; subrec = NEXT_SUBNET_INCLUDING_UNICAST(subrec)) {
 		dump_subnet_namelist( subrec, fp );
 	}

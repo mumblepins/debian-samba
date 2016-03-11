@@ -735,7 +735,6 @@ struct libnet_BecomeDC_state {
 	struct libnet_BecomeDC_Callbacks callbacks;
 
 	bool rodc_join;
-	bool critical_only;
 };
 
 static int32_t get_dc_function_level(struct loadparm_context *lp_ctx)
@@ -770,15 +769,15 @@ static void becomeDC_send_cldap(struct libnet_BecomeDC_state *s)
 						lpcfg_cldap_port(s->libnet->lp_ctx),
 						&dest_address);
 	if (ret != 0) {
-		c->status = map_nt_error_from_unix_common(errno);
+		c->status = map_nt_error_from_unix(errno);
 		if (!composite_is_ok(c)) return;
 	}
 
-	c->status = cldap_socket_init(s, NULL, dest_address, &s->cldap.sock);
+	c->status = cldap_socket_init(s, s->libnet->event_ctx,
+				      NULL, dest_address, &s->cldap.sock);
 	if (!composite_is_ok(c)) return;
 
-	req = cldap_netlogon_send(s, s->libnet->event_ctx,
-				  s->cldap.sock, &s->cldap.io);
+	req = cldap_netlogon_send(s, s->cldap.sock, &s->cldap.io);
 	if (composite_nomem(req, c)) return;
 	tevent_req_set_callback(req, becomeDC_recv_cldap, s);
 }
@@ -1047,17 +1046,11 @@ static NTSTATUS becomeDC_ldap1_infrastructure_fsmo(struct libnet_BecomeDC_state 
 				DS_GUID_INFRASTRUCTURE_CONTAINER,
 				&basedn);
 	if (ret != LDB_SUCCESS) {
-		DEBUG(0,("Failed to get well known DN for DS_GUID_INFRASTRUCTURE_CONTAINER on %s: %s\n", 
-			 ldb_dn_get_linearized(ldb_get_default_basedn(s->ldap1.ldb)), 
-			 ldb_errstring(s->ldap1.ldb)));
 		return NT_STATUS_LDAP(ret);
 	}
 
 	ret = samdb_reference_dn(s->ldap1.ldb, s, basedn, "fSMORoleOwner", &ntds_dn);
 	if (ret != LDB_SUCCESS) {
-		DEBUG(0,("Failed to get reference DN from fsmoRoleOwner on %s: %s\n", 
-			 ldb_dn_get_linearized(basedn), 
-			 ldb_errstring(s->ldap1.ldb)));
 		talloc_free(basedn);
 		return NT_STATUS_LDAP(ret);
 	}
@@ -1074,9 +1067,6 @@ static NTSTATUS becomeDC_ldap1_infrastructure_fsmo(struct libnet_BecomeDC_state 
 	ret = ldb_search(s->ldap1.ldb, s, &r, server_dn, LDB_SCOPE_BASE,
 			 dns_attrs, "(objectClass=*)");
 	if (ret != LDB_SUCCESS) {
-		DEBUG(0,("Failed to get server DN %s: %s\n", 
-			 ldb_dn_get_linearized(server_dn), 
-			 ldb_errstring(s->ldap1.ldb)));
 		return NT_STATUS_LDAP(ret);
 	} else if (r->count != 1) {
 		talloc_free(r);
@@ -1089,13 +1079,9 @@ static NTSTATUS becomeDC_ldap1_infrastructure_fsmo(struct libnet_BecomeDC_state 
 
 	talloc_free(r);
 
-	ldb_dn_remove_extended_components(ntds_dn);
 	ret = ldb_search(s->ldap1.ldb, s, &r, ntds_dn, LDB_SCOPE_BASE,
 			 guid_attrs, "(objectClass=*)");
 	if (ret != LDB_SUCCESS) {
-		DEBUG(0,("Failed to get NTDS Settings DN %s: %s\n", 
-			 ldb_dn_get_linearized(ntds_dn), 
-			 ldb_errstring(s->ldap1.ldb)));
 		return NT_STATUS_LDAP(ret);
 	} else if (r->count != 1) {
 		talloc_free(r);
@@ -1573,20 +1559,12 @@ static void becomeDC_drsuapi_connect_send(struct libnet_BecomeDC_state *s,
 		{
 			print_str = "print,";
 		}
-		binding_str = talloc_asprintf(s, "ncacn_ip_tcp:%s[%s%sseal,target_hostname=%s]",
-					      s->source_dsa.address,
-					      krb5_str, print_str,
-					      s->source_dsa.dns_name);
+		binding_str = talloc_asprintf(s, "ncacn_ip_tcp:%s[%s%sseal]",
+					      s->source_dsa.dns_name,
+					      krb5_str, print_str);
 		if (composite_nomem(binding_str, c)) return;
 		c->status = dcerpc_parse_binding(s, binding_str, &drsuapi->binding);
 		talloc_free(binding_str);
-		if (!composite_is_ok(c)) return;
-	}
-
-	if (DEBUGLEVEL >= 10) {
-		c->status = dcerpc_binding_set_flags(drsuapi->binding,
-						     DCERPC_DEBUG_PRINT_BOTH,
-						     0);
 		if (!composite_is_ok(c)) return;
 	}
 
@@ -1613,7 +1591,6 @@ static void becomeDC_drsuapi1_connect_recv(struct composite_context *req)
 	s->drsuapi1.drsuapi_handle = s->drsuapi1.pipe->binding_handle;
 
 	c->status = gensec_session_key(s->drsuapi1.pipe->conn->security_state.generic_state,
-				       s,
 				       &s->drsuapi1.gensec_skey);
 	if (!composite_is_ok(c)) return;
 
@@ -1703,19 +1680,6 @@ static WERROR becomeDC_drsuapi_bind_recv(struct libnet_BecomeDC_state *s,
 			drsuapi->remote_info28.repl_epoch		= 0;
 			break;
 		}
-		case 28: {
-			drsuapi->remote_info28 = drsuapi->bind_r.out.bind_info->info.info28;
-			break;
-		}
-		case 32: {
-			struct drsuapi_DsBindInfo32 *info32;
-			info32 = &drsuapi->bind_r.out.bind_info->info.info32;
-			drsuapi->remote_info28.supported_extensions	= info32->supported_extensions;
-			drsuapi->remote_info28.site_guid		= info32->site_guid;
-			drsuapi->remote_info28.pid			= info32->pid;
-			drsuapi->remote_info28.repl_epoch		= info32->repl_epoch;
-			break;
-		}
 		case 48: {
 			struct drsuapi_DsBindInfo48 *info48;
 			info48 = &drsuapi->bind_r.out.bind_info->info.info48;
@@ -1725,18 +1689,8 @@ static WERROR becomeDC_drsuapi_bind_recv(struct libnet_BecomeDC_state *s,
 			drsuapi->remote_info28.repl_epoch		= info48->repl_epoch;
 			break;
 		}
-		case 52: {
-			struct drsuapi_DsBindInfo52 *info52;
-			info52 = &drsuapi->bind_r.out.bind_info->info.info52;
-			drsuapi->remote_info28.supported_extensions	= info52->supported_extensions;
-			drsuapi->remote_info28.site_guid		= info52->site_guid;
-			drsuapi->remote_info28.pid			= info52->pid;
-			drsuapi->remote_info28.repl_epoch		= info52->repl_epoch;
-			break;
-		}
-		default:
-			DEBUG(1, ("Warning: invalid info length in bind info: %d\n",
-					drsuapi->bind_r.out.bind_info->length));
+		case 28:
+			drsuapi->remote_info28 = drsuapi->bind_r.out.bind_info->info.info28;
 			break;
 		}
 	}
@@ -2303,7 +2257,6 @@ static void becomeDC_drsuapi1_add_entry_recv(struct tevent_req *subreq)
 	struct drsuapi_DsAddEntry *r = talloc_get_type_abort(s->ndr_struct_ptr,
 				       struct drsuapi_DsAddEntry);
 	char *binding_str;
-	uint32_t assoc_group_id;
 
 	s->ndr_struct_ptr = NULL;
 
@@ -2436,7 +2389,6 @@ static void becomeDC_drsuapi1_add_entry_recv(struct tevent_req *subreq)
 				 "method succeeded but objects returned are %d (expected 1).\n",
 				 r->out.ctr->ctr3.count));
 			composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-			return;
 		}
 
 		s->dest_dsa.ntds_guid	= r->out.ctr->ctr3.objects[0].guid;
@@ -2458,7 +2410,6 @@ static void becomeDC_drsuapi1_add_entry_recv(struct tevent_req *subreq)
 				 r->out.ctr->ctr2.dir_err,
 				 win_errstr(r->out.ctr->ctr2.extended_err)));
 			composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-			return;
 		}
 
 		s->dest_dsa.ntds_guid	= r->out.ctr->ctr2.objects[0].guid;
@@ -2484,17 +2435,8 @@ static void becomeDC_drsuapi1_add_entry_recv(struct tevent_req *subreq)
 	talloc_free(binding_str);
 	if (!composite_is_ok(c)) return;
 
-	if (DEBUGLEVEL >= 10) {
-		c->status = dcerpc_binding_set_flags(s->drsuapi2.binding,
-						     DCERPC_DEBUG_PRINT_BOTH,
-						     0);
-		if (!composite_is_ok(c)) return;
-	}
-
 	/* w2k3 uses the same assoc_group_id as on the first connection, so we do */
-	assoc_group_id = dcerpc_binding_get_assoc_group_id(s->drsuapi1.pipe->binding);
-	c->status = dcerpc_binding_set_assoc_group_id(s->drsuapi2.binding, assoc_group_id);
-	if (!composite_is_ok(c)) return;
+	s->drsuapi2.binding->assoc_group_id	= s->drsuapi1.pipe->assoc_group_id;
 
 	becomeDC_drsuapi_connect_send(s, &s->drsuapi2, becomeDC_drsuapi2_connect_recv);
 }
@@ -2525,7 +2467,6 @@ static void becomeDC_drsuapi2_connect_recv(struct composite_context *req)
 	s->drsuapi2.drsuapi_handle = s->drsuapi2.pipe->binding_handle;
 
 	c->status = gensec_session_key(s->drsuapi2.pipe->conn->security_state.generic_state,
-				       s,
 				       &s->drsuapi2.gensec_skey);
 	if (!composite_is_ok(c)) return;
 
@@ -2540,7 +2481,6 @@ static void becomeDC_drsuapi2_bind_recv(struct tevent_req *subreq)
 					  struct libnet_BecomeDC_state);
 	struct composite_context *c = s->creq;
 	char *binding_str;
-	uint32_t assoc_group_id;
 	WERROR status;
 
 	c->status = dcerpc_drsuapi_DsBind_r_recv(subreq, s);
@@ -2561,22 +2501,10 @@ static void becomeDC_drsuapi2_bind_recv(struct tevent_req *subreq)
 	talloc_free(binding_str);
 	if (!composite_is_ok(c)) return;
 
-	if (DEBUGLEVEL >= 10) {
-		c->status = dcerpc_binding_set_flags(s->drsuapi3.binding,
-						     DCERPC_DEBUG_PRINT_BOTH,
-						     0);
-		if (!composite_is_ok(c)) return;
-	}
-
 	/* w2k3 uses the same assoc_group_id as on the first connection, so we do */
-	assoc_group_id = dcerpc_binding_get_assoc_group_id(s->drsuapi1.pipe->binding);
-	c->status = dcerpc_binding_set_assoc_group_id(s->drsuapi3.binding, assoc_group_id);
-	if (!composite_is_ok(c)) return;
+	s->drsuapi3.binding->assoc_group_id	= s->drsuapi1.pipe->assoc_group_id;
 	/* w2k3 uses the concurrent multiplex feature on the 3rd connection, so we do */
-	c->status = dcerpc_binding_set_flags(s->drsuapi3.binding,
-					     DCERPC_CONCURRENT_MULTIPLEX,
-					     0);
-	if (!composite_is_ok(c)) return;
+	s->drsuapi3.binding->flags		|= DCERPC_CONCURRENT_MULTIPLEX;
 
 	becomeDC_drsuapi_connect_send(s, &s->drsuapi3, becomeDC_drsuapi3_connect_recv);
 }
@@ -2595,7 +2523,6 @@ static void becomeDC_drsuapi3_connect_recv(struct composite_context *req)
 	s->drsuapi3.drsuapi_handle = s->drsuapi3.pipe->binding_handle;
 
 	c->status = gensec_session_key(s->drsuapi3.pipe->conn->security_state.generic_state,
-				       s,
 				       &s->drsuapi3.gensec_skey);
 	if (!composite_is_ok(c)) return;
 
@@ -2673,10 +2600,6 @@ static WERROR becomeDC_drsuapi_pull_partition_recv(struct libnet_BecomeDC_state 
 						   struct libnet_BecomeDC_Partition *partition,
 						   struct drsuapi_DsGetNCChanges *r)
 {
-	uint32_t req_level = 0;
-	struct drsuapi_DsGetNCChangesRequest5 *req5 = NULL;
-	struct drsuapi_DsGetNCChangesRequest8 *req8 = NULL;
-	struct drsuapi_DsGetNCChangesRequest10 *req10 = NULL;
 	uint32_t ctr_level = 0;
 	struct drsuapi_DsGetNCChangesCtr1 *ctr1 = NULL;
 	struct drsuapi_DsGetNCChangesCtr6 *ctr6 = NULL;
@@ -2688,23 +2611,6 @@ static WERROR becomeDC_drsuapi_pull_partition_recv(struct libnet_BecomeDC_state 
 
 	if (!W_ERROR_IS_OK(r->out.result)) {
 		return r->out.result;
-	}
-
-	switch (r->in.level) {
-	case 0:
-		/* none */
-		break;
-	case 5:
-		req5 = &r->in.req->req5;
-		break;
-	case 8:
-		req8 = &r->in.req->req8;
-		break;
-	case 10:
-		req10 = &r->in.req->req10;
-		break;
-	default:
-		return WERR_INVALID_PARAMETER;
 	}
 
 	if (*r->out.level_out == 1) {
@@ -2770,10 +2676,6 @@ static WERROR becomeDC_drsuapi_pull_partition_recv(struct libnet_BecomeDC_state 
 	s->_sc.source_dsa	= &s->source_dsa;
 	s->_sc.dest_dsa		= &s->dest_dsa;
 	s->_sc.partition	= partition;
-	s->_sc.req_level	= req_level;
-	s->_sc.req5		= req5;
-	s->_sc.req8		= req8;
-	s->_sc.req10		= req10;
 	s->_sc.ctr_level	= ctr_level;
 	s->_sc.ctr1		= ctr1;
 	s->_sc.ctr6		= ctr6;
@@ -2925,9 +2827,6 @@ static void becomeDC_drsuapi3_pull_domain_send(struct libnet_BecomeDC_state *s)
 					| DRSUAPI_DRS_FULL_SYNC_IN_PROGRESS
 					| DRSUAPI_DRS_NEVER_SYNCED
 					| DRSUAPI_DRS_USE_COMPRESSION;
-	if (s->critical_only) {
-		s->domain_part.replica_flags |= DRSUAPI_DRS_CRITICAL_ONLY | DRSUAPI_DRS_GET_ANC;
-	}
 	if (s->rodc_join) {
 	    s->schema_part.replica_flags &= ~DRSUAPI_DRS_WRIT_REP;
 	}
@@ -2973,14 +2872,6 @@ static void becomeDC_drsuapi3_pull_domain_recv(struct tevent_req *subreq)
 		return;
 	}
 
-	if (s->critical_only) {
-		/* Remove the critical and ANC */
-		s->domain_part.replica_flags ^= DRSUAPI_DRS_CRITICAL_ONLY | DRSUAPI_DRS_GET_ANC;
-		s->critical_only = false;
-		becomeDC_drsuapi_pull_partition_send(s, &s->drsuapi2, &s->drsuapi3, &s->domain_part,
-						     becomeDC_drsuapi3_pull_domain_recv);
-		return;
-	}
 	becomeDC_drsuapi_update_refs_send(s, &s->drsuapi2, &s->schema_part,
 					  becomeDC_drsuapi2_update_refs_schema_recv);
 }
@@ -3004,7 +2895,7 @@ static void becomeDC_drsuapi_update_refs_send(struct libnet_BecomeDC_state *s,
 
 	ntds_dns_name = talloc_asprintf(r, "%s._msdcs.%s",
 					ntds_guid_str,
-					s->forest.dns_name);
+					s->domain.dns_name);
 	if (composite_nomem(ntds_dns_name, c)) return;
 
 	r->in.bind_handle		= &drsuapi->bind_handle;
@@ -3204,7 +3095,6 @@ static void becomeDC_connect_ldap2(struct libnet_BecomeDC_state *s)
 	c->status = becomeDC_ldap2_move_computer(s);
 	if (!composite_is_ok(c)) return;
 
-	s->critical_only = true;
 	becomeDC_drsuapi3_pull_domain_send(s);
 }
 

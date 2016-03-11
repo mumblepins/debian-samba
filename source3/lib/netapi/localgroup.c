@@ -58,12 +58,6 @@ static NTSTATUS libnetapi_samr_lookup_and_open_alias(TALLOC_CTX *mem_ctx,
 	if (!NT_STATUS_IS_OK(result)) {
 		return result;
 	}
-	if (user_rids.count != 1) {
-		return NT_STATUS_INVALID_NETWORK_RESPONSE;
-	}
-	if (name_types.count != 1) {
-		return NT_STATUS_INVALID_NETWORK_RESPONSE;
-	}
 
 	switch (name_types.ids[0]) {
 		case SID_NAME_ALIAS:
@@ -165,11 +159,6 @@ WERROR NetLocalGroupAdd_r(struct libnetapi_ctx *ctx,
 		return WERR_INVALID_PARAM;
 	}
 
-	ZERO_STRUCT(connect_handle);
-	ZERO_STRUCT(builtin_handle);
-	ZERO_STRUCT(domain_handle);
-	ZERO_STRUCT(alias_handle);
-
 	switch (r->in.level) {
 		case 0:
 			info0 = (struct LOCALGROUP_INFO_0 *)r->in.buffer;
@@ -184,8 +173,13 @@ WERROR NetLocalGroupAdd_r(struct libnetapi_ctx *ctx,
 			goto done;
 	}
 
+	ZERO_STRUCT(connect_handle);
+	ZERO_STRUCT(builtin_handle);
+	ZERO_STRUCT(domain_handle);
+	ZERO_STRUCT(alias_handle);
+
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -319,7 +313,7 @@ WERROR NetLocalGroupDel_r(struct libnetapi_ctx *ctx,
 	ZERO_STRUCT(alias_handle);
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -499,7 +493,7 @@ WERROR NetLocalGroupGetInfo_r(struct libnetapi_ctx *ctx,
 	ZERO_STRUCT(alias_handle);
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -616,7 +610,7 @@ static WERROR map_buffer_to_alias_info(TALLOC_CTX *mem_ctx,
 	struct LOCALGROUP_INFO_1002 *info1002;
 	union samr_AliasInfo *info = NULL;
 
-	info = talloc_zero(mem_ctx, union samr_AliasInfo);
+	info = TALLOC_ZERO_P(mem_ctx, union samr_AliasInfo);
 	W_ERROR_HAVE_NO_MEMORY(info);
 
 	switch (level) {
@@ -678,7 +672,7 @@ WERROR NetLocalGroupSetInfo_r(struct libnetapi_ctx *ctx,
 	ZERO_STRUCT(alias_handle);
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -828,7 +822,7 @@ WERROR NetLocalGroupEnum_r(struct libnetapi_ctx *ctx,
 	ZERO_STRUCT(alias_handle);
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;
@@ -1047,7 +1041,7 @@ static NTSTATUS libnetapi_lsa_lookup_names3(TALLOC_CTX *mem_ctx,
 	NT_STATUS_NOT_OK_RETURN(result);
 
 	if (count != 1 || sids.count != 1) {
-		return NT_STATUS_INVALID_NETWORK_RESPONSE;
+		return NT_STATUS_NONE_MAPPED;
 	}
 
 	sid_copy(sid, sids.sids[0].sid);
@@ -1121,7 +1115,7 @@ static WERROR NetLocalGroupModifyMembers_r(struct libnetapi_ctx *ctx,
 	ZERO_STRUCT(domain_handle);
 	ZERO_STRUCT(alias_handle);
 
-	member_sids = talloc_zero_array(ctx, struct dom_sid,
+	member_sids = TALLOC_ZERO_ARRAY(ctx, struct dom_sid,
 					r->in.total_entries);
 	W_ERROR_HAVE_NO_MEMORY(member_sids);
 
@@ -1141,7 +1135,7 @@ static WERROR NetLocalGroupModifyMembers_r(struct libnetapi_ctx *ctx,
 
 	if (r->in.level == 3) {
 		werr = libnetapi_open_pipe(ctx, r->in.server_name,
-					   &ndr_table_lsarpc,
+					   &ndr_table_lsarpc.syntax_id,
 					   &lsa_pipe);
 		if (!W_ERROR_IS_OK(werr)) {
 			goto done;
@@ -1160,7 +1154,7 @@ static WERROR NetLocalGroupModifyMembers_r(struct libnetapi_ctx *ctx,
 	}
 
 	werr = libnetapi_open_pipe(ctx, r->in.server_name,
-				   &ndr_table_samr,
+				   &ndr_table_samr.syntax_id,
 				   &pipe_cli);
 	if (!W_ERROR_IS_OK(werr)) {
 		goto done;

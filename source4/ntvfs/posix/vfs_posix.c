@@ -27,7 +27,7 @@
 #include "vfs_posix.h"
 #include "librpc/gen_ndr/security.h"
 #include <tdb.h>
-#include "lib/tdb_wrap/tdb_wrap.h"
+#include "lib/util/tdb_wrap.h"
 #include "libcli/security/security.h"
 #include "lib/events/events.h"
 #include "param/param.h"
@@ -38,8 +38,7 @@
 static void pvfs_setup_options(struct pvfs_state *pvfs)
 {
 	struct share_config *scfg = pvfs->ntvfs->ctx->config;
-	char *eadb;
-	char *xattr_backend;
+	const char *eadb;
 	bool def_perm_override = false;
 
 	if (share_bool_option(scfg, SHARE_MAP_HIDDEN, SHARE_MAP_HIDDEN_DEFAULT))
@@ -114,16 +113,14 @@ static void pvfs_setup_options(struct pvfs_state *pvfs)
 	pvfs->fs_attribs = 
 		FS_ATTR_CASE_SENSITIVE_SEARCH | 
 		FS_ATTR_CASE_PRESERVED_NAMES |
-		FS_ATTR_UNICODE_ON_DISK;
+		FS_ATTR_UNICODE_ON_DISK |
+		FS_ATTR_SPARSE_FILES;
 
 	/* allow xattrs to be stored in a external tdb */
-	eadb = share_string_option(pvfs, scfg, PVFS_EADB, NULL);
+	eadb = share_string_option(scfg, PVFS_EADB, NULL);
 	if (eadb != NULL) {
-		pvfs->ea_db = tdb_wrap_open(
-			pvfs, eadb, 50000,
-			lpcfg_tdb_flags(pvfs->ntvfs->ctx->lp_ctx, TDB_DEFAULT),
-			O_RDWR|O_CREAT, 0600);
-		TALLOC_FREE(eadb);
+		pvfs->ea_db = tdb_wrap_open(pvfs, eadb, 50000,  
+					    TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 		if (pvfs->ea_db != NULL) {
 			pvfs->flags |= PVFS_FLAG_XATTR_ENABLE;
 		} else {
@@ -149,9 +146,7 @@ static void pvfs_setup_options(struct pvfs_state *pvfs)
 	}
 
 	/* enable an ACL backend */
-	xattr_backend = share_string_option(pvfs, scfg, PVFS_ACL, "xattr");
-	pvfs->acl_ops = pvfs_acl_backend_byname(xattr_backend);
-	TALLOC_FREE(xattr_backend);
+	pvfs->acl_ops = pvfs_acl_backend_byname(share_string_option(scfg, PVFS_ACL, "xattr"));
 }
 
 static int pvfs_state_destructor(struct pvfs_state *pvfs)
@@ -217,14 +212,14 @@ static NTSTATUS pvfs_connect(struct ntvfs_module_context *ntvfs,
 	 * TODO: call this from ntvfs_posix_init()
 	 *       but currently we don't have a lp_ctx there
 	 */
-	status = pvfs_acl_init();
+	status = pvfs_acl_init(ntvfs->ctx->lp_ctx);
 	NT_STATUS_NOT_OK_RETURN(status);
 
 	pvfs = talloc_zero(ntvfs, struct pvfs_state);
 	NT_STATUS_HAVE_NO_MEMORY(pvfs);
 
 	/* for simplicity of path construction, remove any trailing slash now */
-	base_directory = share_string_option(pvfs, ntvfs->ctx->config, SHARE_PATH, "");
+	base_directory = talloc_strdup(pvfs, share_string_option(ntvfs->ctx->config, SHARE_PATH, ""));
 	NT_STATUS_HAVE_NO_MEMORY(base_directory);
 	if (strcmp(base_directory, "/") != 0) {
 		trim_string(base_directory, NULL, "/");
@@ -254,7 +249,7 @@ static NTSTATUS pvfs_connect(struct ntvfs_module_context *ntvfs,
 
 	ntvfs->private_data = pvfs;
 
-	pvfs->brl_context = brlock_init(pvfs, 
+	pvfs->brl_context = brl_init(pvfs, 
 				     pvfs->ntvfs->ctx->server_id,
 				     pvfs->ntvfs->ctx->lp_ctx,
 				     pvfs->ntvfs->ctx->msg_ctx);
@@ -274,6 +269,13 @@ static NTSTATUS pvfs_connect(struct ntvfs_module_context *ntvfs,
 					   pvfs->ntvfs->ctx->lp_ctx,
 					   pvfs->ntvfs->ctx->event_ctx,
 					   pvfs->ntvfs->ctx->config);
+
+	pvfs->wbc_ctx = wbc_init(pvfs,
+				 pvfs->ntvfs->ctx->msg_ctx,
+				 pvfs->ntvfs->ctx->event_ctx);
+	if (pvfs->wbc_ctx == NULL) {
+		return NT_STATUS_INTERNAL_DB_CORRUPTION;
+	}
 
 	/* allocate the search handle -> ptr tree */
 	pvfs->search.idtree = idr_init(pvfs);
@@ -370,37 +372,37 @@ NTSTATUS ntvfs_posix_init(void)
 	ops.type = NTVFS_DISK;
 	
 	/* fill in all the operations */
-	ops.connect_fn = pvfs_connect;
-	ops.disconnect_fn = pvfs_disconnect;
-	ops.unlink_fn = pvfs_unlink;
-	ops.chkpath_fn = pvfs_chkpath;
-	ops.qpathinfo_fn = pvfs_qpathinfo;
-	ops.setpathinfo_fn = pvfs_setpathinfo;
-	ops.open_fn = pvfs_open;
-	ops.mkdir_fn = pvfs_mkdir;
-	ops.rmdir_fn = pvfs_rmdir;
-	ops.rename_fn = pvfs_rename;
-	ops.copy_fn = pvfs_copy;
-	ops.ioctl_fn = pvfs_ioctl;
-	ops.read_fn = pvfs_read;
-	ops.write_fn = pvfs_write;
-	ops.seek_fn = pvfs_seek;
-	ops.flush_fn = pvfs_flush;
-	ops.close_fn = pvfs_close;
-	ops.exit_fn = pvfs_exit;
-	ops.lock_fn = pvfs_lock;
-	ops.setfileinfo_fn = pvfs_setfileinfo;
-	ops.qfileinfo_fn = pvfs_qfileinfo;
-	ops.fsinfo_fn = pvfs_fsinfo;
-	ops.lpq_fn = pvfs_lpq;
-	ops.search_first_fn = pvfs_search_first;
-	ops.search_next_fn = pvfs_search_next;
-	ops.search_close_fn = pvfs_search_close;
-	ops.trans_fn = pvfs_trans;
-	ops.logoff_fn = pvfs_logoff;
-	ops.async_setup_fn = pvfs_async_setup;
-	ops.cancel_fn = pvfs_cancel;
-	ops.notify_fn = pvfs_notify;
+	ops.connect = pvfs_connect;
+	ops.disconnect = pvfs_disconnect;
+	ops.unlink = pvfs_unlink;
+	ops.chkpath = pvfs_chkpath;
+	ops.qpathinfo = pvfs_qpathinfo;
+	ops.setpathinfo = pvfs_setpathinfo;
+	ops.open = pvfs_open;
+	ops.mkdir = pvfs_mkdir;
+	ops.rmdir = pvfs_rmdir;
+	ops.rename = pvfs_rename;
+	ops.copy = pvfs_copy;
+	ops.ioctl = pvfs_ioctl;
+	ops.read = pvfs_read;
+	ops.write = pvfs_write;
+	ops.seek = pvfs_seek;
+	ops.flush = pvfs_flush;	
+	ops.close = pvfs_close;
+	ops.exit = pvfs_exit;
+	ops.lock = pvfs_lock;
+	ops.setfileinfo = pvfs_setfileinfo;
+	ops.qfileinfo = pvfs_qfileinfo;
+	ops.fsinfo = pvfs_fsinfo;
+	ops.lpq = pvfs_lpq;
+	ops.search_first = pvfs_search_first;
+	ops.search_next = pvfs_search_next;
+	ops.search_close = pvfs_search_close;
+	ops.trans = pvfs_trans;
+	ops.logoff = pvfs_logoff;
+	ops.async_setup = pvfs_async_setup;
+	ops.cancel = pvfs_cancel;
+	ops.notify = pvfs_notify;
 
 	/* register ourselves with the NTVFS subsystem. We register
 	   under the name 'default' as we wish to be the default

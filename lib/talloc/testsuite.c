@@ -27,10 +27,6 @@
 #include "system/time.h"
 #include <talloc.h>
 
-#ifdef HAVE_PTHREAD
-#include <pthread.h>
-#endif
-
 #include "talloc_testsuite.h"
 
 static struct timeval timeval_current(void)
@@ -60,6 +56,15 @@ static double timeval_elapsed(struct timeval *tv)
 		   test, __location__, arg1, arg2, desc); \
 		return false; \
 	}
+
+#if _SAMBA_BUILD_==3
+#ifdef malloc
+#undef malloc
+#endif
+#ifdef strdup
+#undef strdup
+#endif
+#endif
 
 #define CHECK_SIZE(test, ptr, tsize) do { \
 	if (talloc_total_size(ptr) != (tsize)) { \
@@ -145,7 +150,6 @@ static bool test_ref1(void)
 
 	CHECK_BLOCKS("ref1", p1, 5);
 	CHECK_BLOCKS("ref1", p2, 1);
-	CHECK_BLOCKS("ref1", ref, 1);
 	CHECK_BLOCKS("ref1", r1, 2);
 
 	fprintf(stderr, "Freeing p2\n");
@@ -254,7 +258,6 @@ static bool test_ref3(void)
 	CHECK_BLOCKS("ref3", p1, 2);
 	CHECK_BLOCKS("ref3", p2, 2);
 	CHECK_BLOCKS("ref3", r1, 1);
-	CHECK_BLOCKS("ref3", ref, 1);
 
 	fprintf(stderr, "Freeing p1\n");
 	talloc_free(p1);
@@ -297,7 +300,6 @@ static bool test_ref4(void)
 
 	CHECK_BLOCKS("ref4", p1, 5);
 	CHECK_BLOCKS("ref4", p2, 1);
-	CHECK_BLOCKS("ref4", ref, 1);
 	CHECK_BLOCKS("ref4", r1, 2);
 
 	fprintf(stderr, "Freeing r1\n");
@@ -348,7 +350,6 @@ static bool test_unlink1(void)
 
 	CHECK_BLOCKS("unlink", p1, 7);
 	CHECK_BLOCKS("unlink", p2, 1);
-	CHECK_BLOCKS("unlink", ref, 1);
 	CHECK_BLOCKS("unlink", r1, 2);
 
 	fprintf(stderr, "Unreferencing r1\n");
@@ -416,8 +417,6 @@ static bool test_misc(void)
 
 	name = talloc_set_name(p1, "my name is %s", "foo");
 	torture_assert_str_equal("misc", talloc_get_name(p1), "my name is foo",
-		"failed: wrong name after talloc_set_name(my name is foo)");
-	torture_assert_str_equal("misc", talloc_get_name(p1), name,
 		"failed: wrong name after talloc_set_name(my name is foo)");
 	CHECK_BLOCKS("misc", p1, 2);
 	CHECK_BLOCKS("misc", root, 3);
@@ -627,7 +626,6 @@ static bool test_realloc_child(void)
 	el2 = talloc(el1->list, struct el2);
 	el2 = talloc(el1->list2, struct el2);
 	el2 = talloc(el1->list3, struct el2);
-	(void)el2;
 
 	el1->list = talloc_realloc(el1, el1->list, struct el2 *, 100);
 	el1->list2 = talloc_realloc(el1, el1->list2, struct el2 *, 200);
@@ -840,8 +838,6 @@ static bool test_speed(void)
 			p1 = talloc_size(ctx, loop % 100);
 			p2 = talloc_strdup(p1, "foo bar");
 			p3 = talloc_size(p1, 300);
-			(void)p2;
-			(void)p3;
 			talloc_free(p1);
 		}
 		count += 3 * loop;
@@ -861,9 +857,7 @@ static bool test_speed(void)
 			p1 = talloc_size(ctx, loop % 100);
 			p2 = talloc_strdup(p1, "foo bar");
 			p3 = talloc_size(p1, 300);
-			(void)p2;
-			(void)p3;
-			talloc_free(p1);
+			talloc_free_children(ctx);
 		}
 		count += 3 * loop;
 	} while (timeval_elapsed(&tv) < 5.0);
@@ -984,84 +978,6 @@ static bool test_free_parent_deny_child(void)
 	printf("success: free_parent_deny_child\n");
 	return true;
 }
-
-struct new_parent {
-	void *new_parent;
-	char val[20];
-};
-
-static int reparenting_destructor(struct new_parent *np)
-{
-	talloc_set_destructor(np, NULL);
-	(void)talloc_move(np->new_parent, &np);
-	return -1;
-}
-
-static bool test_free_parent_reparent_child(void)
-{
-	void *top = talloc_new(NULL);
-	char *level1;
-	char *alternate_level1;
-	char *level2;
-	struct new_parent *level3;
-
-	printf("test: free_parent_reparent_child\n# "
-		"TALLOC FREE PARENT REPARENT CHILD\n");
-
-	level1 = talloc_strdup(top, "level1");
-	alternate_level1 = talloc_strdup(top, "alternate_level1");
-	level2 = talloc_strdup(level1, "level2");
-	level3 = talloc(level2, struct new_parent);
-	level3->new_parent = alternate_level1;
-	memset(level3->val, 'x', sizeof(level3->val));
-
-	talloc_set_destructor(level3, reparenting_destructor);
-	talloc_free(level1);
-
-	CHECK_PARENT("free_parent_reparent_child",
-		level3, alternate_level1);
-
-	talloc_free(top);
-
-	printf("success: free_parent_reparent_child\n");
-	return true;
-}
-
-static bool test_free_parent_reparent_child_in_pool(void)
-{
-	void *top = talloc_new(NULL);
-	char *level1;
-	char *alternate_level1;
-	char *level2;
-	void *pool;
-	struct new_parent *level3;
-
-	printf("test: free_parent_reparent_child_in_pool\n# "
-		"TALLOC FREE PARENT REPARENT CHILD IN POOL\n");
-
-	pool = talloc_pool(top, 1024);
-	level1 = talloc_strdup(pool, "level1");
-	alternate_level1 = talloc_strdup(top, "alternate_level1");
-	level2 = talloc_strdup(level1, "level2");
-	level3 = talloc(level2, struct new_parent);
-	level3->new_parent = alternate_level1;
-	memset(level3->val, 'x', sizeof(level3->val));
-
-	talloc_set_destructor(level3, reparenting_destructor);
-	talloc_free(level1);
-	talloc_set_destructor(level3, NULL);
-
-	CHECK_PARENT("free_parent_reparent_child_in_pool",
-		level3, alternate_level1);
-
-	/* Even freeing alternate_level1 should leave pool alone. */
-	talloc_free(alternate_level1);
-	talloc_free(top);
-
-	printf("success: free_parent_reparent_child_in_pool\n");
-	return true;
-}
-
 
 static bool test_talloc_ptrtype(void)
 {
@@ -1360,64 +1276,6 @@ static bool test_pool_steal(void)
 	return true;
 }
 
-static bool test_pool_nest(void)
-{
-	void *p1, *p2, *p3;
-	void *e = talloc_new(NULL);
-
-	p1 = talloc_pool(NULL, 1024);
-	torture_assert("talloc_pool", p1 != NULL, "failed");
-
-	p2 = talloc_pool(p1, 500);
-	torture_assert("talloc_pool", p2 != NULL, "failed");
-
-	p3 = talloc_size(p2, 10);
-
-	talloc_steal(e, p3);
-
-	talloc_free(p2);
-
-	talloc_free(p3);
-
-	talloc_free(p1);
-
-	return true;
-}
-
-struct pooled {
-	char *s1;
-	char *s2;
-	char *s3;
-};
-
-static bool test_pooled_object(void)
-{
-	struct pooled *p;
-	const char *s1 = "hello";
-	const char *s2 = "world";
-	const char *s3 = "";
-
-	p = talloc_pooled_object(NULL, struct pooled, 3,
-			strlen(s1)+strlen(s2)+strlen(s3)+3);
-
-	if (talloc_get_size(p) != sizeof(struct pooled)) {
-		return false;
-	}
-
-	p->s1 = talloc_strdup(p, s1);
-
-	TALLOC_FREE(p->s1);
-	p->s1 = talloc_strdup(p, s2);
-	TALLOC_FREE(p->s1);
-
-	p->s1 = talloc_strdup(p, s1);
-	p->s2 = talloc_strdup(p, s2);
-	p->s3 = talloc_strdup(p, s3);
-
-	TALLOC_FREE(p);
-	return true;
-}
-
 static bool test_free_ref_null_context(void)
 {
 	void *p1, *p2, *p3;
@@ -1466,14 +1324,12 @@ static bool test_rusty(void)
 static bool test_free_children(void)
 {
 	void *root;
-	char *p1, *p2;
-	const char *name, *name2;
+	const char *p1, *p2, *name, *name2;
 
 	talloc_enable_null_tracking();
 	root = talloc_new(NULL);
 	p1 = talloc_strdup(root, "foo1");
 	p2 = talloc_strdup(p1, "foo2");
-	(void)p2;
 
 	talloc_set_name(p1, "%s", "testname");
 	talloc_free_children(p1);
@@ -1498,7 +1354,6 @@ static bool test_free_children(void)
 	name2 = talloc_get_name(p1);
 	/* but this does */
 	talloc_free_children(p1);
-	(void)name2;
 	torture_assert("namecheck", strcmp(talloc_get_name(p1), "testname2") == 0,
 		       "wrong name");
 	CHECK_BLOCKS("name1", p1, 1);
@@ -1508,347 +1363,6 @@ static bool test_free_children(void)
 	return true;
 }
 
-static bool test_memlimit(void)
-{
-	void *root;
-	char *l1, *l2, *l3, *l4, *l5, *t;
-	char *pool;
-	int i;
-
-	printf("test: memlimit\n# MEMORY LIMITS\n");
-
-	printf("==== talloc_new(NULL)\n");
-	root = talloc_new(NULL);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_size(root, 2048)\n");
-	l1 = talloc_size(root, 2048);
-	torture_assert("memlimit", l1 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_free(l1)\n");
-	talloc_free(l1);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(root, level 1)\n");
-	l1 = talloc_strdup(root, "level 1");
-	torture_assert("memlimit", l1 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_set_memlimit(l1, 2048)\n");
-	torture_assert("memlimit", talloc_set_memlimit(l1, 2048) == 0,
-		"failed: setting memlimit should never fail\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_size(root, 2048)\n");
-	l2 = talloc_size(l1, 2048);
-	torture_assert("memlimit", l2 == NULL,
-		"failed: alloc should fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l1, level 2)\n");
-	l2 = talloc_strdup(l1, "level 2");
-	torture_assert("memlimit", l2 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_free(l2)\n");
-	talloc_free(l2);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_size(NULL, 2048)\n");
-	l2 = talloc_size(NULL, 2048);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_steal(l1, l2)\n");
-	talloc_steal(l1, l2);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l2, level 3)\n");
-	l3 = talloc_strdup(l2, "level 3");
-	torture_assert("memlimit", l3 == NULL,
-		"failed: alloc should fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_free(l2)\n");
-	talloc_free(l2);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(NULL, level 2)\n");
-	l2 = talloc_strdup(NULL, "level 2");
-	talloc_steal(l1, l2);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l2, level 3)\n");
-	l3 = talloc_strdup(l2, "level 3");
-	torture_assert("memlimit", l3 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_set_memlimit(l3, 1024)\n");
-	torture_assert("memlimit", talloc_set_memlimit(l3, 1024) == 0,
-		"failed: setting memlimit should never fail\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l3, level 4)\n");
-	l4 = talloc_strdup(l3, "level 4");
-	torture_assert("memlimit", l4 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_set_memlimit(l4, 512)\n");
-	torture_assert("memlimit", talloc_set_memlimit(l4, 512) == 0,
-		"failed: setting memlimit should never fail\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l4, level 5)\n");
-	l5 = talloc_strdup(l4, "level 5");
-	torture_assert("memlimit", l5 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_realloc(NULL, l5, char, 600)\n");
-	t = talloc_realloc(NULL, l5, char, 600);
-	torture_assert("memlimit", t == NULL,
-		"failed: alloc should fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_realloc(NULL, l5, char, 5)\n");
-	l5 = talloc_realloc(NULL, l5, char, 5);
-	torture_assert("memlimit", l5 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l3, level 4)\n");
-	l4 = talloc_strdup(l3, "level 4");
-	torture_assert("memlimit", l4 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_set_memlimit(l4, 512)\n");
-	torture_assert("memlimit", talloc_set_memlimit(l4, 512) == 0,
-		"failed: setting memlimit should never fail\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_strdup(l4, level 5)\n");
-	l5 = talloc_strdup(l4, "level 5");
-	torture_assert("memlimit", l5 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-
-	printf("==== Make new temp context and steal l5\n");
-	t = talloc_new(root);
-	talloc_steal(t, l5);
-
-	talloc_report_full(root, stdout);
-
-	printf("==== talloc_size(t, 2048)\n");
-	l1 = talloc_size(t, 2048);
-	torture_assert("memlimit", l1 != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-
-	talloc_report_full(root, stdout);
-	talloc_free(root);
-
-	/* Test memlimits with pools. */
-	pool = talloc_pool(NULL, 10*1024);
-	torture_assert("memlimit", pool != NULL,
-		"failed: alloc should not fail due to memory limit\n");
-	talloc_set_memlimit(pool, 10*1024);
-	for (i = 0; i < 9; i++) {
-		l1 = talloc_size(pool, 1024);
-		torture_assert("memlimit", l1 != NULL,
-			"failed: alloc should not fail due to memory limit\n");
-	}
-	/* The next alloc should fail. */
-	l2 = talloc_size(pool, 1024);
-	torture_assert("memlimit", l2 == NULL,
-			"failed: alloc should fail due to memory limit\n");
-
-	/* Moving one of the children shouldn't change the limit,
-	   as it's still inside the pool. */
-	root = talloc_new(NULL);
-	talloc_steal(root, l1);
-	l2 = talloc_size(pool, 1024);
-	torture_assert("memlimit", l2 == NULL,
-			"failed: alloc should fail due to memory limit\n");
-
-	talloc_free(pool);
-	talloc_free(root);
-	printf("success: memlimit\n");
-
-	return true;
-}
-
-#ifdef HAVE_PTHREAD
-
-#define NUM_THREADS 100
-
-/* Sync variables. */
-static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t condvar = PTHREAD_COND_INITIALIZER;
-static void *intermediate_ptr;
-
-/* Subthread. */
-static void *thread_fn(void *arg)
-{
-	int ret;
-	const char *ctx_name = (const char *)arg;
-	void *sub_ctx = NULL;
-	/*
-	 * Do stuff that creates a new talloc hierarchy in
-	 * this thread.
-	 */
-	void *top_ctx = talloc_named_const(NULL, 0, "top");
-	if (top_ctx == NULL) {
-		return NULL;
-	}
-	sub_ctx = talloc_named_const(top_ctx, 100, ctx_name);
-	if (sub_ctx == NULL) {
-		return NULL;
-	}
-
-	/*
-	 * Now transfer a pointer from our hierarchy
-	 * onto the intermediate ptr.
-	 */
-	ret = pthread_mutex_lock(&mtx);
-	if (ret != 0) {
-		talloc_free(top_ctx);
-		return NULL;
-	}
-	/* Wait for intermediate_ptr to be free. */
-	while (intermediate_ptr != NULL) {
-		ret = pthread_cond_wait(&condvar, &mtx);
-		if (ret != 0) {
-			talloc_free(top_ctx);
-			return NULL;
-		}
-	}
-
-	/* and move our memory onto it from our toplevel hierarchy. */
-	intermediate_ptr = talloc_move(NULL, &sub_ctx);
-
-	/* Tell the main thread it's ready for pickup. */
-	pthread_cond_broadcast(&condvar);
-	pthread_mutex_unlock(&mtx);
-
-	talloc_free(top_ctx);
-	return NULL;
-}
-
-/* Main thread. */
-static bool test_pthread_talloc_passing(void)
-{
-	int i;
-	int ret;
-	char str_array[NUM_THREADS][20];
-	pthread_t thread_id;
-	void *mem_ctx;
-
-	/*
-	 * Important ! Null tracking breaks threaded talloc.
-	 * It *must* be turned off.
-	 */
-	talloc_disable_null_tracking();
-
-	printf("test: pthread_talloc_passing\n# PTHREAD TALLOC PASSING\n");
-
-	/* Main thread toplevel context. */
-	mem_ctx = talloc_named_const(NULL, 0, "toplevel");
-	if (mem_ctx == NULL) {
-		printf("failed to create toplevel context\n");
-		return false;
-	}
-
-	/*
-	 * Spin off NUM_THREADS threads.
-	 * They will use their own toplevel contexts.
-	 */
-	for (i = 0; i < NUM_THREADS; i++) {
-		(void)snprintf(str_array[i],
-				20,
-				"thread:%d",
-				i);
-		if (str_array[i] == NULL) {
-			printf("snprintf %d failed\n", i);
-			return false;
-		}
-		ret = pthread_create(&thread_id,
-				NULL,
-				thread_fn,
-				str_array[i]);
-		if (ret != 0) {
-			printf("failed to create thread %d (%d)\n", i, ret);
-			return false;
-		}
-	}
-
-	printf("Created %d threads\n", NUM_THREADS);
-
-	/* Now wait for NUM_THREADS transfers of the talloc'ed memory. */
-	for (i = 0; i < NUM_THREADS; i++) {
-		ret = pthread_mutex_lock(&mtx);
-		if (ret != 0) {
-			printf("pthread_mutex_lock %d failed (%d)\n", i, ret);
-			talloc_free(mem_ctx);
-			return false;
-		}
-
-		/* Wait for intermediate_ptr to have our data. */
-		while (intermediate_ptr == NULL) {
-			ret = pthread_cond_wait(&condvar, &mtx);
-			if (ret != 0) {
-				printf("pthread_cond_wait %d failed (%d)\n", i,
-					ret);
-				talloc_free(mem_ctx);
-				return false;
-			}
-		}
-
-		/* and move it onto our toplevel hierarchy. */
-		(void)talloc_move(mem_ctx, &intermediate_ptr);
-
-		/* Tell the sub-threads we're ready for another. */
-		pthread_cond_broadcast(&condvar);
-		pthread_mutex_unlock(&mtx);
-	}
-
-	CHECK_SIZE("pthread_talloc_passing", mem_ctx, NUM_THREADS * 100);
-#if 1
-	/* Dump the hierarchy. */
-	talloc_report(mem_ctx, stdout);
-#endif
-	talloc_free(mem_ctx);
-	printf("success: pthread_talloc_passing\n");
-	return true;
-}
-#endif
 
 static void test_reset(void)
 {
@@ -1864,10 +1378,6 @@ bool torture_local_talloc(struct torture_context *tctx)
 
 	setlinebuf(stdout);
 
-	test_reset();
-	ret &= test_pooled_object();
-	test_reset();
-	ret &= test_pool_nest();
 	test_reset();
 	ret &= test_ref1();
 	test_reset();
@@ -1901,10 +1411,6 @@ bool torture_local_talloc(struct torture_context *tctx)
 	test_reset();
 	ret &= test_free_parent_deny_child(); 
 	test_reset();
-	ret &= test_free_parent_reparent_child();
-	test_reset();
-	ret &= test_free_parent_reparent_child_in_pool();
-	test_reset();
 	ret &= test_talloc_ptrtype();
 	test_reset();
 	ret &= test_talloc_free_in_destructor();
@@ -1918,13 +1424,6 @@ bool torture_local_talloc(struct torture_context *tctx)
 	ret &= test_rusty();
 	test_reset();
 	ret &= test_free_children();
-	test_reset();
-	ret &= test_memlimit();
-#ifdef HAVE_PTHREAD
-	test_reset();
-	ret &= test_pthread_talloc_passing();
-#endif
-
 
 	if (ret) {
 		test_reset();

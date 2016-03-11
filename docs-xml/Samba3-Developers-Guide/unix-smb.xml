@@ -112,7 +112,7 @@ shares.
 <title>Passwords</title>
 
 <para>
-When plaintext passwords are used, very old SMB clients uppercase passwords before sending them. I have no
+Many SMB clients uppercase passwords before sending them. I have no
 idea why they do this. Interestingly WfWg uppercases the password only
 if the server is running a protocol greater than COREPLUS, so
 obviously it isn't just the data entry routines that are to blame.
@@ -123,11 +123,12 @@ Unix passwords are case sensitive. So if users use mixed case
 passwords they are in trouble.
 </para>
 
-<para>Samba will try an additional all lower cased password
-authentication if it receives an all uppercase password. Samba used to
-support an option called "password level" that would try to crack
-password by trying all case permutations, but that option has been
-removed.
+<para>
+Samba can try to cope with this by either using the "password level"
+option which causes Samba to try the offered password with up to the
+specified number of case changes, or by using the "password server"
+option which allows Samba to do its validation via another machine
+(typically a WinNT server).
 </para>
 
 <para>
@@ -206,7 +207,7 @@ Unix has no equivalent notion. To implement this Samba uses either lock
 files based on the files inode and placed in a separate lock
 directory or a shared memory implementation. The lock file method 
 is clumsy and consumes processing and file resources,
-the shared memory implementation is vastly preferred and is turned on
+the shared memory implementation is vastly prefered and is turned on
 by default for those systems that support it.
 </para>
 

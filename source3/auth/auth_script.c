@@ -74,62 +74,32 @@ static NTSTATUS script_check_user_credentials(const struct auth_context *auth_co
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	if (strlcpy( secret_str, user_info->mapped.domain_name, secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
-	if (strlcat( secret_str, "\n", secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
-	if (strlcat( secret_str, user_info->client.account_name, secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
-	if (strlcat( secret_str, "\n", secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
+	safe_strcpy( secret_str, user_info->mapped.domain_name, secret_str_len - 1);
+	safe_strcat( secret_str, "\n", secret_str_len - 1);
+	safe_strcat( secret_str, user_info->client.account_name, secret_str_len - 1);
+	safe_strcat( secret_str, "\n", secret_str_len - 1);
 
 	for (i = 0; i < 8; i++) {
 		slprintf(&hex_str[i*2], 3, "%02X", auth_context->challenge.data[i]);
 	}
-	if (strlcat( secret_str, hex_str, secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
-	if (strlcat( secret_str, "\n", secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
+	safe_strcat( secret_str, hex_str, secret_str_len - 1);
+	safe_strcat( secret_str, "\n", secret_str_len - 1);
 
 	if (user_info->password.response.lanman.data) {
 		for (i = 0; i < 24; i++) {
 			slprintf(&hex_str[i*2], 3, "%02X", user_info->password.response.lanman.data[i]);
 		}
-		if (strlcat( secret_str, hex_str, secret_str_len) >= secret_str_len) {
-			/* Truncate. */
-			goto cat_out;
-		}
+		safe_strcat( secret_str, hex_str, secret_str_len - 1);
 	}
-	if (strlcat( secret_str, "\n", secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
+	safe_strcat( secret_str, "\n", secret_str_len - 1);
 
 	if (user_info->password.response.nt.data) {
 		for (i = 0; i < 24; i++) {
 			slprintf(&hex_str[i*2], 3, "%02X", user_info->password.response.nt.data[i]);
 		}
-		if (strlcat( secret_str, hex_str, secret_str_len) >= secret_str_len) {
-			/* Truncate. */
-			goto cat_out;
-		}
+		safe_strcat( secret_str, hex_str, secret_str_len - 1);
 	}
-	if (strlcat( secret_str, "\n", secret_str_len) >= secret_str_len) {
-		/* Truncate. */
-		goto cat_out;
-	}
+	safe_strcat( secret_str, "\n", secret_str_len - 1);
 
 	DEBUG(10,("script_check_user_credentials: running %s with parameters:\n%s\n",
 		script, secret_str ));
@@ -147,11 +117,6 @@ static NTSTATUS script_check_user_credentials(const struct auth_context *auth_co
 
 	/* Cause the auth system to keep going.... */
 	return NT_STATUS_NOT_IMPLEMENTED;
-
-  cat_out:
-
-	SAFE_FREE(secret_str);
-	return NT_STATUS_NO_MEMORY;
 }
 
 /* module initialisation */
@@ -159,7 +124,7 @@ static NTSTATUS auth_init_script(struct auth_context *auth_context, const char *
 {
 	struct auth_methods *result;
 
-	result = talloc_zero(auth_context, struct auth_methods);
+	result = TALLOC_ZERO_P(auth_context, struct auth_methods);
 	if (result == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}

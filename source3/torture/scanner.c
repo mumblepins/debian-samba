@@ -21,7 +21,6 @@
 #include "system/filesys.h"
 #include "torture/proto.h"
 #include "libsmb/libsmb.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 #define VERBOSE 0
 #define OP_MIN 0
@@ -68,7 +67,7 @@ static NTSTATUS try_trans2(struct cli_state *cli,
 			   op, 0,
 			   NULL, 0, 0, /* setup */
 			   param, param_len, 2,
-			   data, data_len, CLI_BUFFER_SIZE,
+			   data, data_len, cli->max_xmit,
 			   NULL,		/* recv_flags2 */
 			   NULL, 0, NULL,	/* rsetup */
 			   &rparam, 0, rparam_len,
@@ -122,109 +121,71 @@ static bool scan_trans2(struct cli_state *cli, int op, int level,
 	uint32_t data_len = 0;
 	uint32_t param_len = 0;
 	uint32_t rparam_len, rdata_len;
-	uint8_t *param = NULL;
-	uint8_t data[DATA_SIZE];
-	const char *newfname;
-	const char *dname;
+	uint8_t param[PARAM_SIZE], data[DATA_SIZE];
 	NTSTATUS status;
 
 	memset(data, 0, sizeof(data));
 	data_len = 4;
 
 	/* try with a info level only */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 2);
-	if (param == NULL) return True;
-
+	param_len = 2;
 	SSVAL(param, 0, level);
-
-	param_len = talloc_get_size(param);
 	status = try_trans2_len(cli, "void", op, level, param, data, param_len, &data_len, 
 			    &rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try with a file descriptor */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, fnum);
 	SSVAL(param, 2, level);
 	SSVAL(param, 4, 0);
-
-	param_len = talloc_get_size(param);
 	status = try_trans2_len(cli, "fnum", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 
 	/* try with a notify style */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, dnum);
 	SSVAL(param, 2, dnum);
 	SSVAL(param, 4, level);
-
-	param_len = talloc_get_size(param);
 	status = try_trans2_len(cli, "notify", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try with a file name */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, level);
 	SSVAL(param, 2, 0);
 	SSVAL(param, 4, 0);
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      fname, strlen(fname)+1, NULL);
-	if (param == NULL) return True;
+	param_len += clistr_push(cli, &param[6], fname, -1, STR_TERMINATE);
 
-	param_len = talloc_get_size(param);
 	status = try_trans2_len(cli, "fname", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try with a new file name */
-	newfname = "\\newfile.dat";
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, level);
 	SSVAL(param, 2, 0);
 	SSVAL(param, 4, 0);
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      newfname, strlen(newfname)+1, NULL);
-	if (param == NULL) return True;
+	param_len += clistr_push(cli, &param[6], "\\newfile.dat", -1, STR_TERMINATE);
 
-	param_len = talloc_get_size(param);
 	status = try_trans2_len(cli, "newfile", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
-	cli_unlink(cli, newfname, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
-	cli_rmdir(cli, newfname);
+	cli_unlink(cli, "\\newfile.dat", FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
+	cli_rmdir(cli, "\\newfile.dat");
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try dfs style  */
-	dname = "\\testdir";
-	cli_mkdir(cli, dname);
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 2);
-	if (param == NULL) return True;
-
+	cli_mkdir(cli, "\\testdir");
+	param_len = 2;
 	SSVAL(param, 0, level);
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      dname, strlen(dname)+1, NULL);
-	if (param == NULL) return True;
+	param_len += clistr_push(cli, &param[2], "\\testdir", -1, STR_TERMINATE);
 
-	param_len = talloc_get_size(param);
 	status = try_trans2_len(cli, "dfs", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
-	cli_rmdir(cli, dname);
+	cli_rmdir(cli, "\\testdir");
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	return False;
@@ -244,12 +205,12 @@ bool torture_trans2_scan(int dummy)
 		return False;
 	}
 
-	if (!NT_STATUS_IS_OK(cli_openx(cli, fname, O_RDWR | O_CREAT | O_TRUNC, 
+	if (!NT_STATUS_IS_OK(cli_open(cli, fname, O_RDWR | O_CREAT | O_TRUNC, 
 			 DENY_NONE, &fnum))) {
 		printf("open of %s failed\n", fname);
 		return false;
 	}
-	if (!NT_STATUS_IS_OK(cli_openx(cli, "\\", O_RDONLY, DENY_NONE, &dnum))) {
+	if (!NT_STATUS_IS_OK(cli_open(cli, "\\", O_RDONLY, DENY_NONE, &dnum))) {
 		printf("open of \\ failed\n");
 		return false;
 	}
@@ -314,7 +275,7 @@ static NTSTATUS try_nttrans(struct cli_state *cli,
 			   op, 0,
 			   NULL, 0, 0, /* setup */
 			   param, param_len, 2,
-			   data, data_len, CLI_BUFFER_SIZE,
+			   data, data_len, cli->max_xmit,
 			   NULL,		/* recv_flags2 */
 			   NULL, 0, NULL,	/* rsetup */
 			   &rparam, 0, rparam_len,
@@ -367,109 +328,71 @@ static bool scan_nttrans(struct cli_state *cli, int op, int level,
 	uint32_t data_len = 0;
 	uint32_t param_len = 0;
 	uint32_t rparam_len, rdata_len;
-	uint8_t *param = NULL;
-	uint8_t data[DATA_SIZE];
+	uint8_t param[PARAM_SIZE], data[DATA_SIZE];
 	NTSTATUS status;
-	const char *newfname;
-	const char *dname;
 
 	memset(data, 0, sizeof(data));
 	data_len = 4;
 
 	/* try with a info level only */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 2);
-	if (param == NULL) return True;
-
+	param_len = 2;
 	SSVAL(param, 0, level);
-
-	param_len = talloc_get_size(param);
 	status = try_nttrans_len(cli, "void", op, level, param, data, param_len, &data_len, 
 			    &rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try with a file descriptor */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, fnum);
 	SSVAL(param, 2, level);
 	SSVAL(param, 4, 0);
-
-	param_len = talloc_get_size(param);
 	status = try_nttrans_len(cli, "fnum", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 
 	/* try with a notify style */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, dnum);
 	SSVAL(param, 2, dnum);
 	SSVAL(param, 4, level);
-
-	param_len = talloc_get_size(param);
 	status = try_nttrans_len(cli, "notify", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try with a file name */
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, level);
 	SSVAL(param, 2, 0);
 	SSVAL(param, 4, 0);
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      fname, strlen(fname)+1, NULL);
-	if (param == NULL) return True;
+	param_len += clistr_push(cli, &param[6], fname, -1, STR_TERMINATE);
 
-	param_len = talloc_get_size(param);
 	status = try_nttrans_len(cli, "fname", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try with a new file name */
-	newfname = "\\newfile.dat";
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 6);
-	if (param == NULL) return True;
-
+	param_len = 6;
 	SSVAL(param, 0, level);
 	SSVAL(param, 2, 0);
 	SSVAL(param, 4, 0);
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      newfname, strlen(newfname)+1, NULL);
-	if (param == NULL) return True;
+	param_len += clistr_push(cli, &param[6], "\\newfile.dat", -1, STR_TERMINATE);
 
-	param_len = talloc_get_size(param);
 	status = try_nttrans_len(cli, "newfile", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
-	cli_unlink(cli, newfname, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
-	cli_rmdir(cli, newfname);
+	cli_unlink(cli, "\\newfile.dat", FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
+	cli_rmdir(cli, "\\newfile.dat");
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	/* try dfs style  */
-	dname = "\\testdir";
-	cli_mkdir(cli, dname);
-	TALLOC_FREE(param);
-	param = talloc_array(talloc_tos(), uint8_t, 2);
-	if (param == NULL) return True;
-
+	cli_mkdir(cli, "\\testdir");
+	param_len = 2;
 	SSVAL(param, 0, level);
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      dname, strlen(dname)+1, NULL);
-	if (param == NULL) return True;
+	param_len += clistr_push(cli, &param[2], "\\testdir", -1, STR_TERMINATE);
 
-	param_len = talloc_get_size(param);
 	status = try_nttrans_len(cli, "dfs", op, level, param, data, param_len, &data_len, 
 				&rparam_len, &rdata_len);
-	cli_rmdir(cli, dname);
+	cli_rmdir(cli, "\\testdir");
 	if (NT_STATUS_IS_OK(status)) return True;
 
 	return False;
@@ -489,9 +412,9 @@ bool torture_nttrans_scan(int dummy)
 		return False;
 	}
 
-	cli_openx(cli, fname, O_RDWR | O_CREAT | O_TRUNC, 
+	cli_open(cli, fname, O_RDWR | O_CREAT | O_TRUNC, 
 			 DENY_NONE, &fnum);
-	cli_openx(cli, "\\", O_RDONLY, DENY_NONE, &dnum);
+	cli_open(cli, "\\", O_RDONLY, DENY_NONE, &dnum);
 
 	for (op=OP_MIN; op<=OP_MAX; op++) {
 		printf("Scanning op=%d\n", op);

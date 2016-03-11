@@ -1,9 +1,8 @@
 <samba:parameter name="private dir"
                  context="G"
 				 type="string"
-                 constant="1"
+                 advanced="1" developer="1"
 		 xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
-<synonym>private directory</synonym>
 <description>
     <para>This parameters defines the directory
     smbd will use for storing such files as <filename moreinfo="none">smbpasswd</filename>
@@ -11,5 +10,5 @@
 </para>
 </description>
 
-<value type="default">&pathconfig.PRIVATE_DIR;</value>
+<value type="default">${prefix}/private</value>
 </samba:parameter>

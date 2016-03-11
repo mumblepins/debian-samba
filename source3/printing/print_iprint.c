@@ -34,49 +34,6 @@
 #define NOVELL_SERVER_VERSION_STRING		"iprintserverversion="
 #define NOVELL_SERVER_VERSION_OES_SP1		33554432
 
-#if (CUPS_VERSION_MAJOR > 1) || (CUPS_VERSION_MINOR > 5)
-#define HAVE_CUPS_1_6 1
-#endif
-
-#ifndef HAVE_CUPS_1_6
-#define ippGetCount(attr)     attr->num_values
-#define ippGetGroupTag(attr)  attr->group_tag
-#define ippGetName(attr)      attr->name
-#define ippGetValueTag(attr)  attr->value_tag
-#define ippGetStatusCode(ipp) ipp->request.status.status_code
-#define ippGetBoolean(attr, element) attr->values[element].boolean
-#define ippGetInteger(attr, element) attr->values[element].integer
-#define ippGetString(attr, element, language) attr->values[element].string.text
-
-static ipp_attribute_t *
-ippFirstAttribute(ipp_t *ipp)
-{
-  if (!ipp)
-    return (NULL);
-  return (ipp->current = ipp->attrs);
-}
-
-static ipp_attribute_t *
-ippNextAttribute(ipp_t *ipp)
-{
-  if (!ipp || !ipp->current)
-    return (NULL);
-  return (ipp->current = ipp->current->next);
-}
-
-static int ippSetOperation(ipp_t *ipp, ipp_op_t op)
-{
-    ipp->request.op.operation_id = op;
-    return (1);
-}
-
-static int ippSetRequestId(ipp_t *ipp, int request_id)
-{
-    ipp->request.any.request_id = request_id;
-    return (1);
-}
-#endif
-
 /*
  * 'iprint_passwd_cb()' - The iPrint password callback...
  */
@@ -93,12 +50,10 @@ iprint_passwd_cb(const char *prompt)	/* I - Prompt */
 
 static const char *iprint_server(void)
 {
-	const char *server = lp_iprint_server(talloc_tos());
-
-	if ((server != NULL) && (strlen(server) > 0)) {
+	if ((lp_iprint_server() != NULL) && (strlen(lp_iprint_server()) > 0)) {
 		DEBUG(10, ("iprint server explicitly set to %s\n",
-			   server));
-		return server;
+			   lp_iprint_server()));
+		return lp_iprint_server();
 	}
 
 	DEBUG(10, ("iprint server left to default %s\n", cupsServer()));
@@ -137,8 +92,8 @@ static int iprint_get_server_version(http_t *http, char* serviceUri)
 
 	request = ippNew();
 
-	ippSetOperation(request, (ipp_op_t)OPERATION_NOVELL_MGMT);
-	ippSetRequestId(request, 1);
+	request->request.op.operation_id = (ipp_op_t)OPERATION_NOVELL_MGMT;
+	request->request.op.request_id   = 1;
 
 	language = cupsLangDefault();
 
@@ -159,12 +114,12 @@ static int iprint_get_server_version(http_t *http, char* serviceUri)
 	*/
 
 	if (((response = cupsDoRequest(http, request, "/ipp/")) == NULL) ||
-	    (ippGetStatusCode(response) >= IPP_OK_CONFLICT))
+	    (response->request.status.status_code >= IPP_OK_CONFLICT))
 		goto out;
 
 	if (((attr = ippFindAttribute(response, "server-version",
 	                              IPP_TAG_STRING)) != NULL)) {
-		if ((ver = strstr(ippGetString(attr, 0, NULL),
+		if ((ver = strstr(attr->values[0].string.text,
                                   NOVELL_SERVER_VERSION_STRING)) != NULL) {
 			ver += strlen(NOVELL_SERVER_VERSION_STRING);
 		       /*
@@ -180,7 +135,7 @@ static int iprint_get_server_version(http_t *http, char* serviceUri)
 				serverVersion = 0;
 		}
 
-		if ((os = strstr(ippGetString(attr, 0, NULL),
+		if ((os = strstr(attr->values[0].string.text,
                                   NOVELL_SERVER_SYSNAME)) != NULL) {
 			os += strlen(NOVELL_SERVER_SYSNAME);
 			if ((temp = strchr(os,'<')) != NULL)
@@ -206,19 +161,18 @@ static int iprint_get_server_version(http_t *http, char* serviceUri)
 
 static int iprint_cache_add_printer(http_t *http,
 				   int reqId,
-				   const char *url,
-				   struct pcap_cache **pcache)
+				   char* url)
 {
 	ipp_t		*request = NULL,	/* IPP Request */
 			*response = NULL;	/* IPP Response */
 	ipp_attribute_t	*attr;			/* Current attribute */
 	cups_lang_t	*language = NULL;	/* Default language */
-	const char	*name,			/* printer-name attribute */
-			*info;			/* printer-info attribute */
-	char		smb_enabled,		/* smb-enabled attribute */
+	char		*name,			/* printer-name attribute */
+			*info,			/* printer-info attribute */
+			smb_enabled,		/* smb-enabled attribute */
 			secure;			/* security-enabled attrib. */
 
-	const char	*httpPath;	/* path portion of the printer-uri */
+	char		*httpPath;	/* path portion of the printer-uri */
 
 	static const char *pattrs[] =	/* Requested printer attributes */
 			{
@@ -230,8 +184,8 @@ static int iprint_cache_add_printer(http_t *http,
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_GET_PRINTER_ATTRIBUTES);
-	ippSetRequestId(request, reqId);
+	request->request.op.operation_id = IPP_GET_PRINTER_ATTRIBUTES;
+	request->request.op.request_id   = reqId;
 
 	language = cupsLangDefault();
 
@@ -276,13 +230,13 @@ static int iprint_cache_add_printer(http_t *http,
 		goto out;
 	}
 
-	for (attr = ippFirstAttribute(response); attr != NULL;) {
+	for (attr = response->attrs; attr != NULL;) {
 	       /*
 		* Skip leading attributes until we hit a printer...
 		*/
 
-		while (attr != NULL && ippGetGroupTag(attr) != IPP_TAG_PRINTER)
-			attr = ippNextAttribute(response);
+		while (attr != NULL && attr->group_tag != IPP_TAG_PRINTER)
+			attr = attr->next;
 
 		if (attr == NULL)
 			break;
@@ -296,15 +250,15 @@ static int iprint_cache_add_printer(http_t *http,
 		smb_enabled= 1;
 		secure     = 0;
 
-		while (attr != NULL && ippGetGroupTag(attr) == IPP_TAG_PRINTER) {
-			if (strcmp(ippGetName(attr), "printer-name") == 0 &&
-			    ippGetValueTag(attr) == IPP_TAG_NAME)
-				name = ippGetString(attr, 0, NULL);
+		while (attr != NULL && attr->group_tag == IPP_TAG_PRINTER) {
+			if (strcmp(attr->name, "printer-name") == 0 &&
+			    attr->value_tag == IPP_TAG_NAME)
+				name = attr->values[0].string.text;
 
-			if (strcmp(ippGetName(attr), "printer-info") == 0 &&
-			    (ippGetValueTag(attr) == IPP_TAG_TEXT ||
-			    ippGetValueTag(attr) == IPP_TAG_TEXTLANG))
-				info = ippGetString(attr, 0, NULL);
+			if (strcmp(attr->name, "printer-info") == 0 &&
+			    (attr->value_tag == IPP_TAG_TEXT ||
+			    attr->value_tag == IPP_TAG_TEXTLANG))
+				info = attr->values[0].string.text;
 
 		       /*
 			* If the smb-enabled attribute is present and the
@@ -312,11 +266,11 @@ static int iprint_cache_add_printer(http_t *http,
 			* If the attribute is not present, assume that the
 			* printer should show up
 			*/
-			if (!strcmp(ippGetName(attr), "smb-enabled") &&
-			    ((ippGetValueTag(attr) == IPP_TAG_INTEGER &&
-			    !ippGetInteger(attr, 0)) ||
-			    (ippGetValueTag(attr) == IPP_TAG_BOOLEAN &&
-			    !ippGetBoolean(attr, 0))))
+			if (!strcmp(attr->name, "smb-enabled") &&
+			    ((attr->value_tag == IPP_TAG_INTEGER &&
+			    !attr->values[0].integer) ||
+			    (attr->value_tag == IPP_TAG_BOOLEAN &&
+			    !attr->values[0].boolean)))
 				smb_enabled = 0;
 
 		       /*
@@ -325,14 +279,14 @@ static int iprint_cache_add_printer(http_t *http,
 			* If the attribute is not present, assume that the
 			* printer should show up
 			*/
-			if (!strcmp(ippGetName(attr), "security-enabled") &&
-			    ((ippGetValueTag(attr) == IPP_TAG_INTEGER &&
-			    ippGetInteger(attr, 0)) ||
-			    (ippGetValueTag(attr) == IPP_TAG_BOOLEAN &&
-			    ippGetBoolean(attr, 0))))
+			if (!strcmp(attr->name, "security-enabled") &&
+			    ((attr->value_tag == IPP_TAG_INTEGER &&
+			    attr->values[0].integer) ||
+			    (attr->value_tag == IPP_TAG_BOOLEAN &&
+			    attr->values[0].boolean)))
 				secure = 1;
 
-			attr = ippNextAttribute(response);
+			attr = attr->next;
 		}
 
 	       /*
@@ -343,7 +297,7 @@ static int iprint_cache_add_printer(http_t *http,
 		*/
 
 		if (name != NULL && !secure && smb_enabled) 
-			pcap_cache_add_specific(pcache, name, info, NULL);
+			pcap_cache_add(name, info, NULL);
 	}
 
  out:
@@ -352,7 +306,7 @@ static int iprint_cache_add_printer(http_t *http,
 	return(0);
 }
 
-bool iprint_cache_reload(struct pcap_cache **_pcache)
+bool iprint_cache_reload(void)
 {
 	http_t		*http = NULL;		/* HTTP connection to server */
 	ipp_t		*request = NULL,	/* IPP Request */
@@ -360,8 +314,7 @@ bool iprint_cache_reload(struct pcap_cache **_pcache)
 	ipp_attribute_t	*attr;			/* Current attribute */
 	cups_lang_t	*language = NULL;	/* Default language */
 	int		i;
-	bool ret = false;
-	struct pcap_cache *pcache = NULL;
+	bool ret = False;
 
 	DEBUG(5, ("reloading iprint printcap cache\n"));
 
@@ -390,8 +343,9 @@ bool iprint_cache_reload(struct pcap_cache **_pcache)
 
 	request = ippNew();
 
-	ippSetOperation(request, (ipp_op_t)OPERATION_NOVELL_LIST_PRINTERS);
-	ippSetRequestId(request, 1);
+	request->request.op.operation_id =
+		(ipp_op_t)OPERATION_NOVELL_LIST_PRINTERS;
+	request->request.op.request_id   = 1;
 
 	language = cupsLangDefault();
 
@@ -414,13 +368,13 @@ bool iprint_cache_reload(struct pcap_cache **_pcache)
 		goto out;
 	}
 
-	for (attr = ippFirstAttribute(response); attr != NULL;) {
+	for (attr = response->attrs; attr != NULL;) {
 	       /*
 		* Skip leading attributes until we hit a printer...
 		*/
 
-		while (attr != NULL && ippGetGroupTag(attr) != IPP_TAG_PRINTER)
-			attr = ippNextAttribute(response);
+		while (attr != NULL && attr->group_tag != IPP_TAG_PRINTER)
+			attr = attr->next;
 
 		if (attr == NULL)
 			break;
@@ -429,30 +383,28 @@ bool iprint_cache_reload(struct pcap_cache **_pcache)
 		* Pull the needed attributes from this printer...
 		*/
 
-		while (attr != NULL && ippGetGroupTag(attr) == IPP_TAG_PRINTER)
+		while (attr != NULL && attr->group_tag == IPP_TAG_PRINTER)
 		{
-			if (strcmp(ippGetName(attr), "printer-name") == 0 &&
-			    (ippGetValueTag(attr) == IPP_TAG_URI ||
-			     ippGetValueTag(attr) == IPP_TAG_NAME ||
-			     ippGetValueTag(attr) == IPP_TAG_TEXT ||
-			     ippGetValueTag(attr) == IPP_TAG_NAMELANG ||
-			     ippGetValueTag(attr) == IPP_TAG_TEXTLANG))
+			if (strcmp(attr->name, "printer-name") == 0 &&
+			    (attr->value_tag == IPP_TAG_URI ||
+			     attr->value_tag == IPP_TAG_NAME ||
+			     attr->value_tag == IPP_TAG_TEXT ||
+			     attr->value_tag == IPP_TAG_NAMELANG ||
+			     attr->value_tag == IPP_TAG_TEXTLANG))
 			{
-				for (i = 0; i<ippGetCount(attr); i++)
+				for (i = 0; i<attr->num_values; i++)
 				{
-					const char *url = ippGetString(attr, i, NULL);
+					char *url = attr->values[i].string.text;
 					if (!url || !strlen(url))
 						continue;
-					iprint_cache_add_printer(http, i+2, url,
-								 &pcache);
+					iprint_cache_add_printer(http, i+2, url);
 				}
 			}
-			attr = ippNextAttribute(response);
+			attr = attr->next;
 		}
 	}
 
-	ret = true;
-	*_pcache = pcache;
+	ret = True;
 
  out:
 	if (response)
@@ -514,8 +466,8 @@ static int iprint_job_delete(const char *sharename, const char *lprm_command, st
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_CANCEL_JOB);
-	ippSetRequestId(request, 1);
+	request->request.op.operation_id = IPP_CANCEL_JOB;
+	request->request.op.request_id   = 1;
 
 	language = cupsLangDefault();
 
@@ -541,7 +493,7 @@ static int iprint_job_delete(const char *sharename, const char *lprm_command, st
 	slprintf(httpPath, sizeof(httpPath) - 1, "/ipp/%s", sharename);
 
 	if ((response = cupsDoRequest(http, request, httpPath)) != NULL) {
-		if (ippGetStatusCode(response) >= IPP_OK_CONFLICT) {
+		if (response->request.status.status_code >= IPP_OK_CONFLICT) {
 			DEBUG(0,("Unable to cancel job %d - %s\n", pjob->sysjob,
 				ippErrorString(cupsLastError())));
 		} else {
@@ -612,8 +564,8 @@ static int iprint_job_pause(int snum, struct printjob *pjob)
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_HOLD_JOB);
-	ippSetRequestId(request, 1);
+	request->request.op.operation_id = IPP_HOLD_JOB;
+	request->request.op.request_id   = 1;
 
 	language = cupsLangDefault();
 
@@ -624,7 +576,7 @@ static int iprint_job_pause(int snum, struct printjob *pjob)
 	             "attributes-natural-language", NULL, language->language);
 
 	slprintf(uri, sizeof(uri) - 1, "ipp://%s/ipp/%s", iprint_server(),
-		 lp_printername(talloc_tos(), snum));
+		 lp_printername(snum));
 
 	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, uri);
 
@@ -638,10 +590,10 @@ static int iprint_job_pause(int snum, struct printjob *pjob)
 	*/
 
 	slprintf(httpPath, sizeof(httpPath) - 1, "/ipp/%s",
-		 lp_printername(talloc_tos(), snum));
+		 lp_printername(snum));
 
 	if ((response = cupsDoRequest(http, request, httpPath)) != NULL) {
-		if (ippGetStatusCode(response) >= IPP_OK_CONFLICT) {
+		if (response->request.status.status_code >= IPP_OK_CONFLICT) {
 			DEBUG(0,("Unable to hold job %d - %s\n", pjob->sysjob,
 				ippErrorString(cupsLastError())));
 		} else {
@@ -712,8 +664,8 @@ static int iprint_job_resume(int snum, struct printjob *pjob)
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_RELEASE_JOB);
-	ippSetRequestId(request, 1);
+	request->request.op.operation_id = IPP_RELEASE_JOB;
+	request->request.op.request_id   = 1;
 
 	language = cupsLangDefault();
 
@@ -724,7 +676,7 @@ static int iprint_job_resume(int snum, struct printjob *pjob)
 	             "attributes-natural-language", NULL, language->language);
 
 	slprintf(uri, sizeof(uri) - 1, "ipp://%s/ipp/%s", iprint_server(),
-		 lp_printername(talloc_tos(), snum));
+		 lp_printername(snum));
 
 	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI, "printer-uri", NULL, uri);
 
@@ -738,10 +690,10 @@ static int iprint_job_resume(int snum, struct printjob *pjob)
 	*/
 
 	slprintf(httpPath, sizeof(httpPath) - 1, "/ipp/%s",
-		 lp_printername(talloc_tos(), snum));
+		 lp_printername(snum));
 
 	if ((response = cupsDoRequest(http, request, httpPath)) != NULL) {
-		if (ippGetStatusCode(response) >= IPP_OK_CONFLICT) {
+		if (response->request.status.status_code >= IPP_OK_CONFLICT) {
 			DEBUG(0,("Unable to release job %d - %s\n", pjob->sysjob,
 				ippErrorString(cupsLastError())));
 		} else {
@@ -770,9 +722,7 @@ static int iprint_job_resume(int snum, struct printjob *pjob)
  * 'iprint_job_submit()' - Submit a job for printing.
  */
 
-static int iprint_job_submit(int snum, struct printjob *pjob,
-			     enum printing_types printing_type,
-			     char *lpq_cmd)
+static int iprint_job_submit(int snum, struct printjob *pjob)
 {
 	int		ret = 1;		/* Return value */
 	http_t		*http = NULL;		/* HTTP connection to server */
@@ -813,8 +763,8 @@ static int iprint_job_submit(int snum, struct printjob *pjob,
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_PRINT_JOB);
-	ippSetRequestId(request, 1);
+	request->request.op.operation_id = IPP_PRINT_JOB;
+	request->request.op.request_id   = 1;
 
 	language = cupsLangDefault();
 
@@ -825,7 +775,7 @@ static int iprint_job_submit(int snum, struct printjob *pjob,
 	             "attributes-natural-language", NULL, language->language);
 
 	slprintf(uri, sizeof(uri) - 1, "ipp://%s/ipp/%s", iprint_server(),
-		 lp_printername(talloc_tos(), snum));
+		 lp_printername(snum));
 
 	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_URI,
 	             "printer-uri", NULL, uri);
@@ -844,19 +794,19 @@ static int iprint_job_submit(int snum, struct printjob *pjob,
 	* Do the request and get back a response...
 	*/
 
-	slprintf(uri, sizeof(uri) - 1, "/ipp/%s", lp_printername(talloc_tos(), snum));
+	slprintf(uri, sizeof(uri) - 1, "/ipp/%s", lp_printername(snum));
 
 	if ((response = cupsDoFileRequest(http, request, uri, pjob->filename)) != NULL) {
-		if (ippGetStatusCode(response) >= IPP_OK_CONFLICT) {
+		if (response->request.status.status_code >= IPP_OK_CONFLICT) {
 			DEBUG(0,("Unable to print file to %s - %s\n",
-				 lp_printername(talloc_tos(), snum),
+				 lp_printername(snum),
 			         ippErrorString(cupsLastError())));
 		} else {
 			ret = 0;
 		}
 	} else {
 		DEBUG(0,("Unable to print file to `%s' - %s\n",
-			 lp_printername(talloc_tos(), snum),
+			 lp_printername(snum),
 			 ippErrorString(cupsLastError())));
 	}
 
@@ -867,9 +817,9 @@ static int iprint_job_submit(int snum, struct printjob *pjob,
 	if ( ret == 0 ) {
 
 		attr = ippFindAttribute(response, "job-id", IPP_TAG_INTEGER);
-		if (attr != NULL && ippGetGroupTag(attr) == IPP_TAG_JOB)
+		if (attr != NULL && attr->group_tag == IPP_TAG_JOB)
 		{
-			pjob->sysjob = ippGetInteger(attr, 0);
+			pjob->sysjob = attr->values[0].integer;
 		}
 	}
 
@@ -916,6 +866,7 @@ static int iprint_queue_get(const char *sharename,
 	int		job_id;		/* job-id attribute */
 	int		job_k_octets;	/* job-k-octets attribute */
 	time_t		job_time;	/* time-at-creation attribute */
+	time_t		printer_current_time = 0;	/* printer's current time */
 	time_t		printer_up_time = 0;	/* printer's uptime */
 	ipp_jstate_t	job_status;	/* job-status attribute */
 	int		job_priority;	/* job-priority attribute */
@@ -988,8 +939,8 @@ static int iprint_queue_get(const char *sharename,
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_GET_PRINTER_ATTRIBUTES);
-	ippSetRequestId(request, 2);
+	request->request.op.operation_id = IPP_GET_PRINTER_ATTRIBUTES;
+	request->request.op.request_id   = 2;
 
 	language = cupsLangDefault();
 
@@ -1020,9 +971,9 @@ static int iprint_queue_get(const char *sharename,
 		goto out;
 	}
 
-	if (ippGetStatusCode(response) >= IPP_OK_CONFLICT) {
+	if (response->request.status.status_code >= IPP_OK_CONFLICT) {
 		DEBUG(0,("Unable to get printer status for %s - %s\n", printername,
-			 ippErrorString(ippGetStatusCode(response))));
+			 ippErrorString(response->request.status.status_code)));
 		*q = queue;
 		goto out;
 	}
@@ -1032,7 +983,7 @@ static int iprint_queue_get(const char *sharename,
 	*/
 
 	if ((attr = ippFindAttribute(response, "printer-state", IPP_TAG_ENUM)) != NULL) {
-		if (ippGetInteger(attr, 0) == IPP_PRINTER_STOPPED)
+		if (attr->values[0].integer == IPP_PRINTER_STOPPED)
 			status->status = LPSTAT_STOPPED;
 		else
 			status->status = LPSTAT_OK;
@@ -1040,11 +991,15 @@ static int iprint_queue_get(const char *sharename,
 
 	if ((attr = ippFindAttribute(response, "printer-state-message",
 	                             IPP_TAG_TEXT)) != NULL)
-		fstrcpy(status->message, ippGetString(attr, 0, NULL));
+		fstrcpy(status->message, attr->values[0].string.text);
+
+	if ((attr = ippFindAttribute(response, "printer-current-time",
+	                             IPP_TAG_DATE)) != NULL)
+		printer_current_time = ippDateToTime(attr->values[0].date);
 
 	if ((attr = ippFindAttribute(response, "printer-up-time",
 	                             IPP_TAG_INTEGER)) != NULL)
-		printer_up_time = ippGetInteger(attr, 0);
+		printer_up_time = attr->values[0].integer;
 
 	ippDelete(response);
 	response = NULL;
@@ -1061,8 +1016,8 @@ static int iprint_queue_get(const char *sharename,
 
 	request = ippNew();
 
-	ippSetOperation(request, IPP_GET_JOBS);
-	ippSetRequestId(request, 3);
+	request->request.op.operation_id = IPP_GET_JOBS;
+	request->request.op.request_id   = 3;
 
 	ippAddString(request, IPP_TAG_OPERATION, IPP_TAG_CHARSET,
 	             "attributes-charset", NULL, "utf-8");
@@ -1090,9 +1045,9 @@ static int iprint_queue_get(const char *sharename,
 		goto out;
 	}
 
-	if (ippGetStatusCode(response) >= IPP_OK_CONFLICT) {
+	if (response->request.status.status_code >= IPP_OK_CONFLICT) {
 		DEBUG(0,("Unable to get jobs for %s - %s\n", uri,
-			 ippErrorString(ippGetStatusCode(response))));
+			 ippErrorString(response->request.status.status_code)));
 		goto out;
 	}
 
@@ -1104,13 +1059,13 @@ static int iprint_queue_get(const char *sharename,
 	qalloc = 0;
 	queue  = NULL;
 
-	for (attr = ippFirstAttribute(response); attr != NULL; attr = ippNextAttribute(response)) {
+	for (attr = response->attrs; attr != NULL; attr = attr->next) {
 	       /*
 		* Skip leading attributes until we hit a job...
 		*/
 
-		while (attr != NULL && ippGetGroupTag(attr) != IPP_TAG_JOB)
-			attr = ippNextAttribute(response);
+		while (attr != NULL && attr->group_tag != IPP_TAG_JOB)
+			attr = attr->next;
 
 		if (attr == NULL)
 			break;
@@ -1145,30 +1100,30 @@ static int iprint_queue_get(const char *sharename,
 		user_name    = NULL;
 		job_name     = NULL;
 
-		while (attr != NULL && ippGetGroupTag(attr) == IPP_TAG_JOB) {
-			if (ippGetName(attr) == NULL) {
-				attr = ippNextAttribute(response);
+		while (attr != NULL && attr->group_tag == IPP_TAG_JOB) {
+			if (attr->name == NULL) {
+				attr = attr->next;
 				break;
 			}
 
-			if (strcmp(ippGetName(attr), "job-id") == 0 &&
-			    ippGetValueTag(attr) == IPP_TAG_INTEGER)
-				job_id = ippGetInteger(attr, 0);
+			if (strcmp(attr->name, "job-id") == 0 &&
+			    attr->value_tag == IPP_TAG_INTEGER)
+				job_id = attr->values[0].integer;
 
-			if (strcmp(ippGetName(attr), "job-k-octets") == 0 &&
-			    ippGetValueTag(attr) == IPP_TAG_INTEGER)
-				job_k_octets = ippGetInteger(attr, 0);
+			if (strcmp(attr->name, "job-k-octets") == 0 &&
+			    attr->value_tag == IPP_TAG_INTEGER)
+				job_k_octets = attr->values[0].integer;
 
-			if (strcmp(ippGetName(attr), "job-priority") == 0 &&
-			    ippGetValueTag(attr) == IPP_TAG_INTEGER)
-				job_priority = ippGetInteger(attr, 0);
+			if (strcmp(attr->name, "job-priority") == 0 &&
+			    attr->value_tag == IPP_TAG_INTEGER)
+				job_priority = attr->values[0].integer;
 
-			if (strcmp(ippGetName(attr), "job-state") == 0 &&
-			    ippGetValueTag(attr) == IPP_TAG_ENUM)
-				job_status = (ipp_jstate_t)ippGetInteger(attr, 0);
+			if (strcmp(attr->name, "job-state") == 0 &&
+			    attr->value_tag == IPP_TAG_ENUM)
+				job_status = (ipp_jstate_t)(attr->values[0].integer);
 
-			if (strcmp(ippGetName(attr), "time-at-creation") == 0 &&
-			    ippGetValueTag(attr) == IPP_TAG_INTEGER)
+			if (strcmp(attr->name, "time-at-creation") == 0 &&
+			    attr->value_tag == IPP_TAG_INTEGER)
 			{
 			       /*
 				* If jobs times are in Unix time, the accuracy of the job
@@ -1178,22 +1133,22 @@ static int iprint_queue_get(const char *sharename,
 				*/
 
 				if (jobUseUnixTime)
-					job_time = ippGetInteger(attr, 0);
+					job_time = attr->values[0].integer; 
 				else
-					job_time = time(NULL) - printer_up_time + ippGetInteger(attr, 0);
+					job_time = time(NULL) - printer_up_time + attr->values[0].integer;
 			}
 
-			if (strcmp(ippGetName(attr), "job-name") == 0 &&
-			    (ippGetValueTag(attr) == IPP_TAG_NAMELANG ||
-			     ippGetValueTag(attr) == IPP_TAG_NAME))
-				job_name = ippGetString(attr, 0, NULL);
+			if (strcmp(attr->name, "job-name") == 0 &&
+			    (attr->value_tag == IPP_TAG_NAMELANG ||
+			     attr->value_tag == IPP_TAG_NAME))
+				job_name = attr->values[0].string.text;
 
-			if (strcmp(ippGetName(attr), "job-originating-user-name") == 0 &&
-			    (ippGetValueTag(attr) == IPP_TAG_NAMELANG ||
-			     ippGetValueTag(attr) == IPP_TAG_NAME))
-				user_name = ippGetString(attr, 0, NULL);
+			if (strcmp(attr->name, "job-originating-user-name") == 0 &&
+			    (attr->value_tag == IPP_TAG_NAMELANG ||
+			     attr->value_tag == IPP_TAG_NAME))
+				user_name = attr->values[0].string.text;
 
-			attr = ippNextAttribute(response);
+			attr = attr->next;
 		}
 
 	       /*
@@ -1207,7 +1162,7 @@ static int iprint_queue_get(const char *sharename,
 				continue;
 		}
 
-		temp->sysjob   = job_id;
+		temp->job      = job_id;
 		temp->size     = job_k_octets * 1024;
 		temp->status   = job_status == IPP_JOB_PENDING ? LPQ_QUEUED :
 		                 job_status == IPP_JOB_STOPPED ? LPQ_PAUSED :

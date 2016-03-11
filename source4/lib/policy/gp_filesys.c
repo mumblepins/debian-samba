@@ -17,13 +17,15 @@
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 #include "includes.h"
-#include "system/filesys.h"
 #include "lib/policy/policy.h"
 #include "libcli/raw/smb.h"
 #include "libcli/libcli.h"
 #include "param/param.h"
 #include "libcli/resolve/resolve.h"
 #include "libcli/raw/libcliraw.h"
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
 
@@ -162,9 +164,10 @@ static NTSTATUS gp_cli_connect(struct gp_context *gp_ctx)
 	lpcfg_smbcli_options(gp_ctx->lp_ctx, &options);
 	lpcfg_smbcli_session_options(gp_ctx->lp_ctx, &session_options);
 
+
 	return smbcli_full_connection(gp_ctx,
 			&gp_ctx->cli,
-			gp_ctx->active_dc->name,
+			gp_ctx->active_dc.name,
 			lpcfg_smb_ports(gp_ctx->lp_ctx),
 			"sysvol",
 			NULL,
@@ -251,7 +254,6 @@ static NTSTATUS gp_get_file (struct smbcli_tree *tree, const char *remote_src,
 		DEBUG(0, ("Remote/local file size mismatch after copying file: "
 		          "%s (remote %zu, local %zu).\n",
 		          remote_src, file_size, nread));
-		close(fh_local);
 		talloc_free(buf);
 		return NT_STATUS_UNSUCCESSFUL;
 	}
@@ -280,18 +282,12 @@ static NTSTATUS gp_get_files(struct smbcli_tree *tree, const char *share_path,
 
 		/* Get local path by replacing backslashes with slashes */
 		local_rel_path = talloc_strdup(mem_ctx, list->files[i].rel_path);
-		if (local_rel_path == NULL) {
-			TALLOC_FREE(mem_ctx);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(local_rel_path, mem_ctx);
 		string_replace(local_rel_path, '\\', '/');
 
 		full_local_path = talloc_asprintf(mem_ctx, "%s%s", local_path,
 				local_rel_path);
-		if (full_local_path == NULL) {
-			TALLOC_FREE(mem_ctx);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(full_local_path, mem_ctx);
 
 		/* If the entry is a directory, create it. */
 		if (list->files[i].is_directory == true) {
@@ -307,10 +303,7 @@ static NTSTATUS gp_get_files(struct smbcli_tree *tree, const char *share_path,
 
 		full_remote_path = talloc_asprintf(mem_ctx, "%s%s", share_path,
 				list->files[i].rel_path);
-		if (full_remote_path == NULL) {
-			TALLOC_FREE(mem_ctx);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(full_remote_path, mem_ctx);
 
 		/* Get the file */
 		status = gp_get_file(tree, full_remote_path, full_local_path);
@@ -349,24 +342,15 @@ NTSTATUS gp_fetch_gpt (struct gp_context *gp_ctx, struct gp_object *gpo,
 
 	/* Get the remote path to copy from */
 	share_path = gp_get_share_path(mem_ctx, gpo->file_sys_path);
-	if (share_path == NULL) {
-		TALLOC_FREE(mem_ctx);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(share_path, mem_ctx);
 
 	/* Get the local path to copy to */
 	local_path = talloc_asprintf(gp_ctx, "%s/%s", gp_tmpdir(mem_ctx), gpo->name);
-	if (local_path == NULL) {
-		TALLOC_FREE(mem_ctx);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(local_path, mem_ctx);
 
 	/* Prepare the state structure */
 	state = talloc_zero(mem_ctx, struct gp_list_state);
-	if (state == NULL) {
-		TALLOC_FREE(mem_ctx);
-		return NT_STATUS_NO_MEMORY;
-	}
+	NT_STATUS_HAVE_NO_MEMORY_AND_FREE(state, mem_ctx);
 
 	state->tree = gp_ctx->cli->tree;
 	state->share_path = share_path;
@@ -411,13 +395,12 @@ static NTSTATUS push_recursive (struct gp_context *gp_ctx, const char *local_pat
 {
 	DIR *dir;
 	struct dirent *dirent;
-	char *entry_local_path = NULL;
-	char *entry_remote_path = NULL;
+	char *entry_local_path;
+	char *entry_remote_path;
 	int local_fd, remote_fd;
 	int buf[1024];
 	int nread, total_read;
 	struct stat s;
-	NTSTATUS status;
 
 	dir = opendir(local_path);
 	while ((dirent = readdir(dir)) != NULL) {
@@ -428,21 +411,14 @@ static NTSTATUS push_recursive (struct gp_context *gp_ctx, const char *local_pat
 
 		entry_local_path = talloc_asprintf(gp_ctx, "%s/%s", local_path,
 		                                   dirent->d_name);
-		if (entry_local_path == NULL) {
-			status = NT_STATUS_NO_MEMORY;
-			goto done;
-		}
+		NT_STATUS_HAVE_NO_MEMORY(entry_local_path);
 
 		entry_remote_path = talloc_asprintf(gp_ctx, "%s\\%s",
 		                                    remote_path, dirent->d_name);
-		if (entry_remote_path == NULL) {
-			status = NT_STATUS_NO_MEMORY;
-			goto done;
-		}
+		NT_STATUS_HAVE_NO_MEMORY(entry_remote_path);
 
-		if (stat(entry_local_path, &s) != 0) {
-			status = NT_STATUS_UNSUCCESSFUL;
-			goto done;
+		if (stat(dirent->d_name, &s) != 0) {
+			return NT_STATUS_UNSUCCESSFUL;
 		}
 		if (s.st_mode & S_IFDIR) {
 			DEBUG(6, ("Pushing directory %s to %s on sysvol\n",
@@ -460,17 +436,19 @@ static NTSTATUS push_recursive (struct gp_context *gp_ctx, const char *local_pat
 			                        O_WRONLY | O_CREAT,
 			                        0);
 			if (remote_fd < 0) {
+				talloc_free(entry_local_path);
+				talloc_free(entry_remote_path);
 				DEBUG(0, ("Failed to create remote file: %s\n",
 				          entry_remote_path));
-				status = NT_STATUS_UNSUCCESSFUL;
-				goto done;
+				return NT_STATUS_UNSUCCESSFUL;
 			}
 			local_fd = open(entry_local_path, O_RDONLY);
 			if (local_fd < 0) {
+				talloc_free(entry_local_path);
+				talloc_free(entry_remote_path);
 				DEBUG(0, ("Failed to open local file: %s\n",
 				          entry_local_path));
-				status = NT_STATUS_UNSUCCESSFUL;
-				goto done;
+				return NT_STATUS_UNSUCCESSFUL;
 			}
 			total_read = 0;
 			while ((nread = read(local_fd, &buf, sizeof(buf)))) {
@@ -482,18 +460,12 @@ static NTSTATUS push_recursive (struct gp_context *gp_ctx, const char *local_pat
 			close(local_fd);
 			smbcli_close(gp_ctx->cli->tree, remote_fd);
 		}
-		TALLOC_FREE(entry_local_path);
-		TALLOC_FREE(entry_remote_path);
+		talloc_free(entry_local_path);
+		talloc_free(entry_remote_path);
 	}
-
-	status = NT_STATUS_OK;
-done:
-	talloc_free(entry_local_path);
-	talloc_free(entry_remote_path);
-
 	closedir(dir);
 
-	return status;
+	return NT_STATUS_OK;
 }
 
 
@@ -581,12 +553,13 @@ NTSTATUS gp_create_gpt(struct gp_context *gp_ctx, const char *name,
 	}
 
 	rv = write(fd, file_content, strlen(file_content));
-	close(fd);
 	if (rv != strlen(file_content)) {
 		DEBUG(0, ("Short write in GPT.INI\n"));
 		talloc_free(mem_ctx);
 		return NT_STATUS_UNSUCCESSFUL;
 	}
+
+	close(fd);
 
 	/* Upload the GPT to the sysvol share on a DC */
 	status = gp_push_gpt(gp_ctx, policy_dir, file_sys_path);

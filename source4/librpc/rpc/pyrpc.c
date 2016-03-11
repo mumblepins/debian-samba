@@ -26,13 +26,10 @@
 #include "librpc/rpc/dcerpc.h"
 #include "librpc/rpc/pyrpc_util.h"
 #include "auth/credentials/pycredentials.h"
-#include "auth/gensec/gensec.h"
 
 void initbase(void);
 
-static PyTypeObject dcerpc_InterfaceType;
-
-static PyTypeObject *ndr_syntax_id_Type;
+staticforward PyTypeObject dcerpc_InterfaceType;
 
 static bool PyString_AsGUID(PyObject *object, struct GUID *uuid)
 {
@@ -120,58 +117,6 @@ static PyObject *py_iface_transfer_syntax(PyObject *obj, void *closure)
 	return py_ndr_syntax_id(&iface->pipe->transfer_syntax);
 }
 
-static PyObject *py_iface_session_key(PyObject *obj, void *closure)
-{
-	dcerpc_InterfaceObject *iface = (dcerpc_InterfaceObject *)obj;
-	DATA_BLOB session_key;
-
-	NTSTATUS status = dcerpc_fetch_session_key(iface->pipe, &session_key);
-	PyErr_NTSTATUS_IS_ERR_RAISE(status);
-
-	return PyString_FromStringAndSize((const char *)session_key.data, session_key.length);
-}
-
-static PyObject *py_iface_user_session_key(PyObject *obj, void *closure)
-{
-	dcerpc_InterfaceObject *iface = (dcerpc_InterfaceObject *)obj;
-	TALLOC_CTX *mem_ctx;
-	NTSTATUS status;
-	struct gensec_security *security = NULL;
-	DATA_BLOB session_key = data_blob_null;
-	static PyObject *session_key_obj = NULL;
-
-	if (iface->pipe == NULL) {
-		PyErr_SetNTSTATUS(NT_STATUS_NO_USER_SESSION_KEY);
-		return NULL;
-	}
-
-	if (iface->pipe->conn == NULL) {
-		PyErr_SetNTSTATUS(NT_STATUS_NO_USER_SESSION_KEY);
-		return NULL;
-	}
-
-	if (iface->pipe->conn->security_state.generic_state == NULL) {
-		PyErr_SetNTSTATUS(NT_STATUS_NO_USER_SESSION_KEY);
-		return NULL;
-	}
-
-	security = iface->pipe->conn->security_state.generic_state;
-
-	mem_ctx = talloc_new(NULL);
-
-	status = gensec_session_key(security, mem_ctx, &session_key);
-	if (!NT_STATUS_IS_OK(status)) {
-		talloc_free(mem_ctx);
-		PyErr_SetNTSTATUS(status);
-		return NULL;
-	}
-
-	session_key_obj = PyString_FromStringAndSize((const char *)session_key.data,
-						     session_key.length);
-	talloc_free(mem_ctx);
-	return session_key_obj;
-}
-
 static PyGetSetDef dcerpc_interface_getsetters[] = {
 	{ discard_const_p(char, "server_name"), py_iface_server_name, NULL,
 	  discard_const_p(char, "name of the server, if connected over SMB") },
@@ -179,10 +124,6 @@ static PyGetSetDef dcerpc_interface_getsetters[] = {
  	  discard_const_p(char, "syntax id of the abstract syntax") },
 	{ discard_const_p(char, "transfer_syntax"), py_iface_transfer_syntax, NULL, 
  	  discard_const_p(char, "syntax id of the transfersyntax") },
-	{ discard_const_p(char, "session_key"), py_iface_session_key, NULL,
-	  discard_const_p(char, "session key (as used for blob encryption on LSA and SAMR)") },
-	{ discard_const_p(char, "user_session_key"), py_iface_user_session_key, NULL,
-	  discard_const_p(char, "user_session key (as used for blob encryption on DRSUAPI)") },
 	{ NULL }
 };
 
@@ -246,74 +187,148 @@ static PyObject *py_iface_request(PyObject *self, PyObject *args, PyObject *kwar
 	return ret;
 }
 
+static PyObject *py_iface_alter_context(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+	dcerpc_InterfaceObject *iface = (dcerpc_InterfaceObject *)self;
+	NTSTATUS status;
+	const char *kwnames[] = { "abstract_syntax", "transfer_syntax", NULL };
+	PyObject *py_abstract_syntax = Py_None, *py_transfer_syntax = Py_None;
+	struct ndr_syntax_id abstract_syntax, transfer_syntax;
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O:alter_context", 
+		discard_const_p(char *, kwnames), &py_abstract_syntax,
+		&py_transfer_syntax)) {
+		return NULL;
+	}
+
+	if (!ndr_syntax_from_py_object(py_abstract_syntax, &abstract_syntax))
+		return NULL;
+
+	if (py_transfer_syntax == Py_None) {
+		transfer_syntax = ndr_transfer_syntax;
+	} else {
+		if (!ndr_syntax_from_py_object(py_transfer_syntax, 
+					       &transfer_syntax))
+			return NULL;
+	}
+
+	status = dcerpc_alter_context(iface->pipe, iface->pipe, &abstract_syntax, 
+				      &transfer_syntax);
+
+	if (!NT_STATUS_IS_OK(status)) {
+		PyErr_SetDCERPCStatus(iface->pipe, status);
+		return NULL;
+	}
+
+	Py_RETURN_NONE;
+}
+
 static PyMethodDef dcerpc_interface_methods[] = {
 	{ "request", (PyCFunction)py_iface_request, METH_VARARGS|METH_KEYWORDS, "S.request(opnum, data, object=None) -> data\nMake a raw request" },
+	{ "alter_context", (PyCFunction)py_iface_alter_context, METH_VARARGS|METH_KEYWORDS, "S.alter_context(syntax)\nChange to a different interface" },
 	{ NULL, NULL, 0, NULL },
 };
 
 static void dcerpc_interface_dealloc(PyObject* self)
 {
 	dcerpc_InterfaceObject *interface = (dcerpc_InterfaceObject *)self;
-	interface->binding_handle = NULL;
-	interface->pipe = NULL;
-	TALLOC_FREE(interface->mem_ctx);
+	talloc_free(interface->mem_ctx);
 	self->ob_type->tp_free(self);
 }
 
 static PyObject *dcerpc_interface_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-	PyObject *ret;
-	const char *binding_string = NULL;
-	PyObject *py_lp_ctx = Py_None;
-	PyObject *py_credentials = Py_None;
-	PyObject *syntax = Py_None;
-	PyObject *py_basis = Py_None;
+	dcerpc_InterfaceObject *ret;
+	const char *binding_string;
+	struct cli_credentials *credentials;
+	struct loadparm_context *lp_ctx = NULL;
+	PyObject *py_lp_ctx = Py_None, *py_credentials = Py_None;
+	TALLOC_CTX *mem_ctx;
+	struct tevent_context *event_ctx;
+	NTSTATUS status;
+
+	PyObject *syntax, *py_basis = Py_None;
 	const char *kwnames[] = {
 		"binding", "syntax", "lp_ctx", "credentials", "basis_connection", NULL
 	};
-	static struct ndr_interface_table dummy_table;
-	PyObject *args2 = Py_None;
-	PyObject *kwargs2 = Py_None;
+	struct ndr_interface_table *table;
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "sO|OOO:connect", discard_const_p(char *, kwnames), &binding_string, &syntax, &py_lp_ctx, &py_credentials, &py_basis)) {
 		return NULL;
 	}
 
-	if (strncmp(binding_string, "irpc:", 5) == 0) {
-		PyErr_SetString(PyExc_ValueError, "irpc: transport not supported");
+	mem_ctx = talloc_new(NULL);
+	if (mem_ctx == NULL) {
+		PyErr_NoMemory();
 		return NULL;
 	}
 
-	/*
-	 * Fill a dummy interface table struct. TODO: In the future, we should
+	lp_ctx = lpcfg_from_py_object(mem_ctx, py_lp_ctx);
+	if (lp_ctx == NULL) {
+		PyErr_SetString(PyExc_TypeError, "Expected loadparm context");
+		talloc_free(mem_ctx);
+		return NULL;
+	}
+
+	credentials = cli_credentials_from_py_object(py_credentials);
+	if (credentials == NULL) {
+		PyErr_SetString(PyExc_TypeError, "Expected credentials");
+		talloc_free(mem_ctx);
+		return NULL;
+	}
+	ret = PyObject_New(dcerpc_InterfaceObject, type);
+	ret->mem_ctx = mem_ctx;
+
+	event_ctx = s4_event_context_init(ret->mem_ctx);
+
+	/* Create a dummy interface table struct. TODO: In the future, we should
 	 * rather just allow connecting without requiring an interface table.
-	 *
-	 * We just fill the syntax during the connect, but keep the memory valid
-	 * the whole time.
 	 */
-	if (!ndr_syntax_from_py_object(syntax, &dummy_table.syntax_id)) {
+
+	table = talloc_zero(ret->mem_ctx, struct ndr_interface_table);
+
+	if (table == NULL) {
+		PyErr_SetString(PyExc_MemoryError, "Allocating interface table");
+		talloc_free(mem_ctx);
 		return NULL;
 	}
 
-	args2 = Py_BuildValue("(s)", binding_string);
-	if (args2 == NULL) {
+	if (!ndr_syntax_from_py_object(syntax, &table->syntax_id)) {
+		talloc_free(mem_ctx);
 		return NULL;
 	}
 
-	kwargs2 = Py_BuildValue("{s:O,s:O,s:O}",
-				"lp_ctx", py_lp_ctx,
-				"credentials", py_credentials,
-				"basis_connection", py_basis);
-	if (kwargs2 == NULL) {
-		Py_DECREF(args2);
-		return NULL;
+	ret->pipe = NULL;
+	ret->binding_handle = NULL;
+
+	if (py_basis != Py_None) {
+		struct dcerpc_pipe *base_pipe;
+
+		if (!PyObject_TypeCheck(py_basis, &dcerpc_InterfaceType)) {
+			PyErr_SetString(PyExc_ValueError, "basis_connection must be a DCE/RPC connection");
+			talloc_free(mem_ctx);
+			return NULL;
+		}
+
+		base_pipe = talloc_reference(ret->mem_ctx, 
+					 ((dcerpc_InterfaceObject *)py_basis)->pipe);
+
+		status = dcerpc_secondary_context(base_pipe, &ret->pipe, table);
+
+		ret->pipe = talloc_steal(ret->mem_ctx, ret->pipe);
+	} else {
+		status = dcerpc_pipe_connect(ret->mem_ctx, &ret->pipe, binding_string, 
+			     table, credentials, event_ctx, lp_ctx);
 	}
 
-	ret = py_dcerpc_interface_init_helper(type, args2, kwargs2, &dummy_table);
-	ZERO_STRUCT(dummy_table.syntax_id);
-	Py_DECREF(args2);
-	Py_DECREF(kwargs2);
-	return ret;
+	if (!NT_STATUS_IS_OK(status)) {
+		PyErr_SetDCERPCStatus(ret->pipe, status);
+		talloc_free(ret->mem_ctx);
+		return NULL;
+	}
+	ret->pipe->conn->flags |= DCERPC_NDR_REF_ALLOC;
+	ret->binding_handle = ret->pipe->binding_handle;
+	return (PyObject *)ret;
 }
 
 static PyTypeObject dcerpc_InterfaceType = {
@@ -334,98 +349,11 @@ static PyTypeObject dcerpc_InterfaceType = {
 	.tp_new = dcerpc_interface_new,
 };
 
-static PyObject *py_transfer_syntax_ndr_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
-{
-	return py_dcerpc_syntax_init_helper(type, args, kwargs, &ndr_transfer_syntax_ndr);
-}
-
-static PyTypeObject py_transfer_syntax_ndr_SyntaxType = {
-	PyObject_HEAD_INIT(NULL) 0,
-	.tp_name = "base.transfer_syntax_ndr",
-	.tp_basicsize = sizeof(pytalloc_Object),
-	.tp_doc = "transfer_syntax_ndr()\n",
-	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-	.tp_new = py_transfer_syntax_ndr_new,
-};
-
-static PyObject *py_transfer_syntax_ndr64_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
-{
-	return py_dcerpc_syntax_init_helper(type, args, kwargs, &ndr_transfer_syntax_ndr64);
-}
-
-static PyTypeObject py_transfer_syntax_ndr64_SyntaxType = {
-	PyObject_HEAD_INIT(NULL) 0,
-	.tp_name = "base.transfer_syntax_ndr64",
-	.tp_basicsize = sizeof(pytalloc_Object),
-	.tp_doc = "transfer_syntax_ndr64()\n",
-	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-	.tp_new = py_transfer_syntax_ndr64_new,
-};
-
-static PyObject *py_bind_time_features_syntax_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
-{
-	const char *kwnames[] = {
-		"features", NULL
-	};
-	unsigned long long features = 0;
-	struct ndr_syntax_id syntax;
-	PyObject *args2 = Py_None;
-	PyObject *kwargs2 = Py_None;
-
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "K:features", discard_const_p(char *, kwnames), &features)) {
-		return NULL;
-	}
-
-	args2 = Py_BuildValue("()");
-	if (args2 == NULL) {
-		return NULL;
-	}
-
-	kwargs2 = Py_BuildValue("{}");
-	if (kwargs2 == NULL) {
-		Py_DECREF(args2);
-		return NULL;
-	}
-
-	syntax = dcerpc_construct_bind_time_features(features);
-
-	return py_dcerpc_syntax_init_helper(type, args2, kwargs2, &syntax);
-}
-
-static PyTypeObject py_bind_time_features_syntax_SyntaxType = {
-	PyObject_HEAD_INIT(NULL) 0,
-	.tp_name = "base.bind_time_features_syntax",
-	.tp_basicsize = sizeof(pytalloc_Object),
-	.tp_doc = "bind_time_features_syntax(features)\n",
-	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-	.tp_new = py_bind_time_features_syntax_new,
-};
-
 void initbase(void)
 {
 	PyObject *m;
-	PyObject *dep_samba_dcerpc_misc;
-
-	dep_samba_dcerpc_misc = PyImport_ImportModule("samba.dcerpc.misc");
-	if (dep_samba_dcerpc_misc == NULL)
-		return;
-
-	ndr_syntax_id_Type = (PyTypeObject *)PyObject_GetAttrString(dep_samba_dcerpc_misc, "ndr_syntax_id");
-	if (ndr_syntax_id_Type == NULL)
-		return;
-
-	py_transfer_syntax_ndr_SyntaxType.tp_base = ndr_syntax_id_Type;
-	py_transfer_syntax_ndr64_SyntaxType.tp_base = ndr_syntax_id_Type;
-	py_bind_time_features_syntax_SyntaxType.tp_base = ndr_syntax_id_Type;
 
 	if (PyType_Ready(&dcerpc_InterfaceType) < 0)
-		return;
-
-	if (PyType_Ready(&py_transfer_syntax_ndr_SyntaxType) < 0)
-		return;
-	if (PyType_Ready(&py_transfer_syntax_ndr64_SyntaxType) < 0)
-		return;
-	if (PyType_Ready(&py_bind_time_features_syntax_SyntaxType) < 0)
 		return;
 
 	m = Py_InitModule3("base", NULL, "DCE/RPC protocol implementation");
@@ -434,11 +362,4 @@ void initbase(void)
 
 	Py_INCREF((PyObject *)&dcerpc_InterfaceType);
 	PyModule_AddObject(m, "ClientConnection", (PyObject *)&dcerpc_InterfaceType);
-
-	Py_INCREF((PyObject *)(void *)&py_transfer_syntax_ndr_SyntaxType);
-	PyModule_AddObject(m, "transfer_syntax_ndr", (PyObject *)(void *)&py_transfer_syntax_ndr_SyntaxType);
-	Py_INCREF((PyObject *)(void *)&py_transfer_syntax_ndr64_SyntaxType);
-	PyModule_AddObject(m, "transfer_syntax_ndr64", (PyObject *)(void *)&py_transfer_syntax_ndr64_SyntaxType);
-	Py_INCREF((PyObject *)(void *)&py_bind_time_features_syntax_SyntaxType);
-	PyModule_AddObject(m, "bind_time_features_syntax", (PyObject *)(void *)&py_bind_time_features_syntax_SyntaxType);
 }

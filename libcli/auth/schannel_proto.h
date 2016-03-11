@@ -25,7 +25,19 @@
 
 struct schannel_state;
 
-struct db_context *open_schannel_session_store(TALLOC_CTX *mem_ctx,
-					       struct loadparm_context *lp_ctx);
+struct tdb_wrap *open_schannel_session_store(TALLOC_CTX *mem_ctx,
+					     const char *private_dir);
+
+NTSTATUS netsec_incoming_packet(struct schannel_state *state,
+				TALLOC_CTX *mem_ctx,
+				bool do_unseal,
+				uint8_t *data, size_t length,
+				const DATA_BLOB *sig);
+uint32_t netsec_outgoing_sig_size(struct schannel_state *state);
+NTSTATUS netsec_outgoing_packet(struct schannel_state *state,
+				TALLOC_CTX *mem_ctx,
+				bool do_seal,
+				uint8_t *data, size_t length,
+				DATA_BLOB *sig);
 
 #endif

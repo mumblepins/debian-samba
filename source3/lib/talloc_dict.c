@@ -18,8 +18,7 @@
 */
 
 #include "includes.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_rbt.h"
+#include "dbwrap.h"
 #include "talloc_dict.h"
 #include "util_tdb.h"
 
@@ -56,34 +55,29 @@ bool talloc_dict_set(struct talloc_dict *dict, DATA_BLOB key, void *pdata)
 	struct db_record *rec;
 	NTSTATUS status = NT_STATUS_OK;
 	void *data = *(void **)pdata;
-	TDB_DATA value;
 
-	rec = dbwrap_fetch_locked(dict->db, talloc_tos(),
-				  make_tdb_data(key.data, key.length));
+	rec = dict->db->fetch_locked(dict->db, talloc_tos(),
+				     make_tdb_data(key.data, key.length));
 	if (rec == NULL) {
 		return false;
 	}
-
-	value = dbwrap_record_get_value(rec);
-
-	if (value.dsize != 0) {
+	if (rec->value.dsize != 0) {
 		void *old_data;
-		if (value.dsize != sizeof(void *)) {
+		if (rec->value.dsize != sizeof(void *)) {
 			TALLOC_FREE(rec);
 			return false;
 		}
-		old_data = *(void **)(value.dptr);
+		old_data = *(void **)(rec->value.dptr);
 		TALLOC_FREE(old_data);
 		if (data == NULL) {
-			status = dbwrap_record_delete(rec);
+			status = rec->delete_rec(rec);
 		}
 	}
 	if (data != NULL) {
 		void *mydata = talloc_move(dict->db, &data);
 		*(void **)pdata = NULL;
-		status = dbwrap_record_store(rec,
-					     make_tdb_data((uint8_t *)&mydata,
-					     sizeof(mydata)), 0);
+		status = rec->store(rec, make_tdb_data((uint8_t *)&mydata,
+						       sizeof(mydata)), 0);
 	}
 	TALLOC_FREE(rec);
 	return NT_STATUS_IS_OK(status);
@@ -99,24 +93,21 @@ void *talloc_dict_fetch(struct talloc_dict *dict, DATA_BLOB key,
 {
 	struct db_record *rec;
 	void *result;
-	TDB_DATA value;
 
-	rec = dbwrap_fetch_locked(dict->db, talloc_tos(),
-				  make_tdb_data(key.data, key.length));
+	rec = dict->db->fetch_locked(dict->db, talloc_tos(),
+				     make_tdb_data(key.data, key.length));
 	if (rec == NULL) {
 		return NULL;
 	}
-
-	value = dbwrap_record_get_value(rec);
-	if (value.dsize != sizeof(void *)) {
+	if (rec->value.dsize != sizeof(void *)) {
 		TALLOC_FREE(rec);
 		return NULL;
 	}
-	result = *(void **)value.dptr;
+	result = *(void **)rec->value.dptr;
 
 	if (mem_ctx != NULL) {
 		NTSTATUS status;
-		status = dbwrap_record_delete(rec);
+		status = rec->delete_rec(rec);
 		if (!NT_STATUS_IS_OK(status)) {
 			TALLOC_FREE(rec);
 			return NULL;
@@ -134,19 +125,14 @@ struct talloc_dict_traverse_state {
 
 static int talloc_dict_traverse_fn(struct db_record *rec, void *private_data)
 {
-	TDB_DATA key;
-	TDB_DATA value;
 	struct talloc_dict_traverse_state *state =
 		(struct talloc_dict_traverse_state *)private_data;
 
-	key = dbwrap_record_get_key(rec);
-	value = dbwrap_record_get_value(rec);
-
-	if (value.dsize != sizeof(void *)) {
+	if (rec->value.dsize != sizeof(void *)) {
 		return -1;
 	}
-	return state->fn(data_blob_const(key.dptr, key.dsize),
-			 *(void **)value.dptr, state->private_data);
+	return state->fn(data_blob_const(rec->key.dptr, rec->key.dsize),
+			 *(void **)rec->value.dptr, state->private_data);
 }
 
 /*
@@ -159,16 +145,7 @@ int talloc_dict_traverse(struct talloc_dict *dict,
 			 void *private_data)
 {
 	struct talloc_dict_traverse_state state;
-	NTSTATUS status;
-	int count = 0;
-
 	state.fn = fn;
 	state.private_data = private_data;
-	status = dbwrap_traverse(dict->db, talloc_dict_traverse_fn, &state,
-				 &count);
-	if (!NT_STATUS_IS_OK(status)) {
-		return -1;
-	} else {
-		return count;
-	}
+	return dict->db->traverse(dict->db, talloc_dict_traverse_fn, &state);
 }

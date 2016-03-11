@@ -16,8 +16,6 @@ void netlogon_creds_des_decrypt_LMKey(struct netlogon_creds_CredentialState *cre
 void netlogon_creds_des_encrypt(struct netlogon_creds_CredentialState *creds, struct samr_Password *pass);
 void netlogon_creds_des_decrypt(struct netlogon_creds_CredentialState *creds, struct samr_Password *pass);
 void netlogon_creds_arcfour_crypt(struct netlogon_creds_CredentialState *creds, uint8_t *data, size_t len);
-void netlogon_creds_aes_encrypt(struct netlogon_creds_CredentialState *creds, uint8_t *data, size_t len);
-void netlogon_creds_aes_decrypt(struct netlogon_creds_CredentialState *creds, uint8_t *data, size_t len);
 
 /*****************************************************************
 The above functions are common to the client and server interface
@@ -26,7 +24,6 @@ next comes the client specific functions
 struct netlogon_creds_CredentialState *netlogon_creds_client_init(TALLOC_CTX *mem_ctx, 
 								  const char *client_account,
 								  const char *client_computer_name, 
-								  uint16_t secure_channel_type,
 								  const struct netr_Credential *client_challenge,
 								  const struct netr_Credential *server_challenge,
 								  const struct samr_Password *machine_password,
@@ -52,27 +49,15 @@ struct netlogon_creds_CredentialState *netlogon_creds_server_init(TALLOC_CTX *me
 								  const struct netr_Credential *client_challenge,
 								  const struct netr_Credential *server_challenge,
 								  const struct samr_Password *machine_password,
-								  const struct netr_Credential *credentials_in,
+								  struct netr_Credential *credentials_in,
 								  struct netr_Credential *credentials_out,
 								  uint32_t negotiate_flags);
 NTSTATUS netlogon_creds_server_step_check(struct netlogon_creds_CredentialState *creds,
-				 const struct netr_Authenticator *received_authenticator,
+				 struct netr_Authenticator *received_authenticator,
 				 struct netr_Authenticator *return_authenticator) ;
-void netlogon_creds_decrypt_samlogon_validation(struct netlogon_creds_CredentialState *creds,
-						uint16_t validation_level,
-						union netr_Validation *validation);
-void netlogon_creds_encrypt_samlogon_validation(struct netlogon_creds_CredentialState *creds,
-						uint16_t validation_level,
-						union netr_Validation *validation);
-void netlogon_creds_decrypt_samlogon_logon(struct netlogon_creds_CredentialState *creds,
-					   enum netr_LogonInfoClass level,
-					   union netr_LogonLevel *logon);
-void netlogon_creds_encrypt_samlogon_logon(struct netlogon_creds_CredentialState *creds,
-					   enum netr_LogonInfoClass level,
-					   union netr_LogonLevel *logon);
-union netr_LogonLevel *netlogon_creds_shallow_copy_logon(TALLOC_CTX *mem_ctx,
-					enum netr_LogonInfoClass level,
-					const union netr_LogonLevel *in);
+void netlogon_creds_decrypt_samlogon(struct netlogon_creds_CredentialState *creds,
+			    uint16_t validation_level,
+			    union netr_Validation *validation) ;
 
 /* The following definitions come from /home/jeremy/src/samba/git/master/source3/../source4/../libcli/auth/session.c  */
 
@@ -124,10 +109,11 @@ bool E_deshash(const char *passwd, uint8_t p16[16]);
 void nt_lm_owf_gen(const char *pwd, uint8_t nt_p16[16], uint8_t p16[16]);
 bool ntv2_owf_gen(const uint8_t owf[16],
 		  const char *user_in, const char *domain_in,
+		  bool upper_case_domain, /* Transform the domain into UPPER case */
 		  uint8_t kr_buf[16]);
 void SMBOWFencrypt(const uint8_t passwd[16], const uint8_t *c8, uint8_t p24[24]);
-void SMBNTencrypt_hash(const uint8_t nt_hash[16], const uint8_t *c8, uint8_t *p24);
-void SMBNTencrypt(const char *passwd, const uint8_t *c8, uint8_t *p24);
+void SMBNTencrypt_hash(const uint8_t nt_hash[16], uint8_t *c8, uint8_t *p24);
+void SMBNTencrypt(const char *passwd, uint8_t *c8, uint8_t *p24);
 void SMBOWFencrypt_ntv2(const uint8_t kr[16],
 			const DATA_BLOB *srv_chal,
 			const DATA_BLOB *smbcli_chal,
@@ -144,7 +130,6 @@ DATA_BLOB NTLMv2_generate_names_blob(TALLOC_CTX *mem_ctx,
 bool SMBNTLMv2encrypt_hash(TALLOC_CTX *mem_ctx, 
 			   const char *user, const char *domain, const uint8_t nt_hash[16],
 			   const DATA_BLOB *server_chal, 
-			   const NTTIME *server_timestamp,
 			   const DATA_BLOB *names_blob,
 			   DATA_BLOB *lm_response, DATA_BLOB *nt_response, 
 			   DATA_BLOB *lm_session_key, DATA_BLOB *user_session_key) ;
@@ -155,11 +140,6 @@ bool SMBNTLMv2encrypt(TALLOC_CTX *mem_ctx,
 		      const DATA_BLOB *names_blob,
 		      DATA_BLOB *lm_response, DATA_BLOB *nt_response, 
 		      DATA_BLOB *lm_session_key, DATA_BLOB *user_session_key) ;
-NTSTATUS NTLMv2_RESPONSE_verify_netlogon_creds(const char *account_name,
-			const char *account_domain,
-			const DATA_BLOB response,
-			const struct netlogon_creds_CredentialState *creds,
-			const char *workgroup);
 
 /***********************************************************
  encode a password buffer with a unicode password.  The buffer
@@ -195,7 +175,6 @@ bool set_pw_in_buffer(uint8_t buffer[516], DATA_BLOB *password);
 ************************************************************/
 bool extract_pw_from_buffer(TALLOC_CTX *mem_ctx, 
 			    uint8_t in_buffer[516], DATA_BLOB *new_pass);
-struct wkssvc_PasswordBuffer;
 void encode_wkssvc_join_password_buffer(TALLOC_CTX *mem_ctx,
 					const char *pwd,
 					DATA_BLOB *session_key,

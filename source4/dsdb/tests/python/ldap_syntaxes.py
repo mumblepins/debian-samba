@@ -10,8 +10,8 @@ import uuid
 
 sys.path.insert(0, "bin/python")
 import samba
-
-from samba.tests.subunitrun import SubunitOptions, TestProgram
+samba.ensure_external_module("testtools", "testtools")
+samba.ensure_external_module("subunit", "subunit/python")
 
 import samba.getopt as options
 
@@ -20,6 +20,9 @@ from ldb import SCOPE_BASE, SCOPE_SUBTREE, LdbError
 from ldb import ERR_CONSTRAINT_VIOLATION
 from ldb import ERR_INVALID_ATTRIBUTE_SYNTAX
 from ldb import ERR_ENTRY_ALREADY_EXISTS
+
+from subunit.run import SubunitTestRunner
+import unittest
 
 import samba.tests
 
@@ -30,8 +33,6 @@ parser.add_option_group(options.VersionOptions(parser))
 # use command line creds if available
 credopts = options.CredentialsOptions(parser)
 parser.add_option_group(credopts)
-subunitopts = SubunitOptions(parser)
-parser.add_option_group(subunitopts)
 opts, args = parser.parse_args()
 
 if len(args) < 1:
@@ -43,14 +44,13 @@ lp = sambaopts.get_loadparm()
 creds = credopts.get_credentials(lp)
 
 
-class SyntaxTests(samba.tests.TestCase):
+class SyntaxTests(unittest.TestCase):
 
     def setUp(self):
         super(SyntaxTests, self).setUp()
-        self.ldb = samba.tests.connect_samdb(host, credentials=creds,
-            session_info=system_session(lp), lp=lp)
-        self.base_dn = self.ldb.domain_dn()
-        self.schema_dn = self.ldb.get_schema_basedn().get_linearized()
+        self.ldb = ldb
+        self.base_dn = ldb.domain_dn()
+        self.schema_dn = ldb.get_schema_basedn().get_linearized()
         self._setup_dn_string_test()
         self._setup_dn_binary_test()
 
@@ -192,26 +192,26 @@ name: """ + object_name + """
         return ldif
 
     def test_dn_string(self):
-        # add object with correct value
+        # add obeject with correct value
         object_name1 = "obj-DN-String1" + time.strftime("%s", time.gmtime())
         ldif = self._get_object_ldif(object_name1, self.dn_string_class_name, self.dn_string_class_ldap_display_name,
                                self.dn_string_attribute, ": S:5:ABCDE:" + self.base_dn)
         self.ldb.add_ldif(ldif)
 
         # search by specifying the DN part only
-        res = self.ldb.search(base=self.base_dn,
+        res = ldb.search(base=self.base_dn,
                          scope=SCOPE_SUBTREE,
                          expression="(%s=%s)" % (self.dn_string_attribute, self.base_dn))
         self.assertEquals(len(res), 0)
 
         # search by specifying the string part only
-        res = self.ldb.search(base=self.base_dn,
+        res = ldb.search(base=self.base_dn,
                          scope=SCOPE_SUBTREE,
                          expression="(%s=S:5:ABCDE)" % self.dn_string_attribute)
         self.assertEquals(len(res), 0)
 
         # search by DN+Stirng
-        res = self.ldb.search(base=self.base_dn,
+        res = ldb.search(base=self.base_dn,
                          scope=SCOPE_SUBTREE,
                          expression="(%s=S:5:ABCDE:%s)" % (self.dn_string_attribute, self.base_dn))
         self.assertEquals(len(res), 1)
@@ -283,6 +283,7 @@ name: """ + object_name + """
             self.ldb.add_ldif(ldif)
         except LdbError, (num, _):
             self.assertEquals(num, ERR_CONSTRAINT_VIOLATION)
+        pass
 
     def test_dn_binary(self):
         # add obeject with correct value
@@ -292,19 +293,19 @@ name: """ + object_name + """
         self.ldb.add_ldif(ldif)
 
         # search by specifyingthe DN part
-        res = self.ldb.search(base=self.base_dn,
+        res = ldb.search(base=self.base_dn,
                          scope=SCOPE_SUBTREE,
                          expression="(%s=%s)" % (self.dn_binary_attribute, self.base_dn))
         self.assertEquals(len(res), 0)
 
         # search by specifying the binary part
-        res = self.ldb.search(base=self.base_dn,
+        res = ldb.search(base=self.base_dn,
                          scope=SCOPE_SUBTREE,
                          expression="(%s=B:4:1234)" % self.dn_binary_attribute)
         self.assertEquals(len(res), 0)
 
         # search by DN+Binary
-        res = self.ldb.search(base=self.base_dn,
+        res = ldb.search(base=self.base_dn,
                          scope=SCOPE_SUBTREE,
                          expression="(%s=B:4:1234:%s)" % (self.dn_binary_attribute, self.base_dn))
         self.assertEquals(len(res), 1)
@@ -368,5 +369,12 @@ name: """ + object_name + """
             self.ldb.add_ldif(ldif)
         except LdbError, (num, _):
             self.assertEquals(num, ERR_CONSTRAINT_VIOLATION)
+        pass
 
-TestProgram(module=__name__, opts=subunitopts)
+ldb = samba.tests.connect_samdb(host, credentials=creds, session_info=system_session(lp), lp=lp)
+runner = SubunitTestRunner()
+rc = 0
+if not runner.run(unittest.makeSuite(SyntaxTests)).wasSuccessful():
+    rc = 1
+
+sys.exit(rc)

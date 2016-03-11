@@ -49,12 +49,17 @@
 #define lock_type struct flock64
 #endif
 
+#ifdef HAVE_GPFS
+#include "gpfs_gpl.h"
+#endif
+
 #define MODULE "prealloc"
 static int module_debug;
 
-static int preallocate_space(int fd, off_t size)
+static int preallocate_space(int fd, SMB_OFF_T size)
 {
 	int err;
+#ifndef HAVE_GPFS
 	lock_type fl = {0};
 
 	if (size <= 0) {
@@ -80,6 +85,10 @@ static int preallocate_space(int fd, off_t size)
 	err = -1;
 	errno = ENOSYS;
 #endif
+#else /* GPFS uses completely different interface */
+       err = gpfs_prealloc(fd, (gpfs_off64_t)0, (gpfs_off64_t)size);
+#endif
+
 	if (err) {
 		DEBUG(module_debug,
 			("%s: preallocate failed on fd=%d size=%lld: %s\n",
@@ -113,7 +122,7 @@ static int prealloc_open(vfs_handle_struct* handle,
 			mode_t		    mode)
 {
 	int fd;
-	off_t size = 0;
+	off64_t size = 0;
 
 	const char * dot;
 	char fext[10];
@@ -130,9 +139,7 @@ static int prealloc_open(vfs_handle_struct* handle,
 	if (dot && *++dot) {
 		if (strlen(dot) < sizeof(fext)) {
 			strncpy(fext, dot, sizeof(fext));
-			if (!strnorm(fext, CASE_LOWER)) {
-				goto normal_open;
-			}
+			strnorm(fext, CASE_LOWER);
 		}
 	}
 
@@ -163,9 +170,9 @@ static int prealloc_open(vfs_handle_struct* handle,
 	 * truncate calls specially.
 	 */
 	if ((flags & O_CREAT) || (flags & O_TRUNC)) {
-		off_t * psize;
+		SMB_OFF_T * psize;
 
-		psize = VFS_ADD_FSP_EXTENSION(handle, fsp, off_t, NULL);
+		psize = VFS_ADD_FSP_EXTENSION(handle, fsp, SMB_OFF_T, NULL);
 		if (psize == NULL || *psize == -1) {
 			return fd;
 		}
@@ -194,9 +201,9 @@ normal_open:
 
 static int prealloc_ftruncate(vfs_handle_struct * handle,
 			files_struct *	fsp,
-			off_t	offset)
+			SMB_OFF_T	offset)
 {
-	off_t *psize;
+	SMB_OFF_T *psize;
 	int ret = SMB_VFS_NEXT_FTRUNCATE(handle, fsp, offset);
 
 	/* Maintain the allocated space even in the face of truncates. */
@@ -209,7 +216,7 @@ static int prealloc_ftruncate(vfs_handle_struct * handle,
 
 static struct vfs_fn_pointers prealloc_fns = {
 	.open_fn = prealloc_open,
-	.ftruncate_fn = prealloc_ftruncate,
+	.ftruncate = prealloc_ftruncate,
 	.connect_fn = prealloc_connect,
 };
 

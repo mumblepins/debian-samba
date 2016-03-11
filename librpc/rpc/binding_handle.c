@@ -98,31 +98,6 @@ uint32_t dcerpc_binding_handle_set_timeout(struct dcerpc_binding_handle *h,
 	return h->ops->set_timeout(h, timeout);
 }
 
-void dcerpc_binding_handle_auth_info(struct dcerpc_binding_handle *h,
-				     enum dcerpc_AuthType *auth_type,
-				     enum dcerpc_AuthLevel *auth_level)
-{
-	enum dcerpc_AuthType _auth_type;
-	enum dcerpc_AuthLevel _auth_level;
-
-	if (auth_type == NULL) {
-		auth_type = &_auth_type;
-	}
-
-	if (auth_level == NULL) {
-		auth_level = &_auth_level;
-	}
-
-	*auth_type = DCERPC_AUTH_TYPE_NONE;
-	*auth_level = DCERPC_AUTH_LEVEL_NONE;
-
-	if (h->ops->auth_info == NULL) {
-		return;
-	}
-
-	h->ops->auth_info(h, auth_type, auth_level);
-}
-
 struct dcerpc_binding_handle_raw_call_state {
 	const struct dcerpc_binding_handle_ops *ops;
 	uint8_t *out_data;
@@ -180,7 +155,8 @@ static void dcerpc_binding_handle_raw_call_done(struct tevent_req *subreq)
 					  &state->out_length,
 					  &state->out_flags);
 	TALLOC_FREE(subreq);
-	if (tevent_req_nterror(req, error)) {
+	if (!NT_STATUS_IS_OK(error)) {
+		tevent_req_nterror(req, error);
 		return;
 	}
 
@@ -224,7 +200,7 @@ NTSTATUS dcerpc_binding_handle_raw_call(struct dcerpc_binding_handle *h,
 	TALLOC_CTX *frame = talloc_stackframe();
 	struct tevent_context *ev;
 	struct tevent_req *subreq;
-	NTSTATUS status = NT_STATUS_NO_MEMORY;
+	NTSTATUS status;
 
 	/*
 	 * TODO: allow only one sync call
@@ -233,10 +209,11 @@ NTSTATUS dcerpc_binding_handle_raw_call(struct dcerpc_binding_handle *h,
 	if (h->sync_ev) {
 		ev = h->sync_ev;
 	} else {
-		ev = samba_tevent_context_init(frame);
+		ev = tevent_context_init(frame);
 	}
 	if (ev == NULL) {
-		goto fail;
+		talloc_free(frame);
+		return NT_STATUS_NO_MEMORY;
 	}
 
 	subreq = dcerpc_binding_handle_raw_call_send(frame, ev,
@@ -245,11 +222,14 @@ NTSTATUS dcerpc_binding_handle_raw_call(struct dcerpc_binding_handle *h,
 						     in_data,
 						     in_length);
 	if (subreq == NULL) {
-		goto fail;
+		talloc_free(frame);
+		return NT_STATUS_NO_MEMORY;
 	}
 
-	if (!tevent_req_poll_ntstatus(subreq, ev, &status)) {
-		goto fail;
+	if (!tevent_req_poll(subreq, ev)) {
+		status = map_nt_error_from_unix(errno);
+		talloc_free(frame);
+		return status;
 	}
 
 	status = dcerpc_binding_handle_raw_call_recv(subreq,
@@ -257,9 +237,13 @@ NTSTATUS dcerpc_binding_handle_raw_call(struct dcerpc_binding_handle *h,
 						     out_data,
 						     out_length,
 						     out_flags);
-fail:
+	if (!NT_STATUS_IS_OK(status)) {
+		talloc_free(frame);
+		return status;
+	}
+
 	TALLOC_FREE(frame);
-	return status;
+	return NT_STATUS_OK;
 }
 
 struct dcerpc_binding_handle_disconnect_state {
@@ -304,7 +288,8 @@ static void dcerpc_binding_handle_disconnect_done(struct tevent_req *subreq)
 
 	error = state->ops->disconnect_recv(subreq);
 	TALLOC_FREE(subreq);
-	if (tevent_req_nterror(req, error)) {
+	if (!NT_STATUS_IS_OK(error)) {
+		tevent_req_nterror(req, error);
 		return;
 	}
 
@@ -456,7 +441,8 @@ static void dcerpc_binding_handle_call_done(struct tevent_req *subreq)
 						    &state->response.length,
 						    &out_flags);
 	TALLOC_FREE(subreq);
-	if (tevent_req_nterror(req, error)) {
+	if (!NT_STATUS_IS_OK(error)) {
+		tevent_req_nterror(req, error);
 		return;
 	}
 
@@ -508,7 +494,15 @@ static void dcerpc_binding_handle_call_done(struct tevent_req *subreq)
 
 NTSTATUS dcerpc_binding_handle_call_recv(struct tevent_req *req)
 {
-	return tevent_req_simple_recv_ntstatus(req);
+	NTSTATUS error;
+
+	if (tevent_req_is_nterror(req, &error)) {
+		tevent_req_received(req);
+		return error;
+	}
+
+	tevent_req_received(req);
+	return NT_STATUS_OK;
 }
 
 NTSTATUS dcerpc_binding_handle_call(struct dcerpc_binding_handle *h,
@@ -521,7 +515,7 @@ NTSTATUS dcerpc_binding_handle_call(struct dcerpc_binding_handle *h,
 	TALLOC_CTX *frame = talloc_stackframe();
 	struct tevent_context *ev;
 	struct tevent_req *subreq;
-	NTSTATUS status = NT_STATUS_NO_MEMORY;
+	NTSTATUS status;
 
 	/*
 	 * TODO: allow only one sync call
@@ -530,25 +524,33 @@ NTSTATUS dcerpc_binding_handle_call(struct dcerpc_binding_handle *h,
 	if (h->sync_ev) {
 		ev = h->sync_ev;
 	} else {
-		ev = samba_tevent_context_init(frame);
+		ev = tevent_context_init(frame);
 	}
 	if (ev == NULL) {
-		goto fail;
+		talloc_free(frame);
+		return NT_STATUS_NO_MEMORY;
 	}
 
 	subreq = dcerpc_binding_handle_call_send(frame, ev,
 						 h, object, table,
 						 opnum, r_mem, r_ptr);
 	if (subreq == NULL) {
-		goto fail;
+		talloc_free(frame);
+		return NT_STATUS_NO_MEMORY;
 	}
 
-	if (!tevent_req_poll_ntstatus(subreq, ev, &status)) {
-		goto fail;
+	if (!tevent_req_poll(subreq, ev)) {
+		status = map_nt_error_from_unix(errno);
+		talloc_free(frame);
+		return status;
 	}
 
 	status = dcerpc_binding_handle_call_recv(subreq);
-fail:
+	if (!NT_STATUS_IS_OK(status)) {
+		talloc_free(frame);
+		return status;
+	}
+
 	TALLOC_FREE(frame);
-	return status;
+	return NT_STATUS_OK;
 }

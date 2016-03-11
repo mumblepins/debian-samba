@@ -2577,10 +2577,7 @@ static bool test_volatile_keys(struct torture_context *tctx,
 			       int hkey)
 {
 	struct policy_handle new_handle, hive_handle;
-	enum winreg_CreateAction action_taken = REG_ACTION_NONE;
-
-	ZERO_STRUCT(new_handle);
-	ZERO_STRUCT(hive_handle);
+	enum winreg_CreateAction action_taken;
 
 	torture_comment(tctx, "Testing VOLATILE key\n");
 
@@ -2774,7 +2771,8 @@ static bool test_symlink_keys(struct torture_context *tctx,
 		convert_string_talloc(tctx, CH_UNIX, CH_UTF16,
 				      kernel_mode_path,
 				      strlen(kernel_mode_path), /* not NULL terminated */
-				      &blob.data, &blob.length),
+				      &blob.data, &blob.length,
+				      false),
 		"failed to convert");
 
 	torture_assert(tctx,

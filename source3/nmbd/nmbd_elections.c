@@ -22,6 +22,7 @@
 
 #include "includes.h"
 #include "nmbd/nmbd.h"
+#include "smbprofile.h"
 
 /* Election parameters. */
 extern time_t StartupTime;
@@ -31,7 +32,7 @@ extern time_t StartupTime;
 **************************************************************************/
 
 static void send_election_dgram(struct subnet_record *subrec, const char *workgroup_name,
-                                uint32_t criterion, int timeup,const char *server_name)
+                                uint32 criterion, int timeup,const char *server_name)
 {
 	char outbuf[1024];
 	unstring srv_name;
@@ -50,16 +51,13 @@ static void send_election_dgram(struct subnet_record *subrec, const char *workgr
 	SIVAL(p,5,timeup*1000); /* ms - Despite what the spec says. */
 	p += 13;
 	unstrcpy(srv_name, server_name);
-	if (!strupper_m(srv_name)) {
-		DEBUG(2,("strupper_m failed for %s\n", srv_name));
-		return;
-	}
+	strupper_m(srv_name);
 	/* The following call does UNIX -> DOS charset conversion. */
 	push_ascii(p, srv_name, sizeof(outbuf)-PTR_DIFF(p,outbuf)-1, STR_TERMINATE);
 	p = skip_string(outbuf,sizeof(outbuf),p);
 
 	send_mailslot(False, BROWSE_MAILSLOT, outbuf, PTR_DIFF(p,outbuf),
-		lp_netbios_name(), 0,
+		global_myname(), 0,
 		workgroup_name, 0x1e,
 		subrec->bcast_ip, subrec->myip, DGRAM_PORT);
 }
@@ -166,8 +164,11 @@ void run_elections(time_t t)
   
 	struct subnet_record *subrec;
   
+	START_PROFILE(run_elections);
+
 	/* Send election packets once every 2 seconds - note */
 	if (lastime && (t - lastime < 2)) {
+		END_PROFILE(run_elections);
 		return;
 	}
   
@@ -193,7 +194,7 @@ yet registered on subnet %s\n", nmb_namestr(&nmbname), subrec->subnet_name ));
 				}
 
 				send_election_dgram(subrec, work->work_group, work->ElectionCriterion,
-						t - StartupTime, lp_netbios_name());
+						t - StartupTime, global_myname());
 	      
 				if (work->ElectionCount++ >= 4) {
 					/* Won election (4 packets were sent out uncontested. */
@@ -207,6 +208,7 @@ yet registered on subnet %s\n", nmb_namestr(&nmbname), subrec->subnet_name ));
 			}
 		}
 	}
+	END_PROFILE(run_elections);
 }
 
 /*******************************************************************
@@ -214,10 +216,10 @@ yet registered on subnet %s\n", nmb_namestr(&nmbname), subrec->subnet_name ));
 ******************************************************************/
 
 static bool win_election(struct work_record *work, int version,
-                         uint32_t criterion, int timeup, const char *server_name)
+                         uint32 criterion, int timeup, const char *server_name)
 {  
 	int mytimeup = time(NULL) - StartupTime;
-	uint32_t mycriterion = work->ElectionCriterion;
+	uint32 mycriterion = work->ElectionCriterion;
 
 	/* If local master is false then never win in election broadcasts. */
 	if(!lp_local_master()) {
@@ -229,7 +231,7 @@ static bool win_election(struct work_record *work, int version,
 			version, ELECTION_VERSION,
 			criterion, mycriterion,
 			timeup, mytimeup,
-			server_name, lp_netbios_name()));
+			server_name, global_myname()));
 
 	if (version > ELECTION_VERSION)
 		return(False);
@@ -246,7 +248,7 @@ static bool win_election(struct work_record *work, int version,
 	if (timeup < mytimeup)
 		return(True);
 
-	if (strcasecmp_m(lp_netbios_name(), server_name) > 0)
+	if (StrCaseCmp(global_myname(), server_name) > 0)
 		return(False);
   
 	return(True);
@@ -260,11 +262,13 @@ void process_election(struct subnet_record *subrec, struct packet_struct *p, con
 {
 	struct dgram_packet *dgram = &p->packet.dgram;
 	int version = CVAL(buf,0);
-	uint32_t criterion = IVAL(buf,1);
+	uint32 criterion = IVAL(buf,1);
 	int timeup = IVAL(buf,5)/1000;
 	unstring server_name;
 	struct work_record *work;
 	unstring workgroup_name;
+
+	START_PROFILE(election);
 
 	pull_ascii_nstring(server_name, sizeof(server_name), buf+13);
 	pull_ascii_nstring(workgroup_name, sizeof(workgroup_name), dgram->dest_name.name);
@@ -312,7 +316,8 @@ is not my workgroup.\n", work->work_group, subrec->subnet_name ));
 		}
 	}
 done:
-	return;
+
+	END_PROFILE(election);
 }
 
 /****************************************************************************

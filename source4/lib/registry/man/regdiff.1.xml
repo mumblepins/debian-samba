@@ -5,9 +5,6 @@
 <refmeta>
 	<refentrytitle>regdiff</refentrytitle>
 	<manvolnum>1</manvolnum>
-	<refmiscinfo class="source">Samba</refmiscinfo>
-	<refmiscinfo class="manual">System Administration tools</refmiscinfo>
-	<refmiscinfo class="version">4.0</refmiscinfo>
 </refmeta>
 
 
@@ -21,7 +18,10 @@
 		<command>regdiff</command>
 		<arg choice="opt">--help</arg>
 		<arg choice="opt">--backend=BACKEND</arg>
+		<arg choice="opt">--backend=BACKEND</arg>
 		<arg choice="opt">--credentials=CREDENTIALS</arg>
+		<arg choice="opt">--credentials=CREDENTIALS</arg>
+		<arg choice="opt">location</arg>
 		<arg choice="opt">location</arg>
 	</cmdsynopsis>
 </refsynopsisdiv>

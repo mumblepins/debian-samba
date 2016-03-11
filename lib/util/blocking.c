@@ -21,9 +21,15 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "replace.h"
+#include "includes.h"
+#include "system/network.h"
 #include "system/filesys.h"
-#include "blocking.h"
+#include "system/locale.h"
+#undef malloc
+#undef strcasecmp
+#undef strncasecmp
+#undef strdup
+#undef realloc
 
 /**
  Set a fd into blocking/nonblocking mode. Uses POSIX O_NONBLOCK if available,
@@ -53,22 +59,4 @@ _PUBLIC_ int set_blocking(int fd, bool set)
 		val |= FLAG_TO_SET;
 	return fcntl( fd, F_SETFL, val);
 #undef FLAG_TO_SET
-}
-
-
-_PUBLIC_ bool smb_set_close_on_exec(int fd)
-{
-#ifdef FD_CLOEXEC
-	int val;
-
-	val = fcntl(fd, F_GETFD, 0);
-	if (val >= 0) {
-		val |= FD_CLOEXEC;
-		val = fcntl(fd, F_SETFD, val);
-		if (val != -1) {
-			return true;
-		}
-	}
-#endif
-	return false;
 }

@@ -27,7 +27,6 @@
 #include "system/network.h"
 #include "lib/socket/netif.h"
 #include "librpc/gen_ndr/ndr_nbt.h"
-#include "libcli/nbt/libnbt.h"
 #include "torture/torture.h"
 #include "torture/nbt/proto.h"
 #include "param/param.h"
@@ -616,14 +615,14 @@ static struct test_wrepl_conflict_conn *test_create_conflict_ctx(
 	ctx->nbtsock = nbt_name_socket_init(ctx, tctx->ev);
 	if (!ctx->nbtsock) return NULL;
 
-	load_interface_list(tctx, tctx->lp_ctx, &ifaces);
+	load_interfaces(tctx, lpcfg_interfaces(tctx->lp_ctx), &ifaces);
 
-	ctx->myaddr = socket_address_from_strings(tctx, ctx->nbtsock->sock->backend_name, iface_list_best_ip(ifaces, address), 0);
+	ctx->myaddr = socket_address_from_strings(tctx, ctx->nbtsock->sock->backend_name, iface_best_ip(ifaces, address), 0);
 	if (!ctx->myaddr) return NULL;
 
-	for (i = 0; i < iface_list_count(ifaces); i++) {
-		if (strcmp(ctx->myaddr->addr, iface_list_n_ip(ifaces, i)) == 0) continue;
-		ctx->myaddr2 = socket_address_from_strings(tctx, ctx->nbtsock->sock->backend_name, iface_list_n_ip(ifaces, i), 0);
+	for (i = 0; i < iface_count(ifaces); i++) {
+		if (strcmp(ctx->myaddr->addr, iface_n_ip(ifaces, i)) == 0) continue;
+		ctx->myaddr2 = socket_address_from_strings(tctx, ctx->nbtsock->sock->backend_name, iface_n_ip(ifaces, i), 0);
 		if (!ctx->myaddr2) return NULL;
 		break;
 	}
@@ -680,12 +679,12 @@ static struct test_wrepl_conflict_conn *test_create_conflict_ctx(
 	ctx->addresses_best[0].owner	= ctx->b.address;
 	ctx->addresses_best[0].ip	= ctx->myaddr->addr;
 
-	ctx->addresses_all_num = iface_list_count(ifaces);
+	ctx->addresses_all_num = iface_count(ifaces);
 	ctx->addresses_all = talloc_array(ctx, struct wrepl_ip, ctx->addresses_all_num);
 	if (!ctx->addresses_all) return NULL;
 	for (i=0; i < ctx->addresses_all_num; i++) {
 		ctx->addresses_all[i].owner	= ctx->b.address;
-		ctx->addresses_all[i].ip	= talloc_strdup(ctx->addresses_all, iface_list_n_ip(ifaces, i));
+		ctx->addresses_all[i].ip	= talloc_strdup(ctx->addresses_all, iface_n_ip(ifaces, i));
 		if (!ctx->addresses_all[i].ip) return NULL;
 	}
 
@@ -719,6 +718,7 @@ static bool test_wrepl_update_one(struct torture_context *tctx,
 	struct wrepl_table *update;
 	struct wrepl_wins_owner wrepl_wins_owners[1];
 	struct wrepl_packet *repl_recv;
+	struct wrepl_wins_owner *send_request;
 	struct wrepl_send_reply *send_reply;
 	struct wrepl_wins_name wrepl_wins_names[1];
 	uint32_t assoc_ctx;
@@ -752,6 +752,7 @@ static bool test_wrepl_update_one(struct torture_context *tctx,
 	CHECK_STATUS(tctx, status, NT_STATUS_OK);
 	CHECK_VALUE(tctx, repl_recv->mess_type, WREPL_REPLICATION);
 	CHECK_VALUE(tctx, repl_recv->message.replication.command, WREPL_REPL_SEND_REQUEST);
+	send_request = &repl_recv->message.replication.info.owner;
 
 	ZERO_STRUCT(repl_send);
 	repl_send.opcode			= WREPL_OPCODE_BITS;
@@ -6700,7 +6701,6 @@ static bool test_conflict_owned_released_vs_replica(struct torture_context *tctx
 }
 
 struct test_conflict_owned_active_vs_replica_struct {
-	struct torture_context *tctx;
 	const char *line; /* just better debugging */
 	const char *section; /* just better debugging */
 	struct nbt_name name;
@@ -6760,7 +6760,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -6787,7 +6786,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,active with different ip(s), positive response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UA_DI_P", 0x00, NULL),
 		.wins	= {
@@ -6815,7 +6813,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,active with different ip(s), positive response other ips
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UA_DI_O", 0x00, NULL),
 		.wins	= {
@@ -6845,7 +6842,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,active with different ip(s), negative response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UA_DI_N", 0x00, NULL),
 		.wins	= {
@@ -6873,7 +6869,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -6900,7 +6895,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -6930,7 +6924,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. group,active with same ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_GA_SI_R", 0x00, NULL),
 		.wins	= {
@@ -6958,7 +6951,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. group,active with different ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_GA_DI_R", 0x00, NULL),
 		.wins	= {
@@ -6986,7 +6978,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. group,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_GT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7013,7 +7004,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. group,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_GT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7043,7 +7033,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. sgroup,active with same ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_SA_SI_R", 0x00, NULL),
 		.wins	= {
@@ -7071,7 +7060,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. group,active with different ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_SA_DI_R", 0x00, NULL),
 		.wins	= {
@@ -7099,7 +7087,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. sgroup,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_ST_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7126,7 +7113,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. sgroup,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_ST_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7156,7 +7142,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7183,7 +7168,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,active with superset ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MA_SP_U", 0x00, NULL),
 		.wins	= {
@@ -7210,7 +7194,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,active with different ip(s), positive response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MA_DI_P", 0x00, NULL),
 		.wins	= {
@@ -7238,7 +7221,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,active with different ip(s), positive response other ips
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MA_DI_O", 0x00, NULL),
 		.wins	= {
@@ -7268,7 +7250,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,active with different ip(s), negative response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MA_DI_N", 0x00, NULL),
 		.wins	= {
@@ -7296,7 +7277,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7323,7 +7303,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7353,7 +7332,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. unique,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_UA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7380,7 +7358,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. unique,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_UA_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7407,7 +7384,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. unique,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_UT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7434,7 +7410,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. unique,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_UT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7464,7 +7439,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. group,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_GA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7491,7 +7465,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. group,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_GA_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7518,7 +7491,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. group,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_GT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7545,7 +7517,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. group,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_GT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7575,7 +7546,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. sgroup,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_SA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7602,7 +7572,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. sgroup,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_SA_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7629,7 +7598,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. sgroup,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_ST_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7656,7 +7624,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. sgroup,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_ST_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7686,7 +7653,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. mhomed,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_MA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7713,7 +7679,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. mhomed,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_MA_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7740,7 +7705,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. mhomed,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_MT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -7767,7 +7731,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * group,active vs. mhomed,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_GA_MT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -7797,7 +7760,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. unique,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_UA_SI_U", 0x1C, NULL),
 		.wins	= {
@@ -7824,7 +7786,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. unique,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_UA_DI_U", 0x1C, NULL),
 		.wins	= {
@@ -7851,7 +7812,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. unique,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_UT_SI_U", 0x1C, NULL),
 		.wins	= {
@@ -7878,7 +7838,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. unique,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_UT_DI_U", 0x1C, NULL),
 		.wins	= {
@@ -7908,7 +7867,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. group,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_GA_SI_U", 0x1C, NULL),
 		.wins	= {
@@ -7935,7 +7893,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. group,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_GA_DI_U", 0x1C, NULL),
 		.wins	= {
@@ -7962,7 +7919,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. group,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_GT_SI_U", 0x1C, NULL),
 		.wins	= {
@@ -7989,7 +7945,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. group,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_GT_DI_U", 0x1C, NULL),
 		.wins	= {
@@ -8019,7 +7974,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. mhomed,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_MA_SI_U", 0x1C, NULL),
 		.wins	= {
@@ -8046,7 +8000,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. mhomed,active with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_MA_DI_U", 0x1C, NULL),
 		.wins	= {
@@ -8073,7 +8026,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. mhomed,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_MT_SI_U", 0x1C, NULL),
 		.wins	= {
@@ -8100,7 +8052,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. mhomed,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_MT_DI_U", 0x1C, NULL),
 		.wins	= {
@@ -8130,7 +8081,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_UA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -8157,7 +8107,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,active with different ip(s), positive response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_UA_DI_P", 0x00, NULL),
 		.wins	= {
@@ -8185,7 +8134,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,active with different ip(s), positive response other ips
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_UA_DI_O", 0x00, NULL),
 		.wins	= {
@@ -8215,7 +8163,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,active with different ip(s), negative response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_UA_DI_N", 0x00, NULL),
 		.wins	= {
@@ -8243,7 +8190,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_UT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -8270,7 +8216,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_UT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -8300,7 +8245,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. group,active with same ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_GA_SI_R", 0x00, NULL),
 		.wins	= {
@@ -8328,7 +8272,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. group,active with different ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_GA_DI_R", 0x00, NULL),
 		.wins	= {
@@ -8356,7 +8299,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. group,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_GT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -8383,7 +8325,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. group,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_GT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -8413,7 +8354,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. sgroup,active with same ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_SA_SI_R", 0x00, NULL),
 		.wins	= {
@@ -8441,7 +8381,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. group,active with different ip(s), release expected
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_SA_DI_R", 0x00, NULL),
 		.wins	= {
@@ -8469,7 +8408,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. sgroup,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_ST_SI_U", 0x00, NULL),
 		.wins	= {
@@ -8496,7 +8434,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. sgroup,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_ST_DI_U", 0x00, NULL),
 		.wins	= {
@@ -8526,7 +8463,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SI_U", 0x00, NULL),
 		.wins	= {
@@ -8553,7 +8489,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with superset ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SP_U", 0x00, NULL),
 		.wins	= {
@@ -8580,7 +8515,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with different ip(s), positive response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_DI_P", 0x00, NULL),
 		.wins	= {
@@ -8608,7 +8542,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with different ip(s), positive response other ips
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_DI_O", 0x00, NULL),
 		.wins	= {
@@ -8638,7 +8571,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with different ip(s), negative response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_DI_N", 0x00, NULL),
 		.wins	= {
@@ -8666,7 +8598,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,tombstone with same ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MT_SI_U", 0x00, NULL),
 		.wins	= {
@@ -8693,7 +8624,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,tombstone with different ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MT_DI_U", 0x00, NULL),
 		.wins	= {
@@ -8723,7 +8653,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with superset ip(s), unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.section= "Test Replica vs. owned active: some more MHOMED combinations",
 		.name	= _NBT_NAME("_MA_MA_SP_U", 0x00, NULL),
@@ -8753,7 +8682,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with same ips, unchecked
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SM_U", 0x00, NULL),
 		.comment= "C:MHOMED vs. B:MHOMED => B:MHOMED",
@@ -8782,7 +8710,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with subset ip(s), positive response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SB_P", 0x00, NULL),
 		.comment= "C:MHOMED vs. B:BEST (C:MHOMED) => B:MHOMED",
@@ -8812,7 +8739,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with subset ip(s), positive response, with all addresses
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SB_A", 0x00, NULL),
 		.comment= "C:MHOMED vs. B:BEST (C:ALL) => B:MHOMED",
@@ -8846,7 +8772,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 *       the release demand has no effect to the database record...
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SB_PRA", 0x00, NULL),
 		.comment= "C:MHOMED vs. B:BEST (C:BEST) => C:MHOMED",
@@ -8879,7 +8804,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with subset ip(s), positive response, with other addresses
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SB_O", 0x00, NULL),
 		.comment= "C:MHOMED vs. B:BEST (B:B_3_4) =>C:MHOMED",
@@ -8911,7 +8835,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. mhomed,active with subset ip(s), negative response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_MA_MA_SB_N", 0x00, NULL),
 		.comment= "C:MHOMED vs. B:BEST (NEGATIVE) => B:BEST",
@@ -8944,7 +8867,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * mhomed,active vs. unique,active with subset ip(s), positive response
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.section= "Test Replica vs. owned active: some more UNIQUE,MHOMED combinations",
 		.name	= _NBT_NAME("_MA_UA_SB_P", 0x00, NULL),
@@ -8977,7 +8899,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 *       the release demand has no effect to the database record...
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UA_DI_PRA", 0x00, NULL),
 		.comment= "C:BEST vs. B:BEST2 (C:BEST2,LR:BEST2) => C:BEST",
@@ -9010,7 +8931,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. unique,active with different ip(s), positive response, with all addresses
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_UA_DI_A", 0x00, NULL),
 		.comment= "C:BEST vs. B:BEST2 (C:ALL) => B:MHOMED",
@@ -9042,7 +8962,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * unique,active vs. mhomed,active with different ip(s), positive response, with all addresses
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_UA_MA_DI_A", 0x00, NULL),
 		.comment= "C:BEST vs. B:BEST2 (C:ALL) => B:MHOMED",
@@ -9077,7 +8996,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,active with different ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.section= "Test Replica vs. owned active: SGROUP vs. SGROUP tests",
 		.name	= _NBT_NAME("_SA_SA_DI_U", 0x1C, NULL),
@@ -9106,7 +9024,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,active with same ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_SA_SI_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9134,7 +9051,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,active with superset ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_SA_SP_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9162,7 +9078,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,active with subset ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_SA_SB_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9190,7 +9105,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,tombstone with different ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_ST_DI_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9218,7 +9132,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,tombstone with same ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_ST_SI_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9246,7 +9159,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,tombstone with superset ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_ST_SP_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9274,7 +9186,6 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	 * sgroup,active vs. sgroup,tombstone with subset ip(s)
 	 */
 	{
-		.tctx	= tctx,
 		.line	= __location__,
 		.name	= _NBT_NAME("_SA_ST_SB_U", 0x1C, NULL),
 		.skip	= (ctx->addresses_all_num < 3),
@@ -9377,7 +9288,7 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 			req = nbt_name_register_send(ctx->nbtsock, name_register);
 
 			/* push the request on the wire */
-			tevent_loop_once(ctx->nbtsock->event_ctx);
+			event_loop_once(ctx->nbtsock->event_ctx);
 
 			/*
 			 * if we register multiple addresses,
@@ -9388,7 +9299,7 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 				end = timeval_current_ofs(records[i].defend.timeout,0);
 				records[i].defend.ret = true;
 				while (records[i].defend.timeout > 0) {
-					tevent_loop_once(ctx->nbtsock_srv->event_ctx);
+					event_loop_once(ctx->nbtsock_srv->event_ctx);
 					if (timeval_expired(&end)) break;
 				}
 				ret &= records[i].defend.ret;
@@ -9450,7 +9361,7 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 		end = timeval_current_ofs(records[i].defend.timeout,0);
 		records[i].defend.ret = true;
 		while (records[i].defend.timeout > 0) {
-			tevent_loop_once(ctx->nbtsock_srv->event_ctx);
+			event_loop_once(ctx->nbtsock_srv->event_ctx);
 			if (timeval_expired(&end)) break;
 		}
 		ret &= records[i].defend.ret;
@@ -9465,7 +9376,7 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 			end = timeval_current_ofs(records[i].defend.timeout,0);
 			records[i].defend.ret = true;
 			while (records[i].defend.timeout > 0) {
-				tevent_loop_once(ctx->nbtsock_srv->event_ctx);
+				event_loop_once(ctx->nbtsock_srv->event_ctx);
 				if (timeval_expired(&end)) break;
 			}
 			ret &= records[i].defend.ret;
@@ -9578,26 +9489,20 @@ static bool test_conflict_owned_active_vs_replica(struct torture_context *tctx,
 	return ret;
 }
 
-#define __NBT_LABEL_CAT1__(a,b)    a##b
-#define __NBT_LABEL_CAT2__(a,b)    __NBT_LABEL_CAT1__(a,b)
-#define _NBT_LABEL __NBT_LABEL_CAT2__(_label_, __LINE__)
-
 #define _NBT_ASSERT(v, correct) do { \
-	bool _ret = true; \
-	torture_assert_int_equal_goto(rec->tctx, v, correct, \
-			_ret, _NBT_LABEL, "Invalid int value"); \
-_NBT_LABEL: \
-	if (!_ret) { \
+	if ((v) != (correct)) { \
+		printf("(%s) Incorrect value %s=%d - should be %s (%d)\n", \
+		       __location__, #v, v, #correct, correct); \
 		return; \
 	} \
 } while (0)
 
 #define _NBT_ASSERT_STRING(v, correct) do { \
-	bool _ret = true; \
-	torture_assert_str_equal_goto(rec->tctx, v, correct, \
-			_ret, _NBT_LABEL, "Invalid string value"); \
-_NBT_LABEL: \
-	if (!_ret) { \
+	if ( ((!v) && (correct)) || \
+	     ((v) && (!correct)) || \
+	     ((v) && (correct) && strcmp(v,correct) != 0)) { \
+		printf("(%s) Incorrect value %s=%s - should be %s\n", \
+		       __location__, #v, v, correct); \
 		return; \
 	} \
 } while (0)
@@ -9617,8 +9522,8 @@ static void test_conflict_owned_active_vs_replica_handler_query(struct nbt_name_
 
 	name = &req_packet->questions[0].name;
 
-	_NBT_ASSERT_STRING(name->name, rec->name.name);
 	_NBT_ASSERT(name->type, rec->name.type);
+	_NBT_ASSERT_STRING(name->name, rec->name.name);
 	_NBT_ASSERT_STRING(name->scope, rec->name.scope);
 
 	_NBT_ASSERT(rec->defend.expect_release, false);
@@ -9692,7 +9597,7 @@ static void test_conflict_owned_active_vs_replica_handler_query(struct nbt_name_
 
 	/* make sure we push the reply to the wire */
 	while (nbtsock->send_queue) {
-		tevent_loop_once(nbtsock->event_ctx);
+		event_loop_once(nbtsock->event_ctx);
 	}
 	smb_msleep(1000);
 
@@ -9716,8 +9621,8 @@ static void test_conflict_owned_active_vs_replica_handler_release(
 
 	name = &req_packet->questions[0].name;
 
-	_NBT_ASSERT_STRING(name->name, rec->name.name);
 	_NBT_ASSERT(name->type, rec->name.type);
+	_NBT_ASSERT_STRING(name->name, rec->name.name);
 	_NBT_ASSERT_STRING(name->scope, rec->name.scope);
 
 	_NBT_ASSERT(rec->defend.expect_release, true);
@@ -9749,7 +9654,7 @@ static void test_conflict_owned_active_vs_replica_handler_release(
 
 	/* make sure we push the reply to the wire */
 	while (nbtsock->send_queue) {
-		tevent_loop_once(nbtsock->event_ctx);
+		event_loop_once(nbtsock->event_ctx);
 	}
 	smb_msleep(1000);
 
@@ -9763,17 +9668,6 @@ static void test_conflict_owned_active_vs_replica_handler(struct nbt_name_socket
 {
 	struct test_conflict_owned_active_vs_replica_struct *rec = 
 		(struct test_conflict_owned_active_vs_replica_struct *)nbtsock->incoming.private_data;
-	struct nbt_name *name = &req_packet->questions[0].name;
-
-	if (req_packet->operation & NBT_FLAG_BROADCAST) {
-		torture_comment(rec->tctx,
-			"%s: incoming packet name[%s] flags[0x%08X] from[%s]\n",
-			__location__,
-			nbt_name_string(rec->tctx, name),
-			req_packet->operation,
-			src->addr);
-		return;
-	}
 
 	rec->defend.ret = false;
 
@@ -9785,14 +9679,8 @@ static void test_conflict_owned_active_vs_replica_handler(struct nbt_name_socket
 		test_conflict_owned_active_vs_replica_handler_release(nbtsock, req_packet, src);
 		break;
 	default:
-		torture_comment(rec->tctx,
-			"%s: unexpected packet name[%s] flags[0x%08X] from[%s]\n",
-			__location__,
-			nbt_name_string(rec->tctx, name),
-			req_packet->operation,
-			src->addr);
-		_NBT_ASSERT((req_packet->operation & NBT_OPCODE), NBT_OPCODE_QUERY);
-		break;
+		printf("%s: unexpected incoming packet\n", __location__);
+		return;
 	}
 }
 

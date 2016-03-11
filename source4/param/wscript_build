@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 
+bld.SAMBA_LIBRARY('samba-hostconfig',
+	source='loadparm.c generic.c util.c',
+	pc_files='samba-hostconfig.pc',
+	vnum='0.0.1',
+	deps='DYNCONFIG',
+	public_deps='samba-util',
+	public_headers='param.h',
+	autoproto='param_proto.h',
+	)
+
+
 bld.SAMBA_SUBSYSTEM('PROVISION',
 	source='provision.c pyparam.c',
 	deps='LIBPYTHON pyparam_util ldb pytalloc-util pyldb-util',
@@ -10,7 +21,7 @@ bld.SAMBA_SUBSYSTEM('PROVISION',
 bld.SAMBA_SUBSYSTEM('share',
 	source='share.c',
 	public_headers='share.h',
-	deps='samba-util samba-modules'
+	deps='samba-util'
 	)
 
 
@@ -18,7 +29,7 @@ bld.SAMBA_MODULE('share_classic',
 	source='share_classic.c',
 	subsystem='share',
 	init_function='share_classic_init',
-	deps='samba-util samba-hostconfig'
+	deps='samba-util'
 	)
 
 
@@ -26,14 +37,13 @@ bld.SAMBA_MODULE('share_ldb',
 	source='share_ldb.c',
 	subsystem='share',
 	init_function='share_ldb_init',
-	deps='ldbsamba auth_system_session',
-	internal_module=False,
+	deps='ldbsamba auth_system_session'
 	)
 
 
 bld.SAMBA_SUBSYSTEM('SECRETS',
 	source='secrets.c',
-	deps='ldb tdb-wrap util_tdb NDR_SECURITY tevent ldbwrap'
+	deps='ldb tdb-wrap UTIL_TDB NDR_SECURITY tevent ldbwrap'
 	)
 
 
@@ -43,19 +53,15 @@ bld.SAMBA_PYTHON('pyparam',
 	realname='samba/param.so'
 	)
 
-bld.SAMBA_SUBSYSTEM('param_options',
-	source='loadparm.c',
-	deps='samba-hostconfig')
-
 
 bld.SAMBA_SUBSYSTEM('pyparam_util',
 	source='pyparam_util.c',
-	deps='LIBPYTHON samba-hostconfig pytalloc-util',
+	deps='LIBPYTHON samba-hostconfig',
 	pyext=True,
 	)
 
 bld.SAMBA_LIBRARY('shares',
                   source=[],
-                  deps='share',
+                  deps='share share_classic share_ldb',
                   grouping_library=True,
                   private_library=True)

@@ -28,7 +28,7 @@
 bool add_gid_to_array_unique(TALLOC_CTX *mem_ctx, gid_t gid,
 			     gid_t **gids, uint32_t *num_gids)
 {
-	uint32_t i;
+	int i;
 
 	if ((*num_gids != 0) && (*gids == NULL)) {
 		/*
@@ -61,7 +61,7 @@ bool add_gid_to_array_unique(TALLOC_CTX *mem_ctx, gid_t gid,
 bool add_uid_to_array_unique(TALLOC_CTX *mem_ctx, uid_t uid,
 			     uid_t **uids, uint32_t *num_uids)
 {
-	uint32_t i;
+	int i;
 
 	if ((*num_uids != 0) && (*uids == NULL)) {
 		/*

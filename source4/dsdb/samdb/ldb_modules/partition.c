@@ -134,9 +134,11 @@ static int partition_req_callback(struct ldb_request *req,
 	struct ldb_module *module;
 	struct ldb_request *nreq;
 	int ret;
+	struct partition_private_data *data;
 	struct ldb_control *partition_ctrl;
 
 	ac = talloc_get_type(req->context, struct partition_context);
+	data = talloc_get_type(ldb_module_get_private(ac->module), struct partition_private_data);
 
 	if (!ares) {
 		return ldb_module_done(ac->req, NULL, NULL,
@@ -396,73 +398,6 @@ static int partition_send_all(struct ldb_module *module,
 	return partition_call_first(ac);
 }
 
-
-/**
- * send an operation to the top partition, then copy the resulting
- * object to all other partitions
- */
-static int partition_copy_all(struct ldb_module *module,
-			      struct partition_context *ac,
-			      struct ldb_request *req,
-			      struct ldb_dn *dn)
-{
-	unsigned int i;
-	struct partition_private_data *data = talloc_get_type(ldb_module_get_private(module),
-							      struct partition_private_data);
-	int ret, search_ret;
-	struct ldb_result *res;
-
-	/* do the request on the top level sam.ldb synchronously */
-	ret = ldb_next_request(module, req);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
-	ret = ldb_wait(req->handle, LDB_WAIT_ALL);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
-
-	/* now fetch the resulting object, and then copy it to all the
-	 * other partitions. We need this approach to cope with the
-	 * partitions getting out of sync. If for example the
-	 * @ATTRIBUTES object exists on one partition but not the
-	 * others then just doing each of the partitions in turn will
-	 * lead to an error
-	 */
-	search_ret = dsdb_module_search_dn(module, ac, &res, dn, NULL, DSDB_FLAG_NEXT_MODULE, req);
-	if (search_ret != LDB_SUCCESS && ret != LDB_ERR_NO_SUCH_OBJECT) {
-		return search_ret;
-	}
-
-	/* now delete the object in the other partitions. Once that is
-	   done we will re-add the object, if search_ret was not
-	   LDB_ERR_NO_SUCH_OBJECT
-	*/
-	for (i=0; data->partitions && data->partitions[i]; i++) {
-		int pret;
-		pret = dsdb_module_del(data->partitions[i]->module, dn, DSDB_FLAG_NEXT_MODULE, req);
-		if (pret != LDB_SUCCESS && pret != LDB_ERR_NO_SUCH_OBJECT) {
-			/* we should only get success or no
-			   such object from the other partitions */
-			return pret;
-		}
-	}
-
-
-	if (search_ret != LDB_ERR_NO_SUCH_OBJECT) {
-		/* now re-add in the other partitions */
-		for (i=0; data->partitions && data->partitions[i]; i++) {
-			int pret;
-			pret = dsdb_module_add(data->partitions[i]->module, res->msgs[0], DSDB_FLAG_NEXT_MODULE, req);
-			if (pret != LDB_SUCCESS) {
-				return pret;
-			}
-		}
-	}
-
-	return ldb_module_done(req, NULL, NULL, LDB_SUCCESS);
-}
-
 /**
  * Figure out which backend a request needs to be aimed at.  Some
  * requests must be replicated to all backends
@@ -492,7 +427,7 @@ static int partition_replicate(struct ldb_module *module, struct ldb_request *re
 					return ldb_operr(ldb_module_get_ctx(module));
 				}
 				
-				return partition_copy_all(module, ac, req, dn);
+				return partition_send_all(module, ac, req);
 			}
 		}
 	}
@@ -541,13 +476,18 @@ static int partition_search(struct ldb_module *module, struct ldb_request *req)
 
 	struct ldb_control *search_control = ldb_request_get_control(req, LDB_CONTROL_SEARCH_OPTIONS_OID);
 	struct ldb_control *domain_scope_control = ldb_request_get_control(req, LDB_CONTROL_DOMAIN_SCOPE_OID);
-	struct ldb_control *no_gc_control = ldb_request_get_control(req, DSDB_CONTROL_NO_GLOBAL_CATALOG);
 	
 	struct ldb_search_options_control *search_options = NULL;
 	struct dsdb_partition *p;
 	unsigned int i, j;
 	int ret;
 	bool domain_scope = false, phantom_root = false;
+
+	/* see if we are still up-to-date */
+	ret = partition_reload_if_required(module, data, req);
+	if (ret != LDB_SUCCESS) {
+		return ret;
+	}
 
 	p = find_partition(data, NULL, req);
 	if (p != NULL) {
@@ -577,11 +517,6 @@ static int partition_search(struct ldb_module *module, struct ldb_request *req)
 		return ldb_next_request(module, req);
 	}
 
-	/* Special DNs without specified partition should go further */
-	if (ldb_dn_is_special(req->op.search.base)) {
-		return ldb_next_request(module, req);
-	}
-
 	/* Locate the options */
 	domain_scope = (search_options
 		&& (search_options->search_options & LDB_SEARCH_OPTION_DOMAIN_SCOPE))
@@ -607,25 +542,11 @@ static int partition_search(struct ldb_module *module, struct ldb_request *req)
 
 	/* Search from the base DN */
 	if (ldb_dn_is_null(req->op.search.base)) {
-		if (!phantom_root) {
-			return ldb_error(ldb, LDB_ERR_NO_SUCH_OBJECT, "empty base DN");
-		}
 		return partition_send_all(module, ac, req);
 	}
 
 	for (i=0; data->partitions[i]; i++) {
 		bool match = false, stop = false;
-
-		if (data->partitions[i]->partial_replica && no_gc_control != NULL) {
-			if (ldb_dn_compare_base(data->partitions[i]->ctrl->dn,
-						req->op.search.base) == 0) {
-				/* base DN is in a partial replica
-				   with the NO_GLOBAL_CATALOG
-				   control. This partition is invisible */
-				/* DEBUG(0,("DENYING NON-GC OP: %s\n", ldb_module_call_chain(req, req))); */
-				continue;
-			}
-		}
 
 		if (phantom_root) {
 			/* Phantom root: Find all partitions under the
@@ -693,8 +614,7 @@ static int partition_search(struct ldb_module *module, struct ldb_request *req)
 
 				/* Initialise the referrals list */
 				if (ac->referrals == NULL) {
-					char **l = str_list_make_empty(ac);
-					ac->referrals = discard_const_p(const char *, l);
+					ac->referrals = (const char **) str_list_make_empty(ac);
 					if (ac->referrals == NULL) {
 						return ldb_oom(ldb);
 					}
@@ -805,14 +725,14 @@ static int partition_rename(struct ldb_module *module, struct ldb_request *req)
 /* start a transaction */
 static int partition_start_trans(struct ldb_module *module)
 {
-	int i;
+	unsigned int i;
 	int ret;
 	struct partition_private_data *data = talloc_get_type(ldb_module_get_private(module),
 							      struct partition_private_data);
 	/* Look at base DN */
 	/* Figure out which partition it is under */
 	/* Skip the lot if 'data' isn't here yet (initialization) */
-	if (ldb_module_flags(ldb_module_get_ctx(module)) & LDB_FLG_ENABLE_TRACING) {
+	if ((module && ldb_module_flags(ldb_module_get_ctx(module)) & LDB_FLG_ENABLE_TRACING)) {
 		ldb_debug(ldb_module_get_ctx(module), LDB_DEBUG_TRACE, "partition_start_trans() -> (metadata partition)");
 	}
 	ret = ldb_next_start_trans(module);
@@ -822,13 +742,6 @@ static int partition_start_trans(struct ldb_module *module)
 
 	ret = partition_reload_if_required(module, data, NULL);
 	if (ret != LDB_SUCCESS) {
-		ldb_next_del_trans(module);
-		return ret;
-	}
-
-	ret = partition_metadata_start_trans(module);
-	if (ret != LDB_SUCCESS) {
-		ldb_next_del_trans(module);
 		return ret;
 	}
 
@@ -844,7 +757,6 @@ static int partition_start_trans(struct ldb_module *module)
 				ldb_next_del_trans(data->partitions[i]->module);
 			}
 			ldb_next_del_trans(module);
-			partition_metadata_del_trans(module);
 			return ret;
 		}
 	}
@@ -860,9 +772,10 @@ static int partition_prepare_commit(struct ldb_module *module)
 	unsigned int i;
 	struct partition_private_data *data = talloc_get_type(ldb_module_get_private(module),
 							      struct partition_private_data);
-	int ret;
 
 	for (i=0; data && data->partitions && data->partitions[i]; i++) {
+		int ret;
+
 		if ((module && ldb_module_flags(ldb_module_get_ctx(module)) & LDB_FLG_ENABLE_TRACING)) {
 			ldb_debug(ldb_module_get_ctx(module), LDB_DEBUG_TRACE, "partition_prepare_commit() -> %s",
 				  ldb_dn_get_linearized(data->partitions[i]->ctrl->dn));
@@ -879,15 +792,7 @@ static int partition_prepare_commit(struct ldb_module *module)
 	if ((module && ldb_module_flags(ldb_module_get_ctx(module)) & LDB_FLG_ENABLE_TRACING)) {
 		ldb_debug(ldb_module_get_ctx(module), LDB_DEBUG_TRACE, "partition_prepare_commit() -> (metadata partition)");
 	}
-
-	ret = ldb_next_prepare_commit(module);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
-
-	/* metadata prepare commit must come last, as other partitions could modify
-	 * the database inside the prepare commit method of a module */
-	return partition_metadata_prepare_commit(module);
+	return ldb_next_prepare_commit(module);
 }
 
 
@@ -906,11 +811,6 @@ static int partition_end_trans(struct ldb_module *module)
 		ret = LDB_ERR_OPERATIONS_ERROR;
 	} else {
 		data->in_transaction--;
-	}
-
-	ret2 = partition_metadata_end_trans(module);
-	if (ret2 != LDB_SUCCESS) {
-		ret = ret2;
 	}
 
 	for (i=0; data && data->partitions && data->partitions[i]; i++) {
@@ -944,11 +844,6 @@ static int partition_del_trans(struct ldb_module *module)
 	unsigned int i;
 	struct partition_private_data *data = talloc_get_type(ldb_module_get_private(module),
 							      struct partition_private_data);
-	ret = partition_metadata_del_trans(module);
-	if (ret != LDB_SUCCESS) {
-		final_ret = ret;
-	}
-
 	for (i=0; data && data->partitions && data->partitions[i]; i++) {
 		if ((module && ldb_module_flags(ldb_module_get_ctx(module)) & LDB_FLG_ENABLE_TRACING)) {
 			ldb_debug(ldb_module_get_ctx(module), LDB_DEBUG_TRACE, "partition_del_trans() -> %s",
@@ -980,91 +875,184 @@ static int partition_del_trans(struct ldb_module *module)
 }
 
 int partition_primary_sequence_number(struct ldb_module *module, TALLOC_CTX *mem_ctx, 
-				      uint64_t *seq_number,
-				      struct ldb_request *parent)
+				     enum ldb_sequence_type type, uint64_t *seq_number) 
 {
 	int ret;
 	struct ldb_result *res;
 	struct ldb_seqnum_request *tseq;
+	struct ldb_request *treq;
 	struct ldb_seqnum_result *seqr;
-
-	tseq = talloc_zero(mem_ctx, struct ldb_seqnum_request);
-	if (tseq == NULL) {
+	res = talloc_zero(mem_ctx, struct ldb_result);
+	if (res == NULL) {
 		return ldb_oom(ldb_module_get_ctx(module));
 	}
-	tseq->type = LDB_SEQ_HIGHEST_SEQ;
+	tseq = talloc_zero(res, struct ldb_seqnum_request);
+	if (tseq == NULL) {
+		talloc_free(res);
+		return ldb_oom(ldb_module_get_ctx(module));
+	}
+	tseq->type = type;
 	
-	ret = dsdb_module_extended(module, tseq, &res,
-				   LDB_EXTENDED_SEQUENCE_NUMBER,
-				   tseq,
-				   DSDB_FLAG_NEXT_MODULE,
-				   parent);
+	ret = ldb_build_extended_req(&treq, ldb_module_get_ctx(module), res,
+				     LDB_EXTENDED_SEQUENCE_NUMBER,
+				     tseq,
+				     NULL,
+				     res,
+				     ldb_extended_default_callback,
+				     NULL);
+	LDB_REQ_SET_LOCATION(treq);
 	if (ret != LDB_SUCCESS) {
-		talloc_free(tseq);
+		talloc_free(res);
 		return ret;
 	}
 	
-	seqr = talloc_get_type_abort(res->extended->data,
-				     struct ldb_seqnum_result);
-	if (seqr->flags & LDB_SEQ_TIMESTAMP_SEQUENCE) {
+	ret = ldb_next_request(module, treq);
+	if (ret != LDB_SUCCESS) {
 		talloc_free(res);
-		return ldb_module_error(module, LDB_ERR_OPERATIONS_ERROR,
-			"Primary backend in partition module returned a timestamp based seq");
+		return ret;
 	}
-
-	*seq_number = seqr->seq_num;
-	talloc_free(tseq);
+	ret = ldb_wait(treq->handle, LDB_WAIT_ALL);
+	if (ret != LDB_SUCCESS) {
+		talloc_free(res);
+		return ret;
+	}
+	
+	seqr = talloc_get_type(res->extended->data,
+			       struct ldb_seqnum_result);
+	if (seqr->flags & LDB_SEQ_TIMESTAMP_SEQUENCE) {
+		ret = LDB_ERR_OPERATIONS_ERROR;
+		ldb_set_errstring(ldb_module_get_ctx(module), "Primary backend in partitions module returned a timestamp based seq number (must return a normal number)");
+		talloc_free(res);
+		return ret;
+	} else {
+		*seq_number = seqr->seq_num;
+	}
+	talloc_free(res);
 	return LDB_SUCCESS;
 }
 
-
-/*
- * Older version of sequence number as sum of sequence numbers for each partition
- */
-int partition_sequence_number_from_partitions(struct ldb_module *module,
-					      uint64_t *seqr)
+/* FIXME: This function is still semi-async */
+static int partition_sequence_number(struct ldb_module *module, struct ldb_request *req)
 {
 	int ret;
 	unsigned int i;
 	uint64_t seq_number = 0;
+	uint64_t timestamp_sequence = 0;
+	uint64_t timestamp = 0;
 	struct partition_private_data *data = talloc_get_type(ldb_module_get_private(module),
 							      struct partition_private_data);
+	struct ldb_seqnum_request *seq;
+	struct ldb_seqnum_result *seqr;
+	struct ldb_request *treq;
+	struct ldb_seqnum_request *tseq;
+	struct ldb_seqnum_result *tseqr;
+	struct ldb_extended *ext;
+	struct ldb_result *res;
+	struct dsdb_partition *p;
 
-	ret = partition_primary_sequence_number(module, data, &seq_number, NULL);
-	if (ret != LDB_SUCCESS) {
-		return ret;
+	p = find_partition(data, NULL, req);
+	if (p != NULL) {
+		/* the caller specified what partition they want the
+		 * sequence number operation on - just pass it on
+		 */
+		return ldb_next_request(p->module, req);		
 	}
-	
-	/* Skip the lot if 'data' isn't here yet (initialisation) */
-	for (i=0; data && data->partitions && data->partitions[i]; i++) {
-		struct ldb_seqnum_request *tseq;
-		struct ldb_seqnum_result *tseqr;
-		struct ldb_request *treq;
-		struct ldb_result *res = talloc_zero(data, struct ldb_result);
+
+	seq = talloc_get_type(req->op.extended.data, struct ldb_seqnum_request);
+
+	switch (seq->type) {
+	case LDB_SEQ_NEXT:
+	case LDB_SEQ_HIGHEST_SEQ:
+
+		ret = partition_primary_sequence_number(module, req, seq->type, &seq_number);
+		if (ret != LDB_SUCCESS) {
+			return ret;
+		}
+
+		/* Skip the lot if 'data' isn't here yet (initialisation) */
+		for (i=0; data && data->partitions && data->partitions[i]; i++) {
+
+			res = talloc_zero(req, struct ldb_result);
+			if (res == NULL) {
+				return ldb_oom(ldb_module_get_ctx(module));
+			}
+			tseq = talloc_zero(res, struct ldb_seqnum_request);
+			if (tseq == NULL) {
+				talloc_free(res);
+				return ldb_oom(ldb_module_get_ctx(module));
+			}
+			tseq->type = seq->type;
+
+			ret = ldb_build_extended_req(&treq, ldb_module_get_ctx(module), res,
+						     LDB_EXTENDED_SEQUENCE_NUMBER,
+						     tseq,
+						     NULL,
+						     res,
+						     ldb_extended_default_callback,
+						     req);
+			LDB_REQ_SET_LOCATION(treq);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+
+			ret = ldb_request_add_control(treq,
+						      DSDB_CONTROL_CURRENT_PARTITION_OID,
+						      false, data->partitions[i]->ctrl);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+
+			ret = partition_request(data->partitions[i]->module, treq);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+			ret = ldb_wait(treq->handle, LDB_WAIT_ALL);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+			tseqr = talloc_get_type(res->extended->data,
+						struct ldb_seqnum_result);
+			if (tseqr->flags & LDB_SEQ_TIMESTAMP_SEQUENCE) {
+				timestamp_sequence = MAX(timestamp_sequence,
+							 tseqr->seq_num);
+			} else {
+				seq_number += tseqr->seq_num;
+			}
+			talloc_free(res);
+		}
+		/* fall through */
+	case LDB_SEQ_HIGHEST_TIMESTAMP:
+
+		res = talloc_zero(req, struct ldb_result);
 		if (res == NULL) {
 			return ldb_oom(ldb_module_get_ctx(module));
 		}
+
 		tseq = talloc_zero(res, struct ldb_seqnum_request);
 		if (tseq == NULL) {
 			talloc_free(res);
 			return ldb_oom(ldb_module_get_ctx(module));
 		}
-		tseq->type = LDB_SEQ_HIGHEST_SEQ;
-		
+		tseq->type = LDB_SEQ_HIGHEST_TIMESTAMP;
+
 		ret = ldb_build_extended_req(&treq, ldb_module_get_ctx(module), res,
 					     LDB_EXTENDED_SEQUENCE_NUMBER,
 					     tseq,
 					     NULL,
 					     res,
 					     ldb_extended_default_callback,
-					     NULL);
+					     req);
 		LDB_REQ_SET_LOCATION(treq);
 		if (ret != LDB_SUCCESS) {
 			talloc_free(res);
 			return ret;
 		}
-		
-		ret = partition_request(data->partitions[i]->module, treq);
+
+		ret = ldb_next_request(module, treq);
 		if (ret != LDB_SUCCESS) {
 			talloc_free(res);
 			return ret;
@@ -1074,63 +1062,108 @@ int partition_sequence_number_from_partitions(struct ldb_module *module,
 			talloc_free(res);
 			return ret;
 		}
+
 		tseqr = talloc_get_type(res->extended->data,
-					struct ldb_seqnum_result);
-		seq_number += tseqr->seq_num;
+					   struct ldb_seqnum_result);
+		timestamp = tseqr->seq_num;
+
 		talloc_free(res);
-	}
 
-	*seqr = seq_number;
-	return LDB_SUCCESS;
-}
+		/* Skip the lot if 'data' isn't here yet (initialisation) */
+		for (i=0; data && data->partitions && data->partitions[i]; i++) {
 
+			res = talloc_zero(req, struct ldb_result);
+			if (res == NULL) {
+				return ldb_oom(ldb_module_get_ctx(module));
+			}
 
-/*
- * Newer version of sequence number using metadata tdb
- */
-static int partition_sequence_number(struct ldb_module *module, struct ldb_request *req)
-{
-	struct ldb_extended *ext;
-	struct ldb_seqnum_request *seq;
-	struct ldb_seqnum_result *seqr;
-	uint64_t seq_number;
-	int ret;
+			tseq = talloc_zero(res, struct ldb_seqnum_request);
+			if (tseq == NULL) {
+				talloc_free(res);
+				return ldb_oom(ldb_module_get_ctx(module));
+			}
+			tseq->type = LDB_SEQ_HIGHEST_TIMESTAMP;
 
-	seq = talloc_get_type_abort(req->op.extended.data, struct ldb_seqnum_request);
-	switch (seq->type) {
-	case LDB_SEQ_NEXT:
-		ret = partition_metadata_sequence_number_increment(module, &seq_number);
-		if (ret != LDB_SUCCESS) {
-			return ret;
+			ret = ldb_build_extended_req(&treq, ldb_module_get_ctx(module), res,
+						     LDB_EXTENDED_SEQUENCE_NUMBER,
+						     tseq,
+						     NULL,
+						     res,
+						     ldb_extended_default_callback,
+						     req);
+			LDB_REQ_SET_LOCATION(treq);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+
+			ret = ldb_request_add_control(treq,
+						      DSDB_CONTROL_CURRENT_PARTITION_OID,
+						      false, data->partitions[i]->ctrl);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+
+			ret = partition_request(data->partitions[i]->module, treq);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+			ret = ldb_wait(treq->handle, LDB_WAIT_ALL);
+			if (ret != LDB_SUCCESS) {
+				talloc_free(res);
+				return ret;
+			}
+
+			tseqr = talloc_get_type(res->extended->data,
+						  struct ldb_seqnum_result);
+			timestamp = MAX(timestamp, tseqr->seq_num);
+
+			talloc_free(res);
 		}
-		break;
 
-	case LDB_SEQ_HIGHEST_SEQ:
-		ret = partition_metadata_sequence_number(module, &seq_number);
-		if (ret != LDB_SUCCESS) {
-			return ret;
-		}
 		break;
-
-	case LDB_SEQ_HIGHEST_TIMESTAMP:
-		return ldb_module_error(module, LDB_ERR_OPERATIONS_ERROR,
-					"LDB_SEQ_HIGHEST_TIMESTAMP not supported");
 	}
 
 	ext = talloc_zero(req, struct ldb_extended);
 	if (!ext) {
-		return ldb_module_oom(module);
+		return ldb_oom(ldb_module_get_ctx(module));
 	}
 	seqr = talloc_zero(ext, struct ldb_seqnum_result);
 	if (seqr == NULL) {
 		talloc_free(ext);
-		return ldb_module_oom(module);
+		return ldb_oom(ldb_module_get_ctx(module));
 	}
 	ext->oid = LDB_EXTENDED_SEQUENCE_NUMBER;
 	ext->data = seqr;
 
-	seqr->seq_num = seq_number;
-	seqr->flags |= LDB_SEQ_GLOBAL_SEQUENCE;
+	switch (seq->type) {
+	case LDB_SEQ_NEXT:
+	case LDB_SEQ_HIGHEST_SEQ:
+
+		/* Has someone above set a timebase sequence? */
+		if (timestamp_sequence) {
+			seqr->seq_num = (((unsigned long long)timestamp << 24) | (seq_number & 0xFFFFFF));
+		} else {
+			seqr->seq_num = seq_number;
+		}
+
+		if (timestamp_sequence > seqr->seq_num) {
+			seqr->seq_num = timestamp_sequence;
+			seqr->flags |= LDB_SEQ_TIMESTAMP_SEQUENCE;
+		}
+
+		seqr->flags |= LDB_SEQ_GLOBAL_SEQUENCE;
+		break;
+	case LDB_SEQ_HIGHEST_TIMESTAMP:
+		seqr->seq_num = timestamp;
+		break;
+	}
+
+	if (seq->type == LDB_SEQ_NEXT) {
+		seqr->seq_num++;
+	}
 
 	/* send request done */
 	return ldb_module_done(req, NULL, ext, LDB_SUCCESS);
@@ -1149,11 +1182,10 @@ static int partition_extended(struct ldb_module *module, struct ldb_request *req
 		return ldb_next_request(module, req);
 	}
 
-	if (strcmp(req->op.extended.oid, DSDB_EXTENDED_SCHEMA_UPDATE_NOW_OID) == 0) {
-		/* Update the metadata.tdb to increment the schema version if needed*/
-		DEBUG(10, ("Incrementing the sequence_number after schema_update_now\n"));
-		ret = partition_metadata_inc_schema_sequence(module);
-		return ldb_module_done(req, NULL, NULL, ret);
+	/* see if we are still up-to-date */
+	ret = partition_reload_if_required(module, data, req);
+	if (ret != LDB_SUCCESS) {
+		return ret;
 	}
 	
 	if (strcmp(req->op.extended.oid, LDB_EXTENDED_SEQUENCE_NUMBER) == 0) {

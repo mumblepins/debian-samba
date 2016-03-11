@@ -1,4 +1,4 @@
-/*
+/* 
    Unix SMB/CIFS implementation.
    Samba database functions
    Copyright (C) Andrew Tridgell              1999-2000
@@ -10,12 +10,12 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -36,7 +36,6 @@ char *line;
 TDB_DATA iterate_kbuf;
 char cmdline[1024];
 static int disable_mmap;
-static int disable_lock;
 
 enum commands {
 	CMD_CREATE_TDB,
@@ -55,7 +54,6 @@ enum commands {
 	CMD_DELETE,
 	CMD_LIST_HASH_FREE,
 	CMD_LIST_FREE,
-	CMD_FREELIST_SIZE,
 	CMD_INFO,
 	CMD_MMAP,
 	CMD_SPEED,
@@ -63,7 +61,6 @@ enum commands {
 	CMD_NEXT,
 	CMD_SYSTEM,
 	CMD_CHECK,
-	CMD_REPACK,
 	CMD_QUIT,
 	CMD_HELP
 };
@@ -90,7 +87,6 @@ COMMAND_TABLE cmd_table[] = {
 	{"delete",	CMD_DELETE},
 	{"list",	CMD_LIST_HASH_FREE},
 	{"free",	CMD_LIST_FREE},
-	{"freelist_size",	CMD_FREELIST_SIZE},
 	{"info",	CMD_INFO},
 	{"speed",	CMD_SPEED},
 	{"mmap",	CMD_MMAP},
@@ -102,7 +98,6 @@ COMMAND_TABLE cmd_table[] = {
 	{"quit",	CMD_QUIT},
 	{"q",		CMD_QUIT},
 	{"!",		CMD_SYSTEM},
-	{"repack",	CMD_REPACK},
 	{NULL,		CMD_HELP}
 };
 
@@ -116,35 +111,8 @@ static void _start_timer(void)
 static double _end_timer(void)
 {
 	gettimeofday(&tp2,NULL);
-	return((tp2.tv_sec - tp1.tv_sec) +
+	return((tp2.tv_sec - tp1.tv_sec) + 
 	       (tp2.tv_usec - tp1.tv_usec)*1.0e-6);
-}
-
-#ifdef PRINTF_ATTRIBUTE
-static void tdb_log_open(struct tdb_context *tdb, enum tdb_debug_level level,
-			 const char *format, ...) PRINTF_ATTRIBUTE(3,4);
-#endif
-static void tdb_log_open(struct tdb_context *tdb, enum tdb_debug_level level,
-			 const char *format, ...)
-{
-	const char *mutex_msg =
-		"Can use mutexes only with MUTEX_LOCKING or NOLOCK\n";
-	char *p;
-	va_list ap;
-
-	p = strstr(format, mutex_msg);
-	if (p != NULL) {
-		/*
-		 * Yes, this is a hack, but we don't want to see this
-		 * message on first open, but we want to see
-		 * everything else.
-		 */
-		return;
-	}
-
-	va_start(ap, format);
-	vfprintf(stderr, format, ap);
-	va_end(ap);
 }
 
 #ifdef PRINTF_ATTRIBUTE
@@ -190,7 +158,7 @@ static void print_data(const char *buf,int len)
 		printf("%02X ",(int)((unsigned char)buf[i]));
 		i++;
 		if (i%8 == 0) printf(" ");
-		if (i%16 == 0) {
+		if (i%16 == 0) {      
 			print_asc(&buf[i-16],8); printf(" ");
 			print_asc(&buf[i-8],8); printf("\n");
 			if (i<len) printf("[%03X] ",i);
@@ -198,18 +166,18 @@ static void print_data(const char *buf,int len)
 	}
 	if (i%16) {
 		int n;
-
+		
 		n = 16 - (i%16);
 		printf(" ");
 		if (n>8) printf(" ");
 		while (n--) printf("   ");
-
+		
 		n = i%16;
 		if (n > 8) n = 8;
 		print_asc(&buf[i-(i%16)],n); printf(" ");
 		n = (i%16) - n;
-		if (n>0) print_asc(&buf[i-n],n);
-		printf("\n");
+		if (n>0) print_asc(&buf[i-n],n); 
+		printf("\n");    
 	}
 }
 
@@ -234,9 +202,7 @@ static void help(void)
 "  delete    key        : delete a record by key\n"
 "  list                 : print the database hash table and freelist\n"
 "  free                 : print the database freelist\n"
-"  freelist_size        : print the number of records in the freelist\n"
 "  check                : check the integrity of an opened database\n"
-"  repack               : repack the database\n"
 "  speed                : perform speed tests on the database\n"
 "  ! command            : execute system command\n"
 "  1 | first            : print the first record\n"
@@ -253,14 +219,11 @@ static void terror(const char *why)
 
 static void create_tdb(const char *tdbname)
 {
-	struct tdb_logging_context log_ctx = { NULL, NULL};
+	struct tdb_logging_context log_ctx;
 	log_ctx.log_fn = tdb_log;
 
 	if (tdb) tdb_close(tdb);
-	tdb = tdb_open_ex(tdbname, 0,
-			  TDB_CLEAR_IF_FIRST |
-			  (disable_mmap?TDB_NOMMAP:0) |
-			  (disable_lock?TDB_NOLOCK:0),
+	tdb = tdb_open_ex(tdbname, 0, TDB_CLEAR_IF_FIRST | (disable_mmap?TDB_NOMMAP:0),
 			  O_RDWR | O_CREAT | O_TRUNC, 0600, &log_ctx, NULL);
 	if (!tdb) {
 		printf("Could not create %s: %s\n", tdbname, strerror(errno));
@@ -269,32 +232,12 @@ static void create_tdb(const char *tdbname)
 
 static void open_tdb(const char *tdbname)
 {
-	struct tdb_logging_context log_ctx = { NULL, NULL };
-	log_ctx.log_fn = tdb_log_open;
+	struct tdb_logging_context log_ctx;
+	log_ctx.log_fn = tdb_log;
 
 	if (tdb) tdb_close(tdb);
-	tdb = tdb_open_ex(tdbname, 0,
-			  (disable_mmap?TDB_NOMMAP:0) |
-			  (disable_lock?TDB_NOLOCK:0),
-			  O_RDWR, 0600,
+	tdb = tdb_open_ex(tdbname, 0, disable_mmap?TDB_NOMMAP:0, O_RDWR, 0600,
 			  &log_ctx, NULL);
-
-	log_ctx.log_fn = tdb_log;
-	if (tdb != NULL) {
-		tdb_set_logging_function(tdb, &log_ctx);
-	}
-
-	if ((tdb == NULL) && (errno == EINVAL)) {
-		/*
-		 * Retry NOLOCK and readonly. There we want to see all
-		 * error messages.
-		 */
-		tdb = tdb_open_ex(tdbname, 0,
-				  (disable_mmap?TDB_NOMMAP:0) |TDB_NOLOCK,
-				  O_RDONLY, 0600,
-				  &log_ctx, NULL);
-	}
-
 	if (!tdb) {
 		printf("Could not open %s: %s\n", tdbname, strerror(errno));
 	}
@@ -314,7 +257,7 @@ static void insert_tdb(char *keyname, size_t keylen, char* data, size_t datalen)
 	dbuf.dptr = (unsigned char *)data;
 	dbuf.dsize = datalen;
 
-	if (tdb_store(tdb, key, dbuf, TDB_INSERT) != 0) {
+	if (tdb_store(tdb, key, dbuf, TDB_INSERT) == -1) {
 		terror("insert failed");
 	}
 }
@@ -341,7 +284,7 @@ static void store_tdb(char *keyname, size_t keylen, char* data, size_t datalen)
 	printf("Storing key:\n");
 	print_rec(tdb, key, dbuf, NULL);
 
-	if (tdb_store(tdb, key, dbuf, TDB_REPLACE) != 0) {
+	if (tdb_store(tdb, key, dbuf, TDB_REPLACE) == -1) {
 		terror("store failed");
 	}
 }
@@ -363,11 +306,11 @@ static void show_tdb(char *keyname, size_t keylen)
 	    terror("fetch failed");
 	    return;
 	}
-
+	
 	print_rec(tdb, key, dbuf, NULL);
-
+	
 	free( dbuf.dptr );
-
+	
 	return;
 }
 
@@ -411,23 +354,23 @@ static void move_rec(char *keyname, size_t keylen, char* tdbname)
 		terror("fetch failed");
 		return;
 	}
-
+	
 	print_rec(tdb, key, dbuf, NULL);
-
+	
 	dst_tdb = tdb_open(tdbname, 0, 0, O_RDWR, 0600);
 	if ( !dst_tdb ) {
 		terror("unable to open destination tdb");
 		return;
 	}
-
-	if (tdb_store( dst_tdb, key, dbuf, TDB_REPLACE ) != 0) {
+	
+	if ( tdb_store( dst_tdb, key, dbuf, TDB_REPLACE ) == -1 ) {
 		terror("failed to move record");
 	}
 	else
 		printf("record moved\n");
-
+	
 	tdb_close( dst_tdb );
-
+	
 	return;
 }
 
@@ -504,9 +447,12 @@ static void speed_tdb(const char *tlimit)
 	printf("Testing fetch speed for %u seconds\n", timelimit);
 	_start_timer();
 	do {
-		TDB_DATA key;
+		long int r = random();
+		TDB_DATA key, dbuf;
 		key.dptr = discard_const_p(uint8_t, str);
 		key.dsize = strlen((char *)key.dptr);
+		dbuf.dptr = (uint8_t *) &r;
+		dbuf.dsize = sizeof(r);
 		tdb_fetch(tdb, key);
 		t = _end_timer();
 		ops++;
@@ -574,7 +520,7 @@ static void first_record(TDB_CONTEXT *the_tdb, TDB_DATA *pkey)
 {
 	TDB_DATA dbuf;
 	*pkey = tdb_firstkey(the_tdb);
-
+	
 	dbuf = tdb_fetch(the_tdb, *pkey);
 	if (!dbuf.dptr) terror("fetch failed");
 	else {
@@ -586,9 +532,9 @@ static void next_record(TDB_CONTEXT *the_tdb, TDB_DATA *pkey)
 {
 	TDB_DATA dbuf;
 	*pkey = tdb_nextkey(the_tdb, *pkey);
-
+	
 	dbuf = tdb_fetch(the_tdb, *pkey);
-	if (!dbuf.dptr)
+	if (!dbuf.dptr) 
 		terror("fetch failed");
 	else
 		print_rec(the_tdb, *pkey, dbuf, NULL);
@@ -665,10 +611,6 @@ static int do_command(void)
 			bIterate = 0;
 			tdb_transaction_commit(tdb);
 			return 0;
-		case CMD_REPACK:
-			bIterate = 0;
-			tdb_repack(tdb);
-			return 0;
 		case CMD_TRANSACTION_CANCEL:
 			bIterate = 0;
 			tdb_transaction_cancel(tdb);
@@ -713,18 +655,6 @@ static int do_command(void)
 		case CMD_LIST_FREE:
 			tdb_printfreelist(tdb);
 			return 0;
-		case CMD_FREELIST_SIZE: {
-			int size;
-
-			size = tdb_freelist_size(tdb);
-			if (size < 0) {
-				printf("Error getting freelist size.\n");
-			} else {
-				printf("freelist size: %d\n", size);
-			}
-
-			return 0;
-		}
 		case CMD_INFO:
 			info_tdb();
 			return 0;
@@ -763,7 +693,7 @@ static int do_command(void)
 	return 0;
 }
 
-static char *tdb_convert_string(char *instring, size_t *sizep)
+static char *convert_string(char *instring, size_t *sizep)
 {
 	size_t length = 0;
 	char *outp, *inp;
@@ -802,13 +732,6 @@ int main(int argc, char *argv[])
 	arg2 = NULL;
 	arg2len = 0;
 
-	if (argv[1] && (strcmp(argv[1], "-l") == 0)) {
-		disable_lock = 1;
-		argv[1] = argv[0];
-		argv += 1;
-		argc -= 1;
-	}
-
 	if (argv[1]) {
 		cmdname = "open";
 		arg1 = argv[1];
@@ -836,15 +759,15 @@ int main(int argc, char *argv[])
 					}
 				}
 			}
-			if (arg1) arg1 = tdb_convert_string(arg1,&arg1len);
-			if (arg2) arg2 = tdb_convert_string(arg2,&arg2len);
+			if (arg1) arg1 = convert_string(arg1,&arg1len);
+			if (arg2) arg2 = convert_string(arg2,&arg2len);
 			if (do_command()) break;
 		}
 		break;
 	case 5:
-		arg2 = tdb_convert_string(argv[4],&arg2len);
+		arg2 = convert_string(argv[4],&arg2len);
 	case 4:
-		arg1 = tdb_convert_string(argv[3],&arg1len);
+		arg1 = convert_string(argv[3],&arg1len);
 	case 3:
 		cmdname = argv[2];
 	default:

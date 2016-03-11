@@ -25,7 +25,6 @@
 
 #include "includes.h"
 #include "system/filesys.h"
-#include "lib/sys_rw.h"
 
 /* Do this on our own in TRANSFER_BUF_SIZE chunks.
  * It's safe to make direct syscalls to lseek/write here
@@ -45,14 +44,14 @@
 
 static ssize_t default_sys_recvfile(int fromfd,
 			int tofd,
-			off_t offset,
+			SMB_OFF_T offset,
 			size_t count)
 {
 	int saved_errno = 0;
 	size_t total = 0;
 	size_t bufsize = MIN(TRANSFER_BUF_SIZE,count);
 	size_t total_written = 0;
-	char buffer[bufsize];
+	char *buffer = NULL;
 
 	DEBUG(10,("default_sys_recvfile: from = %d, to = %d, "
 		"offset=%.0f, count = %lu\n",
@@ -63,12 +62,17 @@ static ssize_t default_sys_recvfile(int fromfd,
 		return 0;
 	}
 
-	if (tofd != -1 && offset != (off_t)-1) {
-		if (lseek(tofd, offset, SEEK_SET) == -1) {
+	if (tofd != -1 && offset != (SMB_OFF_T)-1) {
+		if (sys_lseek(tofd, offset, SEEK_SET) == -1) {
 			if (errno != ESPIPE) {
 				return -1;
 			}
 		}
+	}
+
+	buffer = SMB_MALLOC_ARRAY(char, bufsize);
+	if (buffer == NULL) {
+		return -1;
 	}
 
 	while (total < count) {
@@ -76,31 +80,11 @@ static ssize_t default_sys_recvfile(int fromfd,
 		ssize_t read_ret;
 		size_t toread = MIN(bufsize,count - total);
 
-		/*
-		 * Read from socket - ignore EINTR.
-		 * Can't use sys_read() as that also
-		 * ignores EAGAIN and EWOULDBLOCK.
-		 */
-		do {
-			read_ret = read(fromfd, buffer, toread);
-		} while (read_ret == -1 && errno == EINTR);
-
-		if (read_ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-			/*
-			 * fromfd socket is in non-blocking mode.
-			 * If we already read some and wrote
-			 * it successfully, return that.
-			 * Only return -1 if this is the first read
-			 * attempt. Caller will handle both cases.
-			 */
-			if (total_written != 0) {
-				return total_written;
-			}
-			return -1;
-		}
-
+		/* Read from socket - ignore EINTR. */
+		read_ret = sys_read(fromfd, buffer, toread);
 		if (read_ret <= 0) {
 			/* EOF or socket error. */
+			free(buffer);
 			return -1;
 		}
 
@@ -135,6 +119,7 @@ static ssize_t default_sys_recvfile(int fromfd,
 		total += read_ret;
 	}
 
+	free(buffer);
 	if (saved_errno) {
 		/* Return the correct write error. */
 		errno = saved_errno;
@@ -155,7 +140,7 @@ static ssize_t default_sys_recvfile(int fromfd,
 
 ssize_t sys_recvfile(int fromfd,
 			int tofd,
-			off_t offset,
+			SMB_OFF_T offset,
 			size_t count)
 {
 	static int pipefd[2] = { -1, -1 };
@@ -206,19 +191,6 @@ ssize_t sys_recvfile(int fromfd,
 				return default_sys_recvfile(fromfd, tofd,
 							    offset, count);
 			}
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				/*
-				 * fromfd socket is in non-blocking mode.
-				 * If we already read some and wrote
-				 * it successfully, return that.
-				 * Only return -1 if this is the first read
-				 * attempt. Caller will handle both cases.
-				 */
-				if (total_written != 0) {
-					return total_written;
-				}
-				return -1;
-			}
 			break;
 		}
 
@@ -258,7 +230,7 @@ ssize_t sys_recvfile(int fromfd,
 
 ssize_t sys_recvfile(int fromfd,
 			int tofd,
-			off_t offset,
+			SMB_OFF_T offset,
 			size_t count)
 {
 	return default_sys_recvfile(fromfd, tofd, offset, count);
@@ -268,22 +240,20 @@ ssize_t sys_recvfile(int fromfd,
 /*****************************************************************
  Throw away "count" bytes from the client socket.
  Returns count or -1 on error.
- Must only operate on a blocking socket.
 *****************************************************************/
 
 ssize_t drain_socket(int sockfd, size_t count)
 {
 	size_t total = 0;
 	size_t bufsize = MIN(TRANSFER_BUF_SIZE,count);
-	char buffer[bufsize];
-	int old_flags = 0;
+	char *buffer = NULL;
 
 	if (count == 0) {
 		return 0;
 	}
 
-	old_flags = fcntl(sockfd, F_GETFL, 0);
-	if (set_blocking(sockfd, true) == -1) {
+	buffer = SMB_MALLOC_ARRAY(char, bufsize);
+	if (buffer == NULL) {
 		return -1;
 	}
 
@@ -295,16 +265,12 @@ ssize_t drain_socket(int sockfd, size_t count)
 		read_ret = sys_read(sockfd, buffer, toread);
 		if (read_ret <= 0) {
 			/* EOF or socket error. */
-			count = (size_t)-1;
-			goto out;
+			free(buffer);
+			return -1;
 		}
 		total += read_ret;
 	}
 
-  out:
-
-	if (fcntl(sockfd, F_SETFL, old_flags) == -1) {
-		return -1;
-	}
+	free(buffer);
 	return count;
 }

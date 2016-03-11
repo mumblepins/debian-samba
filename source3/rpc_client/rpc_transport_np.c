@@ -20,36 +20,25 @@
 #include "includes.h"
 #include "../lib/util/tevent_ntstatus.h"
 #include "rpc_client/rpc_transport.h"
-#include "librpc/ndr/ndr_table.h"
-#include "libcli/smb/smbXcli_base.h"
-#include "libcli/smb/tstream_smbXcli_np.h"
-#include "client.h"
+#include "libsmb/cli_np_tstream.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_RPC_CLI
 
 struct rpc_transport_np_init_state {
 	struct rpc_cli_transport *transport;
-	int retries;
-	struct tevent_context *ev;
-	struct smbXcli_conn *conn;
-	int timeout;
-	struct timeval abs_timeout;
-	const char *pipe_name;
-	struct smbXcli_session *session;
-	struct smbXcli_tcon *tcon;
-	uint16_t pid;
 };
 
 static void rpc_transport_np_init_pipe_open(struct tevent_req *subreq);
 
 struct tevent_req *rpc_transport_np_init_send(TALLOC_CTX *mem_ctx,
-					      struct tevent_context *ev,
+					      struct event_context *ev,
 					      struct cli_state *cli,
-					      const struct ndr_interface_table *table)
+					      const struct ndr_syntax_id *abstract_syntax)
 {
 	struct tevent_req *req;
 	struct rpc_transport_np_init_state *state;
+	const char *pipe_name;
 	struct tevent_req *subreq;
 
 	req = tevent_req_create(mem_ctx, &state,
@@ -58,63 +47,18 @@ struct tevent_req *rpc_transport_np_init_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	if (smbXcli_conn_protocol(cli->conn) >= PROTOCOL_SMB2_02) {
-		state->tcon = cli->smb2.tcon;
-		state->session = cli->smb2.session;
-	} else {
-		state->tcon = cli->smb1.tcon;
-		state->session = cli->smb1.session;
-		state->pid = cli->smb1.pid;
-	}
-
-	state->ev = ev;
-	state->conn = cli->conn;
-	state->timeout = cli->timeout;
-	state->abs_timeout = timeval_current_ofs_msec(cli->timeout);
-	state->pipe_name = dcerpc_default_transport_endpoint(state, NCACN_NP,
-							     table);
-	if (tevent_req_nomem(state->pipe_name, req)) {
+	pipe_name = get_pipe_name_from_syntax(state, abstract_syntax);
+	if (tevent_req_nomem(pipe_name, req)) {
 		return tevent_req_post(req, ev);
 	}
 
-	while (state->pipe_name[0] == '\\') {
-		state->pipe_name++;
-	}
-
-	subreq = tstream_smbXcli_np_open_send(state, ev, state->conn,
-					      state->session, state->tcon,
-					      state->pid, state->timeout,
-					      state->pipe_name);
+	subreq = tstream_cli_np_open_send(state, ev, cli, pipe_name);
 	if (tevent_req_nomem(subreq, req)) {
 		return tevent_req_post(req, ev);
 	}
 	tevent_req_set_callback(subreq, rpc_transport_np_init_pipe_open, req);
 
 	return req;
-}
-
-static void rpc_transport_np_init_pipe_open_retry(struct tevent_context *ev,
-						  struct tevent_timer *te,
-						  struct timeval t,
-						  void *priv_data)
-{
-	struct tevent_req *subreq;
-	struct tevent_req *req = talloc_get_type(priv_data, struct tevent_req);
-	struct rpc_transport_np_init_state *state = tevent_req_data(
-		req, struct rpc_transport_np_init_state);
-
-	subreq = tstream_smbXcli_np_open_send(state, ev,
-					      state->conn,
-					      state->session,
-					      state->tcon,
-					      state->pid,
-					      state->timeout,
-					      state->pipe_name);
-	if (tevent_req_nomem(subreq, req)) {
-		return;
-	}
-	tevent_req_set_callback(subreq, rpc_transport_np_init_pipe_open, req);
-	state->retries++;
 }
 
 static void rpc_transport_np_init_pipe_open(struct tevent_req *subreq)
@@ -126,25 +70,9 @@ static void rpc_transport_np_init_pipe_open(struct tevent_req *subreq)
 	NTSTATUS status;
 	struct tstream_context *stream;
 
-	status = tstream_smbXcli_np_open_recv(subreq, state, &stream);
+	status = tstream_cli_np_open_recv(subreq, state, &stream);
 	TALLOC_FREE(subreq);
-	if (NT_STATUS_EQUAL(status, NT_STATUS_PIPE_NOT_AVAILABLE)
-				&& (!timeval_expired(&state->abs_timeout))) {
-		struct tevent_timer *te;
-		/*
-		 * Retry on STATUS_PIPE_NOT_AVAILABLE, Windows starts some
-		 * servers (FssagentRpc) on demand.
-		 */
-		DEBUG(2, ("RPC pipe %s not available, retry %d\n",
-			  state->pipe_name, state->retries));
-		te = tevent_add_timer(state->ev, state,
-				 timeval_current_ofs_msec(100 * state->retries),
-				 rpc_transport_np_init_pipe_open_retry, req);
-		if (tevent_req_nomem(te, req)) {
-			return;
-		}
-		return;
-	} else if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(status)) {
 		tevent_req_nterror(req, status);
 		return;
 	}
@@ -177,27 +105,28 @@ NTSTATUS rpc_transport_np_init_recv(struct tevent_req *req,
 }
 
 NTSTATUS rpc_transport_np_init(TALLOC_CTX *mem_ctx, struct cli_state *cli,
-			       const struct ndr_interface_table *table,
+			       const struct ndr_syntax_id *abstract_syntax,
 			       struct rpc_cli_transport **presult)
 {
 	TALLOC_CTX *frame = talloc_stackframe();
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct tevent_req *req;
 	NTSTATUS status = NT_STATUS_OK;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto fail;
 	}
 
-	req = rpc_transport_np_init_send(frame, ev, cli, table);
+	req = rpc_transport_np_init_send(frame, ev, cli, abstract_syntax);
 	if (req == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto fail;
 	}
 
-	if (!tevent_req_poll_ntstatus(req, ev, &status)) {
+	if (!tevent_req_poll(req, ev)) {
+		status = map_nt_error_from_unix(errno);
 		goto fail;
 	}
 

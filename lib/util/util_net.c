@@ -8,17 +8,17 @@
    Copyright (C) Jim McDonough (jmcd@us.ibm.com)  2003.
    Copyright (C) James J Myers 2003
    Copyright (C) Tim Potter      2000-2001
-
+    
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -41,115 +41,6 @@ void zero_sockaddr(struct sockaddr_storage *pss)
 	pss->ss_family = AF_INET;
 }
 
-static char *normalize_ipv6_literal(const char *str, char *buf, size_t *_len)
-{
-#define IPv6_LITERAL_NET ".ipv6-literal.net"
-	static const size_t llen = sizeof(IPv6_LITERAL_NET) - 1;
-	size_t len = *_len;
-	int cmp;
-	size_t i;
-	size_t idx_chars = 0;
-	size_t cnt_delimiter = 0;
-	size_t cnt_chars = 0;
-
-	if (len <= llen) {
-		return false;
-	}
-
-	/* ignore a trailing '.' */
-	if (str[len - 1] == '.') {
-		len -= 1;
-	}
-
-	len -= llen;
-	if (len >= INET6_ADDRSTRLEN) {
-		return NULL;
-	}
-	if (len < 2) {
-		return NULL;
-	}
-
-	cmp = strncasecmp(&str[len], IPv6_LITERAL_NET, llen);
-	if (cmp != 0) {
-		return NULL;
-	}
-
-	for (i = 0; i < len; i++) {
-		if (idx_chars != 0) {
-			break;
-		}
-
-		switch (str[i]) {
-		case '-':
-			buf[i] = ':';
-			cnt_chars = 0;
-			cnt_delimiter += 1;
-			break;
-		case 's':
-			buf[i] = '%';
-			idx_chars += 1;
-			break;
-		case '0':
-		case '1':
-		case '2':
-		case '3':
-		case '4':
-		case '5':
-		case '6':
-		case '7':
-		case '8':
-		case '9':
-		case 'a':
-		case 'A':
-		case 'b':
-		case 'B':
-		case 'c':
-		case 'C':
-		case 'd':
-		case 'D':
-		case 'e':
-		case 'E':
-		case 'f':
-		case 'F':
-			buf[i] = str[i];
-			cnt_chars += 1;
-			break;
-		default:
-			return NULL;
-		}
-		if (cnt_chars > 4) {
-			return NULL;
-		}
-		if (cnt_delimiter > 7) {
-			return NULL;
-		}
-	}
-
-	if (cnt_delimiter < 2) {
-		return NULL;
-	}
-
-	for (; idx_chars != 0 && i < len; i++) {
-		switch (str[i]) {
-		case '%':
-		case ':':
-			return NULL;
-		default:
-			buf[i] = str[i];
-			idx_chars += 1;
-			break;
-		}
-	}
-
-	if (idx_chars == 1) {
-		return NULL;
-	}
-
-	buf[i] = '\0';
-	*_len = len;
-	return buf;
-}
-
 /**
  * Wrap getaddrinfo...
  */
@@ -158,89 +49,11 @@ bool interpret_string_addr_internal(struct addrinfo **ppres,
 {
 	int ret;
 	struct addrinfo hints;
-#if defined(HAVE_IPV6)
-	char addr[INET6_ADDRSTRLEN*2] = { 0, };
-	unsigned int scope_id = 0;
-	size_t len = strlen(str);
-#endif
 
 	ZERO_STRUCT(hints);
 
 	/* By default make sure it supports TCP. */
 	hints.ai_socktype = SOCK_STREAM;
-
-	/* always try as a numeric host first. This prevents unnecessary name
-	 * lookups, and also ensures we accept IPv6 addresses */
-	hints.ai_flags = AI_PASSIVE | AI_NUMERICHOST;
-
-#if defined(HAVE_IPV6)
-	if (len < sizeof(addr)) {
-		char *p = NULL;
-
-		p = normalize_ipv6_literal(str, addr, &len);
-		if (p != NULL) {
-			hints.ai_family = AF_INET6;
-			str = p;
-		}
-	}
-
-	if (strchr_m(str, ':')) {
-		char *p = strchr_m(str, '%');
-
-		/*
-		 * Cope with link-local.
-		 * This is IP:v6:addr%ifname.
-		 */
-
-		if (p && (p > str) && ((scope_id = if_nametoindex(p+1)) != 0)) {
-			/* Length of string we want to copy.
-			   This is IP:v6:addr (removing the %ifname).
-			 */
-			len = PTR_DIFF(p,str);
-
-			if (len+1 > sizeof(addr)) {
-				/* string+nul too long for array. */
-				return false;
-			}
-			if (str != addr) {
-				memcpy(addr, str, len);
-			}
-			addr[len] = '\0';
-
-			str = addr;
-		}
-	}
-#endif
-
-	ret = getaddrinfo(str, NULL, &hints, ppres);
-	if (ret == 0) {
-#if defined(HAVE_IPV6)
-		struct sockaddr_in6 *ps6 = NULL;
-
-		if (scope_id == 0) {
-			return true;
-		}
-		if (ppres == NULL) {
-			return true;
-		}
-		if ((*ppres) == NULL) {
-			return true;
-		}
-		if ((*ppres)->ai_addr->sa_family != AF_INET6) {
-			return true;
-		}
-
-		ps6 = (struct sockaddr_in6 *)(*ppres)->ai_addr;
-
-		if (IN6_IS_ADDR_LINKLOCAL(&ps6->sin6_addr) &&
-				ps6->sin6_scope_id == 0) {
-			ps6->sin6_scope_id = scope_id;
-		}
-#endif
-
-		return true;
-	}
-
 	hints.ai_flags = flags;
 
 	/* Linux man page on getaddrinfo() says port will be
@@ -251,9 +64,10 @@ bool interpret_string_addr_internal(struct addrinfo **ppres,
 			ppres);
 
 	if (ret) {
-		DEBUG(3, ("interpret_string_addr_internal: "
-			  "getaddrinfo failed for name %s (flags %d) [%s]\n",
-			  str, flags, gai_strerror(ret)));
+		DEBUG(3,("interpret_string_addr_internal: getaddrinfo failed "
+			"for name %s [%s]\n",
+			str,
+			gai_strerror(ret) ));
 		return false;
 	}
 	return true;
@@ -271,17 +85,30 @@ static bool interpret_string_addr_pref(struct sockaddr_storage *pss,
 		bool prefer_ipv4)
 {
 	struct addrinfo *res = NULL;
-	int int_flags;
+#if defined(HAVE_IPV6)
+	char addr[INET6_ADDRSTRLEN];
+	unsigned int scope_id = 0;
+
+	if (strchr_m(str, ':')) {
+		char *p = strchr_m(str, '%');
+
+		/*
+		 * Cope with link-local.
+		 * This is IP:v6:addr%ifname.
+		 */
+
+		if (p && (p > str) && ((scope_id = if_nametoindex(p+1)) != 0)) {
+			strlcpy(addr, str,
+				MIN(PTR_DIFF(p,str)+1,
+					sizeof(addr)));
+			str = addr;
+		}
+	}
+#endif
 
 	zero_sockaddr(pss);
 
-	if (flags & AI_NUMERICHOST) {
-		int_flags = flags;
-	} else {
-		int_flags = flags|AI_ADDRCONFIG;
-	}
-
-	if (!interpret_string_addr_internal(&res, str, int_flags)) {
+	if (!interpret_string_addr_internal(&res, str, flags|AI_ADDRCONFIG)) {
 		return false;
 	}
 	if (!res) {
@@ -305,6 +132,16 @@ static bool interpret_string_addr_pref(struct sockaddr_storage *pss,
 		/* Copy the first sockaddr. */
 		memcpy(pss, res->ai_addr, res->ai_addrlen);
 	}
+
+#if defined(HAVE_IPV6)
+	if (pss->ss_family == AF_INET6 && scope_id) {
+		struct sockaddr_in6 *ps6 = (struct sockaddr_in6 *)pss;
+		if (IN6_IS_ADDR_LINKLOCAL(&ps6->sin6_addr) &&
+				ps6->sin6_scope_id == 0) {
+			ps6->sin6_scope_id = scope_id;
+		}
+	}
+#endif
 
 	freeaddrinfo(res);
 	return true;
@@ -459,118 +296,39 @@ bool is_ipaddress_v4(const char *str)
 	return false;
 }
 
-bool is_ipv6_literal(const char *str)
-{
-#if defined(HAVE_IPV6)
-	char buf[INET6_ADDRSTRLEN*2] = { 0, };
-	size_t len = strlen(str);
-	char *p = NULL;
-
-	if (len >= sizeof(buf)) {
-		return false;
-	}
-
-	p = normalize_ipv6_literal(str, buf, &len);
-	if (p == NULL) {
-		return false;
-	}
-
-	return true;
-#else
-	return false;
-#endif
-}
-
-/**
- * Return true if a string could be a IPv6 address.
- */
-
-bool is_ipaddress_v6(const char *str)
-{
-#if defined(HAVE_IPV6)
-	int ret = -1;
-	char *p = NULL;
-
-	p = strchr_m(str, ':');
-	if (p == NULL) {
-		return is_ipv6_literal(str);
-	} else {
-		char buf[INET6_ADDRSTRLEN] = { 0, };
-		size_t len;
-		const char *addr = str;
-		const char *idxs = NULL;
-		unsigned int idx = 0;
-		struct in6_addr ip6;
-
-		p = strchr_m(str, '%');
-		if (p && (p > str)) {
-			len = PTR_DIFF(p, str);
-			idxs = p + 1;
-		} else {
-			len = strlen(str);
-		}
-
-		if (len >= sizeof(buf)) {
-			return false;
-		}
-		if (idxs != NULL) {
-			strncpy(buf, str, len);
-			addr = buf;
-		}
-
-		/*
-		 * Cope with link-local.
-		 * This is IP:v6:addr%ifidx.
-		 */
-		if (idxs != NULL) {
-			char c;
-
-			ret = sscanf(idxs, "%5u%c", &idx, &c);
-			if (ret != 1) {
-				idx = 0;
-			}
-
-			if (idx > 0 && idx < UINT16_MAX) {
-				/* a valid index */
-				idxs = NULL;
-			}
-		}
-
-		/*
-		 * Cope with link-local.
-		 * This is IP:v6:addr%ifname.
-		 */
-		if (idxs != NULL) {
-			idx = if_nametoindex(idxs);
-
-			if (idx > 0) {
-				/* a valid index */
-				idxs = NULL;
-			}
-		}
-
-		if (idxs != NULL) {
-			return false;
-		}
-
-		ret = inet_pton(AF_INET6, addr, &ip6);
-		if (ret <= 0) {
-			return false;
-		}
-
-		return true;
-	}
-#endif
-	return false;
-}
-
 /**
  * Return true if a string could be an IPv4 or IPv6 address.
  */
 
 bool is_ipaddress(const char *str)
 {
-	return is_ipaddress_v4(str) || is_ipaddress_v6(str);
+#if defined(HAVE_IPV6)
+	int ret = -1;
+
+	if (strchr_m(str, ':')) {
+		char addr[INET6_ADDRSTRLEN];
+		struct in6_addr dest6;
+		const char *sp = str;
+		char *p = strchr_m(str, '%');
+
+		/*
+		 * Cope with link-local.
+		 * This is IP:v6:addr%ifname.
+		 */
+
+		if (p && (p > str) && (if_nametoindex(p+1) != 0)) {
+			strlcpy(addr, str,
+				MIN(PTR_DIFF(p,str)+1,
+					sizeof(addr)));
+			sp = addr;
+		}
+		ret = inet_pton(AF_INET6, sp, &dest6);
+		if (ret > 0) {
+			return true;
+		}
+	}
+#endif
+	return is_ipaddress_v4(str);
 }
 
 /**
@@ -647,30 +405,7 @@ bool is_zero_addr(const struct sockaddr_storage *pss)
  */
 void zero_ip_v4(struct in_addr *ip)
 {
-	ZERO_STRUCTP(ip);
-}
-
-bool is_linklocal_addr(const struct sockaddr_storage *pss)
-{
-#ifdef HAVE_IPV6
-	if (pss->ss_family == AF_INET6) {
-		const struct in6_addr *pin6 =
-			&((const struct sockaddr_in6 *)pss)->sin6_addr;
-		return IN6_IS_ADDR_LINKLOCAL(pin6);
-	}
-#endif
-	if (pss->ss_family == AF_INET) {
-		const struct in_addr *pin =
-			&((const struct sockaddr_in *)pss)->sin_addr;
-		struct in_addr ll_addr;
-		struct in_addr mask_addr;
-
-		/* 169.254.0.0/16, is link local, see RFC 3927 */
-		ll_addr.s_addr = 0xa9fe0000;
-		mask_addr.s_addr = 0xffff0000;
-		return same_net_v4(*pin, ll_addr, mask_addr);
-	}
-	return false;
+	memset(ip, '\0', sizeof(struct in_addr));
 }
 
 /**
@@ -680,7 +415,7 @@ void in_addr_to_sockaddr_storage(struct sockaddr_storage *ss,
 		struct in_addr ip)
 {
 	struct sockaddr_in *sa = (struct sockaddr_in *)ss;
-	ZERO_STRUCTP(ss);
+	memset(ss, '\0', sizeof(*ss));
 	sa->sin_family = AF_INET;
 	sa->sin_addr = ip;
 }
@@ -856,7 +591,7 @@ char *print_sockaddr(char *dest,
 			size_t destlen,
 			const struct sockaddr_storage *psa)
 {
-	return print_sockaddr_len(dest, destlen, (const struct sockaddr *)psa,
+	return print_sockaddr_len(dest, destlen, (struct sockaddr *)psa,
 			sizeof(struct sockaddr_storage));
 }
 
@@ -941,10 +676,7 @@ static const char *get_socket_addr(int fd, char *addr_buf, size_t addr_len)
 	 * zero IPv6 address. No good choice here.
 	 */
 
-	if (strlcpy(addr_buf, "0.0.0.0", addr_len) >= addr_len) {
-		/* Truncate ! */
-		return NULL;
-	}
+	strlcpy(addr_buf, "0.0.0.0", addr_len);
 
 	if (fd == -1) {
 		return addr_buf;
@@ -962,171 +694,4 @@ static const char *get_socket_addr(int fd, char *addr_buf, size_t addr_len)
 const char *client_socket_addr(int fd, char *addr, size_t addr_len)
 {
 	return get_socket_addr(fd, addr, addr_len);
-}
-
-
-enum SOCK_OPT_TYPES {OPT_BOOL,OPT_INT,OPT_ON};
-
-typedef struct smb_socket_option {
-	const char *name;
-	int level;
-	int option;
-	int value;
-	int opttype;
-} smb_socket_option;
-
-static const smb_socket_option socket_options[] = {
-  {"SO_KEEPALIVE", SOL_SOCKET, SO_KEEPALIVE, 0, OPT_BOOL},
-  {"SO_REUSEADDR", SOL_SOCKET, SO_REUSEADDR, 0, OPT_BOOL},
-  {"SO_BROADCAST", SOL_SOCKET, SO_BROADCAST, 0, OPT_BOOL},
-#ifdef TCP_NODELAY
-  {"TCP_NODELAY", IPPROTO_TCP, TCP_NODELAY, 0, OPT_BOOL},
-#endif
-#ifdef TCP_KEEPCNT
-  {"TCP_KEEPCNT", IPPROTO_TCP, TCP_KEEPCNT, 0, OPT_INT},
-#endif
-#ifdef TCP_KEEPIDLE
-  {"TCP_KEEPIDLE", IPPROTO_TCP, TCP_KEEPIDLE, 0, OPT_INT},
-#endif
-#ifdef TCP_KEEPINTVL
-  {"TCP_KEEPINTVL", IPPROTO_TCP, TCP_KEEPINTVL, 0, OPT_INT},
-#endif
-#ifdef IPTOS_LOWDELAY
-  {"IPTOS_LOWDELAY", IPPROTO_IP, IP_TOS, IPTOS_LOWDELAY, OPT_ON},
-#endif
-#ifdef IPTOS_THROUGHPUT
-  {"IPTOS_THROUGHPUT", IPPROTO_IP, IP_TOS, IPTOS_THROUGHPUT, OPT_ON},
-#endif
-#ifdef SO_REUSEPORT
-  {"SO_REUSEPORT", SOL_SOCKET, SO_REUSEPORT, 0, OPT_BOOL},
-#endif
-#ifdef SO_SNDBUF
-  {"SO_SNDBUF", SOL_SOCKET, SO_SNDBUF, 0, OPT_INT},
-#endif
-#ifdef SO_RCVBUF
-  {"SO_RCVBUF", SOL_SOCKET, SO_RCVBUF, 0, OPT_INT},
-#endif
-#ifdef SO_SNDLOWAT
-  {"SO_SNDLOWAT", SOL_SOCKET, SO_SNDLOWAT, 0, OPT_INT},
-#endif
-#ifdef SO_RCVLOWAT
-  {"SO_RCVLOWAT", SOL_SOCKET, SO_RCVLOWAT, 0, OPT_INT},
-#endif
-#ifdef SO_SNDTIMEO
-  {"SO_SNDTIMEO", SOL_SOCKET, SO_SNDTIMEO, 0, OPT_INT},
-#endif
-#ifdef SO_RCVTIMEO
-  {"SO_RCVTIMEO", SOL_SOCKET, SO_RCVTIMEO, 0, OPT_INT},
-#endif
-#ifdef TCP_FASTACK
-  {"TCP_FASTACK", IPPROTO_TCP, TCP_FASTACK, 0, OPT_INT},
-#endif
-#ifdef TCP_QUICKACK
-  {"TCP_QUICKACK", IPPROTO_TCP, TCP_QUICKACK, 0, OPT_BOOL},
-#endif
-#ifdef TCP_NODELAYACK
-  {"TCP_NODELAYACK", IPPROTO_TCP, TCP_NODELAYACK, 0, OPT_BOOL},
-#endif
-#ifdef TCP_KEEPALIVE_THRESHOLD
-  {"TCP_KEEPALIVE_THRESHOLD", IPPROTO_TCP, TCP_KEEPALIVE_THRESHOLD, 0, OPT_INT},
-#endif
-#ifdef TCP_KEEPALIVE_ABORT_THRESHOLD
-  {"TCP_KEEPALIVE_ABORT_THRESHOLD", IPPROTO_TCP, TCP_KEEPALIVE_ABORT_THRESHOLD, 0, OPT_INT},
-#endif
-#ifdef TCP_DEFER_ACCEPT
-  {"TCP_DEFER_ACCEPT", IPPROTO_TCP, TCP_DEFER_ACCEPT, 0, OPT_INT},
-#endif
-  {NULL,0,0,0,0}};
-
-/****************************************************************************
- Print socket options.
-****************************************************************************/
-
-static void print_socket_options(int s)
-{
-	int value;
-	socklen_t vlen = 4;
-	const smb_socket_option *p = &socket_options[0];
-
-	/* wrapped in if statement to prevent streams
-	 * leak in SCO Openserver 5.0 */
-	/* reported on samba-technical  --jerry */
-	if ( DEBUGLEVEL >= 5 ) {
-		DEBUG(5,("Socket options:\n"));
-		for (; p->name != NULL; p++) {
-			if (getsockopt(s, p->level, p->option,
-						(void *)&value, &vlen) == -1) {
-				DEBUGADD(5,("\tCould not test socket option %s.\n",
-							p->name));
-			} else {
-				DEBUGADD(5,("\t%s = %d\n",
-							p->name,value));
-			}
-		}
-	}
- }
-
-/****************************************************************************
- Set user socket options.
-****************************************************************************/
-
-void set_socket_options(int fd, const char *options)
-{
-	TALLOC_CTX *ctx = talloc_new(NULL);
-	char *tok;
-
-	while (next_token_talloc(ctx, &options, &tok," \t,")) {
-		int ret=0,i;
-		int value = 1;
-		char *p;
-		bool got_value = false;
-
-		if ((p = strchr_m(tok,'='))) {
-			*p = 0;
-			value = atoi(p+1);
-			got_value = true;
-		}
-
-		for (i=0;socket_options[i].name;i++)
-			if (strequal(socket_options[i].name,tok))
-				break;
-
-		if (!socket_options[i].name) {
-			DEBUG(0,("Unknown socket option %s\n",tok));
-			continue;
-		}
-
-		switch (socket_options[i].opttype) {
-		case OPT_BOOL:
-		case OPT_INT:
-			ret = setsockopt(fd,socket_options[i].level,
-					socket_options[i].option,
-					(char *)&value,sizeof(int));
-			break;
-
-		case OPT_ON:
-			if (got_value)
-				DEBUG(0,("syntax error - %s "
-					"does not take a value\n",tok));
-
-			{
-				int on = socket_options[i].value;
-				ret = setsockopt(fd,socket_options[i].level,
-					socket_options[i].option,
-					(char *)&on,sizeof(int));
-			}
-			break;
-		}
-
-		if (ret != 0) {
-			/* be aware that some systems like Solaris return
-			 * EINVAL to a setsockopt() call when the client
-			 * sent a RST previously - no need to worry */
-			DEBUG(2,("Failed to set socket option %s (Error %s)\n",
-				tok, strerror(errno) ));
-		}
-	}
-
-	TALLOC_FREE(ctx);
-	print_socket_options(fd);
 }

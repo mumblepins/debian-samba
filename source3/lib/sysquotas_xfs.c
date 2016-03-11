@@ -23,20 +23,23 @@
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_QUOTA
 
-#if defined(HAVE_SYS_QUOTAS) && defined(HAVE_XFS_QUOTAS)
+#ifndef HAVE_SYS_QUOTAS
+#ifdef HAVE_XFS_QUOTAS
+#undef HAVE_XFS_QUOTAS
+#endif
+#endif
 
-#ifdef HAVE_SYS_QUOTA_H
+#ifdef HAVE_XFS_QUOTAS
+
+#ifdef HAVE_LINUX_XFS_QUOTAS
+#include "samba_linux_quota.h"
+#ifdef HAVE_LINUX_DQBLK_XFS_H
+#include <linux/dqblk_xfs.h>
+#endif
+#define HAVE_GROUP_QUOTA
+#else /* IRIX */
 #include <sys/quota.h> 
 #endif
-
-/* this one should actually come from glibc: */
-/* #include "samba_linux_quota.h" */
-
-#ifdef HAVE_XFS_XQM_H
-#include <xfs/xqm.h>
-#endif
-
-#define HAVE_GROUP_QUOTA
 
 /* on IRIX */
 #ifndef Q_XQUOTAON
@@ -72,7 +75,7 @@
 int sys_get_xfs_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
-	uint32_t qflags = 0;
+	uint32 qflags = 0;
 	uint64_t bsize = (uint64_t)BBSIZE;
 	struct fs_disk_quota D;
 	struct fs_quota_stat F;
@@ -159,7 +162,7 @@ int sys_get_xfs_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qt
 int sys_set_xfs_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
-	uint32_t qflags = 0;
+	uint32 qflags = 0;
 	uint64_t bsize = (uint64_t)BBSIZE;
 	struct fs_disk_quota D;
 	struct fs_quota_stat F;

@@ -30,8 +30,6 @@
 #include "libcli/security/security.h"
 #include "param/param.h"
 #include "kdc/kdc-glue.h"
-#include "dsdb/common/util.h"
-#include "kdc/kpasswd_glue.h"
 
 /* Return true if there is a valid error packet formed in the error_blob */
 static bool kpasswdd_make_error_reply(struct kdc_server *kdc,
@@ -113,18 +111,18 @@ static bool kpasswd_make_pwchange_reply(struct kdc_server *kdc,
 		const char *reject_string;
 		switch (reject_reason) {
 		case SAM_PWD_CHANGE_PASSWORD_TOO_SHORT:
-			reject_string = talloc_asprintf(mem_ctx, "Password too short, password must be at least %d characters long.",
+			reject_string = talloc_asprintf(mem_ctx, "Password too short, password must be at least %d characters long",
 							dominfo->min_password_length);
 			break;
 		case SAM_PWD_CHANGE_NOT_COMPLEX:
 			reject_string = "Password does not meet complexity requirements";
 			break;
 		case SAM_PWD_CHANGE_PWD_IN_HISTORY:
-			reject_string = talloc_asprintf(mem_ctx, "Password is already in password history.  New password must not match any of your %d previous passwords.",
-							dominfo->password_history_length);
+			reject_string = "Password is already in password history";
 			break;
 		default:
-			reject_string = "Password change rejected, password changes may not be permitted on this account, or the minimum password age may not have elapsed.";
+			reject_string = talloc_asprintf(mem_ctx, "Password must be at least %d characters long, and cannot match any of your %d previous passwords",
+							dominfo->min_password_length, dominfo->password_history_length);
 			break;
 		}
 		return kpasswdd_make_error_reply(kdc, mem_ctx,
@@ -157,35 +155,65 @@ static bool kpasswdd_change_password(struct kdc_server *kdc,
 				     DATA_BLOB *reply)
 {
 	NTSTATUS status;
-	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
 	enum samPwdChangeReason reject_reason;
 	struct samr_DomInfo1 *dominfo;
-	const char *error_string;
+	struct samr_Password *oldLmHash, *oldNtHash;
+	struct ldb_context *samdb;
+	const char * const attrs[] = { "dBCSPwd", "unicodePwd", NULL };
+	struct ldb_message **res;
+	int ret;
 
-	status = samdb_kpasswd_change_password(mem_ctx,
-					       kdc->task->lp_ctx,
-					       kdc->task->event_ctx,
-					       kdc->samdb,
-					       session_info,
-					       password,
-					       &reject_reason,
-					       &dominfo,
-					       &error_string,
-					       &result);
-	if (!NT_STATUS_IS_OK(status)) {
-		return kpasswdd_make_error_reply(kdc,
-						 mem_ctx,
-						 KRB5_KPASSWD_ACCESSDENIED,
-						 error_string,
-						 reply);
+	/* Fetch the old hashes to get the old password in order to perform
+	 * the password change operation. Naturally it would be much better to
+	 * have a password hash from an authentication around but this doesn't
+	 * seem to be the case here. */
+	ret = gendb_search(kdc->samdb, mem_ctx, NULL, &res, attrs,
+			   "(&(objectClass=user)(sAMAccountName=%s))",
+			   session_info->info->account_name);
+	if (ret != 1) {
+		return kpasswdd_make_error_reply(kdc, mem_ctx,
+						KRB5_KPASSWD_ACCESSDENIED,
+						"No such user when changing password",
+						reply);
 	}
 
-	return kpasswd_make_pwchange_reply(kdc,
-					   mem_ctx,
-					   result,
+	status = samdb_result_passwords(mem_ctx, kdc->task->lp_ctx, res[0],
+					&oldLmHash, &oldNtHash);
+	if (!NT_STATUS_IS_OK(status)) {
+		return kpasswdd_make_error_reply(kdc, mem_ctx,
+						KRB5_KPASSWD_ACCESSDENIED,
+						"Not permitted to change password",
+						reply);
+	}
+
+	/* Start a SAM with user privileges for the password change */
+	samdb = samdb_connect(mem_ctx, kdc->task->event_ctx, kdc->task->lp_ctx,
+			      session_info, 0);
+	if (!samdb) {
+		return kpasswdd_make_error_reply(kdc, mem_ctx,
+						KRB5_KPASSWD_HARDERROR,
+						"Failed to open samdb",
+						reply);
+	}
+
+	DEBUG(3, ("Changing password of %s\\%s (%s)\n",
+		  session_info->info->domain_name,
+		  session_info->info->account_name,
+		  dom_sid_string(mem_ctx, &session_info->security_token->sids[PRIMARY_USER_SID_INDEX])));
+
+	/* Performs the password change */
+	status = samdb_set_password_sid(samdb, mem_ctx,
+					&session_info->security_token->sids[PRIMARY_USER_SID_INDEX],
+					password, NULL, NULL,
+					oldLmHash, oldNtHash, /* this is a user password change */
+					&reject_reason,
+					&dominfo);
+	return kpasswd_make_pwchange_reply(kdc, mem_ctx,
+					   status,
 					   reject_reason,
 					   dominfo,
 					   reply);
+
 }
 
 static bool kpasswd_process_request(struct kdc_server *kdc,
@@ -199,7 +227,6 @@ static bool kpasswd_process_request(struct kdc_server *kdc,
 	size_t pw_len;
 
 	if (!NT_STATUS_IS_OK(gensec_session_info(gensec_security,
-						 mem_ctx,
 						 &session_info))) {
 		return kpasswdd_make_error_reply(kdc, mem_ctx,
 						KRB5_KPASSWD_HARDERROR,
@@ -211,11 +238,11 @@ static bool kpasswd_process_request(struct kdc_server *kdc,
 	case KRB5_KPASSWD_VERS_CHANGEPW:
 	{
 		DATA_BLOB password;
-		if (!convert_string_talloc_handle(mem_ctx, lpcfg_iconv_handle(kdc->task->lp_ctx),
+		if (!convert_string_talloc_convenience(mem_ctx, lpcfg_iconv_convenience(kdc->task->lp_ctx),
 					       CH_UTF8, CH_UTF16,
 					       (const char *)input->data,
 					       input->length,
-					       (void **)&password.data, &pw_len)) {
+					       (void **)&password.data, &pw_len, false)) {
 			return false;
 		}
 		password.length = pw_len;
@@ -251,11 +278,11 @@ static bool kpasswd_process_request(struct kdc_server *kdc,
 							reply);
 		}
 
-		if (!convert_string_talloc_handle(mem_ctx, lpcfg_iconv_handle(kdc->task->lp_ctx),
+		if (!convert_string_talloc_convenience(mem_ctx, lpcfg_iconv_convenience(kdc->task->lp_ctx),
 					       CH_UTF8, CH_UTF16,
 					       (const char *)chpw.newpasswd.data,
 					       chpw.newpasswd.length,
-					       (void **)&password.data, &pw_len)) {
+					       (void **)&password.data, &pw_len, false)) {
 			free_ChangePasswdDataMS(&chpw);
 			return false;
 		}
@@ -516,7 +543,7 @@ enum kdc_process_ret kpasswdd_process(struct kdc_server *kdc,
 	 * older MIT clients need this, we might have to insert more
 	 * complex code */
 
-	nt_status = gensec_set_remote_address(gensec_security, peer_addr);
+	nt_status = gensec_set_local_address(gensec_security, peer_addr);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		talloc_free(tmp_ctx);
 		return KDC_PROCESS_FAILED;
@@ -539,7 +566,7 @@ enum kdc_process_ret kpasswdd_process(struct kdc_server *kdc,
 	}
 
 	/* Accept the AP-REQ and generate teh AP-REP we need for the reply */
-	nt_status = gensec_update_ev(gensec_security, tmp_ctx, kdc->task->event_ctx, ap_req, &ap_rep);
+	nt_status = gensec_update(gensec_security, tmp_ctx, ap_req, &ap_rep);
 	if (!NT_STATUS_IS_OK(nt_status) && !NT_STATUS_EQUAL(nt_status, NT_STATUS_MORE_PROCESSING_REQUIRED)) {
 
 		ret = kpasswdd_make_unauth_error_reply(kdc, mem_ctx,

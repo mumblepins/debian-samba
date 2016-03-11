@@ -24,7 +24,6 @@
  */
 
 #include "includes.h"
-#include "system/passwd.h" /* uid_wrapper */
 #include "registry.h"
 #include "reg_dispatcher.h"
 #include "../libcli/security/security.h"
@@ -114,10 +113,10 @@ WERROR create_reg_subkey(struct registry_key_handle *key, const char *subkey)
 	return WERR_NOT_SUPPORTED;
 }
 
-WERROR delete_reg_subkey(struct registry_key_handle *key, const char *subkey, bool lazy)
+WERROR delete_reg_subkey(struct registry_key_handle *key, const char *subkey)
 {
 	if (key->ops && key->ops->delete_subkey) {
-		return key->ops->delete_subkey(key->name, subkey, lazy);
+		return key->ops->delete_subkey(key->name, subkey);
 	}
 
 	return WERR_NOT_SUPPORTED;
@@ -161,8 +160,8 @@ int fetch_reg_values(struct registry_key_handle *key, struct regval_ctr *val)
  underlying registry backend
  ***********************************************************************/
 
-bool regkey_access_check(struct registry_key_handle *key, uint32_t requested,
-			 uint32_t *granted,
+bool regkey_access_check(struct registry_key_handle *key, uint32 requested,
+			 uint32 *granted,
 			 const struct security_token *token )
 {
 	struct security_descriptor *sec_desc;
@@ -170,7 +169,7 @@ bool regkey_access_check(struct registry_key_handle *key, uint32_t requested,
 	WERROR err;
 
 	/* root free-pass, like we have on all other pipes like samr, lsa, etc. */
-	if (root_mode()) {
+	if (geteuid() == sec_initial_uid()) {
 		*granted = REG_KEY_ALL;
 		return true;
 	}
@@ -244,7 +243,7 @@ bool reg_subkeys_need_update(struct registry_key_handle *key,
 		return key->ops->subkeys_need_update(subkeys);
 	}
 
-	return true;
+	return false;
 }
 
 /**
@@ -259,6 +258,6 @@ bool reg_values_need_update(struct registry_key_handle *key,
 		return key->ops->values_need_update(values);
 	}
 
-	return true;
+	return false;
 }
 

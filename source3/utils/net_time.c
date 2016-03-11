@@ -20,37 +20,49 @@
 #include "utils/net.h"
 #include "libsmb/nmblib.h"
 #include "libsmb/libsmb.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 /*
   return the time on a server. This does not require any authentication
 */
-static time_t cli_servertime(const char *host,
-			     const struct sockaddr_storage *dest_ss,
-			     int *zone)
+static time_t cli_servertime(const char *host, struct sockaddr_storage *pss, int *zone)
 {
+	struct nmb_name calling, called;
 	time_t ret = 0;
 	struct cli_state *cli = NULL;
 	NTSTATUS status;
 
-	status = cli_connect_nb(host, dest_ss, 0, 0x20, lp_netbios_name(),
-				SMB_SIGNING_DEFAULT, 0, &cli);
+	cli = cli_initialise();
+	if (!cli) {
+		goto done;
+	}
+
+	status = cli_connect(cli, host, pss);
 	if (!NT_STATUS_IS_OK(status)) {
 		fprintf(stderr, _("Can't contact server %s. Error %s\n"),
 			host, nt_errstr(status));
 		goto done;
 	}
 
-	status = smbXcli_negprot(cli->conn, cli->timeout, PROTOCOL_CORE,
-				 PROTOCOL_NT1);
+	make_nmb_name(&calling, global_myname(), 0x0);
+	if (host) {
+		make_nmb_name(&called, host, 0x20);
+	} else {
+		make_nmb_name(&called, "*SMBSERVER", 0x20);
+	}
+
+	if (!cli_session_request(cli, &calling, &called)) {
+		fprintf(stderr, _("Session request failed\n"));
+		goto done;
+	}
+	status = cli_negprot(cli);
 	if (!NT_STATUS_IS_OK(status)) {
 		fprintf(stderr, _("Protocol negotiation failed: %s\n"),
 			nt_errstr(status));
 		goto done;
 	}
 
-	ret = cli_state_server_time(cli);
-	if (zone) *zone = smb1cli_conn_server_time_zone(cli->conn);
+	ret = cli->servertime;
+	if (zone) *zone = cli->serverzone;
 
 done:
 	if (cli) {
@@ -84,10 +96,10 @@ static const char *systime(time_t t)
 int net_time_usage(struct net_context *c, int argc, const char **argv)
 {
 	d_printf(_(
-"net time\n\tdisplays time on a server (-S server)\n\n"
-"net time system\n\tdisplays time on a server (-S server) in a format ready for /bin/date\n\n"
-"net time set\n\truns /bin/date with the time from the server (-S server)\n\n"
-"net time zone\n\tdisplays the timezone in hours from GMT on the remote server (-S server)\n\n"
+"net time\n\tdisplays time on a server\n\n"
+"net time system\n\tdisplays time on a server in a format ready for /bin/date\n\n"
+"net time set\n\truns /bin/date with the time from the server\n\n"
+"net time zone\n\tdisplays the timezone in hours from GMT on the remote computer\n\n"
 "\n"));
 	net_common_flags_usage(c, argc, argv);
 	return -1;
@@ -98,16 +110,6 @@ static int net_time_set(struct net_context *c, int argc, const char **argv)
 {
 	struct timeval tv;
 	int result;
-
-	if (c->display_usage || c->opt_host == NULL) {
-		d_printf(  "%s\n"
-			   "net time set\n"
-			   "    %s\n",
-			 _("Usage:"),
-			 _("Set local time to that of remote time "
-				"server (-S server) "));
-		return 0;
-	}
 
 	tv.tv_sec = nettime(c, NULL);
 	tv.tv_usec=0;
@@ -128,13 +130,13 @@ static int net_time_system(struct net_context *c, int argc, const char **argv)
 {
 	time_t t;
 
-	if (c->display_usage || c->opt_host == NULL) {
+	if (c->display_usage) {
 		d_printf(  "%s\n"
 			   "net time system\n"
 			   "    %s\n",
 			 _("Usage:"),
-			 _("Output remote time server (-S server) "
-				"time in a format ready for /bin/date"));
+			 _("Output remote time server time in a format "
+			   "ready for /bin/date"));
 		return 0;
 	}
 
@@ -154,13 +156,13 @@ static int net_time_zone(struct net_context *c, int argc, const char **argv)
 	char zsign;
 	time_t t;
 
-	if (c->display_usage || c->opt_host == NULL) {
+	if (c->display_usage) {
 		d_printf(  "%s\n"
 			   "net time zone\n"
 			   "   %s\n",
 			 _("Usage:"),
-			 _("Display the remote time server's (-S server) "
-				"offset to UTC"));
+			 _("Display the remote time server's offset to "
+			   "UTC"));
 		return 0;
 	}
 
@@ -226,23 +228,16 @@ int net_time(struct net_context *c, int argc, const char **argv)
 		return 0;
 	}
 
-	if (c->opt_host == NULL && !c->opt_have_ip) {
-		bool ok;
-
-		ok = find_master_ip(c->opt_target_workgroup, &c->opt_dest_ip);
-		if (!ok) {
-			d_fprintf(stderr,
-				  _("Could not locate a time server.  "
-				    "Try specifying a target host.\n"));
-			net_time_usage(c, argc, argv);
-			return -1;
-		}
-		c->opt_have_ip = true;
+	if (!c->opt_host && !c->opt_have_ip &&
+	    !find_master_ip(c->opt_target_workgroup, &c->opt_dest_ip)) {
+		d_fprintf(stderr, _("Could not locate a time server.  Try "
+				    "specifying a target host.\n"));
+		net_time_usage(c, argc,argv);
+		return -1;
 	}
 
 	/* default - print the time */
-	t = cli_servertime(c->opt_host,
-			   c->opt_have_ip? &c->opt_dest_ip : NULL,
+	t = cli_servertime(c->opt_host, c->opt_have_ip? &c->opt_dest_ip : NULL,
 			   NULL);
 	if (t == 0) return -1;
 

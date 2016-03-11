@@ -1,24 +1,15 @@
 #!/usr/bin/env python
 
-bld.SAMBA_LIBRARY('ntvfs',
-                  source='ntvfs_base.c ntvfs_generic.c ntvfs_interface.c ntvfs_util.c',
-                  autoproto='ntvfs_proto.h',
-                  deps='tevent samba-modules',
-                  private_library=True,
-                  enabled=bld.AD_DC_BUILD_IS_ENABLED()
-                  )
-
-if bld.AD_DC_BUILD_IS_ENABLED():
-    bld.RECURSE('posix')
-    bld.RECURSE('common')
-    bld.RECURSE('unixuid')
-    bld.RECURSE('sysdep')
+bld.RECURSE('posix')
+bld.RECURSE('common')
+bld.RECURSE('unixuid')
+bld.RECURSE('sysdep')
 
 bld.SAMBA_MODULE('ntvfs_cifs',
 	source='cifs/vfs_cifs.c',
 	subsystem='ntvfs',
 	init_function='ntvfs_cifs_init',
-	deps='LIBCLI_SMB smbclient-raw param_options'
+	deps='LIBCLI_SMB LIBCLI_RAW'
 	)
 
 
@@ -26,7 +17,7 @@ bld.SAMBA_MODULE('ntvfs_smb2',
 	source='smb2/vfs_smb2.c',
 	subsystem='ntvfs',
 	init_function='ntvfs_smb2_init',
-	deps='LIBCLI_SMB smbclient-raw param_options'
+	deps='LIBCLI_SMB LIBCLI_RAW'
 	)
 
 
@@ -61,7 +52,7 @@ bld.SAMBA_MODULE('ntvfs_ipc',
 	autoproto='ipc/proto.h',
 	subsystem='ntvfs',
 	init_function='ntvfs_ipc_init',
-	deps='NDR_NAMED_PIPE_AUTH npa_tstream gssapi samba-credentials DCERPC_SHARE'
+	deps='NDR_NAMED_PIPE_AUTH NAMED_PIPE_AUTH_TSTREAM gssapi credentials DCERPC_SHARE'
 	)
 
 
@@ -72,4 +63,11 @@ bld.SAMBA_MODULE('ntvfs_nbench',
 	deps='talloc'
 	)
 
+
+bld.SAMBA_LIBRARY('ntvfs',
+                  source='ntvfs_base.c ntvfs_generic.c ntvfs_interface.c ntvfs_util.c',
+                  autoproto='ntvfs_proto.h',
+                  deps='tevent',
+                  private_library=True
+                  )
 

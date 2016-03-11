@@ -36,7 +36,7 @@ struct security_token *registry_create_system_token(TALLOC_CTX *mem_ctx)
 {
 	struct security_token *token = NULL;
 
-	token = talloc_zero(mem_ctx, struct security_token);
+	token = TALLOC_ZERO_P(mem_ctx, struct security_token);
 	if (!token) {
 		DEBUG(1,("talloc failed\n"));
 		return NULL;
@@ -74,7 +74,7 @@ WERROR gp_init_reg_ctx(TALLOC_CTX *mem_ctx,
 		return werr;
 	}
 
-	tmp_ctx = talloc_zero(mem_ctx, struct gp_registry_context);
+	tmp_ctx = TALLOC_ZERO_P(mem_ctx, struct gp_registry_context);
 	W_ERROR_HAVE_NO_MEMORY(tmp_ctx);
 
 	if (token) {
@@ -285,7 +285,7 @@ static WERROR gp_store_reg_gpovals(TALLOC_CTX *mem_ctx,
 	W_ERROR_NOT_OK_RETURN(werr);
 
 	werr = gp_store_reg_val_sz(mem_ctx, key, "SOM",
-				   gpo->link ? gpo->link : "");
+				   gpo->link);
 	W_ERROR_NOT_OK_RETURN(werr);
 
 	werr = gp_store_reg_val_sz(mem_ctx, key, "DisplayName",
@@ -293,7 +293,7 @@ static WERROR gp_store_reg_gpovals(TALLOC_CTX *mem_ctx,
 	W_ERROR_NOT_OK_RETURN(werr);
 
 	werr = gp_store_reg_val_sz(mem_ctx, key, "WQL-Id",
-				   "");
+				   NULL);
 	W_ERROR_NOT_OK_RETURN(werr);
 
 	return werr;
@@ -395,7 +395,7 @@ static WERROR gp_reg_read_groupmembership(TALLOC_CTX *mem_ctx,
 	int num_token_sids = 0;
 	struct security_token *tmp_token = NULL;
 
-	tmp_token = talloc_zero(mem_ctx, struct security_token);
+	tmp_token = TALLOC_ZERO_P(mem_ctx, struct security_token);
 	W_ERROR_HAVE_NO_MEMORY(tmp_token);
 
 	path = gp_reg_groupmembership_path(mem_ctx, object_sid, flags);
@@ -542,7 +542,7 @@ WERROR gp_reg_state_store(TALLOC_CTX *mem_ctx,
 		werr = gp_store_reg_gpovals(mem_ctx, key, gpo);
 		if (!W_ERROR_IS_OK(werr)) {
 			DEBUG(0,("gp_reg_state_store: "
-				"gp_store_reg_gpovals failed for %s: %s\n",
+				"gpo_store_reg_gpovals failed for %s: %s\n",
 				gpo->display_name, win_errstr(werr)));
 			goto done;
 		}
@@ -602,7 +602,7 @@ static WERROR gp_read_reg_gpo(TALLOC_CTX *mem_ctx,
 		return WERR_INVALID_PARAM;
 	}
 
-	gpo = talloc_zero(mem_ctx, struct GROUP_POLICY_OBJECT);
+	gpo = TALLOC_ZERO_P(mem_ctx, struct GROUP_POLICY_OBJECT);
 	W_ERROR_HAVE_NO_MEMORY(gpo);
 
 	werr = gp_read_reg_gpovals(mem_ctx, key, gpo);
@@ -901,7 +901,7 @@ bool add_gp_registry_entry_to_array(TALLOC_CTX *mem_ctx,
 				    struct gp_registry_entry **entries,
 				    size_t *num)
 {
-	*entries = talloc_realloc(mem_ctx, *entries,
+	*entries = TALLOC_REALLOC_ARRAY(mem_ctx, *entries,
 					struct gp_registry_entry,
 					(*num)+1);
 

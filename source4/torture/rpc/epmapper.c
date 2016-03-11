@@ -45,7 +45,7 @@ static bool test_Insert(struct torture_context *tctx,
 			struct dcerpc_binding_handle *h,
 			struct ndr_syntax_id object,
 			const char *annotation,
-			const struct dcerpc_binding *b)
+			struct dcerpc_binding *b)
 {
 	struct epm_Insert r;
 	NTSTATUS status;
@@ -95,7 +95,7 @@ static bool test_Insert(struct torture_context *tctx,
 static bool test_Delete(struct torture_context *tctx,
 			struct dcerpc_binding_handle *h,
 			const char *annotation,
-			const struct dcerpc_binding *b)
+			struct dcerpc_binding *b)
 {
 	NTSTATUS status;
 	struct epm_Delete r;
@@ -143,7 +143,7 @@ static bool test_Map_tcpip(struct torture_context *tctx,
 	struct GUID uuid;
 	struct policy_handle entry_handle;
 	struct ndr_syntax_id syntax;
-	struct dcerpc_binding *map_binding;
+	struct dcerpc_binding map_binding;
 	struct epm_twr_t map_tower;
 	struct epm_twr_p_t towers[20];
 	struct epm_tower t;
@@ -170,15 +170,12 @@ static bool test_Map_tcpip(struct torture_context *tctx,
 	r.out.num_towers = &num_towers;
 
 	/* Create map tower */
-	status = dcerpc_parse_binding(tctx, "ncacn_ip_tcp:[135]", &map_binding);
-	torture_assert_ntstatus_ok(tctx, status,
-				   "epm_Map_tcpip failed: can't create map_binding");
+	map_binding.transport = NCACN_IP_TCP;
+	map_binding.object = map_syntax;
+	map_binding.host = "0.0.0.0";
+	map_binding.endpoint = "135";
 
-	status = dcerpc_binding_set_abstract_syntax(map_binding, &map_syntax);
-	torture_assert_ntstatus_ok(tctx, status,
-				   "epm_Map_tcpip failed: set map_syntax");
-
-	status = dcerpc_binding_build_tower(tctx, map_binding,
+	status = dcerpc_binding_build_tower(tctx, &map_binding,
 					    &map_tower.tower);
 	torture_assert_ntstatus_ok(tctx, status,
 				   "epm_Map_tcpip failed: can't create map_tower");
@@ -207,7 +204,7 @@ static bool test_Map_tcpip(struct torture_context *tctx,
 			ndr_interface_name(&syntax.uuid, syntax.if_version));
 
 	dcerpc_floor_get_lhs_data(&t.floors[1], &syntax);
-	torture_assert(tctx, ndr_syntax_id_equal(&syntax, &ndr_transfer_syntax_ndr),
+	torture_assert(tctx, ndr_syntax_id_equal(&syntax, &ndr_transfer_syntax),
 		       "epm_Map_tcpip failed: floor 2 is not NDR encoded");
 
 	torture_assert(tctx, t.floors[2].lhs.protocol == EPM_PROTOCOL_NCACN,
@@ -247,8 +244,7 @@ static bool test_Map_full(struct torture_context *tctx,
 	torture_assert_ntstatus_ok(tctx,
 				   status,
 				   "Unable to generate dcerpc_binding struct");
-	status = dcerpc_binding_set_abstract_syntax(b, &obj);
-	torture_assert_ntstatus_ok(tctx, status, "dcerpc_binding_set_abstract_syntax");
+	b->object = obj;
 
 	ok = test_Insert(tctx, h, obj, annotation, b);
 	if (!ok) {
@@ -270,18 +266,17 @@ static bool test_Map_full(struct torture_context *tctx,
 
 static bool test_Map_display(struct dcerpc_binding_handle *b,
 			     struct torture_context *tctx,
-			     struct epm_entry_t *entry)
-
+			     struct epm_twr_t *twr)
 {
 	NTSTATUS status;
-	struct epm_twr_t *twr = entry->tower;
 	struct epm_Map r;
-	struct GUID uuid = entry->object;
+	struct GUID uuid;
 	struct policy_handle handle;
 	struct ndr_syntax_id syntax;
 	uint32_t num_towers;
 	uint32_t i;
 
+	ZERO_STRUCT(uuid);
 	ZERO_STRUCT(handle);
 
 	r.in.object = &uuid;
@@ -296,15 +291,6 @@ static bool test_Map_display(struct dcerpc_binding_handle *b,
 	torture_comment(tctx,
 			"epm_Map results for '%s':\n",
 			ndr_interface_name(&syntax.uuid, syntax.if_version));
-
-	status = dcerpc_epm_Map_r(b, tctx, &r);
-	if (NT_STATUS_IS_OK(status) && r.out.result == 0) {
-		for (i=0;i<*r.out.num_towers;i++) {
-			if (r.out.towers[i].twr) {
-				display_tower(tctx, &r.out.towers[i].twr->tower);
-			}
-		}
-	}
 
 	/* RPC protocol identifier */
 	twr->tower.floors[2].lhs.protocol = EPM_PROTOCOL_NCACN;
@@ -345,7 +331,7 @@ static bool test_Map_display(struct dcerpc_binding_handle *b,
 
 	twr->tower.floors[3].lhs.protocol = EPM_PROTOCOL_UDP;
 	twr->tower.floors[3].lhs.lhs_data = data_blob(NULL, 0);
-	twr->tower.floors[3].rhs.udp.port = 0;
+	twr->tower.floors[3].rhs.http.port = 0;
 
 	status = dcerpc_epm_Map_r(b, tctx, &r);
 	if (NT_STATUS_IS_OK(status) && r.out.result == 0) {
@@ -414,18 +400,18 @@ static bool test_Map_simple(struct torture_context *tctx,
 
 		for (i = 0; i < *r.out.num_ents; i++) {
 			if (r.out.entries[i].tower->tower.num_floors == 5) {
-				test_Map_display(h, tctx, &r.out.entries[i]);
+				test_Map_display(h, tctx, r.out.entries[i].tower);
 			}
 		}
 	} while (NT_STATUS_IS_OK(status) &&
 		 r.out.result == EPMAPPER_STATUS_OK &&
 		 *r.out.num_ents == r.in.max_ents &&
-		 !ndr_policy_handle_empty(&entry_handle));
+		 !policy_handle_empty(&entry_handle));
 
 	torture_assert_ntstatus_ok(tctx, status, "epm_Map_simple failed");
 
 	torture_assert(tctx,
-		       ndr_policy_handle_empty(&entry_handle),
+		       policy_handle_empty(&entry_handle),
 		       "epm_Map_simple failed - The policy handle should be emtpy.");
 
 	return true;
@@ -441,7 +427,7 @@ static bool test_LookupHandleFree(struct torture_context *tctx,
 		torture_skip(tctx, "Skip Insert test against Samba4");
 	}
 
-	if (ndr_policy_handle_empty(entry_handle)) {
+	if (policy_handle_empty(entry_handle)) {
 		torture_comment(tctx,
 				"epm_LookupHandleFree failed - empty policy_handle\n");
 		return false;
@@ -510,22 +496,21 @@ static bool test_Lookup_simple(struct torture_context *tctx,
 
 		for (i = 0; i < *r.out.num_ents; i++) {
 			torture_comment(tctx,
-					"\n  Found '%s' Object[%s]\n",
-					r.out.entries[i].annotation,
-					GUID_string(tctx, &r.out.entries[i].object));
+					"\n  Found '%s'\n",
+					r.out.entries[i].annotation);
 
 			display_tower(tctx, &r.out.entries[i].tower->tower);
 		}
 	} while (NT_STATUS_IS_OK(status) &&
 		 r.out.result == EPMAPPER_STATUS_OK &&
 		 *r.out.num_ents == r.in.max_ents &&
-		 !ndr_policy_handle_empty(&entry_handle));
+		 !policy_handle_empty(&entry_handle));
 
 	torture_assert_ntstatus_ok(tctx, status, "epm_Lookup failed");
 	torture_assert(tctx, r.out.result == EPMAPPER_STATUS_NO_MORE_ENTRIES, "epm_Lookup failed");
 
 	torture_assert(tctx,
-		       ndr_policy_handle_empty(&entry_handle),
+		       policy_handle_empty(&entry_handle),
 		       "epm_Lookup failed - The policy handle should be emtpy.");
 
 	return true;

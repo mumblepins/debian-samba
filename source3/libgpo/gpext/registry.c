@@ -23,7 +23,6 @@
 #include "libgpo/gpo_proto.h"
 #include "registry.h"
 #include "../librpc/gen_ndr/ndr_preg.h"
-#include "libgpo/gpext/gpext.h"
 
 #define GP_EXT_NAME "registry"
 
@@ -112,14 +111,14 @@ static bool gp_reg_entry_from_file_entry(TALLOC_CTX *mem_ctx,
 
 	ZERO_STRUCTP(*reg_entry);
 
-	data = talloc_zero(mem_ctx, struct registry_value);
+	data = TALLOC_ZERO_P(mem_ctx, struct registry_value);
 	if (!data)
 		return false;
 
 	data->type = r->type;
 	data->data = data_blob_talloc(data, r->data, r->size);
 
-	entry = talloc_zero(mem_ctx, struct gp_registry_entry);
+	entry = TALLOC_ZERO_P(mem_ctx, struct gp_registry_entry);
 	if (!entry)
 		return false;
 
@@ -173,10 +172,6 @@ static NTSTATUS reg_parse_registry(TALLOC_CTX *mem_ctx,
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
 		status = ndr_map_error2ntstatus(ndr_err);
 		goto out;
-	}
-
-	if (flags & GPO_INFO_FLAG_VERBOSE) {
-		NDR_PRINT_DEBUG(preg_file, &r);
 	}
 
 	if (!strequal(r.header.signature, "PReg")) {
@@ -274,73 +269,49 @@ done:
 /****************************************************************
 ****************************************************************/
 
-static NTSTATUS registry_process_group_policy(TALLOC_CTX *mem_ctx,
+static NTSTATUS registry_process_group_policy(ADS_STRUCT *ads,
+					      TALLOC_CTX *mem_ctx,
 					      uint32_t flags,
 					      struct registry_key *root_key,
 					      const struct security_token *token,
-					      const struct GROUP_POLICY_OBJECT *deleted_gpo_list,
-					      const struct GROUP_POLICY_OBJECT *changed_gpo_list)
+					      struct GROUP_POLICY_OBJECT *gpo,
+					      const char *extension_guid,
+					      const char *snapin_guid)
 {
 	NTSTATUS status;
 	WERROR werr;
 	struct gp_registry_entry *entries = NULL;
 	size_t num_entries = 0;
 	char *unix_path = NULL;
-	const struct GROUP_POLICY_OBJECT *gpo;
-	char *gpo_cache_path = cache_path(GPO_CACHE_DIR);
-	if (gpo_cache_path == NULL) {
-		return NT_STATUS_NO_MEMORY;
+
+	debug_gpext_header(0, "registry_process_group_policy", flags, gpo,
+			   extension_guid, snapin_guid);
+
+	status = gpo_get_unix_path(mem_ctx, cache_path(GPO_CACHE_DIR), gpo, &unix_path);
+	NT_STATUS_NOT_OK_RETURN(status);
+
+	status = reg_parse_registry(mem_ctx,
+				    flags,
+				    unix_path,
+				    &entries,
+				    &num_entries);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0,("failed to parse registry: %s\n",
+			nt_errstr(status)));
+		return status;
 	}
 
-	/* implementation of the policy callback function, see
-	 * http://msdn.microsoft.com/en-us/library/aa373494%28v=vs.85%29.aspx
-	 * for details - gd */
+	dump_reg_entries(flags, "READ", entries, num_entries);
 
-	/* for now do not process the list of deleted group policies
-
-	for (gpo = deleted_gpo_list; gpo; gpo = gpo->next) {
+	werr = reg_apply_registry(mem_ctx, token, root_key, flags,
+				  entries, num_entries);
+	if (!W_ERROR_IS_OK(werr)) {
+		DEBUG(0,("failed to apply registry: %s\n",
+			win_errstr(werr)));
+		return werror_to_ntstatus(werr);
 	}
 
-	*/
-
-	for (gpo = changed_gpo_list; gpo; gpo = gpo->next) {
-
-		gpext_debug_header(0, "registry_process_group_policy", flags,
-				   gpo, GP_EXT_GUID_REGISTRY, NULL);
-
-		status = gpo_get_unix_path(mem_ctx, gpo_cache_path,
-					   gpo, &unix_path);
-		if (!NT_STATUS_IS_OK(status)) {
-			goto err_cache_path_free;
-		}
-
-		status = reg_parse_registry(mem_ctx,
-					    flags,
-					    unix_path,
-					    &entries,
-					    &num_entries);
-		if (!NT_STATUS_IS_OK(status)) {
-			DEBUG(0,("failed to parse registry: %s\n",
-				nt_errstr(status)));
-			goto err_cache_path_free;
-		}
-
-		dump_reg_entries(flags, "READ", entries, num_entries);
-
-		werr = reg_apply_registry(mem_ctx, token, root_key, flags,
-					  entries, num_entries);
-		if (!W_ERROR_IS_OK(werr)) {
-			DEBUG(0,("failed to apply registry: %s\n",
-				win_errstr(werr)));
-			status = werror_to_ntstatus(werr);
-			goto err_cache_path_free;
-		}
-	}
-	status = NT_STATUS_OK;
-
-err_cache_path_free:
-	talloc_free(gpo_cache_path);
-	return status;
+	return NT_STATUS_OK;
 }
 
 /****************************************************************
@@ -356,12 +327,12 @@ static NTSTATUS registry_get_reg_config(TALLOC_CTX *mem_ctx,
 		{ NULL, REG_NONE, NULL }
 	};
 
-	info = talloc_zero(mem_ctx, struct gp_extension_reg_info);
+	info = TALLOC_ZERO_P(mem_ctx, struct gp_extension_reg_info);
 	NT_STATUS_HAVE_NO_MEMORY(info);
 
-	status = gpext_info_add_entry(mem_ctx, GP_EXT_NAME,
-				      GP_EXT_GUID_REGISTRY,
-				      table, info);
+	status = gp_ext_info_add_entry(mem_ctx, GP_EXT_NAME,
+				       GP_EXT_GUID_REGISTRY,
+				       table, info);
 	NT_STATUS_NOT_OK_RETURN(status);
 
 	*reg_info = info;
@@ -384,7 +355,7 @@ static NTSTATUS registry_shutdown(void)
 {
 	NTSTATUS status;
 
-	status = gpext_unregister_gp_extension(GP_EXT_NAME);
+	status = unregister_gp_extension(GP_EXT_NAME);
 	if (NT_STATUS_IS_OK(status)) {
 		return status;
 	}
@@ -414,9 +385,9 @@ NTSTATUS gpext_registry_init(void)
 	ctx = talloc_init("gpext_registry_init");
 	NT_STATUS_HAVE_NO_MEMORY(ctx);
 
-	status = gpext_register_gp_extension(ctx, SMB_GPEXT_INTERFACE_VERSION,
-					     GP_EXT_NAME, GP_EXT_GUID_REGISTRY,
-					     &registry_methods);
+	status = register_gp_extension(ctx, SMB_GPEXT_INTERFACE_VERSION,
+				       GP_EXT_NAME, GP_EXT_GUID_REGISTRY,
+				       &registry_methods);
 	if (!NT_STATUS_IS_OK(status)) {
 		TALLOC_FREE(ctx);
 	}

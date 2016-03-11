@@ -35,15 +35,10 @@ struct cmd_set {
 	NTSTATUS (*ntfn)(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx, int argc, 
 			const char **argv);
 	WERROR (*wfn)(struct rpc_pipe_client *cli, TALLOC_CTX *mem_ctx, int argc, const char **argv);
-	const struct ndr_interface_table *table;
+	const struct ndr_syntax_id *interface;
 	struct rpc_pipe_client *rpc_pipe;
 	const char *description;
 	const char *usage;
-	bool use_netlogon_creds;
 };
-
-extern struct messaging_context *rpcclient_msg_ctx;
-extern struct cli_state *rpcclient_cli_state;
-extern struct netlogon_creds_cli_context *rpcclient_netlogon_creds;
 
 #endif /* RPCCLIENT_H */

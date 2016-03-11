@@ -124,6 +124,32 @@ failed:
 	return 0;
 }
 
+uint64_t winsdb_get_seqnumber(struct winsdb_handle *h)
+{
+	int ret;
+	struct ldb_context *ldb = h->ldb;
+	struct ldb_dn *dn;
+	struct ldb_result *res = NULL;
+	TALLOC_CTX *tmp_ctx = talloc_new(ldb);
+	uint64_t seqnumber = 0;
+
+	dn = ldb_dn_new(tmp_ctx, ldb, "@BASEINFO");
+	if (!dn) goto failed;
+
+	/* find the record in the WINS database */
+	ret = ldb_search(ldb, tmp_ctx, &res, dn, LDB_SCOPE_BASE, NULL, NULL);
+	if (ret != LDB_SUCCESS) goto failed;
+	if (res->count > 1) goto failed;
+
+	if (res->count == 1) {
+		seqnumber = ldb_msg_find_attr_as_uint64(res->msgs[0], "sequenceNumber", 0);
+	}
+
+failed:
+	talloc_free(tmp_ctx);
+	return seqnumber;
+}
+
 /*
   return a DN for a nbt_name
 */
@@ -223,7 +249,7 @@ static NTSTATUS winsdb_addr_decode(struct winsdb_handle *h, struct winsdb_record
 	if (!p) {
 		/* support old entries, with only the address */
 		addr->address		= (const char *)talloc_steal(addr, val->data);
-		addr->wins_owner	= talloc_strdup(addr, rec->wins_owner);
+		addr->wins_owner	= talloc_reference(addr, rec->wins_owner);
 		if (!addr->wins_owner) {
 			status = NT_STATUS_NO_MEMORY;
 			goto failed;
@@ -903,8 +929,7 @@ failed:
 }
 
 static bool winsdb_check_or_add_module_list(struct tevent_context *ev_ctx, 
-					    struct loadparm_context *lp_ctx, struct winsdb_handle *h,
-					    const char *wins_path)
+					    struct loadparm_context *lp_ctx, struct winsdb_handle *h)
 {
 	int trans;
 	int ret;
@@ -950,7 +975,7 @@ static bool winsdb_check_or_add_module_list(struct tevent_context *ev_ctx,
 		flags |= LDB_FLG_NOSYNC;
 	}
 
-	h->ldb = ldb_wrap_connect(h, ev_ctx, lp_ctx, wins_path,
+	h->ldb = ldb_wrap_connect(h, ev_ctx, lp_ctx, lock_path(h, lp_ctx, lpcfg_wins_url(lp_ctx)),
 				  NULL, NULL, flags);
 	if (!h->ldb) goto failed;
 
@@ -978,29 +1003,26 @@ struct winsdb_handle *winsdb_connect(TALLOC_CTX *mem_ctx,
 	unsigned int flags = 0;
 	bool ret;
 	int ldb_err;
-	char *wins_path;
 
 	h = talloc_zero(mem_ctx, struct winsdb_handle);
 	if (!h) return NULL;
-
-	wins_path = lpcfg_state_path(h, lp_ctx, "wins.ldb");
 
 	if (lpcfg_parm_bool(lp_ctx, NULL,"winsdb", "nosync", false)) {
 		flags |= LDB_FLG_NOSYNC;
 	}
 
-	h->ldb = ldb_wrap_connect(h, ev_ctx, lp_ctx, wins_path,
+	h->ldb = ldb_wrap_connect(h, ev_ctx, lp_ctx, lock_path(h, lp_ctx, lpcfg_wins_url(lp_ctx)),
 				  NULL, NULL, flags);
 	if (!h->ldb) goto failed;
 
 	h->caller = caller;
-	h->hook_script = lpcfg_wins_hook(lp_ctx, h);
+	h->hook_script = lpcfg_wins_hook(lp_ctx);
 
 	h->local_owner = talloc_strdup(h, owner);
 	if (!h->local_owner) goto failed;
 
 	/* make sure the module list is available and used */
-	ret = winsdb_check_or_add_module_list(ev_ctx, lp_ctx, h, wins_path);
+	ret = winsdb_check_or_add_module_list(ev_ctx, lp_ctx, h);
 	if (!ret) goto failed;
 
 	ldb_err = ldb_set_opaque(h->ldb, "winsdb_handle", h);

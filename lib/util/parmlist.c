@@ -20,8 +20,6 @@
 #include "../lib/util/dlinklist.h"
 #include "../lib/util/parmlist.h"
 
-#undef strcasecmp
-
 struct parmlist_entry *parmlist_get(struct parmlist *ctx, const char *name)
 {
 	struct parmlist_entry *e;
@@ -74,14 +72,11 @@ const char **parmlist_get_string_list(struct parmlist *ctx, const char *name,
 									  const char *separator)
 {
 	struct parmlist_entry *p = parmlist_get(ctx, name);
-	char **l;
 
-	if (p == NULL) {
+	if (p == NULL)
 		return NULL;
-	}
 
-	l = str_list_make(ctx, p->value, separator);
-	return discard_const_p(const char *, l);
+	return (const char **)str_list_make(ctx, p->value, separator);
 }
 
 static struct parmlist_entry *parmlist_get_add(struct parmlist *ctx, const char *name)

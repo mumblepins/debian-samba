@@ -76,7 +76,7 @@ void nb_alarm(int ignore)
 void nbio_shmem(int n)
 {
 	nprocs = n;
-	children = (struct children *)anonymous_shared_allocate(sizeof(*children) * nprocs);
+	children = (struct children *)shm_setup(sizeof(*children) * nprocs);
 	if (!children) {
 		printf("Failed to setup shared memory!\n");
 		exit(1);
@@ -135,13 +135,10 @@ void nb_setup(struct cli_state *cli)
 
 void nb_unlink(const char *fname)
 {
-	NTSTATUS status;
-
-	status = cli_unlink(c, fname, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(cli_unlink(c, fname, FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN))) {
 #if NBDEBUG
 		printf("(%d) unlink %s failed (%s)\n", 
-		       line_count, fname, nt_errstr(status));
+		       line_count, fname, cli_errstr(c));
 #endif
 	}
 }
@@ -153,7 +150,7 @@ void nb_createx(const char *fname,
 	uint16_t fd = (uint16_t)-1;
 	int i;
 	NTSTATUS status;
-	uint32_t desired_access;
+	uint32 desired_access;
 
 	if (create_options & FILE_DIRECTORY_FILE) {
 		desired_access = FILE_READ_DATA;
@@ -166,10 +163,10 @@ void nb_createx(const char *fname,
 				0x0,
 				FILE_SHARE_READ|FILE_SHARE_WRITE, 
 				create_disposition, 
-				create_options, 0, &fd, NULL);
+				create_options, 0, &fd);
 	if (!NT_STATUS_IS_OK(status) && handle != -1) {
 		printf("ERROR: cli_ntcreate failed for %s - %s\n",
-		       fname, nt_errstr(status));
+		       fname, cli_errstr(c));
 		exit(1);
 	}
 	if (NT_STATUS_IS_OK(status) && handle == -1) {
@@ -212,23 +209,12 @@ void nb_writex(int handle, int offset, int size, int ret_size)
 
 void nb_readx(int handle, int offset, int size, int ret_size)
 {
-	int i;
-	NTSTATUS status;
-	size_t nread;
+	int i, ret;
 
 	i = find_handle(handle);
-	status = cli_read(c, ftable[i].fd, buf, offset, size, &nread);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("(%d) ERROR: read failed on handle %d ofs=%d size=%d "
-		       "fd %d nterror %s\n",
-		       line_count, handle, offset, size,
-		       ftable[i].fd, nt_errstr(status));
-		exit(1);
-	} else if (nread != ret_size) {
-		printf("(%d) ERROR: read failed on handle %d ofs=%d size=%d "
-		       "nread=%lu ret_size=%d fd %d\n",
-		       line_count, handle, offset, size, (unsigned long)nread,
-		       ret_size, ftable[i].fd);
+	if ((ret=cli_read(c, ftable[i].fd, buf, offset, size)) != ret_size) {
+		printf("(%d) ERROR: read failed on handle %d ofs=%d size=%d res=%d fd %d errno %d (%s)\n",
+			line_count, handle, offset, size, ret, ftable[i].fd, errno, strerror(errno));
 		exit(1);
 	}
 	children[nbio_id].bytes_in += ret_size;
@@ -247,24 +233,18 @@ void nb_close(int handle)
 
 void nb_rmdir(const char *fname)
 {
-	NTSTATUS status;
-
-	status = cli_rmdir(c, fname);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(cli_rmdir(c, fname))) {
 		printf("ERROR: rmdir %s failed (%s)\n", 
-		       fname, nt_errstr(status));
+		       fname, cli_errstr(c));
 		exit(1);
 	}
 }
 
 void nb_rename(const char *oldname, const char *newname)
 {
-	NTSTATUS status;
-
-	status = cli_rename(c, oldname, newname);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(cli_rename(c, oldname, newname))) {
 		printf("ERROR: rename %s %s failed (%s)\n", 
-		       oldname, newname, nt_errstr(status));
+		       oldname, newname, cli_errstr(c));
 		exit(1);
 	}
 }
@@ -285,9 +265,9 @@ void nb_qfileinfo(int fnum)
 
 void nb_qfsinfo(int level)
 {
-	uint64_t bsize, total, avail;
+	int bsize, total, avail;
 	/* this is not the right call - we need cli_qfsinfo() */
-	cli_disk_size(c, "", &bsize, &total, &avail);
+	cli_dskattr(c, &bsize, &total, &avail);
 }
 
 static NTSTATUS find_fn(const char *mnt, struct file_info *finfo, const char *name,
@@ -306,8 +286,7 @@ void nb_flush(int fnum)
 {
 	int i;
 	i = find_handle(fnum);
-
-	cli_flush(NULL, c, i);
+	/* hmmm, we don't have cli_flush() yet */
 }
 
 static int total_deleted;
@@ -324,7 +303,6 @@ static NTSTATUS delete_fn(const char *mnt, struct file_info *finfo,
 	n = SMB_STRDUP(name);
 	n[strlen(n)-1] = 0;
 	if (asprintf(&s, "%s%s", n, finfo->name) == -1) {
-		free(n);
 		printf("asprintf failed\n");
 		return NT_STATUS_NO_MEMORY;
 	}
@@ -332,15 +310,12 @@ static NTSTATUS delete_fn(const char *mnt, struct file_info *finfo,
 		char *s2;
 		if (asprintf(&s2, "%s\\*", s) == -1) {
 			printf("asprintf failed\n");
-			free(s);
-			free(n);
 			return NT_STATUS_NO_MEMORY;
 		}
 		status = cli_list(c, s2, FILE_ATTRIBUTE_DIRECTORY, delete_fn, NULL);
-		free(s2);
 		if (!NT_STATUS_IS_OK(status)) {
-			free(s);
 			free(n);
+			free(s2);
 			return status;
 		}
 		nb_rmdir(s);

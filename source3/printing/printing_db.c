@@ -20,7 +20,6 @@
 */
 
 #include "includes.h"
-#include "system/passwd.h" /* uid_wrapper */
 #include "system/filesys.h"
 #include "printing.h"
 #include "util_tdb.h"
@@ -38,8 +37,6 @@ struct tdb_print_db *get_print_db_byname(const char *printername)
 	int num_open = 0;
 	char *printdb_path = NULL;
 	bool done_become_root = False;
-	char *print_cache_path;
-	int ret;
 
 	SMB_ASSERT(printername != NULL);
 
@@ -67,9 +64,9 @@ struct tdb_print_db *get_print_db_byname(const char *printername)
 			if (p->ref_count)
 				continue;
 			if (p->tdb) {
-				if (tdb_close(p->tdb)) {
+				if (tdb_close(print_db_head->tdb)) {
 					DEBUG(0,("get_print_db: Failed to close tdb for printer %s\n",
-								p->printer_name ));
+								print_db_head->printer_name ));
 					return NULL;
 				}
 			}
@@ -95,16 +92,9 @@ struct tdb_print_db *get_print_db_byname(const char *printername)
 		DLIST_ADD(print_db_head, p);
 	}
 
-	print_cache_path = cache_path("printing/");
-	if (print_cache_path == NULL) {
-		DLIST_REMOVE(print_db_head, p);
-		SAFE_FREE(p);
-		return NULL;
-	}
-	ret = asprintf(&printdb_path, "%s%s.tdb",
-		       print_cache_path, printername);
-	TALLOC_FREE(print_cache_path);
-	if (ret < 0) {
+	if (asprintf(&printdb_path, "%s%s.tdb",
+				cache_path("printing/"),
+				printername) < 0) {
 		DLIST_REMOVE(print_db_head, p);
 		SAFE_FREE(p);
 		return NULL;
@@ -170,7 +160,7 @@ void close_all_print_db(void)
  messages. data needs freeing on exit.
 ****************************************************************************/
 
-TDB_DATA get_printer_notify_pid_list(struct tdb_context *tdb, const char *printer_name, bool cleanlist)
+struct TDB_DATA get_printer_notify_pid_list(struct tdb_context *tdb, const char *printer_name, bool cleanlist)
 {
 	TDB_DATA data;
 	size_t i;
@@ -202,7 +192,7 @@ TDB_DATA get_printer_notify_pid_list(struct tdb_context *tdb, const char *printe
 	for( i = 0; i < data.dsize; i += 8) {
 		pid_t pid = (pid_t)IVAL(data.dptr, i);
 
-		if (pid == getpid())
+		if (pid == sys_getpid())
 			continue;
 
 		/* Entry is dead if process doesn't exist or refcount is zero. */

@@ -67,33 +67,33 @@
 #define VS_NE_BUF_SIZE                  4096  /* Must be > 2*VS_VERSION_INFO_SIZE */
 
 /* Notify spoolss clients that something has changed.  The
-   notification data is either stored in two uint32_t values or a
+   notification data is either stored in two uint32 values or a
    variable length array. */
 
 #define SPOOLSS_NOTIFY_MSG_UNIX_JOBID 0x0001    /* Job id is unix  */
 
 typedef struct spoolss_notify_msg {
 	fstring printer;	/* Name of printer notified */
-	uint32_t type;		/* Printer or job notify */
-	uint32_t field;		/* Notify field changed */
-	uint32_t id;		/* Job id */
-	uint32_t len;		/* Length of data, 0 for two uint32_t value */
-	uint32_t flags;
+	uint32 type;		/* Printer or job notify */
+	uint32 field;		/* Notify field changed */
+	uint32 id;		/* Job id */
+	uint32 len;		/* Length of data, 0 for two uint32 value */
+	uint32 flags;
 	union {
-		uint32_t value[2];
+		uint32 value[2];
 		char *data;
 	} notify;
 } SPOOLSS_NOTIFY_MSG;
 
 typedef struct {
 	fstring 		printername;
-	uint32_t		num_msgs;
+	uint32			num_msgs;
 	SPOOLSS_NOTIFY_MSG	*msgs;
 } SPOOLSS_NOTIFY_MSG_GROUP;
 
 typedef struct {
 	TALLOC_CTX 			*ctx;
-	uint32_t			num_groups;
+	uint32				num_groups;
 	SPOOLSS_NOTIFY_MSG_GROUP	*msg_groups;
 } SPOOLSS_NOTIFY_MSG_CTR;
 
@@ -128,68 +128,56 @@ bool nt_printing_init(struct messaging_context *msg_ctx);
 
 const char *get_short_archi(const char *long_archi);
 
-WERROR print_access_check(const struct auth_session_info *server_info,
-			  struct messaging_context *msg_ctx, int snum,
-			  int access_type);
-
-WERROR nt_printer_guid_retrieve(TALLOC_CTX *mem_ctx, const char *printer,
-				struct GUID *pguid);
-
-WERROR nt_printer_guid_store(struct messaging_context *msg_ctx,
-			     const char *printer, struct GUID guid);
-
-WERROR nt_printer_guid_get(TALLOC_CTX *mem_ctx,
-			   const struct auth_session_info *session_info,
-			   struct messaging_context *msg_ctx,
-			   const char *printer, struct GUID *guid);
+bool print_access_check(const struct auth_serversupplied_info *server_info,
+			struct messaging_context *msg_ctx, int snum,
+			int access_type);
 
 WERROR nt_printer_publish(TALLOC_CTX *mem_ctx,
-			  const struct auth_session_info *server_info,
+			  const struct auth_serversupplied_info *server_info,
 			  struct messaging_context *msg_ctx,
 			  struct spoolss_PrinterInfo2 *pinfo2,
 			  int action);
 
 bool is_printer_published(TALLOC_CTX *mem_ctx,
-			  const struct auth_session_info *server_info,
+			  const struct auth_serversupplied_info *server_info,
 			  struct messaging_context *msg_ctx,
-			  const char *servername,
-			  const char *printer,
+			  const char *servername, char *printer, struct GUID *guid,
 			  struct spoolss_PrinterInfo2 **info2);
 
 WERROR check_published_printers(struct messaging_context *msg_ctx);
 
-struct dcerpc_binding_handle;
-
 bool printer_driver_in_use(TALLOC_CTX *mem_ctx,
-			   struct dcerpc_binding_handle *b,
+			   const struct auth_serversupplied_info *server_info,
+			   struct messaging_context *msg_ctx,
 			   const struct spoolss_DriverInfo8 *r);
 bool printer_driver_files_in_use(TALLOC_CTX *mem_ctx,
-				 struct dcerpc_binding_handle *b,
+				 const struct auth_serversupplied_info *server_info,
+				 struct messaging_context *msg_ctx,
 				 struct spoolss_DriverInfo8 *r);
-bool delete_driver_files(const struct auth_session_info *server_info,
+bool delete_driver_files(const struct auth_serversupplied_info *server_info,
 			 const struct spoolss_DriverInfo8 *r);
 
-WERROR move_driver_to_download_area(struct auth_session_info *session_info,
+WERROR move_driver_to_download_area(struct auth_serversupplied_info *session_info,
 				    struct spoolss_AddDriverInfoCtr *r);
 
 WERROR clean_up_driver_struct(TALLOC_CTX *mem_ctx,
-			      struct auth_session_info *session_info,
+			      struct auth_serversupplied_info *session_info,
 			      struct spoolss_AddDriverInfoCtr *r);
 
 void map_printer_permissions(struct security_descriptor *sd);
 
 void map_job_permissions(struct security_descriptor *sd);
 
-bool print_time_access_check(const struct auth_session_info *server_info,
+bool print_time_access_check(const struct auth_serversupplied_info *server_info,
 			     struct messaging_context *msg_ctx,
 			     const char *servicename);
 
 void nt_printer_remove(TALLOC_CTX *mem_ctx,
-			const struct auth_session_info *server_info,
+			const struct auth_serversupplied_info *server_info,
 			struct messaging_context *msg_ctx,
 			const char *printer);
 void nt_printer_add(TALLOC_CTX *mem_ctx,
-		    const struct auth_session_info *server_info,
+		    const struct auth_serversupplied_info *server_info,
 		    struct messaging_context *msg_ctx,
 		    const char *printer);
 

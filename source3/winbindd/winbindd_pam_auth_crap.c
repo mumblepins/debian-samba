@@ -22,8 +22,6 @@
 
 struct winbindd_pam_auth_crap_state {
 	struct winbindd_response *response;
-	struct netr_SamInfo3 *info3;
-	uint32_t flags;
 };
 
 static void winbindd_pam_auth_crap_done(struct tevent_req *subreq);
@@ -42,21 +40,6 @@ struct tevent_req *winbindd_pam_auth_crap_send(
 				struct winbindd_pam_auth_crap_state);
 	if (req == NULL) {
 		return NULL;
-	}
-
-	if (request->flags & WBFLAG_PAM_AUTH_PAC) {
-		NTSTATUS status;
-
-		state->flags = request->flags;
-		status = winbindd_pam_auth_pac_send(cli, &state->info3);
-		if (NT_STATUS_IS_OK(status)) {
-			/* Defer filling out response to recv */
-			tevent_req_done(req);
-		} else {
-			tevent_req_nterror(req, status);
-		}
-
-		return tevent_req_post(req, ev);
 	}
 
 	/* Ensure null termination */
@@ -91,7 +74,7 @@ struct tevent_req *winbindd_pam_auth_crap_send(
 	}
 
 	if (request->data.auth_crap.workstation[0] == '\0') {
-		fstrcpy(request->data.auth_crap.workstation, lp_netbios_name());
+		fstrcpy(request->data.auth_crap.workstation, global_myname());
 	}
 
 	subreq = wb_domain_request_send(state, winbind_event_context(), domain,
@@ -131,12 +114,6 @@ NTSTATUS winbindd_pam_auth_crap_recv(struct tevent_req *req,
 		set_auth_errors(response, status);
 		return status;
 	}
-
-	if (state->flags & WBFLAG_PAM_AUTH_PAC) {
-		return append_auth_data(response, response, state->flags,
-					state->info3, NULL, NULL);
-	}
-
 	*response = *state->response;
 	response->result = WINBINDD_PENDING;
 	state->response = talloc_move(response, &state->response);

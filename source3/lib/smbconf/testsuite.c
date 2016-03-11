@@ -25,8 +25,7 @@
 #include "lib/smbconf/smbconf_txt.h"
 
 static void print_strings(const char *prefix,
-			  uint32_t num_strings,
-			  const char * const *strings)
+			  uint32_t num_strings, const char **strings)
 {
 	uint32_t count;
 
@@ -57,7 +56,7 @@ static bool test_get_includes(struct smbconf_ctx *ctx)
 
 	printf("got %u includes%s\n", num_includes,
 	       (num_includes > 0) ? ":" : ".");
-	print_strings("", num_includes, (const char * const *)includes);
+	print_strings("", num_includes, (const char **)includes);
 
 	printf("OK: get_includes\n");
 	ret = true;
@@ -107,11 +106,10 @@ static bool test_set_get_includes(struct smbconf_ctx *ctx)
 	for (count = 0; count < get_num_includes; count++) {
 		if (!strequal(set_includes[count], get_includes[count])) {
 			printf("expected: \n");
-			print_strings("* ", set_num_includes,
-				      (const char * const *)set_includes);
+			print_strings("* ", set_num_includes, set_includes);
 			printf("got: \n");
 			print_strings("* ", get_num_includes,
-				      (const char * const *)get_includes);
+				      (const char **)get_includes);
 			printf("FAIL: get_set_includes - data mismatch:\n");
 			goto done;
 		}
@@ -177,7 +175,6 @@ static bool test_delete_includes(struct smbconf_ctx *ctx)
 	ret = true;
 
 done:
-	talloc_free(mem_ctx);
 	return ret;
 }
 
@@ -186,7 +183,7 @@ static bool create_conf_file(const char *filename)
 	FILE *f;
 
 	printf("TEST: creating file\n");
-	f = fopen(filename, "w");
+	f = sys_fopen(filename, "w");
 	if (!f) {
 		printf("failure: failed to open %s for writing: %s\n",
 		       filename, strerror(errno));
@@ -296,7 +293,7 @@ int main(int argc, const char **argv)
 		{0, 0, 0, 0}
 	};
 
-	smb_init_locale();
+	load_case_tables();
 	setup_logging(argv[0], DEBUG_STDERR);
 
 	/* parse options */
@@ -307,7 +304,12 @@ int main(int argc, const char **argv)
 
 	poptFreeContext(pc);
 
-	ret = lp_load_global(get_dyn_CONFIGFILE());
+	ret = lp_load(get_dyn_CONFIGFILE(),
+		      true,  /* globals_only */
+		      false, /* save_defaults */
+		      false, /* add_ipc */
+		      true   /* initialize globals */);
+
 	if (!ret) {
 		printf("failure: error loading the configuration\n");
 		goto done;

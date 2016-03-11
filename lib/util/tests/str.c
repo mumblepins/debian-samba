@@ -21,12 +21,11 @@
 
 #include "includes.h"
 #include "torture/torture.h"
-#include "torture/local/proto.h"
 
 static bool test_string_sub_simple(struct torture_context *tctx)
 {
 	char tmp[100];
-	strlcpy(tmp, "foobar", sizeof(tmp));
+	safe_strcpy(tmp, "foobar", sizeof(tmp));
 	string_sub(tmp, "foo", "bar", sizeof(tmp));
 	torture_assert_str_equal(tctx, tmp, "barbar", "invalid sub");
 	return true;
@@ -35,7 +34,7 @@ static bool test_string_sub_simple(struct torture_context *tctx)
 static bool test_string_sub_multiple(struct torture_context *tctx)
 {
 	char tmp[100];
-	strlcpy(tmp, "fooblafoo", sizeof(tmp));
+	safe_strcpy(tmp, "fooblafoo", sizeof(tmp));
 	string_sub(tmp, "foo", "bar", sizeof(tmp));
 	torture_assert_str_equal(tctx, tmp, "barblabar", "invalid sub");
 	return true;
@@ -44,7 +43,7 @@ static bool test_string_sub_multiple(struct torture_context *tctx)
 static bool test_string_sub_longer(struct torture_context *tctx)
 {
 	char tmp[100];
-	strlcpy(tmp, "foobla", sizeof(tmp));
+	safe_strcpy(tmp, "foobla", sizeof(tmp));
 	string_sub(tmp, "foo", "blie", sizeof(tmp));
 	torture_assert_str_equal(tctx, tmp, "bliebla", "invalid sub");
 	return true;
@@ -53,7 +52,7 @@ static bool test_string_sub_longer(struct torture_context *tctx)
 static bool test_string_sub_shorter(struct torture_context *tctx)
 {
 	char tmp[100];
-	strlcpy(tmp, "foobla", sizeof(tmp));
+	safe_strcpy(tmp, "foobla", sizeof(tmp));
 	string_sub(tmp, "foo", "bl", sizeof(tmp));
 	torture_assert_str_equal(tctx, tmp, "blbla", "invalid sub");
 	return true;
@@ -62,7 +61,7 @@ static bool test_string_sub_shorter(struct torture_context *tctx)
 static bool test_string_sub_special_char(struct torture_context *tctx)
 {
 	char tmp[100];
-	strlcpy(tmp, "foobla", sizeof(tmp));
+	safe_strcpy(tmp, "foobla", sizeof(tmp));
 	string_sub(tmp, "foo", "%b;l", sizeof(tmp));
 	torture_assert_str_equal(tctx, tmp, "_b_lbla", "invalid sub");
 	return true;

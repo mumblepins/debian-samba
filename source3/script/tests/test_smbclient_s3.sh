@@ -2,31 +2,29 @@
 
 # this runs the file serving tests that are expected to pass with samba3
 
-if [ $# -lt 11 ]; then
+if [ $# -lt 7 ]; then
 cat <<EOF
-Usage: test_smbclient_s3.sh SERVER SERVER_IP DOMAIN USERNAME PASSWORD USERID LOCAL_PATH PREFIX SMBCLIENT WBINFO NET
+Usage: test_smbclient_s3.sh SERVER SERVER_IP USERNAME PASSWORD USERID LOCAL_PATH PREFIX
 EOF
 exit 1;
 fi
 
-SERVER="${1}"
-SERVER_IP="${2}"
-DOMAIN="${3}"
-USERNAME="${4}"
-PASSWORD="${5}"
-USERID="${6}"
-LOCAL_PATH="${7}"
-PREFIX="${8}"
-SMBCLIENT="${9}"
-WBINFO="${10}"
-NET="${11}"
-SMBCLIENT="$VALGRIND ${SMBCLIENT}"
-WBINFO="$VALGRIND ${WBINFO}"
-shift 11
+SERVER="$1"
+SERVER_IP="$2"
+USERNAME="$3"
+PASSWORD="$4"
+USERID="$5"
+LOCAL_PATH="$6"
+PREFIX="$7"
+SMBCLIENT="$VALGRIND ${SMBCLIENT:-$BINDIR/smbclient}"
+WBINFO="$VALGRIND ${WBINFO:-$BINDIR/wbinfo}"
+shift 7
 ADDARGS="$*"
 
+test x"$TEST_FUNCTIONS_SH" != x"INCLUDED" && {
 incdir=`dirname $0`/../../../testprogs/blackbox
 . $incdir/subunit.sh
+}
 
 failed=0
 
@@ -135,7 +133,7 @@ EOF
 # Test creating a good symlink and deleting it by path.
 test_good_symlink()
 {
-    tmpfile=$PREFIX/smbclient.in.$$
+    tmpfile=/tmp/smbclient.in.$$
     slink_name="$LOCAL_PATH/slink"
     slink_target="$LOCAL_PATH/slink_target"
 
@@ -185,7 +183,7 @@ EOF
 test_read_only_dir()
 {
     prompt="NT_STATUS_ACCESS_DENIED making remote directory"
-    tmpfile=$PREFIX/smbclient.in.$$
+    tmpfile=/tmp/smbclient.in.$$
 
 ##
 ## We can't do this as non-root. We always have rights to
@@ -212,7 +210,7 @@ mkdir a_test_dir
 quit
 EOF
 
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT -U% "//$SERVER/$1" -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
+    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U% //$SERVER/ro-tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
     eval echo "$cmd"
     out=`eval $cmd`
     ret=$?
@@ -221,7 +219,6 @@ EOF
     if [ $ret != 0 ] ; then
 	echo "$out"
 	echo "failed writing into read-only directory with error $ret"
-
 	false
 	return
     fi
@@ -239,55 +236,11 @@ EOF
     fi
 }
 
-
-# Test sending a message
-test_message()
-{
-    tmpfile=$PREFIX/message_in.$$
-
-    cat > $tmpfile <<EOF
-Test message from pid $$
-EOF
-
-    cmd='$SMBCLIENT "$@" -U$USERNAME%$PASSWORD -M $SERVER -p 139 $ADDARGS -n msgtest < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed sending message to $SERVER with error $ret"
-	false
-	rm -f $tmpfile
-	return
-    fi
-
-    # The server writes this into a file message.msgtest, via message.%m to test the % sub code
-    cmd='$SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmpguest -p 139 $ADDARGS -c "get message.msgtest $PREFIX/message_out.$$" 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed getting sent message from $SERVER with error $ret"
-	false
-	return
-    fi
-
-    if [ cmp $PREFIX/message_out.$$ $tmpfile != 0 ] ; then
-	echo "failed comparison of message from $SERVER"
-	false
-	return
-    fi
-    true
-}
-
 # Test reading an owner-only file (logon as guest) fails.
 test_owner_only_file()
 {
     prompt="NT_STATUS_ACCESS_DENIED opening remote file"
-    tmpfile=$PREFIX/smbclient.in.$$
+    tmpfile=/tmp/smbclient.in.$$
 
 ##
 ## We can't do this as non-root. We always have rights to
@@ -343,7 +296,7 @@ EOF
 # Test accessing an msdfs path.
 test_msdfs_link()
 {
-    tmpfile=$PREFIX/smbclient.in.$$
+    tmpfile=/tmp/smbclient.in.$$
     prompt="  msdfs-target  "
 
     cat > $tmpfile <<EOF
@@ -409,200 +362,11 @@ EOF
     fi
 }
 
-# Archive bits are correctly set on file/dir creation and rename.
-test_rename_archive_bit()
-{
-    prompt_file="attributes: A (20)"
-    prompt_dir="attributes: D (10)"
-    tmpfile="$PREFIX/smbclient.in.$$"
-    filename="foo.$$"
-    filename_ren="bar.$$"
-    dirname="foodir.$$"
-    dirname_ren="bardir.$$"
-    filename_path="$PREFIX/$filename"
-    local_name1="$LOCAL_PATH/$filename"
-    local_name2="$LOCAL_PATH/$filename_ren"
-    local_dir_name1="$LOCAL_PATH/$dirname"
-    local_dir_name2="$LOCAL_PATH/$dirname_ren"
-
-    rm -f $filename_path
-    rm -f $local_name1
-    rm -f $local_name2
-
-# Create a new file, ensure it has 'A' attributes.
-    touch $filename_path
-
-    cat > $tmpfile <<EOF
-lcd $PREFIX
-put $filename
-allinfo $filename
-quit
-EOF
-
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed creating file $filename with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | grep "$prompt_file" >/dev/null 2>&1
-
-    ret=$?
-
-    rm -f $filename_path
-    rm -f $local_name1
-    rm -f $local_name2
-
-    if [ $ret = 0 ] ; then
-	# got the correct prompt .. succeed
-	true
-    else
-	echo "$out"
-	echo "Attributes incorrect on new file $ret"
-	false
-    fi
-
-# Now check if we remove 'A' and rename, the A comes back.
-    touch $filename_path
-
-    cat > $tmpfile <<EOF
-lcd $PREFIX
-put $filename
-setmode $filename -a
-ren $filename $filename_ren
-allinfo $filename_ren
-quit
-EOF
-
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed creating file and renaming $filename with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | grep "$prompt_file" >/dev/null 2>&1
-
-    ret=$?
-
-    rm -f $filename_path
-    rm -f $local_name1
-    rm -f $local_name2
-
-    if [ $ret = 0 ] ; then
-	# got the correct prompt .. succeed
-	true
-    else
-	echo "$out"
-	echo "Attributes incorrect on renamed file $ret"
-	false
-    fi
-
-    rm -rf $local_dir_name1
-    rm -rf $local_dir_name2
-
-# Create a new directory, ensure it has 'D' but not 'A' attributes.
-
-    cat > $tmpfile <<EOF
-mkdir $dirname
-allinfo $dirname
-quit
-EOF
-
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed creating directory $dirname with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | grep "$prompt_dir" >/dev/null 2>&1
-
-    ret=$?
-
-    rm -rf $local_dir_name1
-    rm -rf $local_dir_name2
-
-    if [ $ret = 0 ] ; then
-	# got the correct prompt .. succeed
-	true
-    else
-	echo "$out"
-	echo "Attributes incorrect on new directory $ret"
-	false
-    fi
-
-# Now check if we rename, we still only have 'D' attributes
-
-    cat > $tmpfile <<EOF
-mkdir $dirname
-ren $dirname $dirname_ren
-allinfo $dirname_ren
-quit
-EOF
-
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed creating directory $dirname and renaming with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | grep "$prompt_dir" >/dev/null 2>&1
-
-    ret=$?
-
-    rm -f $local_name1
-    rm -f $local_name2
-
-    if [ $ret = 0 ] ; then
-	# got the correct prompt .. succeed
-	true
-    else
-	echo "$out"
-	echo "Attributes incorrect on renamed directory $ret"
-	false
-    fi
-}
-
 # Test authenticating using the winbind ccache
 test_ccache_access()
 {
     $WBINFO --ccache-save="${USERNAME}%${PASSWORD}"
-    ret=$?
-
-    if [ $ret != 0 ] ; then
-	echo "wbinfo failed to store creds in cache (user='${USERNAME}', pass='${PASSWORD}')"
-	false
-	return
-    fi
-
-    $SMBCLIENT //$SERVER_IP/tmp -C -U "${USERNAME}" \
+    $SMBCLIENT //$SERVER_IP/tmp -C -U "${USERNAME}%" \
 	-c quit 2>&1
     ret=$?
 
@@ -613,15 +377,7 @@ test_ccache_access()
     fi
 
     $WBINFO --ccache-save="${USERNAME}%GarBage"
-    ret=$?
-
-    if [ $ret != 0 ] ; then
-	echo "wbinfo failed to store creds in cache (user='${USERNAME}', pass='GarBage')"
-	false
-	return
-    fi
-
-    $SMBCLIENT //$SERVER_IP/tmp -C -U "${USERNAME}" \
+    $SMBCLIENT //$SERVER_IP/tmp -C -U "${USERNAME}%" \
 	-c quit 2>&1
     ret=$?
 
@@ -633,376 +389,6 @@ test_ccache_access()
 
     $WBINFO --logoff
 }
-
-# Test authenticating using the winbind ccache
-test_auth_file()
-{
-    tmpfile=$PREFIX/smbclient.in.$$
-    cat > $tmpfile <<EOF
-username=${USERNAME}
-password=${PASSWORD}
-domain=${DOMAIN}
-EOF
-    $SMBCLIENT //$SERVER_IP/tmp --authentication-file=$tmpfile \
-	-c quit 2>&1
-    ret=$?
-    rm $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "smbclient failed to use auth file"
-	false
-	return
-    fi
-
-    cat > $tmpfile <<EOF
-username=${USERNAME}
-password=xxxx
-domain=${DOMAIN}
-EOF
-    $SMBCLIENT //$SERVER_IP/tmp --authentication-file=$tmpfile\
-	-c quit 2>&1
-    ret=$?
-    rm $tmpfile
-
-    if [ $ret -eq 0 ] ; then
-	echo "smbclient succeeded with wrong auth file credentials"
-	false
-	return
-    fi
-}
-
-# Test doing a directory listing with backup privilege.
-test_backup_privilege_list()
-{
-    tmpfile=$PREFIX/smbclient_backup_privilege_list
-
-    # If we don't have a DOMAIN component to the username, add it.
-    echo "$USERNAME" | grep '\\' 2>&1
-    ret=$?
-    if [ $ret != 0 ] ; then
-	priv_username="$DOMAIN\\$USERNAME"
-    else
-	priv_username=$USERNAME
-    fi
-
-    $NET sam rights grant $priv_username SeBackupPrivilege 2>&1
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "Failed to add SeBackupPrivilege to user $priv_username - $ret"
-	false
-	return
-    fi
-
-    cat > $tmpfile <<EOF
-backup
-ls
-quit
-EOF
-
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed backup privilege list $ret"
-	false
-	return
-    fi
-
-# Now remove all privileges from this SID.
-    $NET sam rights revoke $priv_username SeBackupPrivilege 2>&1
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "failed to remove SeBackupPrivilege from user $priv_username - $ret"
-	false
-	return
-    fi
-}
-
-# Test accessing an share with bad names (won't convert).
-test_bad_names()
-{
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/badname-tmp -I $SERVER_IP $ADDARGS -c ls 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed accessing badname-tmp (SMB1) with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | wc -l 2>&1 | grep 6
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep of number of lines (1) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep 'Domain=.*OS=.*Server='
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep (1) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^  \. *D'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep (2) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^  \.\. *D'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep (3) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^  blank.txt *N'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep (4) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^ *$'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep (5) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep 'blocks of size.*blocks available'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - grep (6) failed with $ret"
-	false
-    fi
-
-    # Now check again with -mSMB3
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/badname-tmp -I $SERVER_IP -mSMB3 $ADDARGS -c ls 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed accessing badname-tmp (SMB3) with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | wc -l 2>&1 | grep 6
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep of number of lines (1) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep 'Domain=.*OS=.*Server='
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep (1) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^  \. *D'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep (2) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^  \.\. *D'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep (3) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^  blank.txt *N'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep (4) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep '^ *$'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep (5) failed with $ret"
-	false
-    fi
-
-    echo "$out" | grep 'blocks of size.*blocks available'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed listing \\badname-tmp - SMB3 grep (6) failed with $ret"
-	false
-    fi
-}
-
-# Test accessing an share with a name that must be mangled - with acl_xattrs.
-# We know foo:bar gets mangled to FF4GBY~Q with the default name-mangling algorithm (hash2).
-test_mangled_names()
-{
-    tmpfile=$PREFIX/smbclient_interactive_prompt_commands
-    cat > $tmpfile <<EOF
-ls
-cd FF4GBY~Q
-ls
-quit
-EOF
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/manglenames_share -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed accessing manglenames_share with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | grep 'NT_STATUS'
-    ret=$?
-    if [ $ret == 0 ] ; then
-	echo "$out"
-	echo "failed - NT_STATUS_XXXX listing \\manglenames_share\\FF4GBY~Q"
-	false
-    fi
-}
-
-# Test using scopy to copy a file on the server.
-test_scopy()
-{
-    tmpfile=$PREFIX/smbclient_interactive_prompt_commands
-    scopy_file=$PREFIX/scopy_file
-
-    rm -f $scopy_file
-    cat > $tmpfile <<EOF
-put ${SMBCLIENT}
-scopy smbclient scopy_file
-lcd ${PREFIX}
-get scopy_file
-del smbclient
-del scopy_file
-quit
-EOF
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -mSMB3 -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    out1=`md5sum ${SMBCLIENT} | sed -e 's/ .*//'`
-    out2=`md5sum ${scopy_file} | sed -e 's/ .*//'`
-    rm -f $tmpfile
-    rm -f $scopy_file
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed scopy test (1) with output $ret"
-	false
-	return
-    fi
-
-    if [ $out1 != $out2 ] ; then
-	echo "$out1 $out2"
-	echo "failed md5sum (1)"
-	false
-    fi
-
-#
-# Now do again using SMB1
-# to force client-side fallback.
-#
-
-    cat > $tmpfile <<EOF
-put ${SMBCLIENT}
-scopy smbclient scopy_file
-lcd ${PREFIX}
-get scopy_file
-del smbclient
-del scopy_file
-quit
-EOF
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -mNT1 -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    out1=`md5sum ${SMBCLIENT} | sed -e 's/ .*//'`
-    out2=`md5sum ${scopy_file} | sed -e 's/ .*//'`
-    rm -f $tmpfile
-    rm -f $scopy_file
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed scopy test (2) with output $ret"
-	false
-	return
-    fi
-
-    if [ $out1 != $out2 ] ; then
-	echo "$out1 $out2"
-	echo "failed md5sum (2)"
-	false
-    fi
-}
-
-# Test creating a stream on the root of the share directory filname - :foobar
-test_toplevel_stream()
-{
-    tmpfile=$PREFIX/smbclient_interactive_prompt_commands
-    cat > $tmpfile <<EOF
-put ${PREFIX}/smbclient_interactive_prompt_commands :foobar
-allinfo \\
-setmode \\ -a
-quit
-EOF
-    cmd='CLI_FORCE_INTERACTIVE=yes $SMBCLIENT "$@" -U$USERNAME%$PASSWORD //$SERVER/tmp -I $SERVER_IP -mSMB3 $ADDARGS < $tmpfile 2>&1'
-    eval echo "$cmd"
-    out=`eval $cmd`
-    ret=$?
-    rm -f $tmpfile
-
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed creating toplevel stream :foobar with error $ret"
-	false
-	return
-    fi
-
-    echo "$out" | grep '^stream:.*:foobar'
-    ret=$?
-    if [ $ret != 0 ] ; then
-	echo "$out"
-	echo "failed creating toplevel stream :foobar"
-	false
-    fi
-}
-
 
 LOGDIR_PREFIX=test_smbclient_s3
 
@@ -1044,11 +430,7 @@ testit "creating a good symlink and deleting it by path" \
    failed=`expr $failed + 1`
 
 testit "writing into a read-only directory fails" \
-   test_read_only_dir ro-tmp || \
-   failed=`expr $failed + 1`
-
-testit "writing into a read-only share fails" \
-   test_read_only_dir valid-users-tmp || \
+   test_read_only_dir || \
    failed=`expr $failed + 1`
 
 testit "Reading a owner-only file fails" \
@@ -1059,40 +441,8 @@ testit "Accessing an MS-DFS link" \
    test_msdfs_link || \
    failed=`expr $failed + 1`
 
-testit "Ensure archive bit is set correctly on file/dir rename" \
-    test_rename_archive_bit || \
-    failed=`expr $failed + 1`
-
 testit "ccache access works for smbclient" \
     test_ccache_access || \
-    failed=`expr $failed + 1`
-
-testit "sending a message to the remote server" \
-    test_message || \
-    failed=`expr $failed + 1`
-
-testit "using an authentication file" \
-    test_auth_file || \
-    failed=`expr $failed + 1`
-
-testit "list with backup privilege" \
-    test_backup_privilege_list || \
-    failed=`expr $failed + 1`
-
-testit "list a share with bad names (won't convert)" \
-    test_bad_names || \
-    failed=`expr $failed + 1`
-
-testit "list a share with a mangled name + acl_xattr object" \
-    test_mangled_names || \
-    failed=`expr $failed + 1`
-
-testit "server-side file copy" \
-    test_scopy || \
-    failed=`expr $failed + 1`
-
-testit "creating a :stream at root of share" \
-    test_toplevel_stream || \
     failed=`expr $failed + 1`
 
 testit "rm -rf $LOGDIR" \

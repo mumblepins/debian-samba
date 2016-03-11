@@ -23,7 +23,6 @@
 #include "libnet/libnet.h"
 #include "libcli/libcli.h"
 #include "torture/rpc/torture_rpc.h"
-#include "torture/libnet/proto.h"
 #include "param/param.h"
 
 
@@ -45,7 +44,7 @@ bool torture_lookup(struct torture_context *torture)
 	if (lookup.in.hostname == NULL) {
 		status = torture_rpc_binding(torture, &binding);
 		if (NT_STATUS_IS_OK(status)) {
-			lookup.in.hostname = dcerpc_binding_get_string_option(binding, "host");
+			lookup.in.hostname = binding->host;
 		}
 	}
 
@@ -89,7 +88,7 @@ bool torture_lookup_host(struct torture_context *torture)
 	if (lookup.in.hostname == NULL) {
 		status = torture_rpc_binding(torture, &binding);
 		if (NT_STATUS_IS_OK(status)) {
-			lookup.in.hostname = dcerpc_binding_get_string_option(binding, "host");
+			lookup.in.hostname = binding->host;
 		}
 	}
 
@@ -168,7 +167,6 @@ bool torture_lookup_sam_name(struct torture_context *torture)
 	TALLOC_CTX *mem_ctx;
 	struct libnet_context *ctx;
 	struct libnet_LookupName r;
-	bool ret = true;
 
 	ctx = libnet_context_init(torture->ev, torture->lp_ctx);
 	ctx->cred = cmdline_credentials;
@@ -180,12 +178,9 @@ bool torture_lookup_sam_name(struct torture_context *torture)
 	r.in.domain_name = lpcfg_workgroup(torture->lp_ctx);
 
 	status = libnet_LookupName(ctx, mem_ctx, &r);
-	torture_assert_ntstatus_ok_goto(torture, status, ret, done,
-					"libnet_LookupName: failed");
 
-done:
 	talloc_free(mem_ctx);
 	talloc_free(ctx);
 
-	return ret;
+	return true;
 }

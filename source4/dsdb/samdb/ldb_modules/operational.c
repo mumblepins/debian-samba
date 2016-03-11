@@ -84,12 +84,6 @@ struct operational_data {
 	struct ldb_dn *aggregate_dn;
 };
 
-enum search_type {
-	TOKEN_GROUPS,
-	TOKEN_GROUPS_GLOBAL_AND_UNIVERSAL,
-	TOKEN_GROUPS_NO_GC_ACCEPTABLE
-};
-
 /*
   construct a canonical name from a message
 */
@@ -133,17 +127,15 @@ static int construct_primary_group_token(struct ldb_module *module,
 /*
   construct the token groups for SAM objects from a message
 */
-static int construct_generic_token_groups(struct ldb_module *module,
-					  struct ldb_message *msg, enum ldb_scope scope,
-					  struct ldb_request *parent,
-					  const char *attribute_string,
-					  enum search_type type)
+static int construct_token_groups(struct ldb_module *module,
+				  struct ldb_message *msg, enum ldb_scope scope,
+				  struct ldb_request *parent)
 {
-	struct ldb_context *ldb = ldb_module_get_ctx(module);
+	struct ldb_context *ldb = ldb_module_get_ctx(module);;
 	TALLOC_CTX *tmp_ctx = talloc_new(msg);
 	unsigned int i;
 	int ret;
-	const char *filter = NULL;
+	const char *filter;
 
 	NTSTATUS status;
 
@@ -197,18 +189,8 @@ static int construct_generic_token_groups(struct ldb_module *module,
 	}
 
 	/* only return security groups */
-	switch(type) {
-	case TOKEN_GROUPS_GLOBAL_AND_UNIVERSAL:
-		filter = talloc_asprintf(tmp_ctx, "(&(objectClass=group)(groupType:1.2.840.113556.1.4.803:=%u)(|(groupType:1.2.840.113556.1.4.803:=%u)(groupType:1.2.840.113556.1.4.803:=%u)))",
-					 GROUP_TYPE_SECURITY_ENABLED, GROUP_TYPE_ACCOUNT_GROUP, GROUP_TYPE_UNIVERSAL_GROUP);
-		break;
-	case TOKEN_GROUPS_NO_GC_ACCEPTABLE:
-	case TOKEN_GROUPS:
-		filter = talloc_asprintf(tmp_ctx, "(&(objectClass=group)(groupType:1.2.840.113556.1.4.803:=%u))",
-					 GROUP_TYPE_SECURITY_ENABLED);
-		break;
-	}
-
+	filter = talloc_asprintf(tmp_ctx, "(&(objectClass=group)(groupType:1.2.840.113556.1.4.803:=%u))",
+				 GROUP_TYPE_SECURITY_ENABLED);
 	if (!filter) {
 		talloc_free(tmp_ctx);
 		return ldb_oom(ldb);
@@ -271,7 +253,7 @@ static int construct_generic_token_groups(struct ldb_module *module,
 	}
 
 	for (i=0; i < num_groupSIDs; i++) {
-		ret = samdb_msg_add_dom_sid(ldb, msg, msg, attribute_string, &groupSIDs[i]);
+		ret = samdb_msg_add_dom_sid(ldb, msg, msg, "tokenGroups", &groupSIDs[i]);
 		if (ret) {
 			talloc_free(tmp_ctx);
 			return ret;
@@ -281,40 +263,6 @@ static int construct_generic_token_groups(struct ldb_module *module,
 	return LDB_SUCCESS;
 }
 
-static int construct_token_groups(struct ldb_module *module,
-				  struct ldb_message *msg, enum ldb_scope scope,
-				  struct ldb_request *parent)
-{
-	/**
-	 * TODO: Add in a limiting domain when we start to support
-	 * trusted domains.
-	 */
-	return construct_generic_token_groups(module, msg, scope, parent,
-					      "tokenGroups",
-					      TOKEN_GROUPS);
-}
-
-static int construct_token_groups_no_gc(struct ldb_module *module,
-					struct ldb_message *msg, enum ldb_scope scope,
-					struct ldb_request *parent)
-{
-	/**
-	 * TODO: Add in a limiting domain when we start to support
-	 * trusted domains.
-	 */
-	return construct_generic_token_groups(module, msg, scope, parent,
-					      "tokenGroupsNoGCAcceptable",
-					      TOKEN_GROUPS);
-}
-
-static int construct_global_universal_token_groups(struct ldb_module *module,
-						   struct ldb_message *msg, enum ldb_scope scope,
-						   struct ldb_request *parent)
-{
-	return construct_generic_token_groups(module, msg, scope, parent,
-					      "tokenGroupsGlobalAndUniversal",
-					      TOKEN_GROUPS_GLOBAL_AND_UNIVERSAL);
-}
 /*
   construct the parent GUID for an entry from a message
 */
@@ -335,9 +283,6 @@ static int construct_parent_guid(struct ldb_module *module,
 	ret = dsdb_module_search_dn(module, msg, &res, msg->dn, attrs,
 	                            DSDB_FLAG_NEXT_MODULE |
 	                            DSDB_SEARCH_SHOW_RECYCLED, parent);
-	if (ret != LDB_SUCCESS) {
-		return ret;
-	}
 
 	instanceType = ldb_msg_find_attr_as_uint(res->msgs[0],
 						 "instanceType", 0);
@@ -361,9 +306,9 @@ static int construct_parent_guid(struct ldb_module *module,
 
 	/* not NC, so the object should have a parent*/
 	if (ret == LDB_ERR_NO_SUCH_OBJECT) {
-		return ldb_error(ldb_module_get_ctx(module), LDB_ERR_OPERATIONS_ERROR, 
-				 talloc_asprintf(msg, "Parent dn for %s does not exist", 
-						 ldb_dn_get_linearized(msg->dn)));
+		DEBUG(4,(__location__ ": Parent dn for %s does not exist \n",
+			 ldb_dn_get_linearized(msg->dn)));
+		return ldb_operr(ldb_module_get_ctx(module));
 	} else if (ret != LDB_SUCCESS) {
 		return ret;
 	}
@@ -374,7 +319,7 @@ static int construct_parent_guid(struct ldb_module *module,
 		return LDB_SUCCESS;
 	}
 
-	v = data_blob_dup_talloc(parent_res, *parent_guid);
+	v = data_blob_dup_talloc(parent_res, parent_guid);
 	if (!v.data) {
 		talloc_free(parent_res);
 		return ldb_oom(ldb_module_get_ctx(module));
@@ -382,42 +327,6 @@ static int construct_parent_guid(struct ldb_module *module,
 	ret = ldb_msg_add_steal_value(msg, "parentGUID", &v);
 	talloc_free(parent_res);
 	return ret;
-}
-
-static int construct_modifyTimeStamp(struct ldb_module *module,
-					struct ldb_message *msg, enum ldb_scope scope,
-					struct ldb_request *parent)
-{
-	struct operational_data *data = talloc_get_type(ldb_module_get_private(module), struct operational_data);
-	struct ldb_context *ldb = ldb_module_get_ctx(module);
-
-	/* We may be being called before the init function has finished */
-	if (!data) {
-		return LDB_SUCCESS;
-	}
-
-	/* Try and set this value up, if possible.  Don't worry if it
-	 * fails, we may not have the DB set up yet.
-	 */
-	if (!data->aggregate_dn) {
-		data->aggregate_dn = samdb_aggregate_schema_dn(ldb, data);
-	}
-
-	if (data->aggregate_dn && ldb_dn_compare(data->aggregate_dn, msg->dn) == 0) {
-		/*
-		 * If we have the DN for the object with common name = Aggregate and
-		 * the request is for this DN then let's do the following:
-		 * 1) search the object which changedUSN correspond to the one of the loaded
-		 * schema.
-		 * 2) Get the whenChanged attribute
-		 * 3) Generate the modifyTimestamp out of the whenChanged attribute
-		 */
-		const struct dsdb_schema *schema = dsdb_get_schema(ldb, NULL);
-		char *value = ldb_timestring(msg, schema->ts_last_change);
-
-		return ldb_msg_add_string(msg, "modifyTimeStamp", value);
-	}
-	return ldb_msg_copy_attr(msg, "whenChanged", "modifyTimeStamp");
 }
 
 /*
@@ -617,6 +526,9 @@ static int construct_msds_keyversionnumber(struct ldb_module *module,
 		/* We can't make up a key version number without meta data */
 		return LDB_SUCCESS;
 	}
+	if (!omd_value) {
+		return LDB_SUCCESS;
+	}
 
 	omd = talloc(msg, struct replPropertyMetaDataBlob);
 	if (!omd) {
@@ -655,204 +567,13 @@ static int construct_msds_keyversionnumber(struct ldb_module *module,
 
 }
 
-#define _UF_TRUST_ACCOUNTS ( \
-	UF_WORKSTATION_TRUST_ACCOUNT | \
-	UF_SERVER_TRUST_ACCOUNT | \
-	UF_INTERDOMAIN_TRUST_ACCOUNT \
-)
-#define _UF_NO_EXPIRY_ACCOUNTS ( \
-	UF_SMARTCARD_REQUIRED | \
-	UF_DONT_EXPIRE_PASSWD | \
-	_UF_TRUST_ACCOUNTS \
-)
-
-/*
-  calculate msDS-UserPasswordExpiryTimeComputed
-*/
-static NTTIME get_msds_user_password_expiry_time_computed(struct ldb_module *module,
-						struct ldb_message *msg,
-						struct ldb_dn *domain_dn)
-{
-	int64_t pwdLastSet, maxPwdAge;
-	uint32_t userAccountControl;
-	NTTIME ret;
-
-	userAccountControl = ldb_msg_find_attr_as_uint(msg,
-					"userAccountControl",
-					0);
-	if (userAccountControl & _UF_NO_EXPIRY_ACCOUNTS) {
-		return 0x7FFFFFFFFFFFFFFFULL;
-	}
-
-	pwdLastSet = ldb_msg_find_attr_as_int64(msg, "pwdLastSet", 0);
-	if (pwdLastSet == 0) {
-		return 0;
-	}
-
-	if (pwdLastSet <= -1) {
-		/*
-		 * This can't really happen...
-		 */
-		return 0x7FFFFFFFFFFFFFFFULL;
-	}
-
-	if (pwdLastSet >= 0x7FFFFFFFFFFFFFFFULL) {
-		/*
-		 * Somethings wrong with the clock...
-		 */
-		return 0x7FFFFFFFFFFFFFFFULL;
-	}
-
-	/*
-	 * Note that maxPwdAge is a stored as negative value.
-	 *
-	 * Possible values are in the range of:
-	 *
-	 * maxPwdAge: -864000000001
-	 * to
-	 * maxPwdAge: -9223372036854775808 (-0x8000000000000000ULL)
-	 *
-	 */
-	maxPwdAge = samdb_search_int64(ldb_module_get_ctx(module), msg, 0,
-				       domain_dn, "maxPwdAge", NULL);
-	if (maxPwdAge >= -864000000000) {
-		/*
-		 * This is not really possible...
-		 */
-		return 0x7FFFFFFFFFFFFFFFULL;
-	}
-
-	if (maxPwdAge == -0x8000000000000000ULL) {
-		return 0x7FFFFFFFFFFFFFFFULL;
-	}
-
-	/*
-	 * Note we already catched maxPwdAge == -0x8000000000000000ULL
-	 * and pwdLastSet >= 0x7FFFFFFFFFFFFFFFULL above.
-	 *
-	 * Remember maxPwdAge is a negative number,
-	 * so it results in the following.
-	 *
-	 * 0x7FFFFFFFFFFFFFFEULL + 0x7FFFFFFFFFFFFFFFULL
-	 * =
-	 * 0xFFFFFFFFFFFFFFFFULL
-	 */
-	ret = pwdLastSet - maxPwdAge;
-	if (ret >= 0x7FFFFFFFFFFFFFFFULL) {
-		return 0x7FFFFFFFFFFFFFFFULL;
-	}
-
-	return ret;
-}
-
-
-/*
-  construct msDS-User-Account-Control-Computed attr
-*/
-static int construct_msds_user_account_control_computed(struct ldb_module *module,
-							struct ldb_message *msg, enum ldb_scope scope,
-							struct ldb_request *parent)
-{
-	uint32_t userAccountControl;
-	uint32_t msDS_User_Account_Control_Computed = 0;
-	struct ldb_context *ldb = ldb_module_get_ctx(module);
-	NTTIME now;
-	struct ldb_dn *nc_root;
-	int ret;
-
-	ret = dsdb_find_nc_root(ldb, msg, msg->dn, &nc_root);
-	if (ret != 0) {
-		ldb_asprintf_errstring(ldb,
-				       "Failed to find NC root of DN: %s: %s",
-				       ldb_dn_get_linearized(msg->dn),
-				       ldb_errstring(ldb_module_get_ctx(module)));
-		return ret;
-	}
-	if (ldb_dn_compare(nc_root, ldb_get_default_basedn(ldb)) != 0) {
-		/* Only calculate this on our default NC */
-		return 0;
-	}
-	/* Test account expire time */
-	unix_to_nt_time(&now, time(NULL));
-
-	userAccountControl = ldb_msg_find_attr_as_uint(msg,
-						       "userAccountControl",
-						       0);
-	if (!(userAccountControl & _UF_TRUST_ACCOUNTS)) {
-
-		int64_t lockoutTime = ldb_msg_find_attr_as_int64(msg, "lockoutTime", 0);
-		if (lockoutTime != 0) {
-			int64_t lockoutDuration = samdb_search_int64(ldb,
-								     msg, 0, nc_root,
-								     "lockoutDuration", NULL);
-			if (lockoutDuration >= 0) {
-				msDS_User_Account_Control_Computed |= UF_LOCKOUT;
-			} else if (lockoutTime - lockoutDuration >= now) {
-				msDS_User_Account_Control_Computed |= UF_LOCKOUT;
-			}
-		}
-	}
-
-	if (!(userAccountControl & _UF_NO_EXPIRY_ACCOUNTS)) {
-		NTTIME must_change_time
-			= get_msds_user_password_expiry_time_computed(module,
-								      msg, nc_root);
-		/* check for expired password */
-		if (must_change_time < now) {
-			msDS_User_Account_Control_Computed |= UF_PASSWORD_EXPIRED;
-		}
-	}
-
-	return samdb_msg_add_int64(ldb,
-				   msg->elements, msg,
-				   "msDS-User-Account-Control-Computed",
-				   msDS_User_Account_Control_Computed);
-}
-
-/*
-  construct msDS-UserPasswordExpiryTimeComputed
-*/
-static int construct_msds_user_password_expiry_time_computed(struct ldb_module *module,
-							     struct ldb_message *msg, enum ldb_scope scope,
-							     struct ldb_request *parent)
-{
-	struct ldb_context *ldb = ldb_module_get_ctx(module);
-	struct ldb_dn *nc_root;
-	int64_t password_expiry_time;
-	int ret;
-
-	ret = dsdb_find_nc_root(ldb, msg, msg->dn, &nc_root);
-	if (ret != 0) {
-		ldb_asprintf_errstring(ldb,
-				       "Failed to find NC root of DN: %s: %s",
-				       ldb_dn_get_linearized(msg->dn),
-				       ldb_errstring(ldb));
-		return ret;
-	}
-
-	if (ldb_dn_compare(nc_root, ldb_get_default_basedn(ldb)) != 0) {
-		/* Only calculate this on our default NC */
-		return 0;
-	}
-
-	password_expiry_time
-		= get_msds_user_password_expiry_time_computed(module, msg,
-							      nc_root);
-
-	return samdb_msg_add_int64(ldb,
-				   msg->elements, msg,
-				   "msDS-UserPasswordExpiryTimeComputed",
-				   password_expiry_time);
-}
-
-
 struct op_controls_flags {
 	bool sd;
 	bool bypassoperational;
 };
 
 static bool check_keep_control_for_attribute(struct op_controls_flags* controls_flags, const char* attr) {
-	if (controls_flags->bypassoperational && ldb_attr_cmp(attr, "msDS-KeyVersionNumber") == 0 ) {
+	if (ldb_attr_cmp(attr, "msDS-KeyVersionNumber") == 0 && controls_flags->bypassoperational) {
 		return true;
 	}
 	return false;
@@ -871,64 +592,26 @@ static const struct {
 };
 
 
-struct op_attributes_replace {
-	const char *attr;
-	const char *replace;
-	const char * const *extra_attrs;
-	int (*constructor)(struct ldb_module *, struct ldb_message *, enum ldb_scope, struct ldb_request *);
-};
-
-
-static const char *objectSid_attr[] =
-{
-	"objectSid",
-	NULL
-};
-
-
-static const char *objectCategory_attr[] =
-{
-	"objectCategory",
-	NULL
-};
-
-
-static const char *user_account_control_computed_attrs[] =
-{
-	"lockoutTime",
-	"pwdLastSet",
-	NULL
-};
-
-
-static const char *user_password_expiry_time_computed_attrs[] =
-{
-	"pwdLastSet",
-	NULL
-};
-
-
 /*
   a list of attribute names that are hidden, but can be searched for
   using another (non-hidden) name to produce the correct result
 */
-static const struct op_attributes_replace search_sub[] = {
+static const struct {
+	const char *attr;
+	const char *replace;
+	const char *extra_attr;
+	int (*constructor)(struct ldb_module *, struct ldb_message *, enum ldb_scope, struct ldb_request *);
+} search_sub[] = {
 	{ "createTimeStamp", "whenCreated", NULL , NULL },
-	{ "modifyTimeStamp", "whenChanged", NULL , construct_modifyTimeStamp},
+	{ "modifyTimeStamp", "whenChanged", NULL , NULL },
 	{ "structuralObjectClass", "objectClass", NULL , NULL },
 	{ "canonicalName", NULL, NULL , construct_canonical_name },
-	{ "primaryGroupToken", "objectClass", objectSid_attr, construct_primary_group_token },
-	{ "tokenGroups", "primaryGroupID", objectSid_attr, construct_token_groups },
-	{ "tokenGroupsNoGCAcceptable", "primaryGroupID", objectSid_attr, construct_token_groups_no_gc},
-	{ "tokenGroupsGlobalAndUniversal", "primaryGroupID", objectSid_attr, construct_global_universal_token_groups },
+	{ "primaryGroupToken", "objectClass", "objectSid", construct_primary_group_token },
+	{ "tokenGroups", "primaryGroupID", "objectSid", construct_token_groups },
 	{ "parentGUID", NULL, NULL, construct_parent_guid },
 	{ "subSchemaSubEntry", NULL, NULL, construct_subschema_subentry },
-	{ "msDS-isRODC", "objectClass", objectCategory_attr, construct_msds_isrodc },
-	{ "msDS-KeyVersionNumber", "replPropertyMetaData", NULL, construct_msds_keyversionnumber },
-	{ "msDS-User-Account-Control-Computed", "userAccountControl", user_account_control_computed_attrs,
-	  construct_msds_user_account_control_computed },
-	{ "msDS-UserPasswordExpiryTimeComputed", "userAccountControl", user_password_expiry_time_computed_attrs,
-	  construct_msds_user_password_expiry_time_computed }
+	{ "msDS-isRODC", "objectClass", "objectCategory", construct_msds_isrodc },
+	{ "msDS-KeyVersionNumber", "replPropertyMetaData", NULL, construct_msds_keyversionnumber }
 };
 
 
@@ -945,12 +628,10 @@ enum op_remove {
 
   Some of these are attributes that were once stored, but are now calculated
 */
-struct op_attributes_operations {
+static const struct {
 	const char *attr;
 	enum op_remove op;
-};
-
-static const struct op_attributes_operations operational_remove[] = {
+} operational_remove[] = {
 	{ "nTSecurityDescriptor",    OPERATIONAL_SD_FLAGS },
 	{ "msDS-KeyVersionNumber",   OPERATIONAL_REMOVE_UNLESS_CONTROL  },
 	{ "parentGUID",              OPERATIONAL_REMOVE_ALWAYS  },
@@ -972,10 +653,6 @@ static int operational_search_post_process(struct ldb_module *module,
 					   const char * const *attrs_from_user,
 					   const char * const *attrs_searched_for,
 					   struct op_controls_flags* controls_flags,
-					   struct op_attributes_operations *list,
-					   unsigned int list_size,
-					   struct op_attributes_replace *list_replace,
-					   unsigned int list_replace_size,
 					   struct ldb_request *parent)
 {
 	struct ldb_context *ldb;
@@ -985,27 +662,56 @@ static int operational_search_post_process(struct ldb_module *module,
 	ldb = ldb_module_get_ctx(module);
 
 	/* removed any attrs that should not be shown to the user */
-	for (i=0; i < list_size; i++) {
-		ldb_msg_remove_attr(msg, list[i].attr);
+	for (i=0; i<ARRAY_SIZE(operational_remove); i++) {
+		switch (operational_remove[i].op) {
+		case OPERATIONAL_REMOVE_UNASKED:
+			if (ldb_attr_in_list(attrs_from_user, operational_remove[i].attr)) {
+				continue;
+			}
+			if (ldb_attr_in_list(attrs_searched_for, operational_remove[i].attr)) {
+				continue;
+			}
+		case OPERATIONAL_REMOVE_ALWAYS:
+			ldb_msg_remove_attr(msg, operational_remove[i].attr);
+			break;
+		case OPERATIONAL_REMOVE_UNLESS_CONTROL:
+			if (!check_keep_control_for_attribute(controls_flags, operational_remove[i].attr)) {
+				ldb_msg_remove_attr(msg, operational_remove[i].attr);
+				break;
+			} else {
+				continue;
+			}
+		case OPERATIONAL_SD_FLAGS:
+			if (controls_flags->sd ||
+			    ldb_attr_in_list(attrs_from_user, operational_remove[i].attr)) {
+				continue;
+			}
+			ldb_msg_remove_attr(msg, operational_remove[i].attr);
+			break;
+		}
 	}
 
-	for (a=0; a < list_replace_size; a++) {
-		if (check_keep_control_for_attribute(controls_flags,
-						     list_replace[a].attr)) {
+	for (a=0;attrs_from_user && attrs_from_user[a];a++) {
+		if (check_keep_control_for_attribute(controls_flags, attrs_from_user[a])) {
 			continue;
 		}
+		for (i=0;i<ARRAY_SIZE(search_sub);i++) {
+			if (ldb_attr_cmp(attrs_from_user[a], search_sub[i].attr) != 0) {
+				continue;
+			}
 
-		/* construct the new attribute, using either a supplied
-			constructor or a simple copy */
-		constructed_attributes = true;
-		if (list_replace[a].constructor != NULL) {
-			if (list_replace[a].constructor(module, msg, scope, parent) != LDB_SUCCESS) {
+			/* construct the new attribute, using either a supplied
+			   constructor or a simple copy */
+			constructed_attributes = true;
+			if (search_sub[i].constructor != NULL) {
+				if (search_sub[i].constructor(module, msg, scope, parent) != LDB_SUCCESS) {
+					goto failed;
+				}
+			} else if (ldb_msg_copy_attr(msg,
+						     search_sub[i].replace,
+						     search_sub[i].attr) != LDB_SUCCESS) {
 				goto failed;
 			}
-		} else if (ldb_msg_copy_attr(msg,
-					     list_replace[a].replace,
-					     list_replace[a].attr) != LDB_SUCCESS) {
-			goto failed;
 		}
 	}
 
@@ -1014,20 +720,16 @@ static int operational_search_post_process(struct ldb_module *module,
 	 * - we aren't requesting all attributes
 	 */
 	if ((constructed_attributes) && (!ldb_attr_in_list(attrs_from_user, "*"))) {
-		for (i=0; i < list_replace_size; i++) {
+		for (i=0;i<ARRAY_SIZE(search_sub);i++) {
 			/* remove the added search helper attributes, unless
 			 * they were asked for by the user */
-			if (list_replace[i].replace != NULL &&
-			    !ldb_attr_in_list(attrs_from_user, list_replace[i].replace)) {
-				ldb_msg_remove_attr(msg, list_replace[i].replace);
+			if (search_sub[i].replace != NULL && 
+			    !ldb_attr_in_list(attrs_from_user, search_sub[i].replace)) {
+				ldb_msg_remove_attr(msg, search_sub[i].replace);
 			}
-			if (list_replace[i].extra_attrs != NULL) {
-				unsigned int j;
-				for (j=0; list_replace[i].extra_attrs[j]; j++) {
-					if (!ldb_attr_in_list(attrs_from_user, list_replace[i].extra_attrs[j])) {
-						ldb_msg_remove_attr(msg, list_replace[i].extra_attrs[j]);
-					}
-				}
+			if (search_sub[i].extra_attr != NULL && 
+			    !ldb_attr_in_list(attrs_from_user, search_sub[i].extra_attr)) {
+				ldb_msg_remove_attr(msg, search_sub[i].extra_attr);
 			}
 		}
 	}
@@ -1051,10 +753,6 @@ struct operational_context {
 	enum ldb_scope scope;
 	const char * const *attrs;
 	struct op_controls_flags* controls_flags;
-	struct op_attributes_operations *list_operations;
-	unsigned int list_operations_size;
-	struct op_attributes_replace *attrs_to_replace;
-	unsigned int attrs_to_replace_size;
 };
 
 static int operational_callback(struct ldb_request *req, struct ldb_reply *ares)
@@ -1082,12 +780,7 @@ static int operational_callback(struct ldb_request *req, struct ldb_reply *ares)
 						      ac->scope,
 						      ac->attrs,
 						      req->op.search.attrs,
-						      ac->controls_flags,
-						      ac->list_operations,
-						      ac->list_operations_size,
-						      ac->attrs_to_replace,
-						      ac->attrs_to_replace_size,
-						      req);
+						      ac->controls_flags, req);
 		if (ret != 0) {
 			return ldb_module_done(ac->req, NULL, NULL,
 						LDB_ERR_OPERATIONS_ERROR);
@@ -1105,74 +798,6 @@ static int operational_callback(struct ldb_request *req, struct ldb_reply *ares)
 
 	talloc_free(ares);
 	return LDB_SUCCESS;
-}
-
-static struct op_attributes_operations* operation_get_op_list(TALLOC_CTX *ctx,
-							      const char* const* attrs,
-							      const char* const* searched_attrs,
-							      struct op_controls_flags* controls_flags)
-{
-	int idx = 0;
-	int i;
-	struct op_attributes_operations *list = talloc_zero_array(ctx,
-								  struct op_attributes_operations,
-								  ARRAY_SIZE(operational_remove) + 1);
-
-	if (list == NULL) {
-		return NULL;
-	}
-
-	for (i=0; i<ARRAY_SIZE(operational_remove); i++) {
-		switch (operational_remove[i].op) {
-		case OPERATIONAL_REMOVE_UNASKED:
-			if (ldb_attr_in_list(attrs, operational_remove[i].attr)) {
-				continue;
-			}
-			if (ldb_attr_in_list(searched_attrs, operational_remove[i].attr)) {
-				continue;
-			}
-			list[idx].attr = operational_remove[i].attr;
-			list[idx].op = OPERATIONAL_REMOVE_UNASKED;
-			idx++;
-			break;
-
-		case OPERATIONAL_REMOVE_ALWAYS:
-			list[idx].attr = operational_remove[i].attr;
-			list[idx].op = OPERATIONAL_REMOVE_ALWAYS;
-			idx++;
-			break;
-
-		case OPERATIONAL_REMOVE_UNLESS_CONTROL:
-			if (!check_keep_control_for_attribute(controls_flags, operational_remove[i].attr)) {
-				list[idx].attr = operational_remove[i].attr;
-				list[idx].op = OPERATIONAL_REMOVE_UNLESS_CONTROL;
-				idx++;
-			}
-			break;
-
-		case OPERATIONAL_SD_FLAGS:
-			if (ldb_attr_in_list(attrs, operational_remove[i].attr)) {
-				continue;
-			}
-			if (controls_flags->sd) {
-				if (attrs == NULL) {
-					continue;
-				}
-				if (attrs[0] == NULL) {
-					continue;
-				}
-				if (ldb_attr_in_list(attrs, "*")) {
-					continue;
-				}
-			}
-			list[idx].attr = operational_remove[i].attr;
-			list[idx].op = OPERATIONAL_SD_FLAGS;
-			idx++;
-			break;
-		}
-	}
-
-	return list;
 }
 
 static int operational_search(struct ldb_module *module, struct ldb_request *req)
@@ -1219,8 +844,6 @@ static int operational_search(struct ldb_module *module, struct ldb_request *req
 	ac->controls_flags->bypassoperational =
 		(ldb_request_get_control(req, LDB_CONTROL_BYPASS_OPERATIONAL_OID) != NULL);
 
-	ac->attrs_to_replace = NULL;
-	ac->attrs_to_replace_size = 0;
 	/* in the list of attributes we are looking for, rename any
 	   attributes to the alias for any hidden attributes that can
 	   be fetched directly using non-hidden names */
@@ -1229,31 +852,16 @@ static int operational_search(struct ldb_module *module, struct ldb_request *req
 			continue;
 		}
 		for (i=0;i<ARRAY_SIZE(search_sub);i++) {
+			if (ldb_attr_cmp(ac->attrs[a], search_sub[i].attr) == 0 &&
+			    search_sub[i].replace) {
 
-			if (ldb_attr_cmp(ac->attrs[a], search_sub[i].attr) != 0 ) {
-				continue;
-			}
-
-			ac->attrs_to_replace = talloc_realloc(ac,
-							      ac->attrs_to_replace,
-							      struct op_attributes_replace,
-							      ac->attrs_to_replace_size + 1);
-
-			ac->attrs_to_replace[ac->attrs_to_replace_size] = search_sub[i];
-			ac->attrs_to_replace_size++;
-			if (!search_sub[i].replace) {
-				continue;
-			}
-
-			if (search_sub[i].extra_attrs && search_sub[i].extra_attrs[0]) {
-				unsigned int j;
-				const char **search_attrs2;
-				/* Only adds to the end of the list */
-				for (j = 0; search_sub[i].extra_attrs[j]; j++) {
+				if (search_sub[i].extra_attr) {
+					const char **search_attrs2;
+					/* Only adds to the end of the list */
 					search_attrs2 = ldb_attr_list_copy_add(req, search_attrs
 									       ? search_attrs
 									       : ac->attrs, 
-									       search_sub[i].extra_attrs[j]);
+									       search_sub[i].extra_attr);
 					if (search_attrs2 == NULL) {
 						return ldb_operr(ldb);
 					}
@@ -1261,28 +869,19 @@ static int operational_search(struct ldb_module *module, struct ldb_request *req
 					talloc_free(search_attrs);
 					search_attrs = search_attrs2;
 				}
-			}
 
-			if (!search_attrs) {
-				search_attrs = ldb_attr_list_copy(req, ac->attrs);
-				if (search_attrs == NULL) {
-					return ldb_operr(ldb);
+				if (!search_attrs) {
+					search_attrs = ldb_attr_list_copy(req, ac->attrs);
+					if (search_attrs == NULL) {
+						return ldb_operr(ldb);
+					}
 				}
+				/* Despite the ldb_attr_list_copy_add, this is safe as that fn only adds to the end */
+				search_attrs[a] = search_sub[i].replace;
 			}
-			/* Despite the ldb_attr_list_copy_add, this is safe as that fn only adds to the end */
-			search_attrs[a] = search_sub[i].replace;
 		}
 	}
-	ac->list_operations = operation_get_op_list(ac, ac->attrs,
-						    search_attrs == NULL?req->op.search.attrs:search_attrs,
-						    ac->controls_flags);
-	ac->list_operations_size = 0;
-	i = 0;
 
-	while (ac->list_operations && ac->list_operations[i].attr != NULL) {
-		i++;
-	}
-	ac->list_operations_size = i;
 	ret = ldb_build_search_req_ex(&down_req, ldb, ac,
 					req->op.search.base,
 					req->op.search.scope,

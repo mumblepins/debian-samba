@@ -48,7 +48,6 @@ enum ntlm_break {
 
 struct samlogon_state {
 	TALLOC_CTX *mem_ctx;
-	struct torture_context *tctx;
 	const char *comment;
 	const char *account_name;
 	const char *account_domain;
@@ -164,7 +163,7 @@ static NTSTATUS check_samlogon(struct samlogon_state *samlogon_state,
 		}
 		if (!r->out.return_authenticator ||
 		    !netlogon_creds_client_check(samlogon_state->creds, &r->out.return_authenticator->cred)) {
-			torture_comment(samlogon_state->tctx, "Credential chaining failed\n");
+			d_printf("Credential chaining failed\n");
 		}
 		if (!NT_STATUS_IS_OK(r->out.result)) {
 			if (error_string) {
@@ -175,9 +174,7 @@ static NTSTATUS check_samlogon(struct samlogon_state *samlogon_state,
 
 		validation_level = r->in.validation_level;
 
-		netlogon_creds_decrypt_samlogon_validation(samlogon_state->creds,
-							   validation_level,
-							   r->out.validation);
+		netlogon_creds_decrypt_samlogon(samlogon_state->creds, validation_level, r->out.validation);
 
 		switch (validation_level) {
 		case 2:
@@ -209,9 +206,7 @@ static NTSTATUS check_samlogon(struct samlogon_state *samlogon_state,
 
 		validation_level = r_ex->in.validation_level;
 
-		netlogon_creds_decrypt_samlogon_validation(samlogon_state->creds,
-							   validation_level,
-							   r_ex->out.validation);
+		netlogon_creds_decrypt_samlogon(samlogon_state->creds, validation_level, r_ex->out.validation);
 
 		switch (validation_level) {
 		case 2:
@@ -240,7 +235,7 @@ static NTSTATUS check_samlogon(struct samlogon_state *samlogon_state,
 		}
 		if (!r_flags->out.return_authenticator ||
 		    !netlogon_creds_client_check(samlogon_state->creds, &r_flags->out.return_authenticator->cred)) {
-			torture_comment(samlogon_state->tctx, "Credential chaining failed\n");
+			d_printf("Credential chaining failed\n");
 		}
 		if (!NT_STATUS_IS_OK(r_flags->out.result)) {
 			if (error_string) {
@@ -251,9 +246,7 @@ static NTSTATUS check_samlogon(struct samlogon_state *samlogon_state,
 
 		validation_level = r_flags->in.validation_level;
 
-		netlogon_creds_decrypt_samlogon_validation(samlogon_state->creds,
-							   validation_level,
-							   r_flags->out.validation);
+		netlogon_creds_decrypt_samlogon(samlogon_state->creds, validation_level, r_flags->out.validation);
 
 		switch (validation_level) {
 		case 2:
@@ -273,7 +266,7 @@ static NTSTATUS check_samlogon(struct samlogon_state *samlogon_state,
 	}
 
 	if (!base) {
-		torture_comment(samlogon_state->tctx, "No user info returned from 'successful' SamLogon*() call!\n");
+		d_printf("No user info returned from 'successful' SamLogon*() call!\n");
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
@@ -362,10 +355,10 @@ static bool test_lm_ntlm_broken(struct samlogon_state *samlogon_state, enum ntlm
 
 	if (memcmp(lm_hash, lm_key,
 		   sizeof(lm_key)) != 0) {
-		torture_comment(samlogon_state->tctx, "LM Key does not match expectations!\n");
-		torture_comment(samlogon_state->tctx, "lm_key:\n");
+		d_printf("LM Key does not match expectations!\n");
+		d_printf("lm_key:\n");
 		dump_data(1, lm_key, 8);
-		torture_comment(samlogon_state->tctx, "expected:\n");
+		d_printf("expected:\n");
 		dump_data(1, lm_hash, 8);
 		pass = false;
 	}
@@ -379,9 +372,9 @@ static bool test_lm_ntlm_broken(struct samlogon_state *samlogon_state, enum ntlm
 		if (memcmp(lm_key_expected, user_session_key,
 			   16) != 0) {
 			*error_string = strdup("NT Session Key does not match expectations (should be first-8 LM hash)!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, sizeof(user_session_key));
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lm_key_expected, sizeof(lm_key_expected));
 			pass = false;
 		}
@@ -391,9 +384,9 @@ static bool test_lm_ntlm_broken(struct samlogon_state *samlogon_state, enum ntlm
 		if (memcmp(session_key.data, user_session_key,
 			   sizeof(user_session_key)) != 0) {
 			*error_string = strdup("NT Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, 16);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, session_key.data, session_key.length);
 			pass = false;
 		}
@@ -479,10 +472,10 @@ static bool test_ntlm_in_lm(struct samlogon_state *samlogon_state, char **error_
 	if (lm_good) {
 		if (memcmp(lm_hash, lm_key,
 			   sizeof(lm_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "lm_key:\n");
+			d_printf("LM Key does not match expectations!\n");
+			d_printf("lm_key:\n");
 			dump_data(1, lm_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lm_hash, 8);
 			pass = false;
 		}
@@ -490,10 +483,10 @@ static bool test_ntlm_in_lm(struct samlogon_state *samlogon_state, char **error_
 	} else {
 		if (memcmp(session_key.data, lm_key,
 			   sizeof(lm_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM Key does not match expectations (first 8 session key)!\n");
-			torture_comment(samlogon_state->tctx, "lm_key:\n");
+			d_printf("LM Key does not match expectations (first 8 session key)!\n");
+			d_printf("lm_key:\n");
 			dump_data(1, lm_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, session_key.data, 8);
 			pass = false;
 		}
@@ -505,10 +498,10 @@ static bool test_ntlm_in_lm(struct samlogon_state *samlogon_state, char **error_
 		memset(lm_key_expected+8, '\0', 8);
 		if (memcmp(lm_key_expected, user_session_key,
 			   16) != 0) {
-			torture_comment(samlogon_state->tctx, "NT Session Key does not match expectations (should be first-8 LM hash)!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("NT Session Key does not match expectations (should be first-8 LM hash)!\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, sizeof(user_session_key));
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lm_key_expected, sizeof(lm_key_expected));
 			pass = false;
 		}
@@ -579,19 +572,19 @@ static bool test_ntlm_in_both(struct samlogon_state *samlogon_state, char **erro
 
 	if (memcmp(lm_hash, lm_key,
 		   sizeof(lm_key)) != 0) {
-		torture_comment(samlogon_state->tctx, "LM Key does not match expectations!\n");
-		torture_comment(samlogon_state->tctx, "lm_key:\n");
+		d_printf("LM Key does not match expectations!\n");
+ 		d_printf("lm_key:\n");
 		dump_data(1, lm_key, 8);
-		torture_comment(samlogon_state->tctx, "expected:\n");
+		d_printf("expected:\n");
 		dump_data(1, lm_hash, 8);
 		pass = false;
 	}
 	if (memcmp(session_key.data, user_session_key,
 		   sizeof(user_session_key)) != 0) {
-		torture_comment(samlogon_state->tctx, "NT Session Key does not match expectations!\n");
-		torture_comment(samlogon_state->tctx, "user_session_key:\n");
+		d_printf("NT Session Key does not match expectations!\n");
+ 		d_printf("user_session_key:\n");
 		dump_data(1, user_session_key, 16);
-		torture_comment(samlogon_state->tctx, "expected:\n");
+ 		d_printf("expected:\n");
 		dump_data(1, session_key.data, session_key.length);
 		pass = false;
 	}
@@ -691,19 +684,19 @@ static bool test_lmv2_ntlmv2_broken(struct samlogon_state *samlogon_state,
 	case NO_NT:
 		if (memcmp(lmv2_session_key.data, user_session_key,
 			   sizeof(user_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "USER (LMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("USER (LMv2) Session Key does not match expectations!\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, 16);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lmv2_session_key.data, ntlmv2_session_key.length);
 			pass = false;
 		}
 		if (memcmp(lmv2_session_key.data, lm_session_key,
 				   sizeof(lm_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM (LMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "lm_session_key:\n");
+			d_printf("LM (LMv2) Session Key does not match expectations!\n");
+			d_printf("lm_session_key:\n");
 			dump_data(1, lm_session_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lmv2_session_key.data, 8);
 			pass = false;
 		}
@@ -713,18 +706,18 @@ static bool test_lmv2_ntlmv2_broken(struct samlogon_state *samlogon_state,
 			   sizeof(user_session_key)) != 0) {
 			if (memcmp(lmv2_session_key.data, user_session_key,
 				   sizeof(user_session_key)) == 0) {
-				torture_comment(samlogon_state->tctx, "USER (NTLMv2) Session Key expected, got LMv2 sessesion key instead:\n");
-				torture_comment(samlogon_state->tctx, "user_session_key:\n");
+				d_printf("USER (NTLMv2) Session Key expected, got LMv2 sessesion key instead:\n");
+				d_printf("user_session_key:\n");
 				dump_data(1, user_session_key, 16);
-				torture_comment(samlogon_state->tctx, "expected:\n");
+				d_printf("expected:\n");
 				dump_data(1, ntlmv2_session_key.data, ntlmv2_session_key.length);
 				pass = false;
 
 			} else {
-				torture_comment(samlogon_state->tctx, "USER (NTLMv2) Session Key does not match expectations!\n");
-				torture_comment(samlogon_state->tctx, "user_session_key:\n");
+				d_printf("USER (NTLMv2) Session Key does not match expectations!\n");
+				d_printf("user_session_key:\n");
 				dump_data(1, user_session_key, 16);
-				torture_comment(samlogon_state->tctx, "expected:\n");
+				d_printf("expected:\n");
 				dump_data(1, ntlmv2_session_key.data, ntlmv2_session_key.length);
 				pass = false;
 			}
@@ -733,17 +726,17 @@ static bool test_lmv2_ntlmv2_broken(struct samlogon_state *samlogon_state,
 			   sizeof(lm_session_key)) != 0) {
 			if (memcmp(lmv2_session_key.data, lm_session_key,
 				   sizeof(lm_session_key)) == 0) {
-				torture_comment(samlogon_state->tctx, "LM (NTLMv2) Session Key expected, got LMv2 sessesion key instead:\n");
-				torture_comment(samlogon_state->tctx, "user_session_key:\n");
+				d_printf("LM (NTLMv2) Session Key expected, got LMv2 sessesion key instead:\n");
+				d_printf("user_session_key:\n");
 				dump_data(1, lm_session_key, 8);
-				torture_comment(samlogon_state->tctx, "expected:\n");
+				d_printf("expected:\n");
 				dump_data(1, ntlmv2_session_key.data, 8);
 				pass = false;
 			} else {
-				torture_comment(samlogon_state->tctx, "LM (NTLMv2) Session Key does not match expectations!\n");
-				torture_comment(samlogon_state->tctx, "lm_session_key:\n");
+				d_printf("LM (NTLMv2) Session Key does not match expectations!\n");
+				d_printf("lm_session_key:\n");
 				dump_data(1, lm_session_key, 8);
-				torture_comment(samlogon_state->tctx, "expected:\n");
+				d_printf("expected:\n");
 				dump_data(1, ntlmv2_session_key.data, 8);
 				pass = false;
 			}
@@ -858,19 +851,19 @@ static bool test_lmv2_ntlm_broken(struct samlogon_state *samlogon_state,
 	case NO_NT:
 		if (memcmp(lmv2_session_key.data, user_session_key,
 			   sizeof(user_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "USER (LMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("USER (LMv2) Session Key does not match expectations!\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, 16);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lmv2_session_key.data, ntlmv2_session_key.length);
 			pass = false;
 		}
 		if (memcmp(lmv2_session_key.data, lm_session_key,
 			   sizeof(lm_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM (LMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "lm_session_key:\n");
+			d_printf("LM (LMv2) Session Key does not match expectations!\n");
+			d_printf("lm_session_key:\n");
 			dump_data(1, lm_session_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lmv2_session_key.data, 8);
 			pass = false;
 		}
@@ -878,20 +871,20 @@ static bool test_lmv2_ntlm_broken(struct samlogon_state *samlogon_state,
 	case BREAK_LM:
 		if (memcmp(ntlm_session_key.data, user_session_key,
 			   sizeof(user_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "USER (NTLMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("USER (NTLMv2) Session Key does not match expectations!\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, 16);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, ntlm_session_key.data, ntlm_session_key.length);
 			pass = false;
 		}
 		if (lm_good) {
 			if (memcmp(lm_hash, lm_session_key,
 				   sizeof(lm_session_key)) != 0) {
-				torture_comment(samlogon_state->tctx, "LM Session Key does not match expectations!\n");
-				torture_comment(samlogon_state->tctx, "lm_session_key:\n");
+				d_printf("LM Session Key does not match expectations!\n");
+				d_printf("lm_session_key:\n");
 				dump_data(1, lm_session_key, 8);
-				torture_comment(samlogon_state->tctx, "expected:\n");
+				d_printf("expected:\n");
 				dump_data(1, lm_hash, 8);
 				pass = false;
 			}
@@ -899,10 +892,10 @@ static bool test_lmv2_ntlm_broken(struct samlogon_state *samlogon_state,
 			static const uint8_t zeros[8];
 			if (memcmp(zeros, lm_session_key,
 				   sizeof(lm_session_key)) != 0) {
-				torture_comment(samlogon_state->tctx, "LM Session Key does not match expectations (zeros)!\n");
-				torture_comment(samlogon_state->tctx, "lm_session_key:\n");
+				d_printf("LM Session Key does not match expectations (zeros)!\n");
+				d_printf("lm_session_key:\n");
 				dump_data(1, lm_session_key, 8);
-				torture_comment(samlogon_state->tctx, "expected:\n");
+				d_printf("expected:\n");
 				dump_data(1, zeros, 8);
 				pass = false;
 			}
@@ -911,19 +904,19 @@ static bool test_lmv2_ntlm_broken(struct samlogon_state *samlogon_state,
 	default:
 		if (memcmp(ntlm_session_key.data, user_session_key,
 			   sizeof(user_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "USER (NTLMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "user_session_key:\n");
+			d_printf("USER (NTLMv2) Session Key does not match expectations!\n");
+			d_printf("user_session_key:\n");
 			dump_data(1, user_session_key, 16);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, ntlm_session_key.data, ntlm_session_key.length);
 			pass = false;
 		}
 		if (memcmp(ntlm_session_key.data, lm_session_key,
 			   sizeof(lm_session_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM (NTLMv2) Session Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "lm_session_key:\n");
+			d_printf("LM (NTLMv2) Session Key does not match expectations!\n");
+			d_printf("lm_session_key:\n");
 			dump_data(1, lm_session_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, ntlm_session_key.data, 8);
 			pass = false;
 		}
@@ -1082,7 +1075,7 @@ static bool test_ntlm2(struct samlogon_state *samlogon_state, char **error_strin
 	uint8_t session_nonce_hash[16];
 	uint8_t client_chall[8];
 
-	MD5_CTX md5_session_nonce_ctx;
+	struct MD5Context md5_session_nonce_ctx;
 	HMACMD5Context hmac_ctx;
 
 	ZERO_STRUCT(user_session_key);
@@ -1138,10 +1131,10 @@ static bool test_ntlm2(struct samlogon_state *samlogon_state, char **error_strin
 	if (lm_good) {
 		if (memcmp(lm_hash, lm_key,
 			   sizeof(lm_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM Key does not match expectations!\n");
-			torture_comment(samlogon_state->tctx, "lm_key:\n");
+			d_printf("LM Key does not match expectations!\n");
+			d_printf("lm_key:\n");
 			dump_data(1, lm_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, lm_hash, 8);
 			pass = false;
 		}
@@ -1149,19 +1142,19 @@ static bool test_ntlm2(struct samlogon_state *samlogon_state, char **error_strin
 		static const uint8_t zeros[8];
 		if (memcmp(zeros, lm_key,
 			   sizeof(lm_key)) != 0) {
-			torture_comment(samlogon_state->tctx, "LM Session Key does not match expectations (zeros)!\n");
-			torture_comment(samlogon_state->tctx, "lm_key:\n");
+			d_printf("LM Session Key does not match expectations (zeros)!\n");
+			d_printf("lm_key:\n");
 			dump_data(1, lm_key, 8);
-			torture_comment(samlogon_state->tctx, "expected:\n");
+			d_printf("expected:\n");
 			dump_data(1, zeros, 8);
 			pass = false;
 		}
 	}
 	if (memcmp(nt_key, user_session_key, 16) != 0) {
-		torture_comment(samlogon_state->tctx, "NT Session Key does not match expectations (should be NT Key)!\n");
-		torture_comment(samlogon_state->tctx, "user_session_key:\n");
+		d_printf("NT Session Key does not match expectations (should be NT Key)!\n");
+		d_printf("user_session_key:\n");
 		dump_data(1, user_session_key, sizeof(user_session_key));
-		torture_comment(samlogon_state->tctx, "expected:\n");
+		d_printf("expected:\n");
 		dump_data(1, nt_key, sizeof(nt_key));
 		pass = false;
 	}
@@ -1176,7 +1169,7 @@ static bool test_plaintext(struct samlogon_state *samlogon_state, enum ntlm_brea
 	char *password;
 	char *dospw;
 	smb_ucs2_t *unicodepw;
-	size_t converted_size = 0;
+
 	uint8_t user_session_key[16];
 	uint8_t lm_key[16];
 	uint8_t lm_hash[16];
@@ -1187,7 +1180,7 @@ static bool test_plaintext(struct samlogon_state *samlogon_state, enum ntlm_brea
 	ZERO_STRUCT(user_session_key);
 
 	if (!push_ucs2_talloc(samlogon_state->mem_ctx,
-			      &unicodepw, samlogon_state->password, &converted_size)) {
+			      &unicodepw, samlogon_state->password, NULL)) {
 		DEBUG(0, ("push_ucs2_allocate failed!\n"));
 		exit(1);
 	}
@@ -1199,7 +1192,7 @@ static bool test_plaintext(struct samlogon_state *samlogon_state, enum ntlm_brea
 	if (!convert_string_talloc(samlogon_state->mem_ctx,
 				   CH_UNIX, CH_DOS,
 				   password, strlen(password)+1,
-				   (void**)&dospw, &converted_size)) {
+				   (void**)&dospw, NULL, false)) {
 		DEBUG(0, ("convert_string_talloc failed!\n"));
 		exit(1);
 	}
@@ -1349,7 +1342,7 @@ static bool test_SamLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 	int i, v, l, f;
 	bool ret = true;
 	int validation_levels[] = {2,3,6};
-	int logon_levels[] = { NetlogonNetworkInformation, NetlogonNetworkTransitiveInformation };
+	int logon_levels[] = { 2, 6 };
 	int function_levels[] = {
 		NDR_NETR_LOGONSAMLOGON,
 		NDR_NETR_LOGONSAMLOGONEX,
@@ -1363,7 +1356,7 @@ static bool test_SamLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 
 	ZERO_STRUCT(logon);
 
-	torture_comment(tctx, "Testing netr_LogonSamLogon and netr_LogonSamLogonWithFlags\n");
+	d_printf("Testing netr_LogonSamLogon and netr_LogonSamLogonWithFlags\n");
 
 	samlogon_state.comment = comment;
 	samlogon_state.account_name = account_name;
@@ -1377,7 +1370,6 @@ static bool test_SamLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 	samlogon_state.chall = data_blob_talloc(fn_ctx, NULL, 8);
 	samlogon_state.parameter_control = parameter_control;
 	samlogon_state.old_password = old_password;
-	samlogon_state.tctx = tctx;
 
 	generate_random_buffer(samlogon_state.chall.data, 8);
 	samlogon_state.r_flags.in.server_name = talloc_asprintf(fn_ctx, "\\\\%s", dcerpc_server_name(p));
@@ -1425,7 +1417,7 @@ static bool test_SamLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 					samlogon_state.r_flags.in.validation_level = validation_levels[v];
 					samlogon_state.r_flags.in.logon_level = logon_levels[l];
 					if (!test_table[i].fn(&samlogon_state, &error_string)) {
-						torture_comment(tctx, "Testing '%s' [%s]\\[%s] '%s' at validation level %d, logon level %d, function %d: \n",
+						d_printf("Testing '%s' [%s]\\[%s] '%s' at validation level %d, logon level %d, function %d: \n",
 						       samlogon_state.comment,
 						       samlogon_state.account_domain,
 						       samlogon_state.account_name,
@@ -1433,9 +1425,9 @@ static bool test_SamLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 						       logon_levels[l], function_levels[f]);
 
 						if (test_table[i].expect_fail) {
-							torture_comment(tctx, " failed (expected, test incomplete): %s\n", error_string);
+							d_printf(" failed (expected, test incomplete): %s\n", error_string);
 						} else {
-							torture_comment(tctx, " failed: %s\n", error_string);
+							d_printf(" failed: %s\n", error_string);
 							ret = false;
 						}
 						SAFE_FREE(error_string);
@@ -1453,7 +1445,6 @@ static bool test_SamLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
   test an ADS style interactive domain logon
 */
 bool test_InteractiveLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
-			   struct torture_context *tctx,
 			   struct netlogon_creds_CredentialState *creds,
 			   const char *comment,
 			   const char *workstation_name,
@@ -1463,7 +1454,6 @@ bool test_InteractiveLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 {
 	NTSTATUS status;
 	TALLOC_CTX *fn_ctx = talloc_named(mem_ctx, 0, "test_InteractiveLogon function-level context");
-	bool ret = true;
 	struct netr_LogonSamLogonWithFlags r;
 	struct netr_Authenticator a, ra;
 	struct netr_PasswordInfo pinfo;
@@ -1489,7 +1479,7 @@ bool test_InteractiveLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 	r.in.computer_name = TEST_MACHINE_NAME;
 	r.in.credential = &a;
 	r.in.return_authenticator = &ra;
-	r.in.logon_level = NetlogonInteractiveTransitiveInformation;
+	r.in.logon_level = 5;
 	r.in.logon = &logon;
 	r.in.validation_level = 6;
 	r.in.flags = &flags;
@@ -1517,34 +1507,30 @@ bool test_InteractiveLogon(struct dcerpc_pipe *p, TALLOC_CTX *mem_ctx,
 		netlogon_creds_des_encrypt(creds, &pinfo.ntpassword);
 	}
 
-	torture_comment(tctx, "Testing netr_LogonSamLogonWithFlags '%s' (Interactive Logon)\n", comment);
+	d_printf("Testing netr_LogonSamLogonWithFlags '%s' (Interactive Logon)\n", comment);
 
 	status = dcerpc_netr_LogonSamLogonWithFlags_r(b, fn_ctx, &r);
-	torture_assert_ntstatus_ok_goto(tctx,
-		status,
-		ret, failed,
-		talloc_asprintf(tctx, "%s: netr_LogonSamLogonWithFlags - %s\n",
-			 __location__, nt_errstr(status)));
-
-	if (!r.out.return_authenticator) {
+	if (!NT_STATUS_IS_OK(status)) {
+		d_printf("%s: netr_LogonSamLogonWithFlags - %s\n",
+			 __location__, nt_errstr(status));
+		return false;
+	}
+	if (!r.out.return_authenticator
+	    || !netlogon_creds_client_check(creds, &r.out.return_authenticator->cred)) {
+		d_printf("Credential chaining failed\n");
 		talloc_free(fn_ctx);
-		torture_fail(tctx, "no authenticator returned");
+		return false;
 	}
 
-	torture_assert_goto(tctx,
-		netlogon_creds_client_check(creds, &r.out.return_authenticator->cred),
-		ret, failed,
-		"Credential chaining failed\n");
-
-	torture_assert_ntstatus_equal(tctx, r.out.result, expected_error,
-		talloc_asprintf(tctx, "[%s]\\[%s] netr_LogonSamLogonWithFlags - expected %s got %s\n",
-		       account_domain, account_name, nt_errstr(expected_error), nt_errstr(r.out.result)));
-
-	ret = true;
- failed:
 	talloc_free(fn_ctx);
 
-	return ret;
+	if (!NT_STATUS_EQUAL(expected_error, r.out.result)) {
+		d_printf("[%s]\\[%s] netr_LogonSamLogonWithFlags - expected %s got %s\n",
+		       account_domain, account_name, nt_errstr(expected_error), nt_errstr(r.out.result));
+		return false;
+	}
+
+	return true;
 }
 
 /* This sets and resets the "minPwdAge" (in order to allow immediate user
@@ -1650,8 +1636,9 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 	bool ret = true;
 	struct test_join *join_ctx = NULL;
 	struct test_join *user_ctx = NULL, *user_ctx_wrong_wks = NULL, *user_ctx_wrong_time = NULL;
-	const char *old_user_password, *user_password_wrong_wks, *user_password_wrong_time;
-	char *user_password;
+	char *user_password, *user_password_wrong_wks, *user_password_wrong_time;
+	const char *old_user_password;
+	char *test_machine_account;
 	const char *userdomain;
 	struct samr_SetUserInfo s;
 	union samr_UserInfo u;
@@ -1672,12 +1659,16 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 	torture_assert(torture, handle_minPwdAge(torture, mem_ctx, true),
 		       "handle_minPwdAge error!");
 
+	test_machine_account = talloc_asprintf(mem_ctx, "%s$", TEST_MACHINE_NAME);
 	/* We only need to join as a workstation here, and in future,
 	 * if we wish to test against trusted domains, we must be a
 	 * workstation here */
 	join_ctx = torture_join_domain(torture, TEST_MACHINE_NAME, ACB_WSTRUST,
 				       &machine_credentials);
-	torture_assert(torture, join_ctx, "Failed to join as Workstation\n");
+	if (!join_ctx) {
+		d_printf("Failed to join as Workstation\n");
+		return false;
+	}
 
 	userdomain = torture_setting_string(torture, "userdomain", lpcfg_workgroup(torture->lp_ctx));
 
@@ -1685,14 +1676,15 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 					   TEST_USER_NAME,
 					   userdomain,
 					   ACB_NORMAL,
-					   &old_user_password);
-	torture_assert(torture, user_ctx, "Failed to create a test user\n");
+					   (const char **)&user_password);
+	if (!user_ctx) {
+		d_printf("Failed to create a test user\n");
+		return false;
+	}
 
-	user_password = talloc_strdup(torture, old_user_password);
-	torture_assert(torture, user_password != NULL, "Failed to copy old_user_password\n");
+	old_user_password = user_password;
 
 	tmp_p = torture_join_samr_pipe(user_ctx);
-	torture_assert(torture, tmp_p, "torture_join_samr_pipe failed\n");
 	test_ChangePasswordUser3(tmp_p, torture,
 				 TEST_USER_NAME, 16 /* > 14 */, &user_password,
 				 NULL, 0, false);
@@ -1701,9 +1693,11 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 						     TEST_USER_NAME_WRONG_WKS,
 					   userdomain,
 					   ACB_NORMAL,
-					   &user_password_wrong_wks);
-	torture_assert(torture, user_ctx_wrong_wks,
-		"Failed to create a test user (wrong workstation test)\n");
+					   (const char **)&user_password_wrong_wks);
+	if (!user_ctx_wrong_wks) {
+		d_printf("Failed to create a test user (wrong workstation test)\n");
+		return false;
+	}
 
 	ZERO_STRUCT(u);
 	s.in.user_handle = torture_join_samr_user_policy(user_ctx_wrong_wks);
@@ -1715,18 +1709,26 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 
 	tmp_p = torture_join_samr_pipe(user_ctx_wrong_wks);
 	status = dcerpc_samr_SetUserInfo_r(tmp_p->binding_handle, mem_ctx, &s);
-	torture_assert_ntstatus_ok_goto(torture, status, ret, failed,
-		talloc_asprintf(torture, "SetUserInfo (list of workstations) failed - %s\n", nt_errstr(status)));
-	torture_assert_ntstatus_ok_goto(torture, s.out.result, ret, failed,
-		talloc_asprintf(torture, "SetUserInfo (list of workstations) failed - %s\n", nt_errstr(s.out.result)));
+	if (!NT_STATUS_IS_OK(status)) {
+		printf("SetUserInfo (list of workstations) failed - %s\n", nt_errstr(status));
+		ret = false;
+		goto failed;
+	}
+	if (!NT_STATUS_IS_OK(s.out.result)) {
+		printf("SetUserInfo (list of workstations) failed - %s\n", nt_errstr(s.out.result));
+		ret = false;
+		goto failed;
+	}
 
 	user_ctx_wrong_time
 		= torture_create_testuser(torture, TEST_USER_NAME_WRONG_TIME,
 					   userdomain,
 					   ACB_NORMAL,
-					   &user_password_wrong_time);
-	torture_assert(torture, user_ctx_wrong_time,
-		"Failed to create a test user (wrong workstation test)\n");
+					   (const char **)&user_password_wrong_time);
+	if (!user_ctx_wrong_time) {
+		d_printf("Failed to create a test user (wrong workstation test)\n");
+		return false;
+	}
 
 	ZERO_STRUCT(u);
 	s.in.user_handle = torture_join_samr_user_policy(user_ctx_wrong_time);
@@ -1740,10 +1742,16 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 
 	tmp_p = torture_join_samr_pipe(user_ctx_wrong_time);
 	status = dcerpc_samr_SetUserInfo_r(tmp_p->binding_handle, mem_ctx, &s);
-	torture_assert_ntstatus_ok_goto(torture, status, ret, failed,
-		talloc_asprintf(torture, "SetUserInfo (logon times and list of workstations) failed - %s\n", nt_errstr(status)));
-	torture_assert_ntstatus_ok_goto(torture, s.out.result, ret, failed,
-		talloc_asprintf(torture, "SetUserInfo (list of workstations) failed - %s\n", nt_errstr(s.out.result)));
+	if (!NT_STATUS_IS_OK(status)) {
+		printf("SetUserInfo (logon times and list of workstations) failed - %s\n", nt_errstr(status));
+		ret = false;
+		goto failed;
+	}
+	if (!NT_STATUS_IS_OK(s.out.result)) {
+		printf("SetUserInfo (list of workstations) failed - %s\n", nt_errstr(s.out.result));
+		ret = false;
+		goto failed;
+	}
 
 	status = torture_rpc_binding(torture, &b);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -1754,22 +1762,21 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 	/* We have to use schannel, otherwise the SamLogonEx fails
 	 * with INTERNAL_ERROR */
 
-	status = dcerpc_binding_set_flags(b,
-					  DCERPC_SCHANNEL |
-					  DCERPC_SIGN | DCERPC_SEAL |
-					  DCERPC_SCHANNEL_128,
-					  DCERPC_AUTH_OPTIONS);
-	torture_assert_ntstatus_ok(torture, status, "set flags");
+	b->flags &= ~DCERPC_AUTH_OPTIONS;
+	b->flags |= DCERPC_SCHANNEL | DCERPC_SIGN | DCERPC_SCHANNEL_128;
 
 	status = dcerpc_pipe_connect_b(mem_ctx, &p, b,
 				       &ndr_table_netlogon,
 				       machine_credentials, torture->ev, torture->lp_ctx);
 
-	torture_assert_ntstatus_ok_goto(torture, status, ret, failed,
-		talloc_asprintf(torture, "RPC pipe connect as domain member failed: %s\n", nt_errstr(status)));
+	if (!NT_STATUS_IS_OK(status)) {
+		d_printf("RPC pipe connect as domain member failed: %s\n", nt_errstr(status));
+		ret = false;
+		goto failed;
+	}
 
-	creds = cli_credentials_get_netlogon_creds(machine_credentials);
-	if (creds == NULL) {
+	status = dcerpc_schannel_creds(p->conn->security_state.generic_state, mem_ctx, &creds);
+	if (!NT_STATUS_IS_OK(status)) {
 		ret = false;
 		goto failed;
 	}
@@ -1929,7 +1936,7 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 				.old_password  = true
 			},
 			{
-				.comment       = "test user (wrong workstation): domain\\user",
+				.comment       = "test user (wong workstation): domain\\user",
 				.domain        = userdomain,
 				.username      = TEST_USER_NAME_WRONG_WKS,
 				.password      = user_password_wrong_wks,
@@ -1942,7 +1949,7 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 		/* Try all the tests for different username forms */
 		for (ci = 0; ci < ARRAY_SIZE(usercreds); ci++) {
 
-			if (!test_InteractiveLogon(p, mem_ctx, torture, creds,
+			if (!test_InteractiveLogon(p, mem_ctx, creds,
 						   usercreds[ci].comment,
 						   TEST_MACHINE_NAME,
 						   usercreds[ci].domain,
@@ -1951,7 +1958,6 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 						   usercreds[ci].parameter_control,
 						   usercreds[ci].expected_interactive_error)) {
 				ret = false;
-				goto failed;
 			}
 
 			if (usercreds[ci].network_login) {
@@ -1965,7 +1971,6 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 						   usercreds[ci].old_password,
 						   0)) {
 					ret = false;
-					goto failed;
 				}
 			}
 		}
@@ -1977,11 +1982,7 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 		for (i=0; i < ARRAY_SIZE(credential_flags); i++) {
 			/* TODO:  Somehow we lost setting up the different credential flags here! */
 
-			torture_comment(torture,
-					"Testing with flags: 0x%08x\n",
-					credential_flags[i]);
-
-			if (!test_InteractiveLogon(p, mem_ctx, torture, creds,
+			if (!test_InteractiveLogon(p, mem_ctx, creds,
 						   usercreds[0].comment,
 						   TEST_MACHINE_NAME,
 						   usercreds[0].domain,
@@ -1990,7 +1991,6 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 						   usercreds[0].parameter_control,
 						   usercreds[0].expected_interactive_error)) {
 				ret = false;
-				goto failed;
 			}
 
 			if (usercreds[0].network_login) {
@@ -2004,7 +2004,6 @@ bool torture_rpc_samlogon(struct torture_context *torture)
 						   usercreds[0].old_password,
 						   1)) {
 					ret = false;
-					goto failed;
 				}
 			}
 		}

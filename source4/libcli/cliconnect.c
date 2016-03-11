@@ -26,7 +26,6 @@
 #include "libcli/raw/raw_proto.h"
 #include "libcli/auth/libcli_auth.h"
 #include "libcli/smb_composite/smb_composite.h"
-#include "libcli/smb/smbXcli_base.h"
 
 /*
   wrapper around smbcli_sock_connect()
@@ -36,48 +35,36 @@ bool smbcli_socket_connect(struct smbcli_state *cli, const char *server,
 			   struct tevent_context *ev_ctx,
 			   struct resolve_context *resolve_ctx,
 			   struct smbcli_options *options,
-			   const char *socket_options,
-			   struct nbt_name *calling,
-			   struct nbt_name *called)
+               const char *socket_options)
 {
-	NTSTATUS status;
+	struct smbcli_socket *sock;
 
-	cli->options = *options;
+	sock = smbcli_sock_connect_byname(server, ports, NULL,
+					  resolve_ctx, ev_ctx,
+                      socket_options);
 
-	status = smbcli_sock_connect(cli,
-				     NULL, /* host_addr */
-				     ports,
-				     server,
-				     resolve_ctx,
-				     ev_ctx,
-				     socket_options,
-				     calling,
-				     called,
-				     &cli->sock);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (sock == NULL) return false;
+	
+	cli->transport = smbcli_transport_init(sock, cli, true, options);
+	if (!cli->transport) {
 		return false;
 	}
 
 	return true;
 }
 
+/* wrapper around smbcli_transport_connect() */
+bool smbcli_transport_establish(struct smbcli_state *cli, 
+				struct nbt_name *calling,
+				struct nbt_name *called)
+{
+	return smbcli_transport_connect(cli->transport, calling, called);
+}
+
 /* wrapper around smb_raw_negotiate() */
 NTSTATUS smbcli_negprot(struct smbcli_state *cli, bool unicode, int maxprotocol)
 {
-	if (unicode) {
-		cli->options.unicode = 1;
-	} else {
-		cli->options.unicode = 0;
-	}
-
-	cli->transport = smbcli_transport_init(cli->sock, cli,
-					       true, &cli->options);
-	cli->sock = NULL;
-	if (!cli->transport) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	return smb_raw_negotiate(cli->transport, unicode, PROTOCOL_CORE, maxprotocol);
+	return smb_raw_negotiate(cli->transport, unicode, maxprotocol);
 }
 
 /* wrapper around smb_raw_sesssetup() */
@@ -125,8 +112,7 @@ NTSTATUS smbcli_tconX(struct smbcli_state *cli, const char *sharename,
 
 	/* setup a tree connect */
 	tcon.generic.level = RAW_TCON_TCONX;
-	tcon.tconx.in.flags = TCONX_FLAG_EXTENDED_RESPONSE;
-	tcon.tconx.in.flags |= TCONX_FLAG_EXTENDED_SIGNATURES;
+	tcon.tconx.in.flags = 0;
 	if (cli->transport->negotiate.sec_mode & NEGOTIATE_SECURITY_USER_LEVEL) {
 		tcon.tconx.in.password = data_blob(NULL, 0);
 	} else if (cli->transport->negotiate.sec_mode & NEGOTIATE_SECURITY_CHALLENGE_RESPONSE) {
@@ -144,10 +130,6 @@ NTSTATUS smbcli_tconX(struct smbcli_state *cli, const char *sharename,
 	status = smb_raw_tcon(cli->tree, mem_ctx, &tcon);
 
 	cli->tree->tid = tcon.tconx.out.tid;
-
-	if (tcon.tconx.out.options & SMB_EXTENDED_SIGNATURES) {
-		smb1cli_session_protect_session_key(cli->tree->session->smbXcli);
-	}
 
 	talloc_free(mem_ctx);
 

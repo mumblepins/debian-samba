@@ -29,6 +29,11 @@
 #ifndef __CBUF_H
 #define __CBUF_H
 
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+
 struct cbuf;
 typedef struct cbuf cbuf;
 
@@ -222,7 +227,7 @@ char* cbuf_gets(cbuf* b, size_t idx);
  * @param[out] ost outstream
  * @param[in]  s '\0' terminated string of printable characters.
  *
- * @return number of bytes written, -1 on error
+ * @return numner of bytes written, -1 on error
  */
 int cbuf_print_quoted_string(cbuf* ost, const char* s);
 
@@ -237,7 +242,7 @@ int cbuf_print_quoted_string(cbuf* ost, const char* s);
  * @param[in]  s string of bytes
  * @param[in]  len number of bytes
  *
- * @return number of bytes written, -1 on error
+ * @return numner of bytes written, -1 on error
  */
 int cbuf_print_quoted(cbuf* ost, const char* s, size_t len);
 

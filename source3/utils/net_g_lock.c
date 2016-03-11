@@ -31,12 +31,12 @@ static bool net_g_lock_init(TALLOC_CTX *mem_ctx,
 	struct messaging_context *msg = NULL;
 	struct g_lock_ctx *g_ctx = NULL;
 
-	ev = samba_tevent_context_init(mem_ctx);
+	ev = tevent_context_init(mem_ctx);
 	if (ev == NULL) {
 		d_fprintf(stderr, "ERROR: could not init event context\n");
 		goto fail;
 	}
-	msg = messaging_init(mem_ctx, ev);
+	msg = messaging_init(mem_ctx, procid_self(), ev);
 	if (msg == NULL) {
 		d_fprintf(stderr, "ERROR: could not init messaging context\n");
 		goto fail;
@@ -91,7 +91,7 @@ static int net_g_lock_do(struct net_context *c, int argc, const char **argv)
 
 	status = g_lock_do(name, G_LOCK_WRITE,
 			   timeval_set(timeout / 1000, timeout % 1000),
-			   net_g_lock_do_fn, &state);
+			   procid_self(), net_g_lock_do_fn, &state);
 	if (!NT_STATUS_IS_OK(status)) {
 		d_fprintf(stderr, "ERROR: g_lock_do failed: %s\n",
 			  nt_errstr(status));
@@ -111,9 +111,13 @@ done:
 static int net_g_lock_dump_fn(struct server_id pid, enum g_lock_type lock_type,
 			      void *private_data)
 {
-	struct server_id_buf idbuf;
-	d_printf("%s: %s\n", server_id_str_buf(pid, &idbuf),
-		 (lock_type & 1) ? "WRITE" : "READ");
+	char *pidstr;
+
+	pidstr = procid_str(talloc_tos(), &pid);
+	d_printf("%s: %s (%s)\n", pidstr,
+		 (lock_type & 1) ? "WRITE" : "READ",
+		 (lock_type & G_LOCK_PENDING) ? "pending" : "holder");
+	TALLOC_FREE(pidstr);
 	return 0;
 }
 
@@ -122,6 +126,7 @@ static int net_g_lock_dump(struct net_context *c, int argc, const char **argv)
 	struct tevent_context *ev = NULL;
 	struct messaging_context *msg = NULL;
 	struct g_lock_ctx *g_ctx = NULL;
+	NTSTATUS status;
 	int ret = -1;
 
 	if (argc != 1) {
@@ -133,7 +138,7 @@ static int net_g_lock_dump(struct net_context *c, int argc, const char **argv)
 		goto done;
 	}
 
-	(void)g_lock_dump(g_ctx, argv[0], net_g_lock_dump_fn, NULL);
+	status = g_lock_dump(g_ctx, argv[0], net_g_lock_dump_fn, NULL);
 
 	ret = 0;
 done:
@@ -170,7 +175,7 @@ done:
 	TALLOC_FREE(g_ctx);
 	TALLOC_FREE(msg);
 	TALLOC_FREE(ev);
-	return ret < 0 ? -1 : ret;
+	return ret;
 }
 
 int net_g_lock(struct net_context *c, int argc, const char **argv)

@@ -22,7 +22,6 @@
 
 #include "includes.h"
 #include "torture/torture.h"
-#include "torture/local/proto.h"
 #include "param/param.h"
 
 struct test_list_element {
@@ -111,8 +110,7 @@ static bool test_lists_shell(struct torture_context *tctx, const void *data)
 	ret1 = str_list_make_shell(mem_ctx, element->list_as_string, element->separators);
 	
 	torture_assert(tctx, ret1, "str_list_make_shell() must not return NULL");
-	tmp = str_list_join_shell(mem_ctx, discard_const_p(const char *, ret1),
-				  element->separators ? *element->separators : ' ');
+	tmp = str_list_join_shell(mem_ctx, (const char **) ret1, element->separators ? *element->separators : ' ');
 	ret2 = str_list_make_shell(mem_ctx, tmp, element->separators);
 
 	if ((ret1 == NULL || ret2 == NULL) && ret2 != ret1) {
@@ -162,22 +160,18 @@ static bool test_list_copy(struct torture_context *tctx)
 	const char *list[] = { "foo", "bar", NULL };
 	const char *empty_list[] = { NULL };
 	const char **null_list = NULL;
-	char **l;
 
-	l = str_list_copy(tctx, list);
-	result = discard_const_p(const char *, l);
+	result = (const char **)str_list_copy(tctx, list);
 	torture_assert_int_equal(tctx, str_list_length(result), 2, "list length");
 	torture_assert_str_equal(tctx, result[0], "foo", "element 0");
 	torture_assert_str_equal(tctx, result[1], "bar", "element 1");
 	torture_assert_str_equal(tctx, result[2], NULL, "element 2");
 
-	l = str_list_copy(tctx, empty_list);
-	result = discard_const_p(const char *, l);
+	result = (const char **)str_list_copy(tctx, empty_list);
 	torture_assert_int_equal(tctx, str_list_length(result), 0, "list length");
 	torture_assert_str_equal(tctx, result[0], NULL, "element 0");
 
-	l = str_list_copy(tctx, null_list);
-	result = discard_const_p(const char *, l);
+	result = (const char **)str_list_copy(tctx, null_list);
 	torture_assert(tctx, result == NULL, "result NULL");
 	
 	return true;
@@ -267,12 +261,9 @@ static bool test_list_add(struct torture_context *tctx)
 		"element_3",
 		NULL
 	};
-	char **l;
-
-	l = str_list_make(tctx, "element_0, element_1, element_2", NULL);
-	result = discard_const_p(const char *, l);
+	result = (const char **) str_list_make(tctx, "element_0, element_1, element_2", NULL);
 	torture_assert(tctx, result, "str_list_make() must not return NULL");
-	result2 = str_list_add(result, "element_3");
+	result2 = str_list_add((const char **) result, "element_3");
 	torture_assert(tctx, result2, "str_list_add() must not return NULL");
 	torture_assert(tctx, str_list_equal(result2, list), 
 		       "str_list_add() failed");
@@ -290,10 +281,7 @@ static bool test_list_add_const(struct torture_context *tctx)
 		"element_3",
 		NULL
 	};
-	char **l;
-
-	l = str_list_make(tctx, "element_0, element_1, element_2", NULL);
-	result = discard_const_p(const char *, l);
+	result = (const char **) str_list_make(tctx, "element_0, element_1, element_2", NULL);
 	torture_assert(tctx, result, "str_list_make() must not return NULL");
 	result2 = str_list_add_const(result, "element_3");
 	torture_assert(tctx, result2, "str_list_add_const() must not return NULL");
@@ -312,10 +300,7 @@ static bool test_list_remove(struct torture_context *tctx)
 		"element_3",
 		NULL
 	};
-	char **l;
-
-	l = str_list_make(tctx, "element_0, element_1, element_2, element_3", NULL);
-	result = discard_const_p(const char *, l);
+	result = (const char **) str_list_make(tctx, "element_0, element_1, element_2, element_3", NULL);
 	torture_assert(tctx, result, "str_list_make() must not return NULL");
 	str_list_remove(result, "element_2");
 	torture_assert(tctx, str_list_equal(result, list), 
@@ -372,10 +357,7 @@ static bool test_list_unique(struct torture_context *tctx)
 		"element_2",
 		NULL
 	};
-	char **l;
-
-	l = str_list_copy(tctx, list_dup);
-	result = discard_const_p(const char *, l);
+	result = (const char **) str_list_copy(tctx, list_dup);
 	/* We must copy the list, as str_list_unique does a talloc_realloc() on it's parameter */
 	result = str_list_unique(result);
 	torture_assert(tctx, result, "str_list_unique() must not return NULL");
@@ -391,11 +373,8 @@ static bool test_list_unique_2(struct torture_context *tctx)
 	int i;
 	int count, num_dups;
 	const char **result;
-	char **l1 = str_list_make_empty(tctx);
-	char **l2 = str_list_make_empty(tctx);
-	const char **list = discard_const_p(const char *, l1);
-	const char **list_dup = discard_const_p(const char *, l2);
-	char **l;
+	const char **list = (const char **)str_list_make_empty(tctx);
+	const char **list_dup = (const char **)str_list_make_empty(tctx);
 
 	count = lpcfg_parm_int(tctx->lp_ctx, NULL, "list_unique", "count", 9);
 	num_dups = lpcfg_parm_int(tctx->lp_ctx, NULL, "list_unique", "dups", 7);
@@ -409,8 +388,7 @@ static bool test_list_unique_2(struct torture_context *tctx)
 		list_dup = str_list_append(list_dup, list);
 	}
 
-	l = str_list_copy(tctx, list_dup);
-	result = discard_const_p(const char *, l);
+	result = (const char **)str_list_copy(tctx, list_dup);
 	/* We must copy the list, as str_list_unique does a talloc_realloc() on it's parameter */
 	result = str_list_unique(result);
 	torture_assert(tctx, result, "str_list_unique() must not return NULL");
@@ -445,9 +423,7 @@ static bool test_list_append(struct torture_context *tctx)
 		"element_5",
 		NULL
 	};
-	char **l;
-	l = str_list_copy(tctx, list);
-	result = discard_const_p(const char *, l);
+	result = (const char **) str_list_copy(tctx, list);
 	torture_assert(tctx, result, "str_list_copy() must not return NULL");
 	result = str_list_append(result, list2);
 	torture_assert(tctx, result, "str_list_append() must not return NULL");
@@ -481,9 +457,7 @@ static bool test_list_append_const(struct torture_context *tctx)
 		"element_5",
 		NULL
 	};
-	char **l;
-	l = str_list_copy(tctx, list);
-	result = discard_const_p(const char *, l);
+	result = (const char **) str_list_copy(tctx, list);
 	torture_assert(tctx, result, "str_list_copy() must not return NULL");
 	result = str_list_append_const(result, list2);
 	torture_assert(tctx, result, "str_list_append_const() must not return NULL");

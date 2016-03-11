@@ -28,7 +28,6 @@
 #include "utils/net.h"
 #include "libsmb/libsmb.h"
 #include "libsmb/clirap.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 /* The following messages were for error checking that is not properly
    reported at the moment.  Which should be reinstated? */
@@ -53,15 +52,15 @@ int net_rap_file_usage(struct net_context *c, int argc, const char **argv)
 /***************************************************************************
   list info on an open file
 ***************************************************************************/
-static void file_fn(const char * pPath, const char * pUser, uint16_t perms,
-		    uint16_t locks, uint32_t id)
+static void file_fn(const char * pPath, const char * pUser, uint16 perms,
+		    uint16 locks, uint32 id)
 {
 	d_printf("%-7.1d %-20.20s 0x%-4.2x %-6.1d %s\n",
 		 id, pUser, perms, locks, pPath);
 }
 
-static void one_file_fn(const char *pPath, const char *pUser, uint16_t perms,
-			uint16_t locks, uint32_t id)
+static void one_file_fn(const char *pPath, const char *pUser, uint16 perms,
+			uint16 locks, uint32 id)
 {
 	d_printf(_("File ID          %d\n"
 		   "User name        %s\n"
@@ -196,14 +195,14 @@ int net_rap_share_usage(struct net_context *c, int argc, const char **argv)
 	return net_share_usage(c, argc, argv);
 }
 
-static void long_share_fn(const char *share_name, uint32_t type,
+static void long_share_fn(const char *share_name, uint32 type,
 			  const char *comment, void *state)
 {
 	d_printf("%-12s %-8.8s %-50s\n",
 		 share_name, net_share_type_str(type), comment);
 }
 
-static void share_fn(const char *share_name, uint32_t type,
+static void share_fn(const char *share_name, uint32 type,
 		     const char *comment, void *state)
 {
 	d_printf("%s\n", share_name);
@@ -348,9 +347,9 @@ int net_rap_session_usage(struct net_context *c, int argc, const char **argv)
 	return -1;
 }
 
-static void list_sessions_func(char *wsname, char *username, uint16_t conns,
-			uint16_t opens, uint16_t users, uint32_t sess_time,
-			uint32_t idle_time, uint32_t user_flags, char *clitype)
+static void list_sessions_func(char *wsname, char *username, uint16 conns,
+			uint16 opens, uint16 users, uint32 sess_time,
+			uint32 idle_time, uint32 user_flags, char *clitype)
 {
 	int hrs = idle_time / 3600;
 	int min = (idle_time / 60) % 60;
@@ -361,9 +360,9 @@ static void list_sessions_func(char *wsname, char *username, uint16_t conns,
 }
 
 static void display_session_func(const char *wsname, const char *username,
-				 uint16_t conns, uint16_t opens, uint16_t users,
-				 uint32_t sess_time, uint32_t idle_time,
-				 uint32_t user_flags, const char *clitype)
+				 uint16 conns, uint16 opens, uint16 users,
+				 uint32 sess_time, uint32 idle_time,
+				 uint32 user_flags, const char *clitype)
 {
 	int ihrs = idle_time / 3600;
 	int imin = (idle_time / 60) % 60;
@@ -382,8 +381,8 @@ static void display_session_func(const char *wsname, const char *username,
 		 shrs, smin, ssec, ihrs, imin, isec);
 }
 
-static void display_conns_func(uint16_t conn_id, uint16_t conn_type, uint16_t opens,
-			       uint16_t users, uint32_t conn_time,
+static void display_conns_func(uint16 conn_id, uint16 conn_type, uint16 opens,
+			       uint16 users, uint32 conn_time,
 			       const char *username, const char *netname)
 {
 	d_printf("%-14.14s %-8.8s %5d\n",
@@ -496,7 +495,7 @@ int net_rap_session(struct net_context *c, int argc, const char **argv)
 /****************************************************************************
 list a server name
 ****************************************************************************/
-static void display_server_func(const char *name, uint32_t m,
+static void display_server_func(const char *name, uint32 m,
 				const char *comment, void * reserved)
 {
 	d_printf("\t%-16.16s     %s\n", name, comment);
@@ -634,10 +633,10 @@ int net_rap_printq_usage(struct net_context *c, int argc, const char **argv)
 	return -1;
 }
 
-static void enum_queue(const char *queuename, uint16_t pri, uint16_t start,
-		       uint16_t until, const char *sep, const char *pproc,
+static void enum_queue(const char *queuename, uint16 pri, uint16 start,
+		       uint16 until, const char *sep, const char *pproc,
 		       const char *dest, const char *qparms,
-		       const char *qcomment, uint16_t status, uint16_t jobcount)
+		       const char *qcomment, uint16 status, uint16 jobcount)
 {
 	d_printf(_("%-17.17s Queue %5d jobs                      "),
 		 queuename, jobcount);
@@ -660,9 +659,9 @@ static void enum_queue(const char *queuename, uint16_t pri, uint16_t start,
 	}
 }
 
-static void enum_jobs(uint16_t jobid, const char *ownername,
+static void enum_jobs(uint16 jobid, const char *ownername,
 		      const char *notifyname, const char *datatype,
-		      const char *jparms, uint16_t pos, uint16_t status,
+		      const char *jparms, uint16 pos, uint16 status,
 		      const char *jstatus, unsigned int submitted, unsigned int jobsize,
 		      const char *comment)
 {
@@ -703,7 +702,7 @@ static int rap_printq_info(struct net_context *c, int argc, const char **argv)
 	if (!NT_STATUS_IS_OK(net_make_ipc_connection(c, 0, &cli)))
                 return -1;
 
-	d_printf(PRINTQ_ENUM_DISPLAY, smbXcli_conn_remote_name(cli->conn)); /* list header */
+	d_printf(PRINTQ_ENUM_DISPLAY, cli->desthost); /* list header */
 	ret = cli_NetPrintQGetInfo(cli, argv[0], enum_queue, enum_jobs);
 	cli_shutdown(cli);
 	return ret;
@@ -764,7 +763,7 @@ int net_rap_printq(struct net_context *c, int argc, const char **argv)
 		if (!NT_STATUS_IS_OK(net_make_ipc_connection(c, 0, &cli)))
 			return -1;
 
-		d_printf(PRINTQ_ENUM_DISPLAY, smbXcli_conn_remote_name(cli->conn)); /* list header */
+		d_printf(PRINTQ_ENUM_DISPLAY, cli->desthost); /* list header */
 		ret = cli_NetPrintQEnum(cli, enum_queue, enum_jobs);
 		cli_shutdown(cli);
 		return ret;
@@ -826,7 +825,7 @@ static int rap_user_add(struct net_context *c, int argc, const char **argv)
 	if (!NT_STATUS_IS_OK(net_make_ipc_connection(c, 0, &cli)))
                 return -1;
 
-	strlcpy((char *)userinfo.user_name, argv[0], sizeof(userinfo.user_name));
+	safe_strcpy((char *)userinfo.user_name, argv[0], sizeof(userinfo.user_name)-1);
 	if (c->opt_flags == 0)
                 c->opt_flags = 0x21;
 
@@ -971,7 +970,7 @@ static int rap_group_add(struct net_context *c, int argc, const char **argv)
                 return -1;
 
 	/* BB check for length 21 or smaller explicitly ? BB */
-	strlcpy((char *)grinfo.group_name, argv[0], sizeof(grinfo.group_name));
+	safe_strcpy((char *)grinfo.group_name, argv[0], sizeof(grinfo.group_name)-1);
 	grinfo.reserved1 = '\0';
 	grinfo.comment = smb_xstrdup(c->opt_comment ? c->opt_comment : "");
 

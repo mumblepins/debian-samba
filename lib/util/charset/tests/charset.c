@@ -21,8 +21,6 @@
 #include "includes.h"
 #include "torture/torture.h"
 
-struct torture_suite *torture_local_charset(TALLOC_CTX *mem_ctx);
-
 static bool test_toupper_m(struct torture_context *tctx)
 {
 	torture_assert_int_equal(tctx, toupper_m('c'), 'C', "c");
@@ -50,18 +48,12 @@ static bool test_codepoint_cmpi(struct torture_context *tctx)
 
 static bool test_strcasecmp_m(struct torture_context *tctx)
 {
-	/* file.{accented e} in iso8859-1 */
-	const char file_iso8859_1[7] = { 0x66, 0x69, 0x6c, 0x65, 0x2d, 0xe9, 0 };
-	/* file.{accented e} in utf8 */
-	const char file_utf8[8] =      { 0x66, 0x69, 0x6c, 0x65, 0x2d, 0xc3, 0xa9, 0 };
 	torture_assert(tctx, strcasecmp_m("foo", "bar") != 0, "different strings");
 	torture_assert(tctx, strcasecmp_m("foo", "foo") == 0, "same case strings");
 	torture_assert(tctx, strcasecmp_m("foo", "Foo") == 0, "different case strings");
 	torture_assert(tctx, strcasecmp_m(NULL, "Foo") != 0, "one NULL");
 	torture_assert(tctx, strcasecmp_m("foo", NULL) != 0, "other NULL");
 	torture_assert(tctx, strcasecmp_m(NULL, NULL) == 0, "both NULL");
-	torture_assert(tctx, strcasecmp_m(file_iso8859_1, file_utf8) != 0,
-		"file.{accented e} should differ");
 	return true;
 }
 
@@ -77,14 +69,14 @@ static bool test_strequal_m(struct torture_context *tctx)
 	return true;
 }
 
-static bool test_strcsequal(struct torture_context *tctx)
+static bool test_strcsequal_m(struct torture_context *tctx)
 {
-	torture_assert(tctx, !strcsequal("foo", "bar"), "different strings");
-	torture_assert(tctx, strcsequal("foo", "foo"), "same case strings");
-	torture_assert(tctx, !strcsequal("foo", "Foo"), "different case strings");
-	torture_assert(tctx, !strcsequal(NULL, "Foo"), "one NULL");
-	torture_assert(tctx, !strcsequal("foo", NULL), "other NULL");
-	torture_assert(tctx, strcsequal(NULL, NULL), "both NULL");
+	torture_assert(tctx, !strcsequal_m("foo", "bar"), "different strings");
+	torture_assert(tctx, strcsequal_m("foo", "foo"), "same case strings");
+	torture_assert(tctx, !strcsequal_m("foo", "Foo"), "different case strings");
+	torture_assert(tctx, !strcsequal_m(NULL, "Foo"), "one NULL");
+	torture_assert(tctx, !strcsequal_m("foo", NULL), "other NULL");
+	torture_assert(tctx, strcsequal_m(NULL, NULL), "both NULL");
 	return true;
 }
 
@@ -108,10 +100,6 @@ static bool test_string_replace_m(struct torture_context *tctx)
 
 static bool test_strncasecmp_m(struct torture_context *tctx)
 {
-	/* file.{accented e} in iso8859-1 */
-	const char file_iso8859_1[7] = { 0x66, 0x69, 0x6c, 0x65, 0x2d, 0xe9, 0 };
-	/* file.{accented e} in utf8 */
-	const char file_utf8[8] =      { 0x66, 0x69, 0x6c, 0x65, 0x2d, 0xc3, 0xa9, 0 };
 	torture_assert(tctx, strncasecmp_m("foo", "bar", 3) != 0, "different strings");
 	torture_assert(tctx, strncasecmp_m("foo", "foo", 3) == 0, "same case strings");
 	torture_assert(tctx, strncasecmp_m("foo", "Foo", 3) == 0, "different case strings");
@@ -121,8 +109,6 @@ static bool test_strncasecmp_m(struct torture_context *tctx)
 	torture_assert(tctx, strncasecmp_m(NULL, "Foo", 3) != 0, "one NULL");
 	torture_assert(tctx, strncasecmp_m("foo", NULL, 3) != 0, "other NULL");
 	torture_assert(tctx, strncasecmp_m(NULL, NULL, 3) == 0, "both NULL");
-	torture_assert(tctx, strncasecmp_m(file_iso8859_1, file_utf8, 6) != 0,
-		"file.{accented e} should differ");
 	return true;
 }
 
@@ -217,7 +203,6 @@ static bool test_strlen_m(struct torture_context *tctx)
 {
 	torture_assert_int_equal(tctx, strlen_m("foo"), 3, "simple len");
 	torture_assert_int_equal(tctx, strlen_m("foo\x83l"), 6, "extended len");
-	torture_assert_int_equal(tctx, strlen_m(""), 0, "empty");
 	torture_assert_int_equal(tctx, strlen_m(NULL), 0, "NULL");
 	return true;
 }
@@ -226,17 +211,7 @@ static bool test_strlen_m_term(struct torture_context *tctx)
 {
 	torture_assert_int_equal(tctx, strlen_m_term("foo"), 4, "simple len");
 	torture_assert_int_equal(tctx, strlen_m_term("foo\x83l"), 7, "extended len");
-	torture_assert_int_equal(tctx, strlen_m_term(""), 1, "empty");
-	torture_assert_int_equal(tctx, strlen_m_term(NULL), 0, "NULL");
-	return true;
-}
-
-static bool test_strlen_m_term_null(struct torture_context *tctx)
-{
-	torture_assert_int_equal(tctx, strlen_m_term_null("foo"), 4, "simple len");
-	torture_assert_int_equal(tctx, strlen_m_term_null("foo\x83l"), 7, "extended len");
-	torture_assert_int_equal(tctx, strlen_m_term_null(""), 0, "empty");
-	torture_assert_int_equal(tctx, strlen_m_term_null(NULL), 0, "NULL");
+	torture_assert_int_equal(tctx, strlen_m(NULL), 0, "NULL");
 	return true;
 }
 
@@ -278,7 +253,7 @@ struct torture_suite *torture_local_charset(TALLOC_CTX *mem_ctx)
 	torture_suite_add_simple_test(suite, "codepoint_cmpi", test_codepoint_cmpi);
 	torture_suite_add_simple_test(suite, "strcasecmp_m", test_strcasecmp_m);
 	torture_suite_add_simple_test(suite, "strequal_m", test_strequal_m);
-	torture_suite_add_simple_test(suite, "strcsequal", test_strcsequal);
+	torture_suite_add_simple_test(suite, "strcsequal_m", test_strcsequal_m);
 	torture_suite_add_simple_test(suite, "string_replace_m", test_string_replace_m);
 	torture_suite_add_simple_test(suite, "strncasecmp_m", test_strncasecmp_m);
 	torture_suite_add_simple_test(suite, "next_token", test_next_token);
@@ -289,7 +264,6 @@ struct torture_suite *torture_local_charset(TALLOC_CTX *mem_ctx)
 	torture_suite_add_simple_test(suite, "next_token_quote_wrong", test_next_token_quote_wrong);
 	torture_suite_add_simple_test(suite, "strlen_m", test_strlen_m);
 	torture_suite_add_simple_test(suite, "strlen_m_term", test_strlen_m_term);
-	torture_suite_add_simple_test(suite, "strlen_m_term_null", test_strlen_m_term_null);
 	torture_suite_add_simple_test(suite, "strhaslower", test_strhaslower);
 	torture_suite_add_simple_test(suite, "strhasupper", test_strhasupper);
 	torture_suite_add_simple_test(suite, "count_chars_m", test_count_chars_m);

@@ -20,7 +20,6 @@
 
 #include "includes.h"
 #include "torture/torture.h"
-#include "torture/local/proto.h"
 #include "lib/tdr/tdr.h"
 
 static bool test_push_uint8(struct torture_context *tctx)

@@ -32,6 +32,146 @@
  **/
 
 /**
+ Safe string copy into a known length string. maxlength does not
+ include the terminating zero.
+**/
+_PUBLIC_ char *safe_strcpy(char *dest,const char *src, size_t maxlength)
+{
+	size_t len;
+
+	if (!dest) {
+		DEBUG(0,("ERROR: NULL dest in safe_strcpy\n"));
+		return NULL;
+	}
+
+#ifdef DEVELOPER
+	/* We intentionally write out at the extremity of the destination
+	 * string.  If the destination is too short (e.g. pstrcpy into mallocd
+	 * or fstring) then this should cause an error under a memory
+	 * checker. */
+	dest[maxlength] = '\0';
+	if (PTR_DIFF(&len, dest) > 0) {  /* check if destination is on the stack, ok if so */
+		log_suspicious_usage("safe_strcpy", src);
+	}
+#endif
+
+	if (!src) {
+		*dest = 0;
+		return dest;
+	}  
+
+	len = strlen(src);
+
+	if (len > maxlength) {
+		DEBUG(0,("ERROR: string overflow by %u (%u - %u) in safe_strcpy [%.50s]\n",
+			 (unsigned int)(len-maxlength), (unsigned)len, (unsigned)maxlength, src));
+		len = maxlength;
+	}
+      
+	memmove(dest, src, len);
+	dest[len] = 0;
+	return dest;
+}  
+
+/**
+ Safe string cat into a string. maxlength does not
+ include the terminating zero.
+**/
+_PUBLIC_ char *safe_strcat(char *dest, const char *src, size_t maxlength)
+{
+	size_t src_len, dest_len;
+
+	if (!dest) {
+		DEBUG(0,("ERROR: NULL dest in safe_strcat\n"));
+		return NULL;
+	}
+
+	if (!src)
+		return dest;
+	
+#ifdef DEVELOPER
+	if (PTR_DIFF(&src_len, dest) > 0) {  /* check if destination is on the stack, ok if so */
+		log_suspicious_usage("safe_strcat", src);
+	}
+#endif
+	src_len = strlen(src);
+	dest_len = strlen(dest);
+
+	if (src_len + dest_len > maxlength) {
+		DEBUG(0,("ERROR: string overflow by %d in safe_strcat [%.50s]\n",
+			 (int)(src_len + dest_len - maxlength), src));
+		if (maxlength > dest_len) {
+			memcpy(&dest[dest_len], src, maxlength - dest_len);
+		}
+		dest[maxlength] = 0;
+		return NULL;
+	}
+	
+	memcpy(&dest[dest_len], src, src_len);
+	dest[dest_len + src_len] = 0;
+	return dest;
+}
+
+/**
+  format a string into length-prefixed dotted domain format, as used in NBT
+  and in some ADS structures
+**/
+_PUBLIC_ const char *str_format_nbt_domain(TALLOC_CTX *mem_ctx, const char *s)
+{
+	char *ret;
+	int i;
+	if (!s || !*s) {
+		return talloc_strdup(mem_ctx, "");
+	}
+	ret = talloc_array(mem_ctx, char, strlen(s)+2);
+	if (!ret) {
+		return ret;
+	}
+	
+	memcpy(ret+1, s, strlen(s)+1);
+	ret[0] = '.';
+
+	for (i=0;ret[i];i++) {
+		if (ret[i] == '.') {
+			char *p = strchr(ret+i+1, '.');
+			if (p) {
+				ret[i] = p-(ret+i+1);
+			} else {
+				ret[i] = strlen(ret+i+1);
+			}
+		}
+	}
+
+	talloc_set_name_const(ret, ret);
+
+	return ret;
+}
+
+/**
+ * Add a string to an array of strings.
+ *
+ * num should be a pointer to an integer that holds the current 
+ * number of elements in strings. It will be updated by this function.
+ */
+_PUBLIC_ bool add_string_to_array(TALLOC_CTX *mem_ctx,
+			 const char *str, const char ***strings, int *num)
+{
+	char *dup_str = talloc_strdup(mem_ctx, str);
+
+	*strings = talloc_realloc(mem_ctx,
+				    *strings,
+				    const char *, ((*num)+1));
+
+	if ((*strings == NULL) || (dup_str == NULL))
+		return false;
+
+	(*strings)[*num] = dup_str;
+	*num += 1;
+
+	return true;
+}
+
+/**
  * Parse a string containing a boolean value.
  *
  * val will be set to the read value.
@@ -59,7 +199,7 @@ _PUBLIC_ bool conv_str_bool(const char * str, bool * val)
 /**
  * Convert a size specification like 16K into an integral number of bytes. 
  **/
-_PUBLIC_ bool conv_str_size_error(const char * str, uint64_t * val)
+_PUBLIC_ bool conv_str_size(const char * str, uint64_t * val)
 {
 	char *		    end = NULL;
 	unsigned long long  lval;
@@ -119,6 +259,36 @@ _PUBLIC_ bool conv_str_u64(const char * str, uint64_t * val)
 }
 
 /**
+Do a case-insensitive, whitespace-ignoring string compare.
+**/
+_PUBLIC_ int strwicmp(const char *psz1, const char *psz2)
+{
+	/* if BOTH strings are NULL, return TRUE, if ONE is NULL return */
+	/* appropriate value. */
+	if (psz1 == psz2)
+		return (0);
+	else if (psz1 == NULL)
+		return (-1);
+	else if (psz2 == NULL)
+		return (1);
+
+	/* sync the strings on first non-whitespace */
+	while (1) {
+		while (isspace((int)*psz1))
+			psz1++;
+		while (isspace((int)*psz2))
+			psz2++;
+		if (toupper((unsigned char)*psz1) != toupper((unsigned char)*psz2) 
+		    || *psz1 == '\0'
+		    || *psz2 == '\0')
+			break;
+		psz1++;
+		psz2++;
+	}
+	return (*psz1 - *psz2);
+}
+
+/**
  * Compare 2 strings.
  *
  * @note The comparison is case-insensitive.
@@ -130,206 +300,25 @@ _PUBLIC_ bool strequal(const char *s1, const char *s2)
 	if (!s1 || !s2)
 		return false;
   
-	return strcasecmp_m(s1,s2) == 0;
+	return strcasecmp(s1,s2) == 0;
+}
+
+_PUBLIC_ size_t ucs2_align(const void *base_ptr, const void *p, int flags)
+{
+	if (flags & (STR_NOALIGN|STR_ASCII))
+		return 0;
+	return PTR_DIFF(p, base_ptr) & 1;
 }
 
 /**
- * @file
- * @brief String utilities.
- **/
-
-static bool next_token_internal_talloc(TALLOC_CTX *ctx,
-				const char **ptr,
-                                char **pp_buff,
-                                const char *sep,
-                                bool ltrim)
+ String replace.
+**/
+_PUBLIC_ void string_replace(char *s, char oldc, char newc)
 {
-	const char *s;
-	const char *saved_s;
-	char *pbuf;
-	bool quoted;
-	size_t len=1;
-
-	*pp_buff = NULL;
-	if (!ptr) {
-		return(false);
-	}
-
-	s = *ptr;
-
-	/* default to simple separators */
-	if (!sep) {
-		sep = " \t\n\r";
-	}
-
-	/* find the first non sep char, if left-trimming is requested */
-	if (ltrim) {
-		while (*s && strchr_m(sep,*s)) {
-			s++;
-		}
-	}
-
-	/* nothing left? */
-	if (!*s) {
-		return false;
-	}
-
-	/* When restarting we need to go from here. */
-	saved_s = s;
-
-	/* Work out the length needed. */
-	for (quoted = false; *s &&
-			(quoted || !strchr_m(sep,*s)); s++) {
-		if (*s == '\"') {
-			quoted = !quoted;
-		} else {
-			len++;
-		}
-	}
-
-	/* We started with len = 1 so we have space for the nul. */
-	*pp_buff = talloc_array(ctx, char, len);
-	if (!*pp_buff) {
-		return false;
-	}
-
-	/* copy over the token */
-	pbuf = *pp_buff;
-	s = saved_s;
-	for (quoted = false; *s &&
-			(quoted || !strchr_m(sep,*s)); s++) {
-		if ( *s == '\"' ) {
-			quoted = !quoted;
-		} else {
-			*pbuf++ = *s;
-		}
-	}
-
-	*ptr = (*s) ? s+1 : s;
-	*pbuf = 0;
-
-	return true;
-}
-
-bool next_token_talloc(TALLOC_CTX *ctx,
-			const char **ptr,
-			char **pp_buff,
-			const char *sep)
-{
-	return next_token_internal_talloc(ctx, ptr, pp_buff, sep, true);
-}
-
-/*
- * Get the next token from a string, return false if none found.  Handles
- * double-quotes.  This version does not trim leading separator characters
- * before looking for a token.
- */
-
-bool next_token_no_ltrim_talloc(TALLOC_CTX *ctx,
-			const char **ptr,
-			char **pp_buff,
-			const char *sep)
-{
-	return next_token_internal_talloc(ctx, ptr, pp_buff, sep, false);
-}
-
-/**
- * Get the next token from a string, return False if none found.
- * Handles double-quotes.
- *
- * Based on a routine by GJC@VILLAGE.COM.
- * Extensively modified by Andrew.Tridgell@anu.edu.au
- **/
-_PUBLIC_ bool next_token(const char **ptr,char *buff, const char *sep, size_t bufsize)
-{
-	const char *s;
-	bool quoted;
-	size_t len=1;
-
-	if (!ptr)
-		return false;
-
-	s = *ptr;
-
-	/* default to simple separators */
-	if (!sep)
-		sep = " \t\n\r";
-
-	/* find the first non sep char */
-	while (*s && strchr_m(sep,*s))
+	while (*s) {
+		if (*s == oldc) *s = newc;
 		s++;
-
-	/* nothing left? */
-	if (!*s)
-		return false;
-
-	/* copy over the token */
-	for (quoted = false; len < bufsize && *s && (quoted || !strchr_m(sep,*s)); s++) {
-		if (*s == '\"') {
-			quoted = !quoted;
-		} else {
-			len++;
-			*buff++ = *s;
-		}
 	}
-
-	*ptr = (*s) ? s+1 : s;
-	*buff = 0;
-
-	return true;
 }
 
-/**
- Set a boolean variable from the text value stored in the passed string.
- Returns true in success, false if the passed string does not correctly
- represent a boolean.
-**/
 
-_PUBLIC_ bool set_boolean(const char *boolean_string, bool *boolean)
-{
-	if (strwicmp(boolean_string, "yes") == 0 ||
-	    strwicmp(boolean_string, "true") == 0 ||
-	    strwicmp(boolean_string, "on") == 0 ||
-	    strwicmp(boolean_string, "1") == 0) {
-		*boolean = true;
-		return true;
-	} else if (strwicmp(boolean_string, "no") == 0 ||
-		   strwicmp(boolean_string, "false") == 0 ||
-		   strwicmp(boolean_string, "off") == 0 ||
-		   strwicmp(boolean_string, "0") == 0) {
-		*boolean = false;
-		return true;
-	}
-	return false;
-}
-
-/**
-return the number of bytes occupied by a buffer in CH_UTF16 format
-the result includes the null termination
-**/
-_PUBLIC_ size_t utf16_len(const void *buf)
-{
-	size_t len;
-
-	for (len = 0; SVAL(buf,len); len += 2) ;
-
-	return len + 2;
-}
-
-/**
-return the number of bytes occupied by a buffer in CH_UTF16 format
-the result includes the null termination
-limited by 'n' bytes
-**/
-_PUBLIC_ size_t utf16_len_n(const void *src, size_t n)
-{
-	size_t len;
-
-	for (len = 0; (len+2 < n) && SVAL(src, len); len += 2) ;
-
-	if (len+2 <= n) {
-		len += 2;
-	}
-
-	return len;
-}

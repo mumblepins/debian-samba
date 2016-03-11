@@ -8,7 +8,6 @@
 #define STR_CONFORMANT  LIBNDR_FLAG_STR_CONFORMANT
 #define STR_CHARLEN	LIBNDR_FLAG_STR_CHARLEN
 #define STR_UTF8	LIBNDR_FLAG_STR_UTF8
-#define STR_RAW8	LIBNDR_FLAG_STR_RAW8
 
 /*
   a null terminated UCS2 string
@@ -24,11 +23,6 @@
   a null terminated UTF8 string
 */
 #define utf8string	[flag(STR_UTF8|STR_NULLTERM)] string
-
-/*
-  a null terminated "raw" string (null terminated byte sequence)
-*/
-#define raw8string	[flag(STR_RAW8|STR_NULLTERM)] string
 
 /*
   a null terminated UCS2 string
@@ -53,5 +47,3 @@
 
 #define NDR_RELATIVE_REVERSE LIBNDR_FLAG_RELATIVE_REVERSE
 #define NDR_NO_RELATIVE_REVERSE LIBNDR_FLAG_NO_RELATIVE_REVERSE
-
-#define NDR_SUBCONTEXT_NO_UNREAD_BYTES LIBNDR_FLAG_SUBCONTEXT_NO_UNREAD_BYTES

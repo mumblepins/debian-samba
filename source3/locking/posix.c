@@ -24,8 +24,7 @@
 #include "includes.h"
 #include "system/filesys.h"
 #include "locking/proto.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_rbt.h"
+#include "dbwrap.h"
 #include "util_tdb.h"
 
 #undef DBGC_CLASS
@@ -83,38 +82,51 @@ static const char *posix_lock_type_name(int lock_type)
  False if not.
 ****************************************************************************/
 
-static bool posix_lock_in_range(off_t *offset_out, off_t *count_out,
+static bool posix_lock_in_range(SMB_OFF_T *offset_out, SMB_OFF_T *count_out,
 				uint64_t u_offset, uint64_t u_count)
 {
-	off_t offset = (off_t)u_offset;
-	off_t count = (off_t)u_count;
+	SMB_OFF_T offset = (SMB_OFF_T)u_offset;
+	SMB_OFF_T count = (SMB_OFF_T)u_count;
 
 	/*
 	 * For the type of system we are, attempt to
-	 * find the maximum positive lock offset as an off_t.
+	 * find the maximum positive lock offset as an SMB_OFF_T.
 	 */
 
 #if defined(MAX_POSITIVE_LOCK_OFFSET) /* Some systems have arbitrary limits. */
 
-	off_t max_positive_lock_offset = (MAX_POSITIVE_LOCK_OFFSET);
-#else
+	SMB_OFF_T max_positive_lock_offset = (MAX_POSITIVE_LOCK_OFFSET);
+
+#elif defined(LARGE_SMB_OFF_T) && !defined(HAVE_BROKEN_FCNTL64_LOCKS)
+
 	/*
-	 * In this case off_t is 64 bits,
+	 * In this case SMB_OFF_T is 64 bits,
 	 * and the underlying system can handle 64 bit signed locks.
 	 */
 
-	off_t mask2 = ((off_t)0x4) << (SMB_OFF_T_BITS-4);
-	off_t mask = (mask2<<1);
-	off_t max_positive_lock_offset = ~mask;
+	SMB_OFF_T mask2 = ((SMB_OFF_T)0x4) << (SMB_OFF_T_BITS-4);
+	SMB_OFF_T mask = (mask2<<1);
+	SMB_OFF_T max_positive_lock_offset = ~mask;
 
-#endif
+#else /* !LARGE_SMB_OFF_T || HAVE_BROKEN_FCNTL64_LOCKS */
+
+	/*
+	 * In this case either SMB_OFF_T is 32 bits,
+	 * or the underlying system cannot handle 64 bit signed locks.
+	 * All offsets & counts must be 2^31 or less.
+	 */
+
+	SMB_OFF_T max_positive_lock_offset = 0x7FFFFFFF;
+
+#endif /* !LARGE_SMB_OFF_T || HAVE_BROKEN_FCNTL64_LOCKS */
+
 	/*
 	 * POSIX locks of length zero mean lock to end-of-file.
 	 * Win32 locks of length zero are point probes. Ignore
 	 * any Win32 locks of length zero. JRA.
 	 */
 
-	if (count == 0) {
+	if (count == (SMB_OFF_T)0) {
 		DEBUG(10,("posix_lock_in_range: count = 0, ignoring.\n"));
 		return False;
 	}
@@ -125,10 +137,8 @@ static bool posix_lock_in_range(off_t *offset_out, off_t *count_out,
 	 */
 
 	if (u_offset & ~((uint64_t)max_positive_lock_offset)) {
-		DEBUG(10, ("posix_lock_in_range: (offset = %ju) offset > %ju "
-			   "and we cannot handle this. Ignoring lock.\n",
-			   (uintmax_t)u_offset,
-			   (uintmax_t)max_positive_lock_offset));
+		DEBUG(10,("posix_lock_in_range: (offset = %.0f) offset > %.0f and we cannot handle this. Ignoring lock.\n",
+				(double)u_offset, (double)((uint64_t)max_positive_lock_offset) ));
 		return False;
 	}
 
@@ -153,10 +163,8 @@ static bool posix_lock_in_range(off_t *offset_out, off_t *count_out,
 	 */
 
 	if (count == 0) {
-		DEBUG(10, ("posix_lock_in_range: Count = 0. Ignoring lock "
-			   "u_offset = %ju, u_count = %ju\n",
-			   (uintmax_t)u_offset,
-			   (uintmax_t)u_count));
+		DEBUG(10,("posix_lock_in_range: Count = 0. Ignoring lock u_offset = %.0f, u_count = %.0f\n",
+				(double)u_offset, (double)u_count ));
 		return False;
 	}
 
@@ -164,9 +172,8 @@ static bool posix_lock_in_range(off_t *offset_out, off_t *count_out,
 	 * The mapping was successful.
 	 */
 
-	DEBUG(10, ("posix_lock_in_range: offset_out = %ju, "
-		   "count_out = %ju\n",
-		   (uintmax_t)offset, (uintmax_t)count));
+	DEBUG(10,("posix_lock_in_range: offset_out = %.0f, count_out = %.0f\n",
+			(double)offset, (double)count ));
 
 	*offset_out = offset;
 	*count_out = count;
@@ -175,11 +182,11 @@ static bool posix_lock_in_range(off_t *offset_out, off_t *count_out,
 }
 
 bool smb_vfs_call_lock(struct vfs_handle_struct *handle,
-		       struct files_struct *fsp, int op, off_t offset,
-		       off_t count, int type)
+		       struct files_struct *fsp, int op, SMB_OFF_T offset,
+		       SMB_OFF_T count, int type)
 {
 	VFS_FIND(lock);
-	return handle->fns->lock_fn(handle, fsp, op, offset, count, type);
+	return handle->fns->lock(handle, fsp, op, offset, count, type);
 }
 
 /****************************************************************************
@@ -187,35 +194,32 @@ bool smb_vfs_call_lock(struct vfs_handle_struct *handle,
  broken NFS implementations.
 ****************************************************************************/
 
-static bool posix_fcntl_lock(files_struct *fsp, int op, off_t offset, off_t count, int type)
+static bool posix_fcntl_lock(files_struct *fsp, int op, SMB_OFF_T offset, SMB_OFF_T count, int type)
 {
 	bool ret;
 
-	DEBUG(8,("posix_fcntl_lock %d %d %jd %jd %d\n",
-		 fsp->fh->fd,op,(intmax_t)offset,(intmax_t)count,type));
+	DEBUG(8,("posix_fcntl_lock %d %d %.0f %.0f %d\n",fsp->fh->fd,op,(double)offset,(double)count,type));
 
 	ret = SMB_VFS_LOCK(fsp, op, offset, count, type);
 
 	if (!ret && ((errno == EFBIG) || (errno == ENOLCK) || (errno ==  EINVAL))) {
 
-		DEBUG(0, ("posix_fcntl_lock: WARNING: lock request at offset "
-			  "%ju, length %ju returned\n",
-			  (uintmax_t)offset, (uintmax_t)count));
-		DEBUGADD(0, ("an %s error. This can happen when using 64 bit "
-			     "lock offsets\n", strerror(errno)));
-		DEBUGADD(0, ("on 32 bit NFS mounted file systems.\n"));
+		DEBUG(0,("posix_fcntl_lock: WARNING: lock request at offset %.0f, length %.0f returned\n",
+					(double)offset,(double)count));
+		DEBUGADD(0,("an %s error. This can happen when using 64 bit lock offsets\n", strerror(errno)));
+		DEBUGADD(0,("on 32 bit NFS mounted file systems.\n"));
 
 		/*
 		 * If the offset is > 0x7FFFFFFF then this will cause problems on
 		 * 32 bit NFS mounted filesystems. Just ignore it.
 		 */
 
-		if (offset & ~((off_t)0x7fffffff)) {
+		if (offset & ~((SMB_OFF_T)0x7fffffff)) {
 			DEBUG(0,("Offset greater than 31 bits. Returning success.\n"));
 			return True;
 		}
 
-		if (count & ~((off_t)0x7fffffff)) {
+		if (count & ~((SMB_OFF_T)0x7fffffff)) {
 			/* 32 bit NFS file system, retry with smaller offset */
 			DEBUG(0,("Count greater than 31 bits - retrying with 31 bit truncated length.\n"));
 			errno = 0;
@@ -229,12 +233,11 @@ static bool posix_fcntl_lock(files_struct *fsp, int op, off_t offset, off_t coun
 }
 
 bool smb_vfs_call_getlock(struct vfs_handle_struct *handle,
-			  struct files_struct *fsp, off_t *poffset,
-			  off_t *pcount, int *ptype, pid_t *ppid)
+			  struct files_struct *fsp, SMB_OFF_T *poffset,
+			  SMB_OFF_T *pcount, int *ptype, pid_t *ppid)
 {
 	VFS_FIND(getlock);
-	return handle->fns->getlock_fn(handle, fsp, poffset, pcount, ptype, 
-				       ppid);
+	return handle->fns->getlock(handle, fsp, poffset, pcount, ptype, ppid);
 }
 
 /****************************************************************************
@@ -242,37 +245,34 @@ bool smb_vfs_call_getlock(struct vfs_handle_struct *handle,
  broken NFS implementations.
 ****************************************************************************/
 
-static bool posix_fcntl_getlock(files_struct *fsp, off_t *poffset, off_t *pcount, int *ptype)
+static bool posix_fcntl_getlock(files_struct *fsp, SMB_OFF_T *poffset, SMB_OFF_T *pcount, int *ptype)
 {
 	pid_t pid;
 	bool ret;
 
-	DEBUG(8, ("posix_fcntl_getlock %d %ju %ju %d\n",
-		  fsp->fh->fd, (uintmax_t)*poffset, (uintmax_t)*pcount,
-		  *ptype));
+	DEBUG(8,("posix_fcntl_getlock %d %.0f %.0f %d\n",
+		fsp->fh->fd,(double)*poffset,(double)*pcount,*ptype));
 
 	ret = SMB_VFS_GETLOCK(fsp, poffset, pcount, ptype, &pid);
 
 	if (!ret && ((errno == EFBIG) || (errno == ENOLCK) || (errno ==  EINVAL))) {
 
-		DEBUG(0, ("posix_fcntl_getlock: WARNING: lock request at "
-			  "offset %ju, length %ju returned\n",
-			  (uintmax_t)*poffset, (uintmax_t)*pcount));
-		DEBUGADD(0, ("an %s error. This can happen when using 64 bit "
-			     "lock offsets\n", strerror(errno)));
-		DEBUGADD(0, ("on 32 bit NFS mounted file systems.\n"));
+		DEBUG(0,("posix_fcntl_getlock: WARNING: lock request at offset %.0f, length %.0f returned\n",
+					(double)*poffset,(double)*pcount));
+		DEBUGADD(0,("an %s error. This can happen when using 64 bit lock offsets\n", strerror(errno)));
+		DEBUGADD(0,("on 32 bit NFS mounted file systems.\n"));
 
 		/*
 		 * If the offset is > 0x7FFFFFFF then this will cause problems on
 		 * 32 bit NFS mounted filesystems. Just ignore it.
 		 */
 
-		if (*poffset & ~((off_t)0x7fffffff)) {
+		if (*poffset & ~((SMB_OFF_T)0x7fffffff)) {
 			DEBUG(0,("Offset greater than 31 bits. Returning success.\n"));
 			return True;
 		}
 
-		if (*pcount & ~((off_t)0x7fffffff)) {
+		if (*pcount & ~((SMB_OFF_T)0x7fffffff)) {
 			/* 32 bit NFS file system, retry with smaller offset */
 			DEBUG(0,("Count greater than 31 bits - retrying with 31 bit truncated length.\n"));
 			errno = 0;
@@ -296,13 +296,13 @@ bool is_posix_locked(files_struct *fsp,
 			enum brl_type *plock_type,
 			enum brl_flavour lock_flav)
 {
-	off_t offset;
-	off_t count;
+	SMB_OFF_T offset;
+	SMB_OFF_T count;
 	int posix_lock_type = map_posix_lock_type(fsp,*plock_type);
 
-	DEBUG(10, ("is_posix_locked: File %s, offset = %ju, count = %ju, "
-		   "type = %s\n", fsp_str_dbg(fsp), (uintmax_t)*pu_offset,
-		   (uintmax_t)*pu_count,  posix_lock_type_name(*plock_type)));
+	DEBUG(10,("is_posix_locked: File %s, offset = %.0f, count = %.0f, "
+		  "type = %s\n", fsp_str_dbg(fsp), (double)*pu_offset,
+		  (double)*pu_count,  posix_lock_type_name(*plock_type)));
 
 	/*
 	 * If the requested lock won't fit in the POSIX range, we will
@@ -361,7 +361,7 @@ static TDB_DATA locking_ref_count_key_fsp(files_struct *fsp,
 
 static TDB_DATA fd_array_key_fsp(files_struct *fsp)
 {
-	return make_tdb_data((uint8_t *)&fsp->file_id, sizeof(fsp->file_id));
+	return make_tdb_data((uint8 *)&fsp->file_id, sizeof(fsp->file_id));
 }
 
 /*******************************************************************
@@ -403,10 +403,12 @@ bool posix_locking_end(void)
 ****************************************************************************/
 
 /****************************************************************************
- The records in posix_pending_close_db are composed of an array of
- ints keyed by dev/ino pair. Those ints are the fd's that were open on
- this dev/ino pair that should have been closed, but can't as the lock
- ref count is non zero.
+ The records in posix_pending_close_tdb are composed of an array of ints
+ keyed by dev/ino pair.
+ The first int is a reference count of the number of outstanding locks on
+ all open fd's on this dev/ino pair. Any subsequent ints are the fd's that
+ were open on this dev/ino pair that should have been closed, but can't as
+ the lock ref count is non zero.
 ****************************************************************************/
 
 /****************************************************************************
@@ -417,61 +419,102 @@ bool posix_locking_end(void)
 static void increment_windows_lock_ref_count(files_struct *fsp)
 {
 	struct lock_ref_count_key tmp;
-	int32_t lock_ref_count = 0;
+	struct db_record *rec;
+	int lock_ref_count = 0;
 	NTSTATUS status;
 
-	status = dbwrap_change_int32_atomic(
-		posix_pending_close_db, locking_ref_count_key_fsp(fsp, &tmp),
-		&lock_ref_count, 1);
+	rec = posix_pending_close_db->fetch_locked(
+		posix_pending_close_db, talloc_tos(),
+		locking_ref_count_key_fsp(fsp, &tmp));
+
+	SMB_ASSERT(rec != NULL);
+
+	if (rec->value.dptr != NULL) {
+		SMB_ASSERT(rec->value.dsize == sizeof(lock_ref_count));
+		memcpy(&lock_ref_count, rec->value.dptr,
+		       sizeof(lock_ref_count));
+	}
+
+	lock_ref_count++;
+
+	status = rec->store(rec, make_tdb_data((uint8 *)&lock_ref_count,
+					       sizeof(lock_ref_count)), 0);
 
 	SMB_ASSERT(NT_STATUS_IS_OK(status));
-	SMB_ASSERT(lock_ref_count < INT32_MAX);
+
+	TALLOC_FREE(rec);
 
 	DEBUG(10,("increment_windows_lock_ref_count for file now %s = %d\n",
-		  fsp_str_dbg(fsp), (int)lock_ref_count));
+		  fsp_str_dbg(fsp), lock_ref_count));
 }
 
 /****************************************************************************
  Bulk delete - subtract as many locks as we've just deleted.
 ****************************************************************************/
 
-static void decrement_windows_lock_ref_count(files_struct *fsp)
+void reduce_windows_lock_ref_count(files_struct *fsp, unsigned int dcount)
 {
 	struct lock_ref_count_key tmp;
-	int32_t lock_ref_count = 0;
+	struct db_record *rec;
+	int lock_ref_count = 0;
 	NTSTATUS status;
 
-	status = dbwrap_change_int32_atomic(
-		posix_pending_close_db, locking_ref_count_key_fsp(fsp, &tmp),
-		&lock_ref_count, -1);
+	rec = posix_pending_close_db->fetch_locked(
+		posix_pending_close_db, talloc_tos(),
+		locking_ref_count_key_fsp(fsp, &tmp));
+
+	SMB_ASSERT((rec != NULL)
+		   && (rec->value.dptr != NULL)
+		   && (rec->value.dsize == sizeof(lock_ref_count)));
+
+	memcpy(&lock_ref_count, rec->value.dptr, sizeof(lock_ref_count));
+
+	SMB_ASSERT(lock_ref_count > 0);
+
+	lock_ref_count -= dcount;
+
+	status = rec->store(rec, make_tdb_data((uint8 *)&lock_ref_count,
+					       sizeof(lock_ref_count)), 0);
 
 	SMB_ASSERT(NT_STATUS_IS_OK(status));
-	SMB_ASSERT(lock_ref_count >= 0);
+
+	TALLOC_FREE(rec);
 
 	DEBUG(10,("reduce_windows_lock_ref_count for file now %s = %d\n",
-		  fsp_str_dbg(fsp), (int)lock_ref_count));
+		  fsp_str_dbg(fsp), lock_ref_count));
+}
+
+static void decrement_windows_lock_ref_count(files_struct *fsp)
+{
+	reduce_windows_lock_ref_count(fsp, 1);
 }
 
 /****************************************************************************
  Fetch the lock ref count.
 ****************************************************************************/
 
-static int32_t get_windows_lock_ref_count(files_struct *fsp)
+static int get_windows_lock_ref_count(files_struct *fsp)
 {
 	struct lock_ref_count_key tmp;
-	NTSTATUS status;
-	int32_t lock_ref_count = 0;
+	TDB_DATA dbuf;
+	int res;
+	int lock_ref_count = 0;
 
-	status = dbwrap_fetch_int32(
-		posix_pending_close_db, locking_ref_count_key_fsp(fsp, &tmp),
-		&lock_ref_count);
+	res = posix_pending_close_db->fetch(
+		posix_pending_close_db, talloc_tos(),
+		locking_ref_count_key_fsp(fsp, &tmp), &dbuf);
 
-	if (!NT_STATUS_IS_OK(status) &&
-	    !NT_STATUS_EQUAL(status, NT_STATUS_NOT_FOUND)) {
-		DEBUG(0, ("get_windows_lock_ref_count: Error fetching "
-			  "lock ref count for file %s: %s\n",
-			  fsp_str_dbg(fsp), nt_errstr(status)));
+	SMB_ASSERT(res == 0);
+
+	if (dbuf.dsize != 0) {
+		SMB_ASSERT(dbuf.dsize == sizeof(lock_ref_count));
+		memcpy(&lock_ref_count, dbuf.dptr, sizeof(lock_ref_count));
+		TALLOC_FREE(dbuf.dptr);
 	}
+
+	DEBUG(10,("get_windows_lock_count for file %s = %d\n",
+		  fsp_str_dbg(fsp), lock_ref_count));
+
 	return lock_ref_count;
 }
 
@@ -482,11 +525,18 @@ static int32_t get_windows_lock_ref_count(files_struct *fsp)
 static void delete_windows_lock_ref_count(files_struct *fsp)
 {
 	struct lock_ref_count_key tmp;
+	struct db_record *rec;
+
+	rec = posix_pending_close_db->fetch_locked(
+		posix_pending_close_db, talloc_tos(),
+		locking_ref_count_key_fsp(fsp, &tmp));
+
+	SMB_ASSERT(rec != NULL);
 
 	/* Not a bug if it doesn't exist - no locks were ever granted. */
 
-	dbwrap_delete(posix_pending_close_db,
-		      locking_ref_count_key_fsp(fsp, &tmp));
+	rec->delete_rec(rec);
+	TALLOC_FREE(rec);
 
 	DEBUG(10,("delete_windows_lock_ref_count for file %s\n",
 		  fsp_str_dbg(fsp)));
@@ -499,30 +549,27 @@ static void delete_windows_lock_ref_count(files_struct *fsp)
 static void add_fd_to_close_entry(files_struct *fsp)
 {
 	struct db_record *rec;
-	int *fds;
-	size_t num_fds;
+	uint8_t *new_data;
 	NTSTATUS status;
-	TDB_DATA value;
 
-	rec = dbwrap_fetch_locked(
+	rec = posix_pending_close_db->fetch_locked(
 		posix_pending_close_db, talloc_tos(),
 		fd_array_key_fsp(fsp));
 
 	SMB_ASSERT(rec != NULL);
 
-	value = dbwrap_record_get_value(rec);
-	SMB_ASSERT((value.dsize % sizeof(int)) == 0);
+	new_data = TALLOC_ARRAY(
+		rec, uint8_t, rec->value.dsize + sizeof(fsp->fh->fd));
 
-	num_fds = value.dsize / sizeof(int);
-	fds = talloc_array(rec, int, num_fds+1);
+	SMB_ASSERT(new_data != NULL);
 
-	SMB_ASSERT(fds != NULL);
+	memcpy(new_data, rec->value.dptr, rec->value.dsize);
+	memcpy(new_data + rec->value.dsize,
+	       &fsp->fh->fd, sizeof(fsp->fh->fd));
 
-	memcpy(fds, value.dptr, value.dsize);
-	fds[num_fds] = fsp->fh->fd;
-
-	status = dbwrap_record_store(
-		rec, make_tdb_data((uint8_t *)fds, talloc_get_size(fds)), 0);
+	status = rec->store(
+		rec, make_tdb_data(new_data,
+				   rec->value.dsize + sizeof(fsp->fh->fd)), 0);
 
 	SMB_ASSERT(NT_STATUS_IS_OK(status));
 
@@ -540,12 +587,12 @@ static void delete_close_entries(files_struct *fsp)
 {
 	struct db_record *rec;
 
-	rec = dbwrap_fetch_locked(
+	rec = posix_pending_close_db->fetch_locked(
 		posix_pending_close_db, talloc_tos(),
 		fd_array_key_fsp(fsp));
 
 	SMB_ASSERT(rec != NULL);
-	dbwrap_record_delete(rec);
+	rec->delete_rec(rec);
 	TALLOC_FREE(rec);
 }
 
@@ -558,18 +605,13 @@ static size_t get_posix_pending_close_entries(TALLOC_CTX *mem_ctx,
 					      files_struct *fsp, int **entries)
 {
 	TDB_DATA dbuf;
-	NTSTATUS status;
+	int res;
 
-	status = dbwrap_fetch(
+	res = posix_pending_close_db->fetch(
 		posix_pending_close_db, mem_ctx, fd_array_key_fsp(fsp),
 		&dbuf);
 
-	if (NT_STATUS_EQUAL(status, NT_STATUS_NOT_FOUND)) {
-		*entries = NULL;
-		return 0;
-	}
-
-	SMB_ASSERT(NT_STATUS_IS_OK(status));
+	SMB_ASSERT(res == 0);
 
 	if (dbuf.dsize == 0) {
 		*entries = NULL;
@@ -673,8 +715,8 @@ int fd_close_posix(struct files_struct *fsp)
 struct lock_list {
 	struct lock_list *next;
 	struct lock_list *prev;
-	off_t start;
-	off_t size;
+	SMB_OFF_T start;
+	SMB_OFF_T size;
 };
 
 /****************************************************************************
@@ -686,6 +728,7 @@ struct lock_list {
 static struct lock_list *posix_lock_list(TALLOC_CTX *ctx,
 						struct lock_list *lhead,
 						const struct lock_context *lock_ctx, /* Lock context lhead belongs to. */
+						files_struct *fsp,
 						const struct lock_struct *plocks,
 						int num_locks)
 {
@@ -696,8 +739,8 @@ static struct lock_list *posix_lock_list(TALLOC_CTX *ctx,
 	 * Quit if the list is deleted.
 	 */
 
-	DEBUG(10, ("posix_lock_list: curr: start=%ju,size=%ju\n",
-		   (uintmax_t)lhead->start, (uintmax_t)lhead->size ));
+	DEBUG(10,("posix_lock_list: curr: start=%.0f,size=%.0f\n",
+		(double)lhead->start, (double)lhead->size ));
 
 	for (i=0; i<num_locks && lhead; i++) {
 		const struct lock_struct *lock = &plocks[i];
@@ -709,7 +752,7 @@ static struct lock_list *posix_lock_list(TALLOC_CTX *ctx,
 		}
 
 		/* Ignore locks not owned by this process. */
-		if (!serverid_equal(&lock->context.pid, &lock_ctx->pid)) {
+		if (!procid_equal(&lock->context.pid, &lock_ctx->pid)) {
 			continue;
 		}
 
@@ -721,12 +764,8 @@ static struct lock_list *posix_lock_list(TALLOC_CTX *ctx,
 
 		for (l_curr = lhead; l_curr;) {
 
-			DEBUG(10, ("posix_lock_list: lock: fnum=%ju: "
-				   "start=%ju,size=%ju:type=%s",
-				   (uintmax_t)lock->fnum,
-				   (uintmax_t)lock->start,
-				   (uintmax_t)lock->size,
-				   posix_lock_type_name(lock->lock_type) ));
+			DEBUG(10,("posix_lock_list: lock: fnum=%d: start=%.0f,size=%.0f:type=%s", lock->fnum,
+				(double)lock->start, (double)lock->size, posix_lock_type_name(lock->lock_type) ));
 
 			if ( (l_curr->start >= (lock->start + lock->size)) ||
 				 (lock->start >= (l_curr->start + l_curr->size))) {
@@ -800,10 +839,8 @@ BECOMES....
 				l_curr->size = (l_curr->start + l_curr->size) - (lock->start + lock->size);
 				l_curr->start = lock->start + lock->size;
 
-				DEBUG(10, (" truncate high case: start=%ju,"
-					   "size=%ju\n",
-					   (uintmax_t)l_curr->start,
-					   (uintmax_t)l_curr->size ));
+				DEBUG(10,(" truncate high case: start=%.0f,size=%.0f\n",
+								(double)l_curr->start, (double)l_curr->size ));
 
 				l_curr = l_curr->next;
 
@@ -830,10 +867,8 @@ BECOMES....
 
 				l_curr->size = lock->start - l_curr->start;
 
-				DEBUG(10, (" truncate low case: start=%ju,"
-					   "size=%ju\n",
-					   (uintmax_t)l_curr->start,
-					   (uintmax_t)l_curr->size ));
+				DEBUG(10,(" truncate low case: start=%.0f,size=%.0f\n",
+								(double)l_curr->start, (double)l_curr->size ));
 
 				l_curr = l_curr->next;
 		
@@ -857,7 +892,7 @@ BECOMES.....
         | l_curr|         | l_new   |
         +-------+         +---------+
 **********************************************/
-				struct lock_list *l_new = talloc(ctx, struct lock_list);
+				struct lock_list *l_new = TALLOC_P(ctx, struct lock_list);
 
 				if(l_new == NULL) {
 					DEBUG(0,("posix_lock_list: talloc fail.\n"));
@@ -871,13 +906,9 @@ BECOMES.....
 				/* Truncate the l_curr. */
 				l_curr->size = lock->start - l_curr->start;
 
-				DEBUG(10, (" split case: curr: start=%ju,"
-					   "size=%ju new: start=%ju,"
-					   "size=%ju\n",
-					   (uintmax_t)l_curr->start,
-					   (uintmax_t)l_curr->size,
-					   (uintmax_t)l_new->start,
-					   (uintmax_t)l_new->size ));
+				DEBUG(10,(" split case: curr: start=%.0f,size=%.0f \
+new: start=%.0f,size=%.0f\n", (double)l_curr->start, (double)l_curr->size,
+								(double)l_new->start, (double)l_new->size ));
 
 				/*
 				 * Add into the dlink list after the l_curr point - NOT at lhead. 
@@ -895,14 +926,8 @@ BECOMES.....
 				 */
 				char *msg = NULL;
 
-				if (asprintf(&msg, "logic flaw in cases: "
-					     "l_curr: start = %ju, "
-					     "size = %ju : lock: "
-					     "start = %ju, size = %ju",
-					     (uintmax_t)l_curr->start,
-					     (uintmax_t)l_curr->size,
-					     (uintmax_t)lock->start,
-					     (uintmax_t)lock->size ) != -1) {
+				if (asprintf(&msg, "logic flaw in cases: l_curr: start = %.0f, size = %.0f : \
+lock: start = %.0f, size = %.0f", (double)l_curr->start, (double)l_curr->size, (double)lock->start, (double)lock->size ) != -1) {
 					smb_panic(msg);
 				} else {
 					smb_panic("posix_lock_list");
@@ -928,8 +953,8 @@ bool set_posix_lock_windows_flavour(files_struct *fsp,
 			int num_locks,
 			int *errno_ret)
 {
-	off_t offset;
-	off_t count;
+	SMB_OFF_T offset;
+	SMB_OFF_T count;
 	int posix_lock_type = map_posix_lock_type(fsp,lock_type);
 	bool ret = True;
 	size_t lock_count;
@@ -937,10 +962,10 @@ bool set_posix_lock_windows_flavour(files_struct *fsp,
 	struct lock_list *llist = NULL;
 	struct lock_list *ll = NULL;
 
-	DEBUG(5, ("set_posix_lock_windows_flavour: File %s, offset = %ju, "
-		  "count = %ju, type = %s\n", fsp_str_dbg(fsp),
-		  (uintmax_t)u_offset, (uintmax_t)u_count,
-		  posix_lock_type_name(lock_type)));
+	DEBUG(5,("set_posix_lock_windows_flavour: File %s, offset = %.0f, "
+		 "count = %.0f, type = %s\n", fsp_str_dbg(fsp),
+		 (double)u_offset, (double)u_count,
+		 posix_lock_type_name(lock_type)));
 
 	/*
 	 * If the requested lock won't fit in the POSIX range, we will
@@ -975,7 +1000,7 @@ bool set_posix_lock_windows_flavour(files_struct *fsp,
 		return False;
 	}
 
-	if ((ll = talloc(l_ctx, struct lock_list)) == NULL) {
+	if ((ll = TALLOC_P(l_ctx, struct lock_list)) == NULL) {
 		DEBUG(0,("set_posix_lock_windows_flavour: unable to talloc unlock list.\n"));
 		talloc_destroy(l_ctx);
 		return False;
@@ -1003,6 +1028,7 @@ bool set_posix_lock_windows_flavour(files_struct *fsp,
 	llist = posix_lock_list(l_ctx,
 				llist,
 				lock_ctx, /* Lock context llist belongs to. */
+				fsp,
 				plocks,
 				num_locks);
 
@@ -1016,19 +1042,13 @@ bool set_posix_lock_windows_flavour(files_struct *fsp,
 		offset = ll->start;
 		count = ll->size;
 
-		DEBUG(5, ("set_posix_lock_windows_flavour: Real lock: "
-			  "Type = %s: offset = %ju, count = %ju\n",
-			  posix_lock_type_name(posix_lock_type),
-			  (uintmax_t)offset, (uintmax_t)count ));
+		DEBUG(5,("set_posix_lock_windows_flavour: Real lock: Type = %s: offset = %.0f, count = %.0f\n",
+			posix_lock_type_name(posix_lock_type), (double)offset, (double)count ));
 
-		if (!posix_fcntl_lock(fsp,F_SETLK,offset,count,posix_lock_type)) {
+		if (!posix_fcntl_lock(fsp,SMB_F_SETLK,offset,count,posix_lock_type)) {
 			*errno_ret = errno;
-			DEBUG(5, ("set_posix_lock_windows_flavour: Lock "
-				  "fail !: Type = %s: offset = %ju, "
-				  "count = %ju. Errno = %s\n",
-				  posix_lock_type_name(posix_lock_type),
-				  (uintmax_t)offset, (uintmax_t)count,
-				  strerror(errno) ));
+			DEBUG(5,("set_posix_lock_windows_flavour: Lock fail !: Type = %s: offset = %.0f, count = %.0f. Errno = %s\n",
+				posix_lock_type_name(posix_lock_type), (double)offset, (double)count, strerror(errno) ));
 			ret = False;
 			break;
 		}
@@ -1044,13 +1064,10 @@ bool set_posix_lock_windows_flavour(files_struct *fsp,
 			offset = ll->start;
 			count = ll->size;
 
-			DEBUG(5, ("set_posix_lock_windows_flavour: Backing "
-				  "out locks: Type = %s: offset = %ju, "
-				  "count = %ju\n",
-				  posix_lock_type_name(posix_lock_type),
-				  (uintmax_t)offset, (uintmax_t)count ));
+			DEBUG(5,("set_posix_lock_windows_flavour: Backing out locks: Type = %s: offset = %.0f, count = %.0f\n",
+				posix_lock_type_name(posix_lock_type), (double)offset, (double)count ));
 
-			posix_fcntl_lock(fsp,F_SETLK,offset,count,F_UNLCK);
+			posix_fcntl_lock(fsp,SMB_F_SETLK,offset,count,F_UNLCK);
 		}
 	} else {
 		/* Remember the number of Windows locks we have on this dev/ino pair. */
@@ -1074,16 +1091,16 @@ bool release_posix_lock_windows_flavour(files_struct *fsp,
 				const struct lock_struct *plocks,
 				int num_locks)
 {
-	off_t offset;
-	off_t count;
+	SMB_OFF_T offset;
+	SMB_OFF_T count;
 	bool ret = True;
 	TALLOC_CTX *ul_ctx = NULL;
 	struct lock_list *ulist = NULL;
 	struct lock_list *ul = NULL;
 
-	DEBUG(5, ("release_posix_lock_windows_flavour: File %s, offset = %ju, "
-		  "count = %ju\n", fsp_str_dbg(fsp),
-		  (uintmax_t)u_offset, (uintmax_t)u_count));
+	DEBUG(5,("release_posix_lock_windows_flavour: File %s, offset = %.0f, "
+		 "count = %.0f\n", fsp_str_dbg(fsp),
+		 (double)u_offset, (double)u_count));
 
 	/* Remember the number of Windows locks we have on this dev/ino pair. */
 	decrement_windows_lock_ref_count(fsp);
@@ -1102,7 +1119,7 @@ bool release_posix_lock_windows_flavour(files_struct *fsp,
 		return False;
 	}
 
-	if ((ul = talloc(ul_ctx, struct lock_list)) == NULL) {
+	if ((ul = TALLOC_P(ul_ctx, struct lock_list)) == NULL) {
 		DEBUG(0,("release_posix_lock_windows_flavour: unable to talloc unlock list.\n"));
 		talloc_destroy(ul_ctx);
 		return False;
@@ -1131,6 +1148,7 @@ bool release_posix_lock_windows_flavour(files_struct *fsp,
 	ulist = posix_lock_list(ul_ctx,
 				ulist,
 				lock_ctx, /* Lock context ulist belongs to. */
+				fsp,
 				plocks,
 				num_locks);
 
@@ -1145,11 +1163,10 @@ bool release_posix_lock_windows_flavour(files_struct *fsp,
 	if (deleted_lock_type == WRITE_LOCK &&
 			(!ulist || ulist->next != NULL || ulist->start != offset || ulist->size != count)) {
 
-		DEBUG(5, ("release_posix_lock_windows_flavour: downgrading "
-			  "lock to READ: offset = %ju, count = %ju\n",
-			  (uintmax_t)offset, (uintmax_t)count ));
+		DEBUG(5,("release_posix_lock_windows_flavour: downgrading lock to READ: offset = %.0f, count = %.0f\n",
+			(double)offset, (double)count ));
 
-		if (!posix_fcntl_lock(fsp,F_SETLK,offset,count,F_RDLCK)) {
+		if (!posix_fcntl_lock(fsp,SMB_F_SETLK,offset,count,F_RDLCK)) {
 			DEBUG(0,("release_posix_lock_windows_flavour: downgrade of lock failed with error %s !\n", strerror(errno) ));
 			talloc_destroy(ul_ctx);
 			return False;
@@ -1164,11 +1181,10 @@ bool release_posix_lock_windows_flavour(files_struct *fsp,
 		offset = ulist->start;
 		count = ulist->size;
 
-		DEBUG(5, ("release_posix_lock_windows_flavour: Real unlock: "
-			  "offset = %ju, count = %ju\n",
-			  (uintmax_t)offset, (uintmax_t)count ));
+		DEBUG(5,("release_posix_lock_windows_flavour: Real unlock: offset = %.0f, count = %.0f\n",
+			(double)offset, (double)count ));
 
-		if (!posix_fcntl_lock(fsp,F_SETLK,offset,count,F_UNLCK)) {
+		if (!posix_fcntl_lock(fsp,SMB_F_SETLK,offset,count,F_UNLCK)) {
 			ret = False;
 		}
 	}
@@ -1197,13 +1213,13 @@ bool set_posix_lock_posix_flavour(files_struct *fsp,
 			enum brl_type lock_type,
 			int *errno_ret)
 {
-	off_t offset;
-	off_t count;
+	SMB_OFF_T offset;
+	SMB_OFF_T count;
 	int posix_lock_type = map_posix_lock_type(fsp,lock_type);
 
-	DEBUG(5,("set_posix_lock_posix_flavour: File %s, offset = %ju, count "
-		 "= %ju, type = %s\n", fsp_str_dbg(fsp),
-		 (uintmax_t)u_offset, (uintmax_t)u_count,
+	DEBUG(5,("set_posix_lock_posix_flavour: File %s, offset = %.0f, count "
+		 "= %.0f, type = %s\n", fsp_str_dbg(fsp),
+		 (double)u_offset, (double)u_count,
 		 posix_lock_type_name(lock_type)));
 
 	/*
@@ -1215,10 +1231,10 @@ bool set_posix_lock_posix_flavour(files_struct *fsp,
 		return True;
 	}
 
-	if (!posix_fcntl_lock(fsp,F_SETLK,offset,count,posix_lock_type)) {
+	if (!posix_fcntl_lock(fsp,SMB_F_SETLK,offset,count,posix_lock_type)) {
 		*errno_ret = errno;
-		DEBUG(5,("set_posix_lock_posix_flavour: Lock fail !: Type = %s: offset = %ju, count = %ju. Errno = %s\n",
-			posix_lock_type_name(posix_lock_type), (intmax_t)offset, (intmax_t)count, strerror(errno) ));
+		DEBUG(5,("set_posix_lock_posix_flavour: Lock fail !: Type = %s: offset = %.0f, count = %.0f. Errno = %s\n",
+			posix_lock_type_name(posix_lock_type), (double)offset, (double)count, strerror(errno) ));
 		return False;
 	}
 	return True;
@@ -1241,15 +1257,15 @@ bool release_posix_lock_posix_flavour(files_struct *fsp,
 				int num_locks)
 {
 	bool ret = True;
-	off_t offset;
-	off_t count;
+	SMB_OFF_T offset;
+	SMB_OFF_T count;
 	TALLOC_CTX *ul_ctx = NULL;
 	struct lock_list *ulist = NULL;
 	struct lock_list *ul = NULL;
 
-	DEBUG(5, ("release_posix_lock_posix_flavour: File %s, offset = %ju, "
-		  "count = %ju\n", fsp_str_dbg(fsp),
-		  (uintmax_t)u_offset, (uintmax_t)u_count));
+	DEBUG(5,("release_posix_lock_posix_flavour: File %s, offset = %.0f, "
+		 "count = %.0f\n", fsp_str_dbg(fsp),
+		 (double)u_offset, (double)u_count));
 
 	/*
 	 * If the requested lock won't fit in the POSIX range, we will
@@ -1265,7 +1281,7 @@ bool release_posix_lock_posix_flavour(files_struct *fsp,
 		return False;
 	}
 
-	if ((ul = talloc(ul_ctx, struct lock_list)) == NULL) {
+	if ((ul = TALLOC_P(ul_ctx, struct lock_list)) == NULL) {
 		DEBUG(0,("release_posix_lock_windows_flavour: unable to talloc unlock list.\n"));
 		talloc_destroy(ul_ctx);
 		return False;
@@ -1290,6 +1306,7 @@ bool release_posix_lock_posix_flavour(files_struct *fsp,
 	ulist = posix_lock_list(ul_ctx,
 				ulist,
 				lock_ctx, /* Lock context ulist belongs to. */
+				fsp,
 				plocks,
 				num_locks);
 
@@ -1301,11 +1318,10 @@ bool release_posix_lock_posix_flavour(files_struct *fsp,
 		offset = ulist->start;
 		count = ulist->size;
 
-		DEBUG(5, ("release_posix_lock_posix_flavour: Real unlock: "
-			  "offset = %ju, count = %ju\n",
-			  (uintmax_t)offset, (uintmax_t)count ));
+		DEBUG(5,("release_posix_lock_posix_flavour: Real unlock: offset = %.0f, count = %.0f\n",
+			(double)offset, (double)count ));
 
-		if (!posix_fcntl_lock(fsp,F_SETLK,offset,count,F_UNLCK)) {
+		if (!posix_fcntl_lock(fsp,SMB_F_SETLK,offset,count,F_UNLCK)) {
 			ret = False;
 		}
 	}

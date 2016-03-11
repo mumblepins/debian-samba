@@ -25,7 +25,6 @@
 #include "libcli/raw/raw_proto.h"
 #include "libcli/libcli.h"
 #include "torture/util.h"
-#include "torture/basic/proto.h"
 
 #define BASEDIR "\\test_disconnect"
 
@@ -43,8 +42,8 @@
 static bool test_disconnect_open(struct smbcli_state *cli, TALLOC_CTX *mem_ctx)
 {
 	union smb_open io;
-	struct smbcli_request *req1, *req2;
 	NTSTATUS status;
+	struct smbcli_request *req1, *req2;
 
 	printf("trying open/disconnect\n");
 
@@ -66,11 +65,6 @@ static bool test_disconnect_open(struct smbcli_state *cli, TALLOC_CTX *mem_ctx)
 	io.ntcreatex.in.share_access = 0;
 	req1 = smb_raw_open_send(cli->tree, &io);
 	req2 = smb_raw_open_send(cli->tree, &io);
-	if (!req1 || !req2) {
-		printf("test_disconnect_open: smb_raw_open_send() "
-			"returned NULL\n");
-		return false;
-	}
 
 	status = smbcli_chkpath(cli->tree, "\\");
 	CHECK_STATUS(status, NT_STATUS_OK);
@@ -118,11 +112,6 @@ static bool test_disconnect_lock(struct smbcli_state *cli, TALLOC_CTX *mem_ctx)
 	lock[0].pid = 2;
 	io.lockx.in.timeout = 3000;
 	req = smb_raw_lock_send(cli->tree, &io);
-	if (!req) {
-		printf("test_disconnect_lock: smb_raw_lock_send() "
-			"returned NULL\n");
-		return false;
-	}
 
 	status = smbcli_chkpath(cli->tree, "\\");
 	CHECK_STATUS(status, NT_STATUS_OK);
@@ -151,7 +140,9 @@ bool torture_disconnect(struct torture_context *torture)
 		return false;
 	}
 
-	torture_assert(torture, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	for (i=0;i<torture_numops;i++) {
 		ret &= test_disconnect_lock(cli, mem_ctx);

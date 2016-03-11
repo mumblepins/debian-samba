@@ -26,22 +26,27 @@
 #include "net_idmap_check.h"
 #include "includes.h"
 #include "system/filesys.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_open.h"
-#include "dbwrap/dbwrap_rbt.h"
+#include "dbwrap.h"
 #include "net.h"
 #include "../libcli/security/dom_sid.h"
 #include "cbuf.h"
 #include "srprs.h"
+#include <termios.h>
 #include "util_tdb.h"
-#include "interact.h"
 
 static int traverse_commit(struct db_record *diff_rec, void* data);
 static int traverse_check(struct db_record *rec, void* data);
 
+static char* interact_edit(TALLOC_CTX* mem_ctx, const char* str);
+static int interact_prompt(const char* msg, const char* accept, char def);
+
 /* TDB_DATA *******************************************************************/
 static char*    print_data(TALLOC_CTX* mem_ctx, TDB_DATA d);
 static TDB_DATA parse_data(TALLOC_CTX* mem_ctx, const char** ptr);
+static TDB_DATA talloc_copy(TALLOC_CTX* mem_ctx, TDB_DATA data);
+static bool is_empty(TDB_DATA data) {
+	return (data.dsize == 0) || (data.dptr == NULL);
+}
 
 /* record *********************************************************************/
 
@@ -73,9 +78,7 @@ static bool is_map(const struct record* r) {
 /* action *********************************************************************/
 
 typedef struct check_action {
-	void (*fmt)(struct check_action *a,
-		    struct record *r,
-		    TDB_DATA *v);
+	const char* fmt;
 	const char* name;
 	const char* prompt;
 	const char* answers;
@@ -99,38 +102,6 @@ struct check_actions {
 	check_action invalid_diff;
 };
 
-static void invalid_mapping_fmt(struct check_action *a,
-				struct record *r,
-				TDB_DATA *v)
-{
-	d_printf("%1$s: %2$s -> %3$s\n(%4$s <- %3$s)\n",
-		 a->name,
-		 print_data(r, r->key),
-		 print_data(r, r->val),
-		 (v ? print_data(r, *v) : ""));
-}
-
-static void record_exists_fmt(struct check_action *a,
-			      struct record *r,
-			      TDB_DATA *v)
-{
-	d_printf("%1$s: %2$s\n-%4$s\n+%3$s\n",
-		 a->name,
-		 print_data(r, r->key),
-		 print_data(r, r->val),
-		 (v ? print_data(r, *v) : ""));
-}
-
-static void valid_mapping_fmt(struct check_action *a,
-			      struct record *r,
-			      TDB_DATA *v)
-{
-	d_printf("%1$s: %2$s <-> %3$s\n",
-		 a->name,
-		 print_data(r, r->key),
-		 print_data(r, r->val));
-}
-
 static struct check_actions
 check_actions_init(const struct check_options* opts) {
 	struct check_actions ret = {
@@ -151,7 +122,7 @@ check_actions_init(const struct check_options* opts) {
 			.verbose = true,
 		},
 		.invalid_mapping = (check_action) {
-			.fmt = invalid_mapping_fmt,
+			.fmt = "%1$s: %2$s -> %3$s\n(%4$s <- %3$s)\n",
 			.name = "Invalid mapping",
 			.prompt = "[e]dit/[d]elete/[D]elete all"
 			"/[s]kip/[S]kip all",
@@ -168,7 +139,7 @@ check_actions_init(const struct check_options* opts) {
 			.verbose = true,
 		},
 		.record_exists = (check_action) {
-			.fmt = record_exists_fmt,
+			.fmt = "%1$s: %2$s\n-%4$s\n+%3$s\n",
 			.name = "Record exists",
 			.prompt = "[o]verwrite/[O]verwrite all/[e]dit"
 			"/[d]elete/[D]elete all/[s]kip/[S]kip all",
@@ -198,7 +169,7 @@ check_actions_init(const struct check_options* opts) {
 			.verbose = true,
 		},
 		.valid_mapping = (check_action) {
-			.fmt = valid_mapping_fmt,
+			.fmt = "%1$s: %2$s <-> %3$s\n",
 			.name = "Mapping",
 			.auto_action = 's',
 			.verbose = opts->verbose,
@@ -264,7 +235,10 @@ static char get_action(struct check_action* a, struct record* r, TDB_DATA* v) {
 				d_printf("\n");
 			}
 		} else {
-			a->fmt(a, r, v);
+			d_printf(a->fmt, a->name,
+				 print_data(r, r->key),
+				 print_data(r, r->val),
+				 (v ? print_data(r, *v) : ""));
 		}
 	}
 
@@ -302,10 +276,10 @@ static TDB_DATA_diff unpack_diff(TDB_DATA data) {
 
 #define DEBUG_DIFF(LEV,MEM,MSG,KEY,OLD,NEW)			\
 	DEBUG(LEV, ("%s: %s\n", MSG, print_data(MEM, KEY)));	\
-	if (!tdb_data_is_empty(OLD)) {				\
+	if (!is_empty(OLD)) {					\
 		DEBUGADD(LEV, ("-%s\n", print_data(MEM, OLD)));	\
 	}							\
-	if (!tdb_data_is_empty(NEW)) {				\
+	if (!is_empty(NEW)) {					\
 		DEBUGADD(LEV, ("+%s\n", print_data(MEM, NEW)));	\
 	}
 
@@ -337,29 +311,21 @@ static int add_record(struct check_ctx* ctx, TDB_DATA key, TDB_DATA value)
 	NTSTATUS status;
 	TDB_DATA_diff diff;
 	TALLOC_CTX* mem = talloc_new(ctx->diff);
-	TDB_DATA recvalue;
-	struct db_record *rec = dbwrap_fetch_locked(ctx->diff, mem, key);
-
+	struct db_record* rec = ctx->diff->fetch_locked(ctx->diff, mem, key);
 	if (rec == NULL) {
 		return -1;
-	}
-
-	recvalue = dbwrap_record_get_value(rec);
-
-	if (recvalue.dptr == 0) { /* first entry */
-		status = dbwrap_fetch(ctx->db, ctx->diff, key, &diff.oval);
-		if (!NT_STATUS_IS_OK(status)) {
-			diff.oval = tdb_null;
-		}
+	};
+	if (rec->value.dptr == 0) { /* first entry */
+		diff.oval = dbwrap_fetch(ctx->db, ctx->diff, key);
 	} else {
-		diff = unpack_diff(recvalue);
+		diff = unpack_diff(rec->value);
 		talloc_free(diff.nval.dptr);
 	}
-	diff.nval = tdb_data_talloc_copy(ctx->diff, value);
+	diff.nval = talloc_copy(ctx->diff, value);
 
 	DEBUG_DIFF(2, mem, "TDB DIFF", key, diff.oval, diff.nval);
 
-	status = dbwrap_record_store(rec, pack_diff(&diff), 0);
+	status = rec->store(rec, pack_diff(&diff), 0);
 
 	talloc_free(mem);
 
@@ -379,19 +345,20 @@ static TDB_DATA
 fetch_record(struct check_ctx* ctx, TALLOC_CTX* mem_ctx, TDB_DATA key)
 {
 	TDB_DATA tmp;
-	NTSTATUS status;
 
-	status = dbwrap_fetch(ctx->diff, mem_ctx, key, &tmp);
-
-	if (NT_STATUS_IS_OK(status)) {
+	if (ctx->diff->fetch(ctx->diff, mem_ctx, key, &tmp) == -1) {
+		DEBUG(0, ("Out of memory!\n"));
+		return tdb_null;
+	}
+	if (tmp.dptr != NULL) {
 		TDB_DATA_diff diff = unpack_diff(tmp);
-		TDB_DATA ret = tdb_data_talloc_copy(mem_ctx, diff.nval);
+		TDB_DATA ret = talloc_copy(mem_ctx, diff.nval);
 		talloc_free(tmp.dptr);
 		return ret;
 	}
 
-	status = dbwrap_fetch(ctx->db, mem_ctx, key, &tmp);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (ctx->db->fetch(ctx->db, mem_ctx, key, &tmp) == -1) {
+		DEBUG(0, ("Out of memory!\n"));
 		return tdb_null;
 	}
 
@@ -420,12 +387,10 @@ static void edit_record(struct record* r) {
 static bool check_version(struct check_ctx* ctx) {
 	static const char* key = "IDMAP_VERSION";
 	uint32_t version;
-	NTSTATUS status;
+	bool no_version = !dbwrap_fetch_uint32(ctx->db, key, &version);
 	char action = 's';
 	struct check_actions* act = &ctx->action;
-
-	status = dbwrap_fetch_uint32_bystring(ctx->db, key, &version);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (no_version) {
 		d_printf("No version number, assume 2\n");
 		action = get_action(&act->no_version, NULL, NULL);
 	} else if (version != 2) {
@@ -451,11 +416,9 @@ static bool check_version(struct check_ctx* ctx) {
 static void check_hwm(struct check_ctx* ctx, const char* key, uint32_t target) {
 	uint32_t hwm;
 	char action = 's';
-	NTSTATUS status;
+	bool found = dbwrap_fetch_uint32(ctx->db, key, &hwm);
 	struct check_actions* act = &ctx->action;
-
-	status = dbwrap_fetch_uint32_bystring(ctx->db, key, &hwm);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!found) {
 		d_printf("No %s should be %d\n", key, target);
 		action = get_action(&act->invalid_hwm, NULL, NULL);
 	} else if (target < hwm) {
@@ -473,15 +436,8 @@ int traverse_check(struct db_record *rec, void* data) {
 	struct check_ctx* ctx = (struct check_ctx*)data;
 	struct check_actions* act = &ctx->action;
 	TALLOC_CTX* mem = talloc_new(ctx->diff);
-	TDB_DATA key;
-	TDB_DATA value;
-	struct record *r;
+	struct record* r = parse_record(mem, rec->key, rec->value);
 	char action = 's';
-
-	key = dbwrap_record_get_key(rec);
-	value = dbwrap_record_get_value(rec);
-
-	r = parse_record(mem, key, value);
 
 	if (is_invalid(r)) {
 		action = get_action(&act->invalid_record, r, NULL);
@@ -514,10 +470,10 @@ int traverse_check(struct db_record *rec, void* data) {
 		case 's': /* skip */
 			break;
 		case 'd': /* delete */
-			del_record(ctx, key);
+			del_record(ctx, rec->key);
 			break;
 		case 'f': /* add reverse mapping */
-			add_record(ctx, value, key);
+			add_record(ctx, rec->value, rec->key);
 			break;
 		case 'e': /* edit */
 			edit_record(r);
@@ -526,9 +482,9 @@ int traverse_check(struct db_record *rec, void* data) {
 				action = get_action(&act->invalid_edit, r,NULL);
 				continue;
 			}
-			if (!tdb_data_equal(key, r->key)) {
+			if (!tdb_data_equal(rec->key, r->key)) {
 				TDB_DATA oval = fetch_record(ctx, mem, r->key);
-				if (!tdb_data_is_empty(oval) &&
+				if (!is_empty(oval) &&
 				    !tdb_data_equal(oval, r->val))
 				{
 					action = get_action(&act->record_exists,
@@ -540,7 +496,7 @@ int traverse_check(struct db_record *rec, void* data) {
 			}
 			if (is_map(r)) {
 				TDB_DATA okey = fetch_record(ctx, mem, r->val);
-				if (!tdb_data_is_empty(okey) &&
+				if (!is_empty(okey) &&
 				    !tdb_data_equal(okey, r->key))
 				{
 					action = get_action(&act->record_exists,
@@ -551,8 +507,8 @@ int traverse_check(struct db_record *rec, void* data) {
 			continue;
 		case 'o': /* overwrite */
 			adjust_hwm(ctx, r);
-			if (!tdb_data_equal(key, r->key)) {
-				del_record(ctx, key);
+			if (!tdb_data_equal(rec->key, r->key)) {
+				del_record(ctx, rec->key);
 			}
 			add_record(ctx, r->key, r->val);
 			if (is_map(r)) {
@@ -578,8 +534,22 @@ void adjust_hwm(struct check_ctx* ctx, const struct record* r) {
 	}
 }
 
+TDB_DATA talloc_copy(TALLOC_CTX* mem_ctx, TDB_DATA data) {
+	TDB_DATA ret = {
+		.dptr  = (uint8_t *)talloc_size(mem_ctx, data.dsize+1),
+		.dsize = data.dsize
+	};
+	if (ret.dptr == NULL) {
+		ret.dsize = 0;
+	} else {
+		memcpy(ret.dptr, data.dptr, data.dsize);
+		ret.dptr[ret.dsize] = '\0';
+	}
+	return ret;
+}
+
 static bool is_cstr(TDB_DATA str) {
-	return !tdb_data_is_empty(str) && str.dptr[str.dsize-1] == '\0';
+	return !is_empty(str) && str.dptr[str.dsize-1] == '\0';
 }
 
 static bool parse_sid (TDB_DATA str, enum DT* type, struct dom_sid* sid) {
@@ -619,8 +589,8 @@ parse_record(TALLOC_CTX* mem_ctx, TDB_DATA key, TDB_DATA val)
 		DEBUG(0, ("Out of memory.\n"));
 		return NULL;
 	}
-	ret->key = tdb_data_talloc_copy(ret, key);
-	ret->val = tdb_data_talloc_copy(ret, val);
+	ret->key = talloc_copy(ret, key);
+	ret->val = talloc_copy(ret, val);
 	if ((ret->key.dptr == NULL && key.dptr != NULL) ||
 	    (ret->val.dptr == NULL && val.dptr != NULL))
 	{
@@ -676,10 +646,35 @@ struct record* reverse_record(struct record* in)
 
 /******************************************************************************/
 
+int interact_prompt(const char* msg, const char* acc, char def) {
+	struct termios old_tio, new_tio;
+	int c;
+
+	tcgetattr(STDIN_FILENO, &old_tio);
+	new_tio=old_tio;
+	new_tio.c_lflag &=(~ICANON & ~ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
+
+	do {
+		d_printf("%s? [%c]\n", msg, def);
+		fflush(stdout);
+		c = getchar();
+		if (c == '\n') {
+			c = def;
+			break;
+		}
+		else if (strchr(acc, tolower(c)) != NULL) {
+			break;
+		}
+		d_printf("Invalid input '%c'\n", c);
+	} while(c != EOF);
+	tcsetattr(STDIN_FILENO, TCSANOW, &old_tio);
+	return c;
+}
 
 char* print_data(TALLOC_CTX* mem_ctx, TDB_DATA d)
 {
-	if (!tdb_data_is_empty(d)) {
+	if (!is_empty(d)) {
 		char* ret = NULL;
 		cbuf* ost = cbuf_new(mem_ctx);
 		int len = cbuf_print_quoted(ost, (const char*)d.dptr, d.dsize);
@@ -706,16 +701,75 @@ TDB_DATA parse_data(TALLOC_CTX* mem_ctx, const char** ptr) {
 	return ret;
 }
 
+static const char* get_editor(void) {
+	static const char* editor = NULL;
+	if (editor == NULL) {
+		editor = getenv("VISUAL");
+		if (editor == NULL) {
+			editor = getenv("EDITOR");
+		}
+		if (editor == NULL) {
+			editor = "vi";
+		}
+	}
+	return editor;
+}
+
+char* interact_edit(TALLOC_CTX* mem_ctx, const char* str) {
+	char fname[] = "/tmp/net_idmap_check.XXXXXX";
+	char buf[128];
+	char* ret = NULL;
+	FILE* file;
+
+	int fd = mkstemp(fname);
+	if (fd == -1) {
+		DEBUG(0, ("failed to mkstemp %s: %s\n", fname,
+			  strerror(errno)));
+		return NULL;
+	}
+
+	file  = fdopen(fd, "w");
+	if (!file) {
+		DEBUG(0, ("failed to open %s for writing: %s\n", fname,
+			  strerror(errno)));
+		close(fd);
+		unlink(fname);
+		return NULL;
+	}
+
+	fprintf(file, "%s", str);
+	fclose(file);
+
+	snprintf(buf, sizeof(buf), "%s %s\n", get_editor(), fname);
+	if (system(buf) != 0) {
+		DEBUG(0, ("failed to start editor %s: %s\n", buf,
+			  strerror(errno)));
+		unlink(fname);
+		return NULL;
+	}
+
+	file = fopen(fname, "r");
+	if (!file) {
+		DEBUG(0, ("failed to open %s for reading: %s\n", fname,
+			  strerror(errno)));
+		unlink(fname);
+		return NULL;
+	}
+	while ( fgets(buf, sizeof(buf), file) ) {
+		ret = talloc_strdup_append(ret, buf);
+	}
+	fclose(file);
+	unlink(fname);
+
+	return talloc_steal(mem_ctx, ret);
+}
+
+
 static int traverse_print_diff(struct db_record *rec, void* data) {
 	struct check_ctx* ctx = (struct check_ctx*)data;
-	TDB_DATA key;
-	TDB_DATA value;
-	TDB_DATA_diff diff;
+	TDB_DATA key = rec->key;
+	TDB_DATA_diff diff = unpack_diff(rec->value);
 	TALLOC_CTX* mem = talloc_new(ctx->diff);
-
-	key = dbwrap_record_get_key(rec);
-	value = dbwrap_record_get_value(rec);
-	diff = unpack_diff(value);
 
 	DEBUG_DIFF(0, mem, "DIFF", key, diff.oval, diff.nval);
 
@@ -726,34 +780,25 @@ static int traverse_print_diff(struct db_record *rec, void* data) {
 
 static int traverse_commit(struct db_record *diff_rec, void* data) {
 	struct check_ctx* ctx = (struct check_ctx*)data;
-	TDB_DATA key;
-	TDB_DATA diff_value;
-	TDB_DATA_diff diff;
-	TDB_DATA value;
+	TDB_DATA_diff diff = unpack_diff(diff_rec->value);
+	TDB_DATA key = diff_rec->key;
 	TALLOC_CTX* mem = talloc_new(ctx->diff);
 	int ret = -1;
 	NTSTATUS status;
 	struct check_actions* act = &ctx->action;
-	struct db_record* rec;
 
-	key = dbwrap_record_get_key(diff_rec);
-	diff_value = dbwrap_record_get_value(diff_rec);
-	diff = unpack_diff(diff_value);
-
-	rec = dbwrap_fetch_locked(ctx->db, mem, key);
+	struct db_record* rec = ctx->db->fetch_locked(ctx->db, mem, key);
 	if (rec == NULL) {
 		goto done;
-	}
+	};
 
-	value = dbwrap_record_get_value(rec);
-
-	if (!tdb_data_equal(value, diff.oval)) {
+	if (!tdb_data_equal(rec->value, diff.oval)) {
 		char action;
 
 		d_printf("Warning: record has changed: %s\n"
 			 "expected: %s got %s\n", print_data(mem, key),
 			 print_data(mem, diff.oval),
-			 print_data(mem, value));
+			 print_data(mem, rec->value));
 
 		action = get_action(&act->invalid_diff, NULL, NULL);
 		if (action == 's') {
@@ -766,10 +811,10 @@ static int traverse_commit(struct db_record *diff_rec, void* data) {
 
 	DEBUG_DIFF(0, mem, "Commit", key, diff.oval, diff.nval);
 
-	if (tdb_data_is_empty(diff.nval)) {
-		status = dbwrap_record_delete(rec);
+	if (is_empty(diff.nval)) {
+		status = rec->delete_rec(rec);
 	} else {
-		status = dbwrap_record_store(rec, diff.nval, 0);
+		status = rec->store(rec, diff.nval, 0);
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
@@ -820,8 +865,7 @@ static bool check_open_db(struct check_ctx* ctx, const char* name, int oflags)
 		}
 	}
 
-	ctx->db = db_open(ctx, name, 0, TDB_DEFAULT, oflags, 0,
-			  DBWRAP_LOCK_ORDER_1, DBWRAP_FLAG_NONE);
+	ctx->db = db_open(ctx, name, 0, TDB_DEFAULT, oflags, 0);
 	if (ctx->db == NULL) {
 		d_fprintf(stderr,
 			  _("Could not open idmap db (%s) for writing: %s\n"),
@@ -870,15 +914,15 @@ static void check_summary(const struct check_ctx* ctx)
 }
 
 static bool check_transaction_start(struct check_ctx* ctx) {
-	return (dbwrap_transaction_start(ctx->db) == 0);
+	return (ctx->db->transaction_start(ctx->db) == 0);
 }
 
 static bool check_transaction_commit(struct check_ctx* ctx) {
-	return (dbwrap_transaction_commit(ctx->db) == 0);
+	return (ctx->db->transaction_commit(ctx->db) == 0);
 }
 
 static bool check_transaction_cancel(struct check_ctx* ctx) {
-	return (dbwrap_transaction_cancel(ctx->db) == 0);
+	return (ctx->db->transaction_cancel(ctx->db) == 0);
 }
 
 
@@ -925,7 +969,7 @@ static bool check_commit(struct check_ctx* ctx)
 		check_transaction_cancel(ctx);
 		return false;
 	}
-	if (ctx->opts.test) { /*get_action? */
+	if (ctx->opts.test) { //get_action?
 		return check_transaction_cancel(ctx);
 	} else {
 		return check_transaction_commit(ctx);

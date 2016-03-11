@@ -3,12 +3,10 @@ Description=Samba NMB Daemon
 After=syslog.target network.target
 
 [Service]
-Type=notify
-NotifyAccess=all
+Type=forking
 PIDFile=/run/nmbd.pid
 EnvironmentFile=-/etc/sysconfig/samba
 ExecStart=/usr/sbin/nmbd $NMBDOPTIONS
-ExecReload=/usr/bin/kill -HUP $MAINPID
 
 [Install]
 WantedBy=multi-user.target

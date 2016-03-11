@@ -1,21 +1,21 @@
-/*
+/* 
    Unix SMB/CIFS implementation.
    Pipe SMB reply routines
    Copyright (C) Andrew Tridgell 1992-1998
    Copyright (C) Luke Kenneth Casson Leighton 1996-1998
    Copyright (C) Paul Ashton  1997-1998.
    Copyright (C) Jeremy Allison 2005.
-
+   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -30,6 +30,11 @@
 #include "smbd/globals.h"
 #include "libcli/security/security.h"
 #include "rpc_server/srv_pipe_hnd.h"
+
+#define	PIPE		"\\PIPE\\"
+#define	PIPELEN		strlen(PIPE)
+
+#define MAX_PIPE_NAME_LEN	24
 
 NTSTATUS open_np_file(struct smb_request *smb_req, const char *name,
 		      struct files_struct **pfsp)
@@ -51,10 +56,11 @@ NTSTATUS open_np_file(struct smb_request *smb_req, const char *name,
 	fsp->can_lock = false;
 	fsp->access_mask = FILE_READ_DATA | FILE_WRITE_DATA;
 
-	smb_fname = synthetic_smb_fname(talloc_tos(), name, NULL, NULL);
-	if (smb_fname == NULL) {
+	status = create_synthetic_smb_fname(talloc_tos(), name, NULL, NULL,
+					    &smb_fname);
+		if (!NT_STATUS_IS_OK(status)) {
 		file_free(smb_req, fsp);
-		return NT_STATUS_NO_MEMORY;
+		return status;
 	}
 	status = fsp_set_smb_fname(fsp, smb_fname);
 	TALLOC_FREE(smb_fname);
@@ -66,8 +72,8 @@ NTSTATUS open_np_file(struct smb_request *smb_req, const char *name,
 	status = np_open(fsp, name,
 			 conn->sconn->local_address,
 			 conn->sconn->remote_address,
+			 &conn->sconn->client_id,
 			 conn->session_info,
-			 conn->sconn->ev_ctx,
 			 conn->sconn->msg_ctx,
 			 &fsp->fake_file_handle);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -107,24 +113,15 @@ void reply_open_pipe_and_X(connection_struct *conn, struct smb_request *req)
 	/* If the name doesn't start \PIPE\ then this is directed */
 	/* at a mailslot or something we really, really don't understand, */
 	/* not just something we really don't understand. */
-
-#define	PIPE		"PIPE\\"
-#define	PIPELEN		strlen(PIPE)
-
-	fname = pipe_name;
-	while (fname[0] == '\\') {
-		fname++;
-	}
-	if (!strnequal(fname, PIPE, PIPELEN)) {
-		reply_nterror(req, NT_STATUS_OBJECT_PATH_SYNTAX_BAD);
+	if ( strncmp(pipe_name,PIPE,PIPELEN) != 0 ) {
+		reply_nterror(req, NT_STATUS_ACCESS_DENIED);
 		return;
 	}
-	fname += PIPELEN;
-	while (fname[0] == '\\') {
-		fname++;
-	}
 
-	DEBUG(4,("Opening pipe %s => %s.\n", pipe_name, fname));
+	DEBUG(4,("Opening pipe %s.\n", pipe_name));
+
+	/* Strip \PIPE\ off the name. */
+	fname = pipe_name + PIPELEN;
 
 #if 0
 	/*
@@ -150,9 +147,6 @@ void reply_open_pipe_and_X(connection_struct *conn, struct smb_request *req)
 	/* Prepare the reply */
 	reply_outbuf(req, 15, 0);
 
-	SSVAL(req->outbuf, smb_vwv0, 0xff); /* andx chain ends */
-	SSVAL(req->outbuf, smb_vwv1, 0);    /* no andx offset */
-
 	/* Mark the opened file as an existing named pipe in message mode. */
 	SSVAL(req->outbuf,smb_vwv9,2);
 	SSVAL(req->outbuf,smb_vwv10,0xc700);
@@ -163,6 +157,9 @@ void reply_open_pipe_and_X(connection_struct *conn, struct smb_request *req)
 	SIVAL(req->outbuf, smb_vwv6, 0);	/* size */
 	SSVAL(req->outbuf, smb_vwv8, 0);	/* rmode */
 	SSVAL(req->outbuf, smb_vwv11, 0x0001);
+
+	chain_reply(req);
+	return;
 }
 
 /****************************************************************************
@@ -203,10 +200,10 @@ void reply_pipe_write(struct smb_request *req)
 
 	data = req->buf + 3;
 
-	DEBUG(6, ("reply_pipe_write: %s, name: %s len: %d\n", fsp_fnum_dbg(fsp),
+	DEBUG(6, ("reply_pipe_write: %x name: %s len: %d\n", (int)fsp->fnum,
 		  fsp_str_dbg(fsp), (int)state->numtowrite));
 
-	subreq = np_write_send(state, req->sconn->ev_ctx,
+	subreq = np_write_send(state, smbd_event_context(),
 			       fsp->fake_file_handle, data, state->numtowrite);
 	if (subreq == NULL) {
 		TALLOC_FREE(state);
@@ -246,7 +243,7 @@ static void pipe_write_done(struct tevent_req *subreq)
 	DEBUG(3,("write-IPC nwritten=%d\n", (int)nwritten));
 
  send:
-	if (!srv_send_smb(req->xconn, (char *)req->outbuf,
+	if (!srv_send_smb(req->sconn, (char *)req->outbuf,
 			  true, req->seqnum+1,
 			  IS_CONN_ENCRYPTED(req->conn)||req->encrypted,
 			  &req->pcd)) {
@@ -273,7 +270,7 @@ void reply_pipe_write_and_X(struct smb_request *req)
 {
 	files_struct *fsp = file_fsp(req, SVAL(req->vwv+2, 0));
 	int smb_doff = SVAL(req->vwv+11, 0);
-	const uint8_t *data;
+	uint8_t *data;
 	struct pipe_write_andx_state *state;
 	struct tevent_req *subreq;
 
@@ -299,10 +296,10 @@ void reply_pipe_write_and_X(struct smb_request *req)
 		((SVAL(req->vwv+7, 0) & (PIPE_START_MESSAGE|PIPE_RAW_MODE))
 		 == (PIPE_START_MESSAGE|PIPE_RAW_MODE));
 
-	DEBUG(6, ("reply_pipe_write_and_X: %s, name: %s len: %d\n",
-		  fsp_fnum_dbg(fsp), fsp_str_dbg(fsp), (int)state->numtowrite));
+	DEBUG(6, ("reply_pipe_write_and_X: %x name: %s len: %d\n",
+		  (int)fsp->fnum, fsp_str_dbg(fsp), (int)state->numtowrite));
 
-	data = (const uint8_t *)smb_base(req->inbuf) + smb_doff;
+	data = (uint8_t *)smb_base(req->inbuf) + smb_doff;
 
 	if (state->pipe_start_message_raw) {
 		/*
@@ -322,7 +319,7 @@ void reply_pipe_write_and_X(struct smb_request *req)
 		state->numtowrite -= 2;
 	}
 
-	subreq = np_write_send(state, req->sconn->ev_ctx,
+	subreq = np_write_send(state, smbd_event_context(),
 			       fsp->fake_file_handle, data, state->numtowrite);
 	if (subreq == NULL) {
 		TALLOC_FREE(state);
@@ -358,20 +355,18 @@ static void pipe_write_andx_done(struct tevent_req *subreq)
 
 	reply_outbuf(req, 6, 0);
 
-	SSVAL(req->outbuf, smb_vwv0, 0xff); /* andx chain ends */
-	SSVAL(req->outbuf, smb_vwv1, 0);    /* no andx offset */
-
 	nwritten = (state->pipe_start_message_raw ? nwritten + 2 : nwritten);
 	SSVAL(req->outbuf,smb_vwv2,nwritten);
 
 	DEBUG(3,("writeX-IPC nwritten=%d\n", (int)nwritten));
 
  done:
+	chain_reply(req);
 	/*
 	 * We must free here as the ownership of req was
 	 * moved to the connection struct in reply_pipe_write_and_X().
 	 */
-	smb_request_done(req);
+	TALLOC_FREE(req);
 }
 
 /****************************************************************************
@@ -399,7 +394,7 @@ void reply_pipe_read_and_X(struct smb_request *req)
            is deliberate, instead we always return the next lump of
            data on the pipe */
 #if 0
-	uint32_t smb_offs = IVAL(req->vwv+3, 0);
+	uint32 smb_offs = IVAL(req->vwv+3, 0);
 #endif
 
 	if (!fsp_is_np(fsp)) {
@@ -422,12 +417,8 @@ void reply_pipe_read_and_X(struct smb_request *req)
 	state->smb_maxcnt = SVAL(req->vwv+5, 0);
 	state->smb_mincnt = SVAL(req->vwv+6, 0);
 
-	reply_outbuf(req, 12, state->smb_maxcnt + 1 /* padding byte */);
-	SSVAL(req->outbuf, smb_vwv0, 0xff); /* andx chain ends */
-	SSVAL(req->outbuf, smb_vwv1, 0);    /* no andx offset */
-	SCVAL(smb_buf(req->outbuf), 0, 0); /* padding byte */
-
-	data = (uint8_t *)smb_buf(req->outbuf) + 1 /* padding byte */;
+	reply_outbuf(req, 12, state->smb_maxcnt);
+	data = (uint8_t *)smb_buf(req->outbuf);
 
 	/*
 	 * We have to tell the upper layers that we're async.
@@ -435,7 +426,7 @@ void reply_pipe_read_and_X(struct smb_request *req)
 	state->outbuf = req->outbuf;
 	req->outbuf = NULL;
 
-	subreq = np_read_send(state, req->sconn->ev_ctx,
+	subreq = np_read_send(state, smbd_event_context(),
 			      fsp->fake_file_handle, data,
 			      state->smb_maxcnt);
 	if (subreq == NULL) {
@@ -459,8 +450,6 @@ static void pipe_read_andx_done(struct tevent_req *subreq)
 	status = np_read_recv(subreq, &nread, &is_data_outstanding);
 	TALLOC_FREE(subreq);
 	if (!NT_STATUS_IS_OK(status)) {
-		NTSTATUS old = status;
-		status = nt_status_np_pipe(old);
 		reply_nterror(req, status);
 		goto done;
 	}
@@ -468,8 +457,7 @@ static void pipe_read_andx_done(struct tevent_req *subreq)
 	req->outbuf = state->outbuf;
 	state->outbuf = NULL;
 
-	srv_set_message((char *)req->outbuf, 12, nread + 1 /* padding byte */,
-			false);
+	srv_set_message((char *)req->outbuf, 12, nread, False);
 
 #if 0
 	/*
@@ -487,20 +475,20 @@ static void pipe_read_andx_done(struct tevent_req *subreq)
 
 	SSVAL(req->outbuf,smb_vwv5,nread);
 	SSVAL(req->outbuf,smb_vwv6,
-	      (smb_wct - 4)	/* offset from smb header to wct */
+	      req_wct_ofs(req)
 	      + 1 		/* the wct field */
 	      + 12 * sizeof(uint16_t) /* vwv */
-	      + 2		/* the buflen field */
-	      + 1);		/* padding byte */
+	      + 2);		/* the buflen field */
 	SSVAL(req->outbuf,smb_vwv11,state->smb_maxcnt);
-
+  
 	DEBUG(3,("readX-IPC min=%d max=%d nread=%d\n",
 		 state->smb_mincnt, state->smb_maxcnt, (int)nread));
 
  done:
+	chain_reply(req);
 	/*
 	 * We must free here as the ownership of req was
 	 * moved to the connection struct in reply_pipe_read_and_X().
 	 */
-	smb_request_done(req);
+	TALLOC_FREE(req);
 }

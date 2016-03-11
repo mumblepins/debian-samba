@@ -111,7 +111,7 @@ static NTSTATUS make_connection(struct smbsrv_request *req,
 	enum ntvfs_type type;
 	const char *type_str;
 	struct share_config *scfg;
-	char *sharetype;
+	const char *sharetype;
 
 	/* the service might be of the form \\SERVER\SHARE. Should we put
 	   the server name we get from this somewhere? */
@@ -124,7 +124,7 @@ static NTSTATUS make_connection(struct smbsrv_request *req,
 
 	status = share_get_config(req, req->smb_conn->share_context, service, &scfg);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0,("make_connection: couldn't find service %s: %s\n", service, nt_errstr(status)));
+		DEBUG(0,("make_connection: couldn't find service %s\n", service));
 		return NT_STATUS_BAD_NETWORK_NAME;
 	}
 
@@ -138,7 +138,7 @@ static NTSTATUS make_connection(struct smbsrv_request *req,
 	}
 
 	/* work out what sort of connection this is */
-	sharetype = share_string_option(req, scfg, "type", "DISK");
+	sharetype = share_string_option(scfg, "type", "DISK");
 	if (sharetype && strcmp(sharetype, "IPC") == 0) {
 		type = NTVFS_IPC;
 		type_str = "IPC";
@@ -149,7 +149,6 @@ static NTSTATUS make_connection(struct smbsrv_request *req,
 		type = NTVFS_DISK;
 		type_str = "A:";
 	}
-	TALLOC_FREE(sharetype);
 
 	if (strcmp(dev, "?????") != 0 && strcasecmp(type_str, dev) != 0) {
 		/* the client gave us the wrong device type */

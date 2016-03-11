@@ -39,7 +39,6 @@
 #include "../libcli/named_pipe_auth/npa_tstream.h"
 #include "smbd/process_model.h"
 
-NTSTATUS server_service_rpc_init(void);
 
 /*
   open the dcerpc server sockets
@@ -72,21 +71,10 @@ static void dcesrv_task_init(struct task_server *task)
 	}
 
 	for (e=dce_ctx->endpoint_list;e;e=e->next) {
-		enum dcerpc_transport_t transport =
-			dcerpc_binding_get_transport(e->ep_description);
-
-		if (transport == NCACN_HTTP) {
-			/*
-			 * We don't support ncacn_http yet
-			 */
-			continue;
-		}
-
 		status = dcesrv_add_ep(dce_ctx, task->lp_ctx, e, task->event_ctx, model_ops);
 		if (!NT_STATUS_IS_OK(status)) goto failed;
 	}
 
-	irpc_add_name(task->msg_ctx, "rpc_server");
 	return;
 failed:
 	task_server_terminate(task, "Failed to startup dcerpc server task", true);	

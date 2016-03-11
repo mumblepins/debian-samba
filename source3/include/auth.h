@@ -21,8 +21,6 @@
 
 #include "../auth/common_auth.h"
 
-struct gensec_security;
-
 struct extra_auth_info {
 	struct dom_sid user_sid;
 	struct dom_sid pgid_sid;
@@ -38,15 +36,17 @@ struct auth_serversupplied_info {
 
 	struct security_token *security_token;
 
-	/* These are the intermediate session keys, as provided by a
-	 * NETLOGON server and used by NTLMSSP to negotiate key
-	 * exchange etc (which will provide the session_key in the
-	 * auth_session_info).  It is usually the same as the keys in
-	 * the info3, but is a variable length structure here to allow
-	 * it to be omitted if the auth module does not know it.
+	/* This is the final session key, as used by SMB signing, and
+	 * (truncated to 16 bytes) encryption on the SAMR and LSA pipes
+	 * when over ncacn_np.
+	 * It is calculated by NTLMSSP from the session key in the info3,
+	 * and is  set from the Kerberos session key using
+	 * krb5_auth_con_getremotesubkey().
+	 *
+	 * Bottom line, it is not the same as the session keys in info3.
 	 */
 
-	DATA_BLOB session_key;
+	DATA_BLOB user_session_key;
 	DATA_BLOB lm_session_key;
 
 	struct netr_SamInfo3 *info3;
@@ -64,17 +64,16 @@ struct auth_serversupplied_info {
 	bool nss_token;
 
 	char *unix_name;
+
+	/*
+	 * For performance reasons we keep an alpha_strcpy-sanitized version
+	 * of the username around as long as the global variable current_user
+	 * still exists. If we did not do keep this, we'd have to call
+	 * alpha_strcpy whenever we do a become_user(), potentially on every
+	 * smb request. See set_current_user_info.
+	 */
+	char *sanitized_username;
 };
-
-struct auth_context;
-
-typedef NTSTATUS (*prepare_gensec_fn)(const struct auth_context *auth_context, 
-				      TALLOC_CTX *mem_ctx,
-				      struct gensec_security **gensec_context);
-
-typedef NTSTATUS (*make_auth4_context_fn)(const struct auth_context *auth_context, 
-					  TALLOC_CTX *mem_ctx,
-					  struct auth4_context **auth4_context);
 
 struct auth_context {
 	DATA_BLOB challenge; 
@@ -82,12 +81,18 @@ struct auth_context {
 	/* Who set this up in the first place? */ 
 	const char *challenge_set_by; 
 
+	bool challenge_may_be_modified;
+
+	struct auth_methods *challenge_set_method; 
 	/* What order are the various methods in?   Try to stop it changing under us */ 
 	struct auth_methods *auth_method_list;	
 
-	prepare_gensec_fn prepare_gensec;
-	make_auth4_context_fn make_auth4_context;
-	const char *forced_samba4_methods;
+	NTSTATUS (*get_ntlm_challenge)(struct auth_context *auth_context,
+				       uint8_t chal[8]);
+	NTSTATUS (*check_ntlm_password)(const struct auth_context *auth_context,
+					const struct auth_usersupplied_info *user_info, 
+					struct auth_serversupplied_info **server_info);
+	NTSTATUS (*nt_status_squash)(NTSTATUS nt_status);
 };
 
 typedef struct auth_methods
@@ -101,13 +106,16 @@ typedef struct auth_methods
 			 const struct auth_usersupplied_info *user_info, 
 			 struct auth_serversupplied_info **server_info);
 
-	/* Optional methods allowing this module to provide a way to get a gensec context and an auth4_context */
-	prepare_gensec_fn prepare_gensec;
-	make_auth4_context_fn make_auth4_context;
+	/* If you are using this interface, then you are probably
+	 * getting something wrong.  This interface is only for
+	 * security=server, and makes a number of compromises to allow
+	 * that.  It is not compatible with being a PDC.  */
+	DATA_BLOB (*get_chal)(const struct auth_context *auth_context,
+			      void **my_private_data, 
+			      TALLOC_CTX *mem_ctx);
+
 	/* Used to keep tabs on things like the cli for SMB server authentication */
 	void *private_data;
-
-	uint32_t flags;
 
 } auth_methods;
 
@@ -122,18 +130,11 @@ struct auth_init_function_entry {
 	struct auth_init_function_entry *prev, *next;
 };
 
-extern const struct gensec_security_ops gensec_ntlmssp3_server_ops;
-
-/* Intent of use for session key. LSA and SAMR pipes use 16 bytes of session key when doing create/modify calls */
-enum session_key_use_intent {
-	KEY_USE_FULL = 0,
-	KEY_USE_16BYTES
-};
+struct auth_ntlmssp_state;
 
 /* Changed from 1 -> 2 to add the logon_parameters field. */
 /* Changed from 2 -> 3 when we reworked many auth structures to use IDL or be in common with Samba4 */
-/* Changed from 3 -> 4 when we reworked added the flags */
-#define AUTH_INTERFACE_VERSION 4
+#define AUTH_INTERFACE_VERSION 3
 
 #include "auth/proto.h"
 

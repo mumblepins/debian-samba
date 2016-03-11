@@ -7,6 +7,7 @@ from samba_utils import *
 def SAMBA_PIDL(bld, pname, source,
                options='',
                output_dir='.',
+               symlink=False,
                generate_tables=True):
     '''Build a IDL file using pidl.
        This will produce up to 13 output files depending on the options used'''
@@ -30,8 +31,8 @@ def SAMBA_PIDL(bld, pname, source,
                     '--client'            : 'ndr_%s_c.c ndr_%s_c.h',
                     '--python'            : 'py_%s.c',
                     '--tdr-parser'        : 'tdr_%s.c tdr_%s.h',
-                    '--dcom-proxy'        : '%s_p.c',
-                    '--com-header'        : 'com_%s.h'
+                    '--dcom-proxy'	  : '%s_p.c',
+                    '--com-header'	  : 'com_%s.h'
                     }
 
     table_header_idx = None
@@ -59,9 +60,9 @@ def SAMBA_PIDL(bld, pname, source,
     # the cd .. is needed because pidl currently is sensitive to the directory it is run in
     cpp = ""
     cc = ""
-    if bld.CONFIG_SET("CPP") and bld.CONFIG_GET("CPP") != "":
+    if bld.CONFIG_SET("CPP"):
         if isinstance(bld.CONFIG_GET("CPP"), list):
-            cpp = 'CPP="%s"' % " ".join(bld.CONFIG_GET("CPP"))
+            cpp = 'CPP="%s"' % bld.CONFIG_GET("CPP")[0]
         else:
             cpp = 'CPP="%s"' % bld.CONFIG_GET("CPP")
 
@@ -71,14 +72,14 @@ def SAMBA_PIDL(bld, pname, source,
 
     if bld.CONFIG_SET("CC"):
         if isinstance(bld.CONFIG_GET("CC"), list):
-            cc = 'CC="%s"' % " ".join(bld.CONFIG_GET("CC"))
+            cc = 'CC="%s"' % bld.CONFIG_GET("CC")[0]
         else:
             cc = 'CC="%s"' % bld.CONFIG_GET("CC")
 
     t = bld(rule='cd .. && %s %s ${PERL} "${PIDL}" --quiet ${OPTIONS} --outputdir ${OUTPUTDIR} -- "${SRC[0].abspath(env)}"' % (cpp, cc),
             ext_out    = '.c',
             before     = 'cc',
-            update_outputs = True,
+            on_results = True,
             shell      = True,
             source     = source,
             target     = out_files,
@@ -90,7 +91,27 @@ def SAMBA_PIDL(bld, pname, source,
 
     t.env.PIDL = os.path.join(bld.srcnode.abspath(), 'pidl/pidl')
     t.env.OPTIONS = TO_LIST(options)
-    t.env.OUTPUTDIR = bld.bldnode.name + '/' + bld.path.find_dir(output_dir).bldpath(t.env)
+
+    # this rather convoluted set of path calculations is to cope with the possibility
+    # that gen_ndr is a symlink into the source tree. By doing this for the source3
+    # gen_ndr directory we end up generating identical output in gen_ndr for the old
+    # build system and the new one. That makes keeping things in sync much easier.
+    # eventually we should drop the gen_ndr files in git, but in the meanwhile this works
+
+    found_dir = bld.path.find_dir(output_dir)
+    if not 'abspath' in dir(found_dir):
+        Logs.error('Unable to find pidl output directory %s' %
+                   os.path.normpath(os.path.join(bld.curdir, output_dir)))
+        sys.exit(1)
+
+    outdir = bld.path.find_dir(output_dir).abspath(t.env)
+
+    if symlink and not os.path.lexists(outdir):
+        link_source = os.path.normpath(os.path.join(bld.curdir,output_dir))
+        os.symlink(link_source, outdir)
+
+    real_outputdir = os.path.realpath(outdir)
+    t.env.OUTPUTDIR = os_path_relpath(real_outputdir, os.path.dirname(bld.env.BUILD_DIRECTORY))
 
     if generate_tables and table_header_idx is not None:
         pidl_headers = LOCAL_CACHE(bld, 'PIDL_HEADERS')
@@ -103,10 +124,11 @@ Build.BuildContext.SAMBA_PIDL = SAMBA_PIDL
 def SAMBA_PIDL_LIST(bld, name, source,
                     options='',
                     output_dir='.',
+                    symlink=False,
                     generate_tables=True):
     '''A wrapper for building a set of IDL files'''
     for p in TO_LIST(source):
-        bld.SAMBA_PIDL(name, p, options=options, output_dir=output_dir, generate_tables=generate_tables)
+        bld.SAMBA_PIDL(name, p, options=options, output_dir=output_dir, symlink=symlink, generate_tables=generate_tables)
 Build.BuildContext.SAMBA_PIDL_LIST = SAMBA_PIDL_LIST
 
 
@@ -135,7 +157,7 @@ def SAMBA_PIDL_TABLES(bld, name, target):
             rule     = '${PERL} ${SRC} --output ${TGT} | sed "s|default/||" > ${TGT}',
             ext_out  = '.c',
             before   = 'cc',
-            update_outputs = True,
+            on_results = True,
             shell    = True,
             source   = '../../librpc/tables.pl',
             target   = target,

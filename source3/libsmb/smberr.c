@@ -40,7 +40,7 @@ typedef const struct
 } err_code_struct;
 
 /* Dos Error Messages */
-static err_code_struct dos_msgs[] = {
+err_code_struct dos_msgs[] = {
   {"ERRbadfunc",ERRbadfunc,"Invalid function."},
   {"ERRbadfile",ERRbadfile,"File not found."},
   {"ERRbadpath",ERRbadpath,"Directory invalid."},
@@ -79,7 +79,7 @@ static err_code_struct dos_msgs[] = {
   {NULL,-1,NULL}};
 
 /* Server Error Messages */
-static err_code_struct server_msgs[] = {
+err_code_struct server_msgs[] = {
   {"ERRerror",1,"Non-specific error code."},
   {"ERRbadpw",2,"Bad password - name/password pair in a Tree Connect or Session Setup are invalid."},
   {"ERRbadtype",3,"reserved."},
@@ -115,7 +115,7 @@ static err_code_struct server_msgs[] = {
   {NULL,-1,NULL}};
 
 /* Hard Error Messages */
-static err_code_struct hard_msgs[] = {
+err_code_struct hard_msgs[] = {
   {"ERRnowrite",19,"Attempt to write on write-protected diskette."},
   {"ERRbadunit",20,"Unknown unit."},
   {"ERRnotready",21,"Drive not ready."},
@@ -137,7 +137,7 @@ static err_code_struct hard_msgs[] = {
   {NULL,-1,NULL}};
 
 
-static const struct
+const struct
 {
   int code;
   const char *e_class;
@@ -158,7 +158,7 @@ static const struct
 /****************************************************************************
 return a SMB error name from a class and code
 ****************************************************************************/
-const char *smb_dos_err_name(uint8_t e_class, uint16_t num)
+const char *smb_dos_err_name(uint8 e_class, uint16 num)
 {
 	char *result;
 	int i,j;
@@ -187,7 +187,7 @@ const char *smb_dos_err_name(uint8_t e_class, uint16_t num)
 
 const char *get_dos_error_msg(WERROR result)
 {
-	uint16_t errnum;
+	uint16 errnum;
 
 	errnum = W_ERROR_V(result);
 
@@ -197,7 +197,7 @@ const char *get_dos_error_msg(WERROR result)
 /****************************************************************************
 return a SMB error class name as a string.
 ****************************************************************************/
-const char *smb_dos_err_class(uint8_t e_class)
+const char *smb_dos_err_class(uint8 e_class)
 {
 	char *result;
 	int i;
@@ -210,6 +210,48 @@ const char *smb_dos_err_class(uint8_t e_class)
 
 	result = talloc_asprintf(talloc_tos(), "Error: Unknown class (%d)",
 				 e_class);
+	SMB_ASSERT(result != NULL);
+	return result;
+}
+
+/****************************************************************************
+return a SMB string from an SMB buffer
+****************************************************************************/
+char *smb_dos_errstr(char *inbuf)
+{
+	char *result;
+	int e_class = CVAL(inbuf,smb_rcls);
+	int num = SVAL(inbuf,smb_err);
+	int i,j;
+
+	for (i=0;err_classes[i].e_class;i++)
+		if (err_classes[i].code == e_class) {
+			if (err_classes[i].err_msgs) {
+				err_code_struct *err = err_classes[i].err_msgs;
+				for (j=0;err[j].name;j++)
+					if (num == err[j].code) {
+						if (DEBUGLEVEL > 0)
+							result = talloc_asprintf(
+								talloc_tos(), "%s - %s (%s)",
+								err_classes[i].e_class,
+								err[j].name,err[j].message);
+						else
+							result = talloc_asprintf(
+								talloc_tos(), "%s - %s",
+								err_classes[i].e_class,
+								err[j].name);
+						goto done;
+					}
+			}
+
+			result = talloc_asprintf(talloc_tos(), "%s - %d",
+						 err_classes[i].e_class, num);
+			goto done;
+		}
+
+	result = talloc_asprintf(talloc_tos(), "Error: Unknown error (%d,%d)",
+				 e_class, num);
+ done:
 	SMB_ASSERT(result != NULL);
 	return result;
 }

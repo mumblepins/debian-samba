@@ -26,7 +26,6 @@
 #include "librpc/gen_ndr/winreg.h"
 #include "libcli/security/security.h"
 #include "system/filesys.h"
-#include "lib/registry/tests/proto.h"
 
 /**
  * Test obtaining a predefined key.
@@ -255,9 +254,8 @@ static bool test_query_key(struct torture_context *tctx, void *_data)
 	NTTIME last_changed_time;
 	uint32_t num_subkeys, num_values;
 	const char *classname;
-	const char *data = "temp";
 
-	if (!create_test_key(tctx, rctx, "Muenchen", &root, &subkey))
+	if (!create_test_key(tctx, rctx, "Munchen", &root, &subkey))
 		return false;
 
 	error = reg_key_get_info(tctx, subkey, &classname,
@@ -268,19 +266,6 @@ static bool test_query_key(struct torture_context *tctx, void *_data)
 	torture_assert(tctx, classname == NULL, "classname");
 	torture_assert_int_equal(tctx, num_subkeys, 0, "num subkeys");
 	torture_assert_int_equal(tctx, num_values, 0, "num values");
-
-	error = reg_val_set(subkey, "", REG_SZ,
-			    data_blob_string_const(data));
-	torture_assert_werr_ok(tctx, error, "set default value");
-
-	error = reg_key_get_info(tctx, subkey, &classname,
-				 &num_subkeys, &num_values,
-				 &last_changed_time, NULL, NULL, NULL);
-
-	torture_assert_werr_ok(tctx, error, "get info key");
-	torture_assert(tctx, classname == NULL, "classname");
-	torture_assert_int_equal(tctx, num_subkeys, 0, "num subkeys");
-	torture_assert_int_equal(tctx, num_values, 1, "num values");
 
 	return true;
 }
@@ -423,8 +408,6 @@ static bool test_get_value(struct torture_context *tctx, void *_data)
 	DATA_BLOB data;
 	char value[4];
 	uint32_t type;
-	const char *data_val = "temp";
-
 	SIVAL(value, 0, 42);
 
 	if (!create_test_key(tctx, rctx, "Duisburg", &root, &subkey))
@@ -448,18 +431,6 @@ static bool test_get_value(struct torture_context *tctx, void *_data)
 				 "value content ok");
 	torture_assert_int_equal(tctx, REG_DWORD, type, "value type");
 
-	error = reg_val_set(subkey, "", REG_SZ,
-			    data_blob_talloc(tctx, data_val,
-					     strlen(data_val)));
-	torture_assert_werr_ok(tctx, error, "set default value");
-
-	error = reg_key_get_value_by_name(tctx, subkey, "", &type,
-					  &data);
-	torture_assert_werr_ok(tctx, error, "getting default value");
-	torture_assert_int_equal(tctx, REG_SZ, type, "value type ok");
-	torture_assert_int_equal(tctx, strlen(data_val), data.length, "value length ok");
-	torture_assert_str_equal(tctx, data_val, (char *)data.data, "value ok");
-
 	return true;
 }
 
@@ -474,8 +445,6 @@ static bool test_del_value(struct torture_context *tctx, void *_data)
 	DATA_BLOB data;
 	uint32_t type;
 	char value[4];
-	const char *data_val = "temp";
-
 	SIVAL(value, 0, 42);
 
 	if (!create_test_key(tctx, rctx, "Warschau", &root, &subkey))
@@ -498,18 +467,6 @@ static bool test_del_value(struct torture_context *tctx, void *_data)
 	torture_assert_werr_equal(tctx, error, WERR_BADFILE,
 				  "getting missing value");
 
-	error = reg_del_value(tctx, subkey, "");
-	torture_assert_werr_equal(tctx, error, WERR_BADFILE,
-				  "unsetting missing default value");
-
-	error = reg_val_set(subkey, "", REG_SZ,
-			    data_blob_talloc(tctx, data_val,
-					     strlen(data_val)));
-	torture_assert_werr_ok(tctx, error, "set default value");
-
-	error = reg_del_value(tctx, subkey, "");
-	torture_assert_werr_ok (tctx, error, "unsetting default value");
-
 	return true;
 }
 
@@ -525,8 +482,6 @@ static bool test_list_values(struct torture_context *tctx, void *_data)
 	uint32_t type;
 	const char *name;
 	char value[4];
-	const char *data_val = "temp";
-
 	SIVAL(value, 0, 42);
 
 	if (!create_test_key(tctx, rctx, "Bonn", &root, &subkey))
@@ -550,17 +505,6 @@ static bool test_list_values(struct torture_context *tctx, void *_data)
 					   &type, &data);
 	torture_assert_werr_equal(tctx, error, WERR_NO_MORE_ITEMS,
 				  "getting missing value");
-
-	error = reg_val_set(subkey, "", REG_SZ,
-			    data_blob_talloc(tctx, data_val, strlen(data_val)));
-	torture_assert_werr_ok(tctx, error, "set default value");
-
-	error = reg_key_get_value_by_index(tctx, subkey, 0, &name,
-					   &type, &data);
-	torture_assert_werr_ok(tctx, error, "getting default value");
-	torture_assert_int_equal(tctx, REG_SZ, type, "value type ok");
-	torture_assert_int_equal(tctx, strlen(data_val), data.length, "value length ok");
-	torture_assert_str_equal(tctx, data_val, (char *)data.data, "value ok");
 
 	return true;
 }

@@ -26,13 +26,6 @@
 #include "librpc/gen_ndr/ndr_echo.h"
 #include "lib/events/events.h"
 
-#define DCESRV_INTERFACE_RPCECHO_BIND(call, iface) \
-       dcesrv_interface_rpcecho_bind(call, iface)
-static NTSTATUS dcesrv_interface_rpcecho_bind(struct dcesrv_call_state *dce_call,
-					      const struct dcesrv_interface *iface)
-{
-	return dcesrv_interface_bind_allow_connect(dce_call, iface);
-}
 
 static NTSTATUS dcesrv_echo_AddOne(struct dcesrv_call_state *dce_call, TALLOC_CTX *mem_ctx, struct echo_AddOne *r)
 {
@@ -199,7 +192,7 @@ static long dcesrv_echo_TestSleep(struct dcesrv_call_state *dce_call, TALLOC_CTX
 	p->dce_call	= dce_call;
 	p->r		= r;
 
-	tevent_add_timer(dce_call->event_ctx, p,
+	event_add_timed(dce_call->event_ctx, p, 
 			timeval_add(&dce_call->time, r->in.seconds, 0),
 			echo_TestSleep_handler, p);
 

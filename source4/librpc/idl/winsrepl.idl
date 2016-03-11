@@ -13,8 +13,7 @@ import "nbt.idl";
 
 [
 	uuid("915f5653-bac1-431c-97ee-9ffb34526921"),
-	helpstring("WINS Replication PDUs"),
-	helper("../libcli/nbt/libnbt.h")
+	helpstring("WINS Replication PDUs")
 ] interface wrepl
 {
 	const int WINS_REPLICATION_PORT = 42;

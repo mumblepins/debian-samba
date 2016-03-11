@@ -37,7 +37,6 @@ struct tevent_req *winbindd_pam_logoff_send(TALLOC_CTX *mem_ctx,
 	struct winbindd_domain *domain;
 	fstring name_domain, user;
 	uid_t caller_uid;
-	gid_t caller_gid;
 	int res;
 
 	req = tevent_req_create(mem_ctx, &state,
@@ -72,7 +71,7 @@ struct tevent_req *winbindd_pam_logoff_send(TALLOC_CTX *mem_ctx,
 
 	caller_uid = (uid_t)-1;
 
-	res = getpeereid(cli->sock, &caller_uid, &caller_gid);
+	res = sys_getpeereid(cli->sock, &caller_uid);
 	if (res != 0) {
 		DEBUG(1,("winbindd_pam_logoff: failed to check peerid: %s\n",
 			strerror(errno)));

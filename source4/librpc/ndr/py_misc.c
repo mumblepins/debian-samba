@@ -1,7 +1,6 @@
 /* 
    Unix SMB/CIFS implementation.
    Samba utility functions
-
    Copyright (C) Jelmer Vernooij <jelmer@samba.org> 2008
    
    This program is free software; you can redistribute it and/or modify
@@ -20,11 +19,15 @@
 #include <Python.h>
 #include "librpc/gen_ndr/misc.h"
 
+#ifndef Py_RETURN_NONE
+#define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
+#endif
+
 static int py_GUID_cmp(PyObject *py_self, PyObject *py_other)
 {
 	int ret;
-	struct GUID *self = pytalloc_get_ptr(py_self), *other;
-	other = pytalloc_get_ptr(py_other);
+	struct GUID *self = py_talloc_get_ptr(py_self), *other;
+	other = py_talloc_get_ptr(py_other);
 	if (other == NULL)
 		return -1;
 
@@ -40,7 +43,7 @@ static int py_GUID_cmp(PyObject *py_self, PyObject *py_other)
 
 static PyObject *py_GUID_str(PyObject *py_self)
 {
-	struct GUID *self = pytalloc_get_ptr(py_self);
+	struct GUID *self = py_talloc_get_ptr(py_self);
 	char *str = GUID_string(NULL, self);
 	PyObject *ret = PyString_FromString(str);
 	talloc_free(str);
@@ -49,7 +52,7 @@ static PyObject *py_GUID_str(PyObject *py_self)
 
 static PyObject *py_GUID_repr(PyObject *py_self)
 {
-	struct GUID *self = pytalloc_get_ptr(py_self);
+	struct GUID *self = py_talloc_get_ptr(py_self);
 	char *str = GUID_string(NULL, self);
 	PyObject *ret = PyString_FromFormat("GUID('%s')", str);
 	talloc_free(str);
@@ -60,7 +63,7 @@ static int py_GUID_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
 	PyObject *str = NULL;
 	NTSTATUS status;
-	struct GUID *guid = pytalloc_get_ptr(self);
+	struct GUID *guid = py_talloc_get_ptr(self);
 	const char *kwnames[] = { "str", NULL };
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|O", discard_const_p(char *, kwnames), &str))
@@ -99,7 +102,7 @@ static int py_policy_handle_init(PyObject *self, PyObject *args, PyObject *kwarg
 {
 	char *str = NULL;
 	NTSTATUS status;
-	struct policy_handle *handle = pytalloc_get_ptr(self);
+	struct policy_handle *handle = py_talloc_get_ptr(self);
 	const char *kwnames[] = { "uuid", "type", NULL };
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|si", discard_const_p(char *, kwnames), &str, &handle->handle_type))
@@ -118,7 +121,7 @@ static int py_policy_handle_init(PyObject *self, PyObject *args, PyObject *kwarg
 
 static PyObject *py_policy_handle_repr(PyObject *py_self)
 {
-	struct policy_handle *self = pytalloc_get_ptr(py_self);
+	struct policy_handle *self = py_talloc_get_ptr(py_self);
 	char *uuid_str = GUID_string(NULL, &self->uuid);
 	PyObject *ret = PyString_FromFormat("policy_handle(%d, '%s')", self->handle_type, uuid_str);
 	talloc_free(uuid_str);
@@ -127,7 +130,7 @@ static PyObject *py_policy_handle_repr(PyObject *py_self)
 
 static PyObject *py_policy_handle_str(PyObject *py_self)
 {
-	struct policy_handle *self = pytalloc_get_ptr(py_self);
+	struct policy_handle *self = py_talloc_get_ptr(py_self);
 	char *uuid_str = GUID_string(NULL, &self->uuid);
 	PyObject *ret = PyString_FromFormat("%d, %s", self->handle_type, uuid_str);
 	talloc_free(uuid_str);

@@ -54,7 +54,7 @@ struct tevent_req *winbindd_sid_to_gid_send(TALLOC_CTX *mem_ctx,
 		return tevent_req_post(req, ev);
 	}
 
-	subreq = wb_sids2xids_send(state, ev, &state->sid, 1);
+	subreq = wb_sid2gid_send(state, ev, &state->sid);
 	if (tevent_req_nomem(subreq, req)) {
 		return tevent_req_post(req, ev);
 	}
@@ -69,26 +69,12 @@ static void winbindd_sid_to_gid_done(struct tevent_req *subreq)
 	struct winbindd_sid_to_gid_state *state = tevent_req_data(
 		req, struct winbindd_sid_to_gid_state);
 	NTSTATUS status;
-	struct unixid xids[1];
 
-	status = wb_sids2xids_recv(subreq, xids, ARRAY_SIZE(xids));
+	status = wb_sid2gid_recv(subreq, &state->gid);
 	TALLOC_FREE(subreq);
 	if (tevent_req_nterror(req, status)) {
 		return;
 	}
-
-	/*
-	 * We are filtering further down in sids2xids, but that filtering
-	 * depends on the actual type of the sid handed in (as determined
-	 * by lookupsids). Here we need to filter for the type of object
-	 * actually requested, in this case gid.
-	 */
-	if (!(xids[0].type == ID_TYPE_GID || xids[0].type == ID_TYPE_BOTH)) {
-		tevent_req_nterror(req, NT_STATUS_NONE_MAPPED);
-		return;
-	}
-
-	state->gid = (gid_t)xids[0].id;
 	tevent_req_done(req);
 }
 

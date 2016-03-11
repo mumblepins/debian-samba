@@ -24,35 +24,6 @@ struct dcerpc_binding_handle;
 struct ndr_interface_table;
 struct tsocket_address;
 
-struct npa_state {
-	struct tstream_context *stream;
-
-	struct tevent_queue *read_queue;
-	struct tevent_queue *write_queue;
-
-	uint64_t allocation_size;
-	uint16_t device_state;
-	uint16_t file_type;
-
-	void *private_data;
-};
-
-NTSTATUS make_external_rpc_pipe(TALLOC_CTX *mem_ctx,
-				const char *pipe_name,
-				const struct tsocket_address *local_address,
-				const struct tsocket_address *remote_address,
-				const struct auth_session_info *session_info,
-				struct npa_state **pnpa);
-
-NTSTATUS make_internal_rpc_pipe_socketpair(TALLOC_CTX *mem_ctx,
-					   struct tevent_context *ev_ctx,
-					   struct messaging_context *msg_ctx,
-					   const char *pipe_name,
-					   const struct ndr_syntax_id *syntax,
-					   const struct tsocket_address *remote_address,
-					   const struct auth_session_info *session_info,
-					   struct npa_state **pnpa);
-
 struct np_proxy_state {
 	uint16_t file_type;
 	uint16_t device_state;
@@ -64,32 +35,30 @@ struct np_proxy_state {
 
 struct pipes_struct *make_internal_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 					      const struct ndr_syntax_id *syntax,
-					      const struct tsocket_address *remote_address,
-					      const struct auth_session_info *session_info,
+					      struct client_address *client_id,
+					      const struct auth_serversupplied_info *session_info,
 					      struct messaging_context *msg_ctx);
 struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 				const char *pipe_name,
 				const struct tsocket_address *local_address,
 				const struct tsocket_address *remote_address,
-				const struct auth_session_info *session_info);
+				const struct auth_serversupplied_info *session_info);
 NTSTATUS rpcint_binding_handle(TALLOC_CTX *mem_ctx,
 			       const struct ndr_interface_table *ndr_table,
-			       const struct tsocket_address *remote_address,
-			       const struct auth_session_info *session_info,
+			       struct client_address *client_id,
+			       const struct auth_serversupplied_info *session_info,
 			       struct messaging_context *msg_ctx,
 			       struct dcerpc_binding_handle **binding_handle);
 NTSTATUS rpc_pipe_open_interface(TALLOC_CTX *mem_ctx,
-				 const struct ndr_interface_table *table,
-				 const struct auth_session_info *session_info,
-				 const struct tsocket_address *remote_address,
+				 const struct ndr_syntax_id *syntax,
+				 const struct auth_serversupplied_info *session_info,
+				 struct client_address *client_id,
 				 struct messaging_context *msg_ctx,
 				 struct rpc_pipe_client **cli_pipe);
 
-NTSTATUS rpc_pipe_open_internal(TALLOC_CTX *mem_ctx,
-				const struct ndr_syntax_id *abstract_syntax,
-				const struct auth_session_info *session_info,
-				const struct tsocket_address *remote_address,
-				struct messaging_context *msg_ctx,
-				struct rpc_pipe_client **presult);
+struct pipes_struct *get_first_internal_pipe(void);
+struct pipes_struct *get_next_internal_pipe(struct pipes_struct *p);
+bool check_open_pipes(void);
+int close_internal_rpc_pipe_hnd(struct pipes_struct *p);
 
 #endif /* _RPC_NCACN_NP_H_ */

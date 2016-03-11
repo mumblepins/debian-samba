@@ -89,6 +89,7 @@
 	dead time = 30
 
 	read prediction = yes
+	share modes = yes
 	max xmit = 17384
 	read size = 512</programlisting>
 

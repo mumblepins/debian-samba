@@ -28,10 +28,6 @@ extern struct poptOption popt_common_netapi_examples[];
 
 #define POPT_COMMON_LIBNETAPI_EXAMPLES { NULL, 0, POPT_ARG_INCLUDE_TABLE, popt_common_netapi_examples, 0, "Common samba netapi example options:", NULL },
 
-#ifndef POPT_TABLEEND
-#define POPT_TABLEEND { NULL, '\0', 0, 0, 0, NULL, NULL }
-#endif
-
 NET_API_STATUS test_netuseradd(const char *hostname,
 			       const char *username);
 
@@ -49,8 +45,6 @@ NET_API_STATUS netapitest_file(struct libnetapi_ctx *ctx,
 			       const char *hostname);
 NET_API_STATUS netapitest_server(struct libnetapi_ctx *ctx,
 				 const char *hostname);
-NET_API_STATUS netapitest_wksta(struct libnetapi_ctx *ctx,
-				const char *hostname);
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))

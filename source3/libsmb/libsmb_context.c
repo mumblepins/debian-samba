@@ -1,10 +1,10 @@
-/*
+/* 
    Unix SMB/Netbios implementation.
    SMB client library implementation
    Copyright (C) Andrew Tridgell 1998
    Copyright (C) Richard Sharpe 2000, 2002
    Copyright (C) John Terpstra 2000
-   Copyright (C) Tom Jansen (Ninja ISD) 2002
+   Copyright (C) Tom Jansen (Ninja ISD) 2002 
    Copyright (C) Derrell Lipman 2003-2008
    Copyright (C) Jeremy Allison 2007, 2008
 
@@ -27,10 +27,10 @@
 #include "libsmbclient.h"
 #include "libsmb_internal.h"
 #include "secrets.h"
-#include "../libcli/smb/smbXcli_base.h"
+
 
 /*
- * Is the logging working / configfile read ?
+ * Is the logging working / configfile read ? 
  */
 static bool SMBC_initialized = false;
 static unsigned int initialized_ctx_count = 0;
@@ -46,15 +46,19 @@ SMBC_module_init(void * punused)
     char *home = NULL;
     TALLOC_CTX *frame = talloc_stackframe();
 
+    load_case_tables_library();
+
     setup_logging("libsmbclient", DEBUG_STDOUT);
 
     /* Here we would open the smb.conf file if needed ... */
+
+    lp_set_in_client(True);
 
     home = getenv("HOME");
     if (home) {
         char *conf = NULL;
         if (asprintf(&conf, "%s/.smb/smb.conf", home) > 0) {
-            if (lp_load_client(conf)) {
+            if (lp_load(conf, True, False, False, True)) {
                 conf_loaded = True;
             } else {
                 DEBUG(5, ("Could not load config file: %s\n",
@@ -72,7 +76,7 @@ SMBC_module_init(void * punused)
          * defaults ...
          */
 
-        if (!lp_load_client(get_dyn_CONFIGFILE())) {
+        if (!lp_load(get_dyn_CONFIGFILE(), True, False, False, False)) {
             DEBUG(5, ("Could not load config file: %s\n",
                       get_dyn_CONFIGFILE()));
         } else if (home) {
@@ -85,7 +89,7 @@ SMBC_module_init(void * punused)
             if (asprintf(&conf,
                          "%s/.smb/smb.conf.append",
                          home) > 0) {
-                if (!lp_load_client_no_reinit(conf)) {
+                if (!lp_load(conf, True, False, False, False)) {
                     DEBUG(10,
                           ("Could not append config file: "
                            "%s\n",
@@ -121,11 +125,9 @@ SMBC_module_init(void * punused)
 static void
 SMBC_module_terminate(void)
 {
-    TALLOC_CTX *frame = talloc_stackframe();
     secrets_shutdown();
     gfree_all();
     SMBC_initialized = false;
-    TALLOC_FREE(frame);
 }
 
 
@@ -136,7 +138,6 @@ SMBCCTX *
 smbc_new_context(void)
 {
         SMBCCTX *context;
-	TALLOC_CTX *frame = talloc_stackframe();
 
         /* The first call to this function should initialize the module */
         SMB_THREAD_ONCE(&SMBC_initialized, SMBC_module_init, NULL);
@@ -147,7 +148,6 @@ smbc_new_context(void)
          */
         context = SMB_MALLOC_P(SMBCCTX);
         if (!context) {
-		TALLOC_FREE(frame);
                 errno = ENOMEM;
                 return NULL;
         }
@@ -156,7 +156,6 @@ smbc_new_context(void)
 
         context->internal = SMB_MALLOC_P(struct SMBC_internal_data);
         if (!context->internal) {
-		TALLOC_FREE(frame);
                 SAFE_FREE(context);
                 errno = ENOMEM;
                 return NULL;
@@ -167,7 +166,6 @@ smbc_new_context(void)
 
         smbc_setDebug(context, 0);
         smbc_setTimeout(context, 20000);
-        smbc_setPort(context, 0);
 
         smbc_setOptionFullTimeNames(context, False);
         smbc_setOptionOpenShareMode(context, SMBC_SHAREMODE_DENY_NONE);
@@ -194,7 +192,6 @@ smbc_new_context(void)
         smbc_setFunctionOpen(context, SMBC_open_ctx);
         smbc_setFunctionCreat(context, SMBC_creat_ctx);
         smbc_setFunctionRead(context, SMBC_read_ctx);
-        smbc_setFunctionSplice(context, SMBC_splice_ctx);
         smbc_setFunctionWrite(context, SMBC_write_ctx);
         smbc_setFunctionClose(context, SMBC_close_ctx);
         smbc_setFunctionUnlink(context, SMBC_unlink_ctx);
@@ -214,7 +211,6 @@ smbc_new_context(void)
         smbc_setFunctionTelldir(context, SMBC_telldir_ctx);
         smbc_setFunctionLseekdir(context, SMBC_lseekdir_ctx);
         smbc_setFunctionFstatdir(context, SMBC_fstatdir_ctx);
-        smbc_setFunctionNotify(context, SMBC_notify_ctx);
         smbc_setFunctionChmod(context, SMBC_chmod_ctx);
         smbc_setFunctionUtimes(context, SMBC_utimes_ctx);
         smbc_setFunctionSetxattr(context, SMBC_setxattr_ctx);
@@ -227,7 +223,6 @@ smbc_new_context(void)
         smbc_setFunctionListPrintJobs(context, SMBC_list_print_jobs_ctx);
         smbc_setFunctionUnlinkPrintJob(context, SMBC_unlink_print_job_ctx);
 
-	TALLOC_FREE(frame);
         return context;
 }
 
@@ -242,13 +237,10 @@ int
 smbc_free_context(SMBCCTX *context,
                   int shutdown_ctx)
 {
-	TALLOC_CTX *frame;
         if (!context) {
                 errno = EBADF;
                 return 1;
         }
-
-	frame = talloc_stackframe();
 
         if (shutdown_ctx) {
                 SMBCFILE * f;
@@ -269,8 +261,8 @@ smbc_free_context(SMBCCTX *context,
                                   "Nice way shutdown failed.\n"));
                         s = context->internal->servers;
                         while (s) {
-                                DEBUG(1, ("Forced shutdown: %p (cli=%p)\n",
-                                          s, s->cli));
+                                DEBUG(1, ("Forced shutdown: %p (fd=%d)\n",
+                                          s, s->cli->fd));
                                 cli_shutdown(s->cli);
                                 smbc_getFunctionRemoveCachedServer(context)(context,
                                                                          s);
@@ -288,21 +280,18 @@ smbc_free_context(SMBCCTX *context,
                         DEBUG(1, ("Could not purge all servers, "
                                   "free_context failed.\n"));
                         errno = EBUSY;
-			TALLOC_FREE(frame);
                         return 1;
                 }
                 if (context->internal->servers) {
                         DEBUG(1, ("Active servers in context, "
                                   "free_context failed.\n"));
                         errno = EBUSY;
-			TALLOC_FREE(frame);
                         return 1;
                 }
                 if (context->internal->files) {
                         DEBUG(1, ("Active files in context, "
                                   "free_context failed.\n"));
                         errno = EBUSY;
-			TALLOC_FREE(frame);
                         return 1;
                 }
         }
@@ -338,7 +327,6 @@ smbc_free_context(SMBCCTX *context,
                 smb_panic("error unlocking 'initialized_ctx_count'");
 	}
 
-	TALLOC_FREE(frame);
         return 0;
 }
 
@@ -360,8 +348,6 @@ smbc_option_set(SMBCCTX *context,
                 void *v;
                 const char *s;
         } option_value;
-
-	TALLOC_CTX *frame = talloc_stackframe();
 
         va_start(ap, option_name);
 
@@ -429,7 +415,6 @@ smbc_option_set(SMBCCTX *context,
         }
 
         va_end(ap);
-	TALLOC_FREE(frame);
 }
 
 
@@ -472,11 +457,11 @@ smbc_option_get(SMBCCTX *context,
                 switch(smbc_getOptionSmbEncryptionLevel(context))
                 {
                 case 0:
-                        return discard_const_p(void, "none");
+                        return (void *) "none";
                 case 1:
-                        return discard_const_p(void, "request");
+                        return (void *) "request";
                 case 2:
-                        return discard_const_p(void, "require");
+                        return (void *) "require";
                 }
 
         } else if (strcmp(option_name, "smb_encrypt_on") == 0) {
@@ -485,7 +470,7 @@ smbc_option_get(SMBCCTX *context,
 
                 for (s = context->internal->servers; s; s = s->next) {
                         num_servers++;
-                        if (!smb1cli_conn_encryption_on(s->cli->conn)) {
+                        if (s->cli->trans_enc_state == NULL) {
                                 return (void *)false;
                         }
                 }
@@ -560,7 +545,6 @@ SMBCCTX *
 smbc_init_context(SMBCCTX *context)
 {
         int pid;
-        TALLOC_CTX *frame;
 
         if (!context) {
                 errno = EBADF;
@@ -572,14 +556,11 @@ smbc_init_context(SMBCCTX *context)
                 return NULL;
         }
 
-        frame = talloc_stackframe();
-
         if ((!smbc_getFunctionAuthData(context) &&
              !smbc_getFunctionAuthDataWithContext(context)) ||
             smbc_getDebug(context) < 0 ||
             smbc_getDebug(context) > 100) {
 
-                TALLOC_FREE(frame);
                 errno = EINVAL;
                 return NULL;
 
@@ -598,7 +579,6 @@ smbc_init_context(SMBCCTX *context)
                 }
 
                 if (!user) {
-                        TALLOC_FREE(frame);
                         errno = ENOMEM;
                         return NULL;
                 }
@@ -607,7 +587,6 @@ smbc_init_context(SMBCCTX *context)
 		SAFE_FREE(user);
 
         	if (!smbc_getUser(context)) {
-                        TALLOC_FREE(frame);
                         errno = ENOMEM;
                         return NULL;
                 }
@@ -620,17 +599,16 @@ smbc_init_context(SMBCCTX *context)
                  * our hostname etc
                  */
                 char *netbios_name;
-                if (lp_netbios_name()) {
-                        netbios_name = SMB_STRDUP(lp_netbios_name());
+                if (global_myname()) {
+                        netbios_name = SMB_STRDUP(global_myname());
                 } else {
                         /*
                          * Hmmm, I want to get hostname as well, but I am too
                          * lazy for the moment
                          */
-                        pid = getpid();
+                        pid = sys_getpid();
                         netbios_name = (char *)SMB_MALLOC(17);
                         if (!netbios_name) {
-                                TALLOC_FREE(frame);
                                 errno = ENOMEM;
                                 return NULL;
                         }
@@ -639,7 +617,6 @@ smbc_init_context(SMBCCTX *context)
                 }
 
                 if (!netbios_name) {
-                        TALLOC_FREE(frame);
                         errno = ENOMEM;
                         return NULL;
                 }
@@ -648,7 +625,6 @@ smbc_init_context(SMBCCTX *context)
 		SAFE_FREE(netbios_name);
 
                 if (!smbc_getNetbiosName(context)) {
-                        TALLOC_FREE(frame);
                         errno = ENOMEM;
                         return NULL;
                 }
@@ -668,7 +644,6 @@ smbc_init_context(SMBCCTX *context)
                 }
 
                 if (!workgroup) {
-                        TALLOC_FREE(frame);
                         errno = ENOMEM;
                         return NULL;
                 }
@@ -677,7 +652,6 @@ smbc_init_context(SMBCCTX *context)
 		SAFE_FREE(workgroup);
 
 		if (!smbc_getWorkgroup(context)) {
-                        TALLOC_FREE(frame);
 			errno = ENOMEM;
 			return NULL;
 		}
@@ -703,7 +677,6 @@ smbc_init_context(SMBCCTX *context)
                 smb_panic("error unlocking 'initialized_ctx_count'");
 	}
 
-        TALLOC_FREE(frame);
         return context;
 }
 
@@ -739,14 +712,11 @@ void smbc_set_credentials_with_fallback(SMBCCTX *context,
 	smbc_bool use_kerberos = false;
 	const char *signing_state = "off";
 	struct user_auth_info *auth_info = NULL;
-	TALLOC_CTX *frame;
 
 	if (! context) {
 
 		return;
 	}
-
-	frame = talloc_stackframe();
 
 	if (! workgroup || ! *workgroup) {
 		workgroup = smbc_getWorkgroup(context);
@@ -764,7 +734,6 @@ void smbc_set_credentials_with_fallback(SMBCCTX *context,
 
 	if (! auth_info) {
 		DEBUG(0, ("smbc_set_credentials_with_fallback: allocation fail\n"));
-		TALLOC_FREE(frame);
 		return;
 	}
 
@@ -772,16 +741,15 @@ void smbc_set_credentials_with_fallback(SMBCCTX *context,
 		use_kerberos = True;
 	}
 
-	if (lp_client_signing() != SMB_SIGNING_OFF) {
-		signing_state = "if_required";
+	if (lp_client_signing()) {
+		signing_state = "on";
 	}
 
-	if (lp_client_signing() == SMB_SIGNING_REQUIRED) {
-		signing_state = "required";
+	if (lp_client_signing() == Required) {
+		signing_state = "force";
 	}
 
         set_cmdline_auth_info_username(auth_info, user);
-        set_cmdline_auth_info_domain(auth_info, workgroup);
         set_cmdline_auth_info_password(auth_info, password);
         set_cmdline_auth_info_use_kerberos(auth_info, use_kerberos);
         set_cmdline_auth_info_signing_state(auth_info, signing_state);
@@ -789,9 +757,9 @@ void smbc_set_credentials_with_fallback(SMBCCTX *context,
 		smbc_getOptionFallbackAfterKerberos(context));
 	set_cmdline_auth_info_use_ccache(
 		auth_info, smbc_getOptionUseCCache(context));
+        set_global_myworkgroup(workgroup);
 
 	TALLOC_FREE(context->internal->auth_info);
 
         context->internal->auth_info = auth_info;
-	TALLOC_FREE(frame);
 }

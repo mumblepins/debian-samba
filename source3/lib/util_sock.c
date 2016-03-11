@@ -21,15 +21,17 @@
 
 #include "includes.h"
 #include "system/filesys.h"
-#include "../lib/util/memcache.h"
+#include "memcache.h"
 #include "../lib/async_req/async_sock.h"
 #include "../lib/util/select.h"
-#include "lib/socket/interfaces.h"
+#include "interfaces.h"
 #include "../lib/util/tevent_unix.h"
 #include "../lib/util/tevent_ntstatus.h"
-#include "../lib/tsocket/tsocket.h"
-#include "lib/sys_rw.h"
-#include "lib/sys_rw_data.h"
+
+const char *client_name(int fd)
+{
+	return get_peer_name(fd,false);
+}
 
 const char *client_addr(int fd, char *addr, size_t addrlen)
 {
@@ -45,6 +47,26 @@ int client_socket_port(int fd)
 #endif
 
 /****************************************************************************
+ Accessor functions to make thread-safe code easier later...
+****************************************************************************/
+
+void set_smb_read_error(enum smb_read_errors *pre,
+			enum smb_read_errors newerr)
+{
+	if (pre) {
+		*pre = newerr;
+	}
+}
+
+void cond_set_smb_read_error(enum smb_read_errors *pre,
+			enum smb_read_errors newerr)
+{
+	if (pre && *pre == SMB_READ_OK) {
+		*pre = newerr;
+	}
+}
+
+/****************************************************************************
  Determine if a file descriptor is in fact a socket.
 ****************************************************************************/
 
@@ -54,6 +76,169 @@ bool is_a_socket(int fd)
 	socklen_t l;
 	l = sizeof(int);
 	return(getsockopt(fd, SOL_SOCKET, SO_TYPE, (char *)&v, &l) == 0);
+}
+
+enum SOCK_OPT_TYPES {OPT_BOOL,OPT_INT,OPT_ON};
+
+typedef struct smb_socket_option {
+	const char *name;
+	int level;
+	int option;
+	int value;
+	int opttype;
+} smb_socket_option;
+
+static const smb_socket_option socket_options[] = {
+  {"SO_KEEPALIVE", SOL_SOCKET, SO_KEEPALIVE, 0, OPT_BOOL},
+  {"SO_REUSEADDR", SOL_SOCKET, SO_REUSEADDR, 0, OPT_BOOL},
+  {"SO_BROADCAST", SOL_SOCKET, SO_BROADCAST, 0, OPT_BOOL},
+#ifdef TCP_NODELAY
+  {"TCP_NODELAY", IPPROTO_TCP, TCP_NODELAY, 0, OPT_BOOL},
+#endif
+#ifdef TCP_KEEPCNT
+  {"TCP_KEEPCNT", IPPROTO_TCP, TCP_KEEPCNT, 0, OPT_INT},
+#endif
+#ifdef TCP_KEEPIDLE
+  {"TCP_KEEPIDLE", IPPROTO_TCP, TCP_KEEPIDLE, 0, OPT_INT},
+#endif
+#ifdef TCP_KEEPINTVL
+  {"TCP_KEEPINTVL", IPPROTO_TCP, TCP_KEEPINTVL, 0, OPT_INT},
+#endif
+#ifdef IPTOS_LOWDELAY
+  {"IPTOS_LOWDELAY", IPPROTO_IP, IP_TOS, IPTOS_LOWDELAY, OPT_ON},
+#endif
+#ifdef IPTOS_THROUGHPUT
+  {"IPTOS_THROUGHPUT", IPPROTO_IP, IP_TOS, IPTOS_THROUGHPUT, OPT_ON},
+#endif
+#ifdef SO_REUSEPORT
+  {"SO_REUSEPORT", SOL_SOCKET, SO_REUSEPORT, 0, OPT_BOOL},
+#endif
+#ifdef SO_SNDBUF
+  {"SO_SNDBUF", SOL_SOCKET, SO_SNDBUF, 0, OPT_INT},
+#endif
+#ifdef SO_RCVBUF
+  {"SO_RCVBUF", SOL_SOCKET, SO_RCVBUF, 0, OPT_INT},
+#endif
+#ifdef SO_SNDLOWAT
+  {"SO_SNDLOWAT", SOL_SOCKET, SO_SNDLOWAT, 0, OPT_INT},
+#endif
+#ifdef SO_RCVLOWAT
+  {"SO_RCVLOWAT", SOL_SOCKET, SO_RCVLOWAT, 0, OPT_INT},
+#endif
+#ifdef SO_SNDTIMEO
+  {"SO_SNDTIMEO", SOL_SOCKET, SO_SNDTIMEO, 0, OPT_INT},
+#endif
+#ifdef SO_RCVTIMEO
+  {"SO_RCVTIMEO", SOL_SOCKET, SO_RCVTIMEO, 0, OPT_INT},
+#endif
+#ifdef TCP_FASTACK
+  {"TCP_FASTACK", IPPROTO_TCP, TCP_FASTACK, 0, OPT_INT},
+#endif
+#ifdef TCP_QUICKACK
+  {"TCP_QUICKACK", IPPROTO_TCP, TCP_QUICKACK, 0, OPT_BOOL},
+#endif
+#ifdef TCP_NODELAYACK
+  {"TCP_NODELAYACK", IPPROTO_TCP, TCP_NODELAYACK, 0, OPT_BOOL},
+#endif
+#ifdef TCP_KEEPALIVE_THRESHOLD
+  {"TCP_KEEPALIVE_THRESHOLD", IPPROTO_TCP, TCP_KEEPALIVE_THRESHOLD, 0, OPT_INT},
+#endif
+#ifdef TCP_KEEPALIVE_ABORT_THRESHOLD
+  {"TCP_KEEPALIVE_ABORT_THRESHOLD", IPPROTO_TCP, TCP_KEEPALIVE_ABORT_THRESHOLD, 0, OPT_INT},
+#endif
+  {NULL,0,0,0,0}};
+
+/****************************************************************************
+ Print socket options.
+****************************************************************************/
+
+static void print_socket_options(int s)
+{
+	int value;
+	socklen_t vlen = 4;
+	const smb_socket_option *p = &socket_options[0];
+
+	/* wrapped in if statement to prevent streams
+	 * leak in SCO Openserver 5.0 */
+	/* reported on samba-technical  --jerry */
+	if ( DEBUGLEVEL >= 5 ) {
+		DEBUG(5,("Socket options:\n"));
+		for (; p->name != NULL; p++) {
+			if (getsockopt(s, p->level, p->option,
+						(void *)&value, &vlen) == -1) {
+				DEBUGADD(5,("\tCould not test socket option %s.\n",
+							p->name));
+			} else {
+				DEBUGADD(5,("\t%s = %d\n",
+							p->name,value));
+			}
+		}
+	}
+ }
+
+/****************************************************************************
+ Set user socket options.
+****************************************************************************/
+
+void set_socket_options(int fd, const char *options)
+{
+	TALLOC_CTX *ctx = talloc_stackframe();
+	char *tok;
+
+	while (next_token_talloc(ctx, &options, &tok," \t,")) {
+		int ret=0,i;
+		int value = 1;
+		char *p;
+		bool got_value = false;
+
+		if ((p = strchr_m(tok,'='))) {
+			*p = 0;
+			value = atoi(p+1);
+			got_value = true;
+		}
+
+		for (i=0;socket_options[i].name;i++)
+			if (strequal(socket_options[i].name,tok))
+				break;
+
+		if (!socket_options[i].name) {
+			DEBUG(0,("Unknown socket option %s\n",tok));
+			continue;
+		}
+
+		switch (socket_options[i].opttype) {
+		case OPT_BOOL:
+		case OPT_INT:
+			ret = setsockopt(fd,socket_options[i].level,
+					socket_options[i].option,
+					(char *)&value,sizeof(int));
+			break;
+
+		case OPT_ON:
+			if (got_value)
+				DEBUG(0,("syntax error - %s "
+					"does not take a value\n",tok));
+
+			{
+				int on = socket_options[i].value;
+				ret = setsockopt(fd,socket_options[i].level,
+					socket_options[i].option,
+					(char *)&on,sizeof(int));
+			}
+			break;
+		}
+
+		if (ret != 0) {
+			/* be aware that some systems like Solaris return
+			 * EINVAL to a setsockopt() call when the client
+			 * sent a RST previously - no need to worry */
+			DEBUG(2,("Failed to set socket option %s (Error %s)\n",
+				tok, strerror(errno) ));
+		}
+	}
+
+	TALLOC_FREE(ctx);
+	print_socket_options(fd);
 }
 
 /****************************************************************************
@@ -198,9 +383,95 @@ NTSTATUS read_fd_with_timeout(int fd, char *buf,
  on socket calls.
 ****************************************************************************/
 
-NTSTATUS read_data_ntstatus(int fd, char *buffer, size_t N)
+NTSTATUS read_data(int fd, char *buffer, size_t N)
 {
 	return read_fd_with_timeout(fd, buffer, N, N, 0, NULL);
+}
+
+/****************************************************************************
+ Write all data from an iov array
+ NB. This can be called with a non-socket fd, don't add dependencies
+ on socket calls.
+****************************************************************************/
+
+ssize_t write_data_iov(int fd, const struct iovec *orig_iov, int iovcnt)
+{
+	int i;
+	size_t to_send;
+	ssize_t thistime;
+	size_t sent;
+	struct iovec *iov_copy, *iov;
+
+	to_send = 0;
+	for (i=0; i<iovcnt; i++) {
+		to_send += orig_iov[i].iov_len;
+	}
+
+	thistime = sys_writev(fd, orig_iov, iovcnt);
+	if ((thistime <= 0) || (thistime == to_send)) {
+		return thistime;
+	}
+	sent = thistime;
+
+	/*
+	 * We could not send everything in one call. Make a copy of iov that
+	 * we can mess with. We keep a copy of the array start in iov_copy for
+	 * the TALLOC_FREE, because we're going to modify iov later on,
+	 * discarding elements.
+	 */
+
+	iov_copy = (struct iovec *)TALLOC_MEMDUP(
+		talloc_tos(), orig_iov, sizeof(struct iovec) * iovcnt);
+
+	if (iov_copy == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	iov = iov_copy;
+
+	while (sent < to_send) {
+		/*
+		 * We have to discard "thistime" bytes from the beginning
+		 * iov array, "thistime" contains the number of bytes sent
+		 * via writev last.
+		 */
+		while (thistime > 0) {
+			if (thistime < iov[0].iov_len) {
+				char *new_base =
+					(char *)iov[0].iov_base + thistime;
+				iov[0].iov_base = (void *)new_base;
+				iov[0].iov_len -= thistime;
+				break;
+			}
+			thistime -= iov[0].iov_len;
+			iov += 1;
+			iovcnt -= 1;
+		}
+
+		thistime = sys_writev(fd, iov, iovcnt);
+		if (thistime <= 0) {
+			break;
+		}
+		sent += thistime;
+	}
+
+	TALLOC_FREE(iov_copy);
+	return sent;
+}
+
+/****************************************************************************
+ Write data to a fd.
+ NB. This can be called with a non-socket fd, don't add dependencies
+ on socket calls.
+****************************************************************************/
+
+ssize_t write_data(int fd, const char *buffer, size_t N)
+{
+	struct iovec iov;
+
+	iov.iov_base = CONST_DISCARD(void *, buffer);
+	iov.iov_len = N;
+	return write_data_iov(fd, &iov, 1);
 }
 
 /****************************************************************************
@@ -211,7 +482,7 @@ bool send_keepalive(int client)
 {
 	unsigned char buf[4];
 
-	buf[0] = NBSSkeepalive;
+	buf[0] = SMBkeepalive;
 	buf[1] = buf[2] = buf[3] = 0;
 
 	return(write_data(client,(char *)buf,4) == 4);
@@ -241,7 +512,7 @@ NTSTATUS read_smb_length_return_keepalive(int fd, char *inbuf,
 	*len = smb_len(inbuf);
 	msg_type = CVAL(inbuf,0);
 
-	if (msg_type == NBSSkeepalive) {
+	if (msg_type == SMBkeepalive) {
 		DEBUG(5,("Got keepalive packet\n"));
 	}
 
@@ -393,9 +664,8 @@ int open_socket_in(int type,
 
 	/* now we've got a socket - we need to bind it */
 	if (bind(res, (struct sockaddr *)&sock, slen) == -1 ) {
-		if( DEBUGLVL(dlevel) && (port == NMB_PORT ||
-					 port == NBT_SMB_PORT ||
-					 port == TCP_SMB_PORT) ) {
+		if( DEBUGLVL(dlevel) && (port == SMB_PORT1 ||
+				port == SMB_PORT2 || port == NMB_PORT) ) {
 			char addr[INET6_ADDRSTRLEN];
 			print_sockaddr(addr, sizeof(addr),
 					&sock);
@@ -413,39 +683,21 @@ int open_socket_in(int type,
 
 struct open_socket_out_state {
 	int fd;
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct sockaddr_storage ss;
 	socklen_t salen;
 	uint16_t port;
-	int wait_usec;
-	struct tevent_req *connect_subreq;
+	int wait_nsec;
 };
 
 static void open_socket_out_connected(struct tevent_req *subreq);
 
-static void open_socket_out_cleanup(struct tevent_req *req,
-				    enum tevent_req_state req_state)
+static int open_socket_out_state_destructor(struct open_socket_out_state *s)
 {
-	struct open_socket_out_state *state =
-		tevent_req_data(req, struct open_socket_out_state);
-
-	/*
-	 * Make sure that the async_connect_send subreq has a chance to reset
-	 * fcntl before the socket goes away.
-	 */
-	TALLOC_FREE(state->connect_subreq);
-
-	if (req_state == TEVENT_REQ_DONE) {
-		/*
-		 * we keep the socket open for the caller to use
-		 */
-		return;
+	if (s->fd != -1) {
+		close(s->fd);
 	}
-
-	if (state->fd != -1) {
-		close(state->fd);
-		state->fd = -1;
-	}
+	return 0;
 }
 
 /****************************************************************************
@@ -453,13 +705,13 @@ static void open_socket_out_cleanup(struct tevent_req *req,
 **************************************************************************/
 
 struct tevent_req *open_socket_out_send(TALLOC_CTX *mem_ctx,
-					struct tevent_context *ev,
+					struct event_context *ev,
 					const struct sockaddr_storage *pss,
 					uint16_t port,
 					int timeout)
 {
 	char addr[INET6_ADDRSTRLEN];
-	struct tevent_req *result;
+	struct tevent_req *result, *subreq;
 	struct open_socket_out_state *state;
 	NTSTATUS status;
 
@@ -471,7 +723,7 @@ struct tevent_req *open_socket_out_send(TALLOC_CTX *mem_ctx,
 	state->ev = ev;
 	state->ss = *pss;
 	state->port = port;
-	state->wait_usec = 10000;
+	state->wait_nsec = 10000;
 	state->salen = -1;
 
 	state->fd = socket(state->ss.ss_family, SOCK_STREAM, 0);
@@ -479,11 +731,10 @@ struct tevent_req *open_socket_out_send(TALLOC_CTX *mem_ctx,
 		status = map_nt_error_from_unix(errno);
 		goto post_status;
 	}
-
-	tevent_req_set_cleanup_fn(result, open_socket_out_cleanup);
+	talloc_set_destructor(state, open_socket_out_state_destructor);
 
 	if (!tevent_req_set_endtime(
-		    result, ev, timeval_current_ofs_msec(timeout))) {
+		    result, ev, timeval_current_ofs(0, timeout*1000))) {
 		goto fail;
 	}
 
@@ -514,17 +765,16 @@ struct tevent_req *open_socket_out_send(TALLOC_CTX *mem_ctx,
 	print_sockaddr(addr, sizeof(addr), &state->ss);
 	DEBUG(3,("Connecting to %s at port %u\n", addr,	(unsigned int)port));
 
-	state->connect_subreq = async_connect_send(
-		state, state->ev, state->fd, (struct sockaddr *)&state->ss,
-		state->salen, NULL, NULL, NULL);
-	if ((state->connect_subreq == NULL)
+	subreq = async_connect_send(state, state->ev, state->fd,
+				    (struct sockaddr *)&state->ss,
+				    state->salen);
+	if ((subreq == NULL)
 	    || !tevent_req_set_endtime(
-		    state->connect_subreq, state->ev,
-		    timeval_current_ofs(0, state->wait_usec))) {
+		    subreq, state->ev,
+		    timeval_current_ofs(0, state->wait_nsec))) {
 		goto fail;
 	}
-	tevent_req_set_callback(state->connect_subreq,
-				open_socket_out_connected, result);
+	tevent_req_set_callback(subreq, open_socket_out_connected, result);
 	return result;
 
  post_status:
@@ -546,7 +796,6 @@ static void open_socket_out_connected(struct tevent_req *subreq)
 
 	ret = async_connect_recv(subreq, &sys_errno);
 	TALLOC_FREE(subreq);
-	state->connect_subreq = NULL;
 	if (ret == 0) {
 		tevent_req_done(req);
 		return;
@@ -564,23 +813,22 @@ static void open_socket_out_connected(struct tevent_req *subreq)
 		 * retry
 		 */
 
-		if (state->wait_usec < 250000) {
-			state->wait_usec *= 1.5;
+		if (state->wait_nsec < 250000) {
+			state->wait_nsec *= 1.5;
 		}
 
 		subreq = async_connect_send(state, state->ev, state->fd,
 					    (struct sockaddr *)&state->ss,
-					    state->salen, NULL, NULL, NULL);
+					    state->salen);
 		if (tevent_req_nomem(subreq, req)) {
 			return;
 		}
 		if (!tevent_req_set_endtime(
 			    subreq, state->ev,
-			    timeval_current_ofs_usec(state->wait_usec))) {
+			    timeval_current_ofs(0, state->wait_nsec))) {
 			tevent_req_nterror(req, NT_STATUS_NO_MEMORY);
 			return;
 		}
-		state->connect_subreq = subreq;
 		tevent_req_set_callback(subreq, open_socket_out_connected, req);
 		return;
 	}
@@ -603,12 +851,10 @@ NTSTATUS open_socket_out_recv(struct tevent_req *req, int *pfd)
 	NTSTATUS status;
 
 	if (tevent_req_is_nterror(req, &status)) {
-		tevent_req_received(req);
 		return status;
 	}
 	*pfd = state->fd;
 	state->fd = -1;
-	tevent_req_received(req);
 	return NT_STATUS_OK;
 }
 
@@ -626,11 +872,11 @@ NTSTATUS open_socket_out(const struct sockaddr_storage *pss, uint16_t port,
 			 int timeout, int *pfd)
 {
 	TALLOC_CTX *frame = talloc_stackframe();
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct tevent_req *req;
 	NTSTATUS status = NT_STATUS_NO_MEMORY;
 
-	ev = samba_tevent_context_init(frame);
+	ev = event_context_init(frame);
 	if (ev == NULL) {
 		goto fail;
 	}
@@ -650,7 +896,7 @@ NTSTATUS open_socket_out(const struct sockaddr_storage *pss, uint16_t port,
 }
 
 struct open_socket_out_defer_state {
-	struct tevent_context *ev;
+	struct event_context *ev;
 	struct sockaddr_storage ss;
 	uint16_t port;
 	int timeout;
@@ -661,7 +907,7 @@ static void open_socket_out_defer_waited(struct tevent_req *subreq);
 static void open_socket_out_defer_connected(struct tevent_req *subreq);
 
 struct tevent_req *open_socket_out_defer_send(TALLOC_CTX *mem_ctx,
-					      struct tevent_context *ev,
+					      struct event_context *ev,
 					      struct timeval wait_time,
 					      const struct sockaddr_storage *pss,
 					      uint16_t port,
@@ -755,7 +1001,6 @@ int open_udp_socket(const char *host, int port)
 {
 	struct sockaddr_storage ss;
 	int res;
-	socklen_t salen;
 
 	if (!interpret_string_addr(&ss, host, 0)) {
 		DEBUG(10,("open_udp_socket: can't resolve name %s\n",
@@ -778,21 +1023,15 @@ int open_udp_socket(const char *host, int port)
 			setup_linklocal_scope_id(
 				(struct sockaddr *)&ss);
 		}
-		salen = sizeof(struct sockaddr_in6);
-	} else 
-#endif
-	if (ss.ss_family == AF_INET) {
-		struct sockaddr_in *psa;
-		psa = (struct sockaddr_in *)&ss;
-		psa->sin_port = htons(port);
-	    salen = sizeof(struct sockaddr_in);
-	} else {
-		DEBUG(1, ("unknown socket family %d", ss.ss_family));
-		close(res);
-		return -1;
 	}
+#endif
+        if (ss.ss_family == AF_INET) {
+                struct sockaddr_in *psa;
+                psa = (struct sockaddr_in *)&ss;
+                psa->sin_port = htons(port);
+        }
 
-	if (connect(res, (struct sockaddr *)&ss, salen)) {
+	if (sys_connect(res,(struct sockaddr *)&ss)) {
 		close(res);
 		return -1;
 	}
@@ -884,7 +1123,7 @@ static bool matchname(const char *remotehost,
 			continue;
 		}
 		if (sockaddr_equal((const struct sockaddr *)res->ai_addr,
-					(const struct sockaddr *)pss)) {
+					(struct sockaddr *)pss)) {
 			freeaddrinfo(ailist);
 			return true;
 		}
@@ -963,99 +1202,73 @@ static void store_nc(const struct name_addr_pair *nc)
 }
 
 /*******************************************************************
- Return the IP addr of the remote end of a socket as a string.
- ******************************************************************/
+ Return the DNS name of the remote end of a socket.
+******************************************************************/
 
-const char *get_peer_addr(int fd, char *addr, size_t addr_len)
+const char *get_peer_name(int fd, bool force_lookup)
 {
-	return get_peer_addr_internal(fd, addr, addr_len, NULL, NULL);
-}
-
-int get_remote_hostname(const struct tsocket_address *remote_address,
-			char **name,
-			TALLOC_CTX *mem_ctx)
-{
+	struct name_addr_pair nc;
+	char addr_buf[INET6_ADDRSTRLEN];
+	struct sockaddr_storage ss;
+	socklen_t length = sizeof(ss);
+	const char *p;
+	int ret;
 	char name_buf[MAX_DNS_NAME_LENGTH];
 	char tmp_name[MAX_DNS_NAME_LENGTH];
-	struct name_addr_pair nc;
-	struct sockaddr_storage ss;
-	ssize_t len;
-	int rc;
 
-	if (!lp_hostname_lookups()) {
-		nc.name = tsocket_address_inet_addr_string(remote_address,
-							   mem_ctx);
-		if (nc.name == NULL) {
-			return -1;
-		}
-
-		len = tsocket_address_bsd_sockaddr(remote_address,
-						   (struct sockaddr *) &nc.ss,
-						   sizeof(struct sockaddr_storage));
-		if (len < 0) {
-			return -1;
-		}
-
+	/* reverse lookups can be *very* expensive, and in many
+	   situations won't work because many networks don't link dhcp
+	   with dns. To avoid the delay we avoid the lookup if
+	   possible */
+	if (!lp_hostname_lookups() && (force_lookup == false)) {
+		length = sizeof(nc.ss);
+		nc.name = get_peer_addr_internal(fd, addr_buf, sizeof(addr_buf),
+			(struct sockaddr *)&nc.ss, &length);
 		store_nc(&nc);
 		lookup_nc(&nc);
-
-		if (nc.name == NULL) {
-			*name = talloc_strdup(mem_ctx, "UNKNOWN");
-		} else {
-			*name = talloc_strdup(mem_ctx, nc.name);
-		}
-		return 0;
+		return nc.name ? nc.name : "UNKNOWN";
 	}
 
 	lookup_nc(&nc);
 
-	ZERO_STRUCT(ss);
-
-	len = tsocket_address_bsd_sockaddr(remote_address,
-					   (struct sockaddr *) &ss,
-					   sizeof(struct sockaddr_storage));
-	if (len < 0) {
-		return -1;
-	}
+	memset(&ss, '\0', sizeof(ss));
+	p = get_peer_addr_internal(fd, addr_buf, sizeof(addr_buf), (struct sockaddr *)&ss, &length);
 
 	/* it might be the same as the last one - save some DNS work */
 	if (sockaddr_equal((struct sockaddr *)&ss, (struct sockaddr *)&nc.ss)) {
-		if (nc.name == NULL) {
-			*name = talloc_strdup(mem_ctx, "UNKNOWN");
-		} else {
-			*name = talloc_strdup(mem_ctx, nc.name);
-		}
-		return 0;
+		return nc.name ? nc.name : "UNKNOWN";
+	}
+
+	/* Not the same. We need to lookup. */
+	if (fd == -1) {
+		return "UNKNOWN";
 	}
 
 	/* Look up the remote host name. */
-	rc = sys_getnameinfo((struct sockaddr *) &ss,
-			     len,
-			     name_buf,
-			     sizeof(name_buf),
-			     NULL,
-			     0,
-			     0);
-	if (rc < 0) {
-		char *p;
+	ret = sys_getnameinfo((struct sockaddr *)&ss,
+			length,
+			name_buf,
+			sizeof(name_buf),
+			NULL,
+			0,
+			0);
 
-		p = tsocket_address_inet_addr_string(remote_address, mem_ctx);
-		if (p == NULL) {
-			return -1;
-		}
-
-		DEBUG(1,("getnameinfo failed for %s with error %s\n",
-			 p,
-			 gai_strerror(rc)));
+	if (ret) {
+		DEBUG(1,("get_peer_name: getnameinfo failed "
+			"for %s with error %s\n",
+			p,
+			gai_strerror(ret)));
 		strlcpy(name_buf, p, sizeof(name_buf));
-
-		TALLOC_FREE(p);
 	} else {
-		if (!matchname(name_buf, (struct sockaddr *)&ss, len)) {
-			DEBUG(0,("matchname failed on %s\n", name_buf));
-			strlcpy(name_buf, "UNKNOWN", sizeof(name_buf));
+		if (!matchname(name_buf, (struct sockaddr *)&ss, length)) {
+			DEBUG(0,("Matchname failed on %s %s\n",name_buf,p));
+			strlcpy(name_buf,"UNKNOWN",sizeof(name_buf));
 		}
 	}
+
+	/* can't pass the same source and dest strings in when you
+	   use --enable-developer or the clobber_region() call will
+	   get you */
 
 	strlcpy(tmp_name, name_buf, sizeof(tmp_name));
 	alpha_strcpy(name_buf, tmp_name, "_-.", sizeof(name_buf));
@@ -1068,14 +1281,16 @@ int get_remote_hostname(const struct tsocket_address *remote_address,
 
 	store_nc(&nc);
 	lookup_nc(&nc);
+	return nc.name ? nc.name : "UNKNOWN";
+}
 
-	if (nc.name == NULL) {
-		*name = talloc_strdup(mem_ctx, "UNKOWN");
-	} else {
-		*name = talloc_strdup(mem_ctx, nc.name);
-	}
+/*******************************************************************
+ Return the IP addr of the remote end of a socket as a string.
+ ******************************************************************/
 
-	return 0;
+const char *get_peer_addr(int fd, char *addr, size_t addr_len)
+{
+	return get_peer_addr_internal(fd, addr, addr_len, NULL, NULL);
 }
 
 /*******************************************************************
@@ -1092,21 +1307,46 @@ int create_pipe_sock(const char *socket_dir,
 {
 #ifdef HAVE_UNIXSOCKET
 	struct sockaddr_un sunaddr;
-	bool ok;
-	int sock = -1;
+	struct stat st;
+	int sock;
 	mode_t old_umask;
 	char *path = NULL;
 
 	old_umask = umask(0);
 
-	ok = directory_create_or_exist_strict(socket_dir,
-					      sec_initial_uid(),
-					      dir_perms);
-	if (!ok) {
-		goto out_close;
+	/* Create the socket directory or reuse the existing one */
+
+	if (lstat(socket_dir, &st) == -1) {
+		if (errno == ENOENT) {
+			/* Create directory */
+			if (mkdir(socket_dir, dir_perms) == -1) {
+				DEBUG(0, ("error creating socket directory "
+					"%s: %s\n", socket_dir,
+					strerror(errno)));
+				goto out_umask;
+			}
+		} else {
+			DEBUG(0, ("lstat failed on socket directory %s: %s\n",
+				socket_dir, strerror(errno)));
+			goto out_umask;
+		}
+	} else {
+		/* Check ownership and permission on existing directory */
+		if (!S_ISDIR(st.st_mode)) {
+			DEBUG(0, ("socket directory %s isn't a directory\n",
+				socket_dir));
+			goto out_umask;
+		}
+		if ((st.st_uid != sec_initial_uid()) ||
+				((st.st_mode & 0777) != dir_perms)) {
+			DEBUG(0, ("invalid permissions on socket directory "
+				"%s\n", socket_dir));
+			goto out_umask;
+		}
 	}
 
 	/* Create the socket file */
+
 	sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	if (sock == -1) {
@@ -1130,6 +1370,12 @@ int create_pipe_sock(const char *socket_dir,
 		goto out_close;
 	}
 
+	if (listen(sock, 5) == -1) {
+		DEBUG(0, ("listen failed on pipe socket %s: %s\n", path,
+			strerror(errno)));
+		goto out_close;
+	}
+
 	SAFE_FREE(path);
 
 	umask(old_umask);
@@ -1140,6 +1386,7 @@ out_close:
 	if (sock != -1)
 		close(sock);
 
+out_umask:
 	umask(old_umask);
 	return -1;
 
@@ -1234,13 +1481,13 @@ static bool is_my_ipaddr(const char *ipaddr_str)
 		return false;
 	}
 
-	if (is_zero_addr(&ss)) {
-		return false;
+	if (ismyaddr((struct sockaddr *)&ss)) {
+		return true;
 	}
 
-	if (ismyaddr((struct sockaddr *)&ss) ||
-			is_loopback_addr((struct sockaddr *)&ss)) {
-		return true;
+	if (is_zero_addr(&ss) ||
+		is_loopback_addr((struct sockaddr *)&ss)) {
+		return false;
 	}
 
 	n = get_interfaces(talloc_tos(), &nics);
@@ -1283,7 +1530,7 @@ bool is_myname_or_ipaddr(const char *s)
 	}
 
 	/* Optimize for the common case */
-	if (strequal(servername, lp_netbios_name())) {
+	if (strequal(servername, global_myname())) {
 		return true;
 	}
 
@@ -1387,7 +1634,7 @@ struct tevent_req *getaddrinfo_send(TALLOC_CTX *mem_ctx,
 static void getaddrinfo_do(void *private_data)
 {
 	struct getaddrinfo_state *state =
-		talloc_get_type_abort(private_data, struct getaddrinfo_state);
+		(struct getaddrinfo_state *)private_data;
 
 	state->ret = getaddrinfo(state->node, state->service, state->hints,
 				 &state->res);
@@ -1430,18 +1677,27 @@ int getaddrinfo_recv(struct tevent_req *req, struct addrinfo **res)
 
 int poll_one_fd(int fd, int events, int timeout, int *revents)
 {
-	struct pollfd pfd;
+	struct pollfd *fds;
 	int ret;
+	int saved_errno;
 
-	pfd.fd = fd;
-	pfd.events = events;
+	fds = TALLOC_ZERO_ARRAY(talloc_tos(), struct pollfd, 2);
+	if (fds == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	fds[0].fd = fd;
+	fds[0].events = events;
 
-	ret = poll(&pfd, 1, timeout);
+	ret = sys_poll(fds, 1, timeout);
 
 	/*
 	 * Assign whatever poll did, even in the ret<=0 case.
 	 */
-	*revents = pfd.revents;
+	*revents = fds[0].revents;
+	saved_errno = errno;
+	TALLOC_FREE(fds);
+	errno = saved_errno;
 
 	return ret;
 }

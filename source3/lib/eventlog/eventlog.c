@@ -73,7 +73,7 @@ char *elog_tdbname(TALLOC_CTX *ctx, const char *name )
 	char *file;
 	char *tdbname;
 
-	path = state_path("eventlog");
+	path = talloc_strdup(ctx, state_path("eventlog"));
 	if (!path) {
 		return NULL;
 	}
@@ -84,13 +84,12 @@ char *elog_tdbname(TALLOC_CTX *ctx, const char *name )
 		return NULL;
 	}
 
-	tdbname = talloc_asprintf(ctx, "%s/%s", path, file);
+	tdbname = talloc_asprintf(path, "%s/%s", state_path("eventlog"), file);
 	if (!tdbname) {
 		talloc_free(path);
 		return NULL;
 	}
 
-	talloc_free(path);
 	return tdbname;
 }
 
@@ -341,7 +340,6 @@ ELOG_TDB *elog_open_tdb( const char *logname, bool force_clear, bool read_only )
 	ELOG_TDB *tdb_node = NULL;
 	char *eventlogdir;
 	TALLOC_CTX *ctx = talloc_tos();
-	bool ok;
 
 	/* check for invalid options */
 
@@ -373,15 +371,9 @@ ELOG_TDB *elog_open_tdb( const char *logname, bool force_clear, bool read_only )
 
 	/* make sure that the eventlog dir exists */
 
-	eventlogdir = state_path("eventlog");
-	if (eventlogdir == NULL) {
-		return NULL;
-	}
-	ok = directory_create_or_exist(eventlogdir, 0755);
-	TALLOC_FREE(eventlogdir);
-	if (!ok) {
-		return NULL;
-	}
+	eventlogdir = state_path( "eventlog" );
+	if ( !directory_exist( eventlogdir ) )
+		mkdir( eventlogdir, 0755 );
 
 	/* get the path on disk */
 
@@ -424,7 +416,7 @@ ELOG_TDB *elog_open_tdb( const char *logname, bool force_clear, bool read_only )
 			return ptr;
 		}
 
-		if ( !(tdb_node = talloc_zero( NULL, ELOG_TDB)) ) {
+		if ( !(tdb_node = TALLOC_ZERO_P( NULL, ELOG_TDB)) ) {
 			DEBUG(0,("elog_open_tdb: talloc() failure!\n"));
 			tdb_close( tdb );
 			return NULL;
@@ -586,7 +578,7 @@ bool parse_logentry( TALLOC_CTX *mem_ctx, char *line, struct eventlog_Record_tdb
 		}
 	} else if ( 0 == strncmp( start, "STR", stop - start ) ) {
 		size_t tmp_len;
-		size_t num_of_strings;
+		int num_of_strings;
 		/* skip past initial ":" */
 		stop++;
 		/* now skip any other leading whitespace */
@@ -789,7 +781,7 @@ NTSTATUS evlog_push_record_tdb(TALLOC_CTX *mem_ctx,
 
 	/* lock */
 	ret = tdb_lock_bystring_with_timeout(tdb, EVT_NEXT_RECORD, 1);
-	if (ret != 0) {
+	if (ret == -1) {
 		return NT_STATUS_LOCK_NOT_GRANTED;
 	}
 
@@ -812,13 +804,13 @@ NTSTATUS evlog_push_record_tdb(TALLOC_CTX *mem_ctx,
 	ebuf.dptr  = blob.data;
 
 	ret = tdb_store(tdb, kbuf, ebuf, 0);
-	if (ret != 0) {
+	if (ret == -1) {
 		tdb_unlock_bystring(tdb, EVT_NEXT_RECORD);
 		return NT_STATUS_EVENTLOG_FILE_CORRUPT;
 	}
 
 	ret = tdb_store_int32(tdb, EVT_NEXT_RECORD, r->record_number + 1);
-	if (ret != 0) {
+	if (ret == -1) {
 		tdb_unlock_bystring(tdb, EVT_NEXT_RECORD);
 		return NT_STATUS_EVENTLOG_FILE_CORRUPT;
 	}
@@ -962,7 +954,7 @@ NTSTATUS evlog_tdb_entry_to_evt_entry(TALLOC_CTX *mem_ctx,
 		size_t len;
 		if (!convert_string_talloc(mem_ctx, CH_UTF16, CH_UNIX,
 					   t->sid.data, t->sid.length,
-					   (void *)&sid_str, &len)) {
+					   (void *)&sid_str, &len, false)) {
 			return NT_STATUS_INVALID_SID;
 		}
 		if (len > 0) {

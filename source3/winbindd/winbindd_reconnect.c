@@ -27,7 +27,7 @@
 
 extern struct winbindd_methods msrpc_methods;
 
-bool reconnect_need_retry(NTSTATUS status, struct winbindd_domain *domain)
+static bool reconnect_need_retry(NTSTATUS status)
 {
 	if (NT_STATUS_IS_OK(status)) {
 		return false;
@@ -69,21 +69,13 @@ bool reconnect_need_retry(NTSTATUS status, struct winbindd_domain *domain)
 		return false;
 	}
 
-	if (NT_STATUS_EQUAL(status, NT_STATUS_IO_DEVICE_ERROR)) {
-		/*
-		 * RPC call sent on expired session, needs
-		 * reauthentication.
-		 */
-		invalidate_cm_connection(domain);
-	}
-
 	return true;
 }
 
 /* List all users */
 static NTSTATUS query_user_list(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wbint_userinfo **info)
 {
 	NTSTATUS result;
@@ -91,7 +83,7 @@ static NTSTATUS query_user_list(struct winbindd_domain *domain,
 	result = msrpc_methods.query_user_list(domain, mem_ctx,
 					       num_entries, info);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.query_user_list(domain, mem_ctx,
 						       num_entries, info);
 	return result;
@@ -100,7 +92,7 @@ static NTSTATUS query_user_list(struct winbindd_domain *domain,
 /* list all domain groups */
 static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
-				uint32_t *num_entries,
+				uint32 *num_entries, 
 				struct wb_acct_info **info)
 {
 	NTSTATUS result;
@@ -108,7 +100,7 @@ static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 	result = msrpc_methods.enum_dom_groups(domain, mem_ctx,
 					       num_entries, info);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.enum_dom_groups(domain, mem_ctx,
 						       num_entries, info);
 	return result;
@@ -118,7 +110,7 @@ static NTSTATUS enum_dom_groups(struct winbindd_domain *domain,
 
 static NTSTATUS enum_local_groups(struct winbindd_domain *domain,
 				  TALLOC_CTX *mem_ctx,
-				  uint32_t *num_entries,
+				  uint32 *num_entries, 
 				  struct wb_acct_info **info)
 {
 	NTSTATUS result;
@@ -126,7 +118,7 @@ static NTSTATUS enum_local_groups(struct winbindd_domain *domain,
 	result = msrpc_methods.enum_local_groups(domain, mem_ctx,
 						 num_entries, info);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.enum_local_groups(domain, mem_ctx,
 							 num_entries, info);
 
@@ -147,7 +139,7 @@ static NTSTATUS name_to_sid(struct winbindd_domain *domain,
 	result = msrpc_methods.name_to_sid(domain, mem_ctx, domain_name, name,
 					   flags, sid, type);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.name_to_sid(domain, mem_ctx,
 						   domain_name, name, flags,
 						   sid, type);
@@ -170,7 +162,7 @@ static NTSTATUS sid_to_name(struct winbindd_domain *domain,
 	result = msrpc_methods.sid_to_name(domain, mem_ctx, sid,
 					   domain_name, name, type);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.sid_to_name(domain, mem_ctx, sid,
 						   domain_name, name, type);
 
@@ -180,7 +172,7 @@ static NTSTATUS sid_to_name(struct winbindd_domain *domain,
 static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 			      TALLOC_CTX *mem_ctx,
 			      const struct dom_sid *sid,
-			      uint32_t *rids,
+			      uint32 *rids,
 			      size_t num_rids,
 			      char **domain_name,
 			      char ***names,
@@ -191,7 +183,7 @@ static NTSTATUS rids_to_names(struct winbindd_domain *domain,
 	result = msrpc_methods.rids_to_names(domain, mem_ctx, sid,
 					     rids, num_rids,
 					     domain_name, names, types);
-	if (reconnect_need_retry(result, domain)) {
+	if (reconnect_need_retry(result)) {
 		result = msrpc_methods.rids_to_names(domain, mem_ctx, sid,
 						     rids, num_rids,
 						     domain_name, names,
@@ -212,7 +204,7 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 	result = msrpc_methods.query_user(domain, mem_ctx, user_sid,
 					  user_info);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.query_user(domain, mem_ctx, user_sid,
 						  user_info);
 
@@ -223,7 +215,7 @@ static NTSTATUS query_user(struct winbindd_domain *domain,
 static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 				  TALLOC_CTX *mem_ctx,
 				  const struct dom_sid *user_sid,
-				  uint32_t *num_groups, struct dom_sid **user_gids)
+				  uint32 *num_groups, struct dom_sid **user_gids)
 {
 	NTSTATUS result;
 
@@ -231,7 +223,7 @@ static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 						 user_sid, num_groups,
 						 user_gids);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.lookup_usergroups(domain, mem_ctx,
 							 user_sid, num_groups,
 							 user_gids);
@@ -241,8 +233,8 @@ static NTSTATUS lookup_usergroups(struct winbindd_domain *domain,
 
 static NTSTATUS lookup_useraliases(struct winbindd_domain *domain,
 				   TALLOC_CTX *mem_ctx,
-				   uint32_t num_sids, const struct dom_sid *sids,
-				   uint32_t *num_aliases, uint32_t **alias_rids)
+				   uint32 num_sids, const struct dom_sid *sids,
+				   uint32 *num_aliases, uint32 **alias_rids)
 {
 	NTSTATUS result;
 
@@ -251,7 +243,7 @@ static NTSTATUS lookup_useraliases(struct winbindd_domain *domain,
 						  num_aliases,
 						  alias_rids);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.lookup_useraliases(domain, mem_ctx,
 							  num_sids, sids,
 							  num_aliases,
@@ -265,9 +257,9 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 				TALLOC_CTX *mem_ctx,
 				const struct dom_sid *group_sid,
 				enum lsa_SidType type,
-				uint32_t *num_names,
+				uint32 *num_names,
 				struct dom_sid **sid_mem, char ***names,
-				uint32_t **name_types)
+				uint32 **name_types)
 {
 	NTSTATUS result;
 
@@ -276,7 +268,7 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 					       sid_mem, names,
 					       name_types);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.lookup_groupmem(domain, mem_ctx,
 						       group_sid, type,
 						       num_names,
@@ -287,13 +279,13 @@ static NTSTATUS lookup_groupmem(struct winbindd_domain *domain,
 }
 
 /* find the sequence number for a domain */
-static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32_t *seq)
+static NTSTATUS sequence_number(struct winbindd_domain *domain, uint32 *seq)
 {
 	NTSTATUS result;
 
 	result = msrpc_methods.sequence_number(domain, seq);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.sequence_number(domain, seq);
 
 	return result;
@@ -308,7 +300,7 @@ static NTSTATUS lockout_policy(struct winbindd_domain *domain,
 
 	result = msrpc_methods.lockout_policy(domain, mem_ctx, policy);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.lockout_policy(domain, mem_ctx, policy);
 
 	return result;
@@ -323,7 +315,7 @@ static NTSTATUS password_policy(struct winbindd_domain *domain,
  
 	result = msrpc_methods.password_policy(domain, mem_ctx, policy);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.password_policy(domain, mem_ctx, policy);
 	
 	return result;
@@ -338,7 +330,7 @@ static NTSTATUS trusted_domains(struct winbindd_domain *domain,
 
 	result = msrpc_methods.trusted_domains(domain, mem_ctx, trusts);
 
-	if (reconnect_need_retry(result, domain))
+	if (reconnect_need_retry(result))
 		result = msrpc_methods.trusted_domains(domain, mem_ctx,
 						       trusts);
 

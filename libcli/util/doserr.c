@@ -43,8 +43,10 @@ static const struct werror_code_struct dos_errs[] =
 	{ "WERR_INVALID_PARAM", WERR_INVALID_PARAM },
 	{ "WERR_NOT_SUPPORTED", WERR_NOT_SUPPORTED },
 	{ "WERR_DUP_NAME", WERR_DUP_NAME },
+	{ "WERR_BAD_PASSWORD", WERR_BAD_PASSWORD },
 	{ "WERR_NOMEM", WERR_NOMEM },
 	{ "WERR_INVALID_NAME", WERR_INVALID_NAME },
+	{ "WERR_UNKNOWN_LEVEL", WERR_UNKNOWN_LEVEL },
 	{ "WERR_OBJECT_PATH_INVALID", WERR_OBJECT_PATH_INVALID },
 	{ "WERR_ALREADY_EXISTS", WERR_ALREADY_EXISTS },
 	{ "WERR_NO_MORE_ITEMS", WERR_NO_MORE_ITEMS },
@@ -307,7 +309,6 @@ static const struct werror_code_struct dos_errs[] =
 	{ "WERR_PASSWORD_RESTRICTION", WERR_PASSWORD_RESTRICTION },
 	{ "WERR_WRONG_PASSWORD", WERR_WRONG_PASSWORD },
 	{ "WERR_CLASS_NOT_REGISTERED", WERR_CLASS_NOT_REGISTERED },
-	{ "WERR_PRINT_PROCESSOR_ALREADY_INSTALLED", WERR_PRINT_PROCESSOR_ALREADY_INSTALLED },
 	/*****************************************************************************
 	 Auto-generated Win32 error from:
 	 http://msdn.microsoft.com/en-us/library/cc231199%28PROT.10%29.aspx
@@ -2705,6 +2706,7 @@ const struct werror_str_struct dos_err_strs[] = {
 	{ WERR_ACCESS_DENIED, "Access is denied" },
 	{ WERR_INVALID_PARAM, "Invalid parameter" },
 	{ WERR_NOT_SUPPORTED, "Not supported" },
+	{ WERR_BAD_PASSWORD, "A bad password was supplied" },
 	{ WERR_NOMEM, "Out of memory" },
 	{ WERR_NO_LOGON_SERVERS, "No logon servers found" },
 	{ WERR_NO_SUCH_LOGON_SESSION, "No such logon session" },

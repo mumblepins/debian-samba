@@ -47,7 +47,6 @@ static void continue_name_resolved(struct composite_context *ctx);
  */
 
 struct composite_context *libnet_Lookup_send(struct libnet_context *ctx,
-					     TALLOC_CTX *mem_ctx,
 					     struct libnet_Lookup *io)
 {
 	struct composite_context *c;
@@ -56,7 +55,7 @@ struct composite_context *libnet_Lookup_send(struct libnet_context *ctx,
 	struct resolve_context *resolve_ctx;
 
 	/* allocate context and state structures */
-	c = composite_create(mem_ctx, ctx->event_ctx);
+	c = composite_create(ctx, ctx->event_ctx);
 	if (c == NULL) return NULL;
 
 	s = talloc_zero(c, struct lookup_state);
@@ -123,13 +122,10 @@ NTSTATUS libnet_Lookup_recv(struct composite_context *c, TALLOC_CTX *mem_ctx,
 
 	status = composite_wait(c);
 	if (NT_STATUS_IS_OK(status)) {
-		char **address;
-
 		s = talloc_get_type(c->private_data, struct lookup_state);
 
-		address = str_list_make_single(mem_ctx, s->address);
-		NT_STATUS_HAVE_NO_MEMORY(address);
-		io->out.address = discard_const_p(const char *, address);
+		io->out.address = (const char **)str_list_make_single(mem_ctx, s->address);
+		NT_STATUS_HAVE_NO_MEMORY(io->out.address);
 	}
 
 	talloc_free(c);
@@ -148,7 +144,7 @@ NTSTATUS libnet_Lookup_recv(struct composite_context *c, TALLOC_CTX *mem_ctx,
 NTSTATUS libnet_Lookup(struct libnet_context *ctx, TALLOC_CTX *mem_ctx,
 		       struct libnet_Lookup *io)
 {
-	struct composite_context *c = libnet_Lookup_send(ctx, mem_ctx, io);
+	struct composite_context *c = libnet_Lookup_send(ctx, io);
 	return libnet_Lookup_recv(c, mem_ctx, io);
 }
 
@@ -163,11 +159,10 @@ NTSTATUS libnet_Lookup(struct libnet_context *ctx, TALLOC_CTX *mem_ctx,
  * Sends asynchronous LookupHost request
  */
 struct composite_context* libnet_LookupHost_send(struct libnet_context *ctx,
-						 TALLOC_CTX *mem_ctx,
 						 struct libnet_Lookup *io)
 {
 	io->in.type = NBT_NAME_SERVER;
-	return libnet_Lookup_send(ctx, mem_ctx, io);
+	return libnet_Lookup_send(ctx, io);
 }
 
 
@@ -178,7 +173,7 @@ struct composite_context* libnet_LookupHost_send(struct libnet_context *ctx,
 NTSTATUS libnet_LookupHost(struct libnet_context *ctx, TALLOC_CTX *mem_ctx,
 			   struct libnet_Lookup *io)
 {
-	struct composite_context *c = libnet_LookupHost_send(ctx, mem_ctx, io);
+	struct composite_context *c = libnet_LookupHost_send(ctx, io);
 	return libnet_Lookup_recv(c, mem_ctx, io);
 }
 
@@ -286,7 +281,7 @@ struct composite_context* libnet_LookupName_send(struct libnet_context *ctx,
 	s->monitor_fn = monitor;
 	s->ctx = ctx;
 
-	prereq_met = lsa_domain_opened(ctx, c, io->in.domain_name, &c, &s->domopen,
+	prereq_met = lsa_domain_opened(ctx, io->in.domain_name, &c, &s->domopen,
 				       continue_lookup_name, monitor);
 	if (!prereq_met) return c;
 
@@ -311,7 +306,7 @@ static bool prepare_lookup_params(struct libnet_context *ctx,
 	s->sids.count = 0;
 	s->sids.sids  = NULL;
 	
-	s->names = talloc_array(s, struct lsa_String, single_name);
+	s->names = talloc_array(ctx, struct lsa_String, single_name);
 	if (composite_nomem(s->names, c)) return false;
 	s->names[0].string = s->name;
 	
@@ -323,7 +318,7 @@ static bool prepare_lookup_params(struct libnet_context *ctx,
 	s->lookup.in.count     = &s->count;
 	s->lookup.out.count    = &s->count;
 	s->lookup.out.sids     = &s->sids;
-	s->lookup.out.domains  = talloc_zero(s, struct lsa_RefDomainList *);
+	s->lookup.out.domains  = talloc_zero(ctx, struct lsa_RefDomainList *);
 	if (composite_nomem(s->lookup.out.domains, c)) return false;
 	
 	return true;
@@ -367,11 +362,6 @@ static void continue_name_found(struct tevent_req *subreq)
 
 	c->status = s->lookup.out.result;
 	if (!composite_is_ok(c)) return;
-
-	if (s->lookup.out.sids->count != s->lookup.in.num_names) {
-		composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
-	}
 
 	composite_done(c);
 }

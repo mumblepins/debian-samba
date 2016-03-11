@@ -92,13 +92,13 @@ static void print_tree(unsigned int level, struct registry_key *p,
 	}
 
 	mem_ctx = talloc_init("sec_desc");
-	if (!W_ERROR_IS_OK(reg_get_sec_desc(mem_ctx, p, &sec_desc))) {
+	if (NT_STATUS_IS_ERR(reg_get_sec_desc(mem_ctx, p, &sec_desc))) {
 		DEBUG(0, ("Error getting security descriptor\n"));
 	}
 	talloc_free(mem_ctx);
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char **argv)
 {
 	int opt;
 	unsigned int i;
@@ -122,7 +122,7 @@ int main(int argc, const char **argv)
 		{ NULL }
 	};
 
-	pc = poptGetContext(argv[0], argc, argv, long_options,0);
+	pc = poptGetContext(argv[0], argc, (const char **) argv, long_options,0);
 
 	while((opt = poptGetNextOpt(pc)) != -1) {
 	}

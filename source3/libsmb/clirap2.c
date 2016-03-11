@@ -80,7 +80,6 @@
 #include "../librpc/gen_ndr/rap.h"
 #include "../librpc/gen_ndr/svcctl.h"
 #include "libsmb/clirap.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 #define WORDSIZE 2
 #define DWORDSIZE 4
@@ -218,7 +217,7 @@ static size_t rap_getstringp(TALLOC_CTX *ctx, char *p, char **dest, char *r, uin
 	return 4;
 }
 
-static char *make_header(char *param, uint16_t apinum, const char *reqfmt, const char *datafmt)
+static char *make_header(char *param, uint16 apinum, const char *reqfmt, const char *datafmt)
 {
 	PUTWORD(param,apinum);
 	if (reqfmt)
@@ -867,8 +866,10 @@ int cli_NetUserAdd(struct cli_state *cli, struct rap_user_info_1 * userinfo )
 
 	PUTWORD(p, 1); /* info level */
 	PUTWORD(p, 0); /* pwencrypt */
-	PUTWORD(p, MIN(strlen((const char *)userinfo->passwrd),
-		       RAP_UPASSWD_LEN));
+	if(userinfo->passwrd)
+		PUTWORD(p,MIN(strlen((const char *)userinfo->passwrd), RAP_UPASSWD_LEN));
+	else
+		PUTWORD(p, 0); /* password length */
 
 	p = data;
 	memset(data, '\0', soffset);
@@ -1097,7 +1098,7 @@ int cli_RNetUserEnum0(struct cli_state *cli,
  Call a NetFileClose2 - close open file on another session to server.
 ****************************************************************************/
 
-int cli_NetFileClose(struct cli_state *cli, uint32_t file_id )
+int cli_NetFileClose(struct cli_state *cli, uint32 file_id )
 {
 	char *rparam = NULL;
 	char *rdata = NULL;
@@ -1125,7 +1126,7 @@ int cli_NetFileClose(struct cli_state *cli, uint32_t file_id )
 		if (res == 0) {
 			/* nothing to do */
 		} else if (res == 2314){
-			DEBUG(1, ("NetFileClose2 - attempt to close non-existent file open instance\n"));
+			DEBUG(1, ("NetFileClose2 - attempt to close non-existant file open instance\n"));
 		} else {
 			DEBUG(4,("NetFileClose2 res=%d\n", res));
 		}
@@ -1145,7 +1146,7 @@ int cli_NetFileClose(struct cli_state *cli, uint32_t file_id )
  workstation.
 ****************************************************************************/
 
-int cli_NetFileGetInfo(struct cli_state *cli, uint32_t file_id, void (*fn)(const char *, const char *, uint16_t, uint16_t, uint32_t))
+int cli_NetFileGetInfo(struct cli_state *cli, uint32 file_id, void (*fn)(const char *, const char *, uint16, uint16, uint32))
 {
 	char *rparam = NULL;
 	char *rdata = NULL;
@@ -1245,8 +1246,8 @@ int cli_NetFileGetInfo(struct cli_state *cli, uint32_t file_id, void (*fn)(const
 
 int cli_NetFileEnum(struct cli_state *cli, const char * user,
 		    const char * base_path,
-		    void (*fn)(const char *, const char *, uint16_t, uint16_t,
-			       uint32_t))
+		    void (*fn)(const char *, const char *, uint16, uint16,
+			       uint32))
 {
 	char *rparam = NULL;
 	char *rdata = NULL;
@@ -1532,10 +1533,8 @@ bool cli_get_pdc_name(struct cli_state *cli, const char *workgroup, char **pdc_n
 				TALLOC_FREE(frame);
 			}
 		} else {
-			DEBUG(4, ("cli_get_pdc_name: machine %s failed the "
-				  "NetServerEnum call. Error was : %s.\n",
-				  smbXcli_conn_remote_name(cli->conn),
-				  win_errstr(W_ERROR(cli->rap_error))));
+			DEBUG(4,("cli_get_pdc_name: machine %s failed the NetServerEnum call. "
+				"Error was : %s.\n", cli->desthost, cli_errstr(cli) ));
 		}
 	}
 
@@ -1636,7 +1635,7 @@ bool cli_get_server_domain(struct cli_state *cli)
 *
 * Parameters:
 *             cli       - pointer to cli_state structure
-*             pstype    - pointer to uint32_t to contain returned server type
+*             pstype    - pointer to uint32 to contain returned server type
 *
 * Returns:
 *             True      - success
@@ -1646,7 +1645,7 @@ bool cli_get_server_domain(struct cli_state *cli)
 *
 ************************************************************************/
 
-bool cli_get_server_type(struct cli_state *cli, uint32_t *pstype)
+bool cli_get_server_type(struct cli_state *cli, uint32 *pstype)
 {
 	char *rparam = NULL;
 	char *rdata = NULL;
@@ -1755,7 +1754,7 @@ bool cli_get_server_name(TALLOC_CTX *mem_ctx, struct cli_state *cli,
 * PURPOSE:  Remotes a NetServerEnum2 API call to the current server
 *           requesting server_info_0 level information of machines
 *           matching the given server type. If the returned server
-*           list contains the machine name contained in smbXcli_conn_remote_name(->conn)
+*           list contains the machine name contained in cli->desthost
 *           then we conclude the server type checks out. This routine
 *           is useful to retrieve list of server's of a certain
 *           type when all you have is a null session connection and
@@ -1775,7 +1774,7 @@ bool cli_get_server_name(TALLOC_CTX *mem_ctx, struct cli_state *cli,
 *
 ************************************************************************/
 
-bool cli_ns_check_server_type(struct cli_state *cli, char *workgroup, uint32_t stype)
+bool cli_ns_check_server_type(struct cli_state *cli, char *workgroup, uint32 stype)
 {
 	char *rparam = NULL;
 	char *rdata = NULL;
@@ -1790,7 +1789,6 @@ bool cli_ns_check_server_type(struct cli_state *cli, char *workgroup, uint32_t s
 		+RAP_MACHNAME_LEN];             /* workgroup     */
 	bool found_server = false;
 	int res = -1;
-	const char *remote_name = smbXcli_conn_remote_name(cli->conn);
 
 	/* send a SMBtrans command with api NetServerEnum */
 	p = make_header(param, RAP_NetServerEnum2,
@@ -1826,16 +1824,14 @@ bool cli_ns_check_server_type(struct cli_state *cli, char *workgroup, uint32_t s
 						RAP_MACHNAME_LEN,
 						RAP_MACHNAME_LEN,
 						endp);
-				if (strequal(ret_server, remote_name)) {
+				if (strequal(ret_server, cli->desthost)) {
 					found_server = true;
 					break;
 				}
 			}
 		} else {
-			DEBUG(4, ("cli_ns_check_server_type: machine %s "
-				  "failed the NetServerEnum call. Error was : "
-				  "%s.\n", remote_name,
-				  win_errstr(W_ERROR(cli->rap_error))));
+			DEBUG(4,("cli_ns_check_server_type: machine %s failed the NetServerEnum call. "
+				"Error was : %s.\n", cli->desthost, cli_errstr(cli) ));
 		}
 	}
 
@@ -1874,16 +1870,12 @@ bool cli_NetWkstaUserLogoff(struct cli_state *cli, const char *user, const char 
 	PUTDWORD(p, 0); /* Null pointer */
 	PUTDWORD(p, 0); /* Null pointer */
 	strlcpy(upperbuf, user, sizeof(upperbuf));
-	if (!strupper_m(upperbuf)) {
-		return false;
-	}
+	strupper_m(upperbuf);
 	tmp = upperbuf;
 	PUTSTRINGF(p, tmp, RAP_USERNAME_LEN);
 	p++; /* strange format, but ok */
 	strlcpy(upperbuf, workstation, sizeof(upperbuf));
-	if (!strupper_m(upperbuf)) {
-		return false;
-	}
+	strupper_m(upperbuf);
 	tmp = upperbuf;
 	PUTSTRINGF(p, tmp, RAP_MACHNAME_LEN);
 	PUTWORD(p, CLI_BUFFER_SIZE);
@@ -1910,8 +1902,8 @@ bool cli_NetWkstaUserLogoff(struct cli_state *cli, const char *user, const char 
 }
 
 int cli_NetPrintQEnum(struct cli_state *cli,
-		void (*qfn)(const char*,uint16_t,uint16_t,uint16_t,const char*,const char*,const char*,const char*,const char*,uint16_t,uint16_t),
-		void (*jfn)(uint16_t,const char*,const char*,const char*,const char*,uint16_t,uint16_t,const char*,unsigned int,unsigned int,const char*))
+		void (*qfn)(const char*,uint16,uint16,uint16,const char*,const char*,const char*,const char*,const char*,uint16,uint16),
+		void (*jfn)(uint16,const char*,const char*,const char*,const char*,uint16,uint16,const char*,unsigned int,unsigned int,const char*))
 {
 	char param[WORDSIZE                         /* api number    */
 		+sizeof(RAP_NetPrintQEnum_REQ)    /* req string    */
@@ -2018,7 +2010,7 @@ int cli_NetPrintQEnum(struct cli_state *cli,
 			if (jobcount) {
 				int j;
 				for (j=0;j<jobcount;j++) {
-					uint16_t jid = 0, pos = 0, fsstatus = 0;
+					uint16 jid = 0, pos = 0, fsstatus = 0;
 					char ownername[RAP_USERNAME_LEN];
 					char notifyname[RAP_MACHNAME_LEN];
 					char datatype[RAP_DATATYPE_LEN];
@@ -2086,8 +2078,8 @@ int cli_NetPrintQEnum(struct cli_state *cli,
 }
 
 int cli_NetPrintQGetInfo(struct cli_state *cli, const char *printer,
-	void (*qfn)(const char*,uint16_t,uint16_t,uint16_t,const char*,const char*,const char*,const char*,const char*,uint16_t,uint16_t),
-	void (*jfn)(uint16_t,const char*,const char*,const char*,const char*,uint16_t,uint16_t,const char*,unsigned int,unsigned int,const char*))
+	void (*qfn)(const char*,uint16,uint16,uint16,const char*,const char*,const char*,const char*,const char*,uint16,uint16),
+	void (*jfn)(uint16,const char*,const char*,const char*,const char*,uint16,uint16,const char*,unsigned int,unsigned int,const char*))
 {
 	char param[WORDSIZE                         /* api number    */
 		+sizeof(RAP_NetPrintQGetInfo_REQ) /* req string    */
@@ -2347,7 +2339,7 @@ int cli_RNetServiceEnum(struct cli_state *cli, void (*fn)(const char *, const ch
  Call a NetSessionEnum - list workstations with sessions to an SMB server.
 ****************************************************************************/
 
-int cli_NetSessionEnum(struct cli_state *cli, void (*fn)(char *, char *, uint16_t, uint16_t, uint16_t, unsigned int, unsigned int, unsigned int, char *))
+int cli_NetSessionEnum(struct cli_state *cli, void (*fn)(char *, char *, uint16, uint16, uint16, unsigned int, unsigned int, unsigned int, char *))
 {
 	char param[WORDSIZE                       /* api number    */
 		+sizeof(RAP_NetSessionEnum_REQ) /* parm string   */
@@ -2447,7 +2439,7 @@ int cli_NetSessionEnum(struct cli_state *cli, void (*fn)(char *, char *, uint16_
 ****************************************************************************/
 
 int cli_NetSessionGetInfo(struct cli_state *cli, const char *workstation,
-		void (*fn)(const char *, const char *, uint16_t, uint16_t, uint16_t, unsigned int, unsigned int, unsigned int, const char *))
+		void (*fn)(const char *, const char *, uint16, uint16, uint16, unsigned int, unsigned int, unsigned int, const char *))
 {
 	char param[WORDSIZE                          /* api number    */
 		+sizeof(RAP_NetSessionGetInfo_REQ) /* req string    */

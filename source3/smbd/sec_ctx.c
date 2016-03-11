@@ -18,13 +18,11 @@
 */
 
 #include "includes.h"
-#include "system/passwd.h"
 #include "smbd/smbd.h"
 #include "smbd/globals.h"
 #include "libcli/security/security_token.h"
 #include "auth.h"
 #include "smbprofile.h"
-#include "../lib/util/setid.h"
 
 extern struct current_user current_user;
 
@@ -66,6 +64,7 @@ static bool become_uid(uid_t uid)
 
 	set_effective_uid(uid);
 
+	DO_PROFILE_INC(uid_changes);
 	return True;
 }
 
@@ -151,7 +150,7 @@ static int get_current_groups(gid_t gid, uint32_t *p_ngroups, gid_t **p_groups)
 	   returned from getgroups() (tridge) */
 	save_re_gid();
 	set_effective_gid(gid);
-	samba_setgid(gid);
+	setgid(gid);
 
 	ngroups = sys_getgroups(0,&grp);
 	if (ngroups <= 0) {
@@ -195,8 +194,6 @@ bool push_sec_ctx(void)
 {
 	struct sec_ctx *ctx_p;
 
-	START_PROFILE(push_sec_ctx);
-
 	/* Check we don't overflow our stack */
 
 	if (sec_ctx_stack_ndx == MAX_SEC_CTX_DEPTH) {
@@ -232,8 +229,6 @@ bool push_sec_ctx(void)
 	} else {
 		ctx_p->ut.groups = NULL;
 	}
-
-	END_PROFILE(push_sec_ctx);
 
 	return True;
 }
@@ -294,7 +289,7 @@ static void set_unix_security_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *grou
 	if (syscall(SYS_initgroups, (ngroups > max) ? max : ngroups,
 			groups, uid) == -1 && !non_root_mode()) {
 		DEBUG(0, ("WARNING: failed to set group list "
-			"(%d groups) for UID %d: %s\n",
+			"(%d groups) for UID %ld: %s\n",
 			ngroups, uid, strerror(errno)));
 		smb_panic("sys_setgroups failed");
 	}
@@ -309,9 +304,7 @@ static void set_unix_security_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *grou
  Set the current security context to a given user.
 ****************************************************************************/
 
-static void set_sec_ctx_internal(uid_t uid, gid_t gid,
-				 int ngroups, gid_t *groups,
-				 const struct security_token *token)
+void set_sec_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *groups, const struct security_token *token)
 {
 	struct sec_ctx *ctx_p = &sec_ctx_stack[sec_ctx_stack_ndx];
 
@@ -336,8 +329,11 @@ static void set_sec_ctx_internal(uid_t uid, gid_t gid,
 	TALLOC_FREE(ctx_p->token);
 
 	if (ngroups) {
-		ctx_p->ut.groups = (gid_t *)smb_xmemdup(groups,
-						        sizeof(gid_t) * ngroups);
+		ctx_p->ut.groups = (gid_t *)memdup(groups,
+						   sizeof(gid_t) * ngroups);
+		if (!ctx_p->ut.groups) {
+			smb_panic("memdup failed");
+		}
 	} else {
 		ctx_p->ut.groups = NULL;
 	}
@@ -363,13 +359,6 @@ static void set_sec_ctx_internal(uid_t uid, gid_t gid,
 	current_user.nt_user_token = ctx_p->token;
 }
 
-void set_sec_ctx(uid_t uid, gid_t gid, int ngroups, gid_t *groups, const struct security_token *token)
-{
-	START_PROFILE(set_sec_ctx);
-	set_sec_ctx_internal(uid, gid, ngroups, groups, token);
-	END_PROFILE(set_sec_ctx);
-}
-
 /****************************************************************************
  Become root context.
 ****************************************************************************/
@@ -378,9 +367,7 @@ void set_root_sec_ctx(void)
 {
 	/* May need to worry about supplementary groups at some stage */
 
-	START_PROFILE(set_root_sec_ctx);
-	set_sec_ctx_internal(0, 0, 0, NULL, NULL);
-	END_PROFILE(set_root_sec_ctx);
+	set_sec_ctx(0, 0, 0, NULL, NULL);
 }
 
 /****************************************************************************
@@ -391,8 +378,6 @@ bool pop_sec_ctx(void)
 {
 	struct sec_ctx *ctx_p;
 	struct sec_ctx *prev_ctx_p;
-
-	START_PROFILE(pop_sec_ctx);
 
 	/* Check for stack underflow */
 
@@ -432,8 +417,6 @@ bool pop_sec_ctx(void)
 	current_user.ut.ngroups = prev_ctx_p->ut.ngroups;
 	current_user.ut.groups = prev_ctx_p->ut.groups;
 	current_user.nt_user_token = prev_ctx_p->token;
-
-	END_PROFILE(pop_sec_ctx);
 
 	DEBUG(4, ("pop_sec_ctx (%u, %u) - sec_ctx_stack_ndx = %d\n", 
 		(unsigned int)geteuid(), (unsigned int)getegid(), sec_ctx_stack_ndx));
@@ -480,29 +463,4 @@ void init_sec_ctx(void)
 	current_user.conn = NULL;
 	current_user.vuid = UID_FIELD_INVALID;
 	current_user.nt_user_token = NULL;
-}
-
-/*************************************************************
- Called when we're inside a become_root() temporary escalation
- of privileges and the nt_user_token is NULL. Return the last
- active token on the context stack. We know there is at least
- one valid non-NULL token on the stack so panic if we underflow.
-*************************************************************/
-
-const struct security_token *sec_ctx_active_token(void)
-{
-	int stack_index = sec_ctx_stack_ndx;
-	struct sec_ctx *ctx_p = &sec_ctx_stack[stack_index];
-
-	while (ctx_p->token == NULL) {
-		stack_index--;
-		if (stack_index < 0) {
-			DEBUG(0, ("Security context active token "
-				  "stack underflow!\n"));
-			smb_panic("Security context active token "
-				  "stack underflow!");
-		}
-		ctx_p = &sec_ctx_stack[stack_index];
-	}
-	return ctx_p->token;
 }

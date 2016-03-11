@@ -107,9 +107,9 @@ open_pty(void)
     {
 	char *clone[] = {
 	    "/dev/ptc",
-	    "/dev/ptmx",
+	    "/dev/ptmx", 
 	    "/dev/ptm",
-	    "/dev/ptym/clone",
+	    "/dev/ptym/clone", 
 	    NULL
 	};
 	char **q;
@@ -233,7 +233,7 @@ eval_parent(pid_t pid)
 		     c->str, c->lineno);
 	    else if (alarmset)
 		errx(1, "got a signal %d waiting for %s (line %u)",
-		     (int)alarmset, c->str, c->lineno);
+		     alarmset, c->str, c->lineno);
 	    if (sret <= 0)
 		errx(1, "end command while waiting for %s (line %u)",
 		     c->str, c->lineno);
@@ -372,7 +372,7 @@ main(int argc, char **argv)
 	    sa.sa_handler = caught_signal;
 	    sa.sa_flags = 0;
 	    sigemptyset (&sa.sa_mask);
-
+	
 	    sigaction(SIGALRM, &sa, NULL);
 	}
 

@@ -23,11 +23,10 @@
 #include "includes.h"
 #include "registry.h"
 #include "reg_util_internal.h"
+#include "reg_backend_db.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_REGISTRY
-
-extern struct registry_ops regdb_ops;
 
 /* registry paths used in the print_registry[] */
 #define KEY_CONTROL_PRINTERS	"HKLM\\SYSTEM\\CURRENTCONTROLSET\\CONTROL\\PRINT\\PRINTERS"
@@ -89,10 +88,10 @@ static int key_printers_fetch_keys( const char *key, struct regsubkey_ctr *subke
 	printers_key = create_printer_registry_path(ctx, key);
 	if (printers_key == NULL) {
 		/* normalize on the 'HKLM\SOFTWARE\....\Print\Printers' key */
-		return regdb_ops.fetch_subkeys(KEY_WINNT_PRINTERS, subkeys);
+		return regdb_fetch_keys(KEY_WINNT_PRINTERS, subkeys);
 	}
 
-	return regdb_ops.fetch_subkeys(printers_key, subkeys);
+	return regdb_fetch_keys(printers_key, subkeys);
 }
 
 /**********************************************************************
@@ -106,10 +105,10 @@ static bool key_printers_store_keys( const char *key, struct regsubkey_ctr *subk
 	printers_key = create_printer_registry_path(ctx, key);
 	if (printers_key == NULL) {
 		/* normalize on the 'HKLM\SOFTWARE\....\Print\Printers' key */
-		return regdb_ops.store_subkeys(KEY_WINNT_PRINTERS, subkeys);
+		return regdb_store_keys(KEY_WINNT_PRINTERS, subkeys);
 	}
 
-	return regdb_ops.store_subkeys(printers_key, subkeys);
+	return regdb_store_keys(printers_key, subkeys);
 }
 
 /**********************************************************************
@@ -123,10 +122,10 @@ static int key_printers_fetch_values(const char *key, struct regval_ctr *values)
 	printers_key = create_printer_registry_path(ctx, key);
 	if (printers_key == NULL) {
 		/* normalize on the 'HKLM\SOFTWARE\....\Print\Printers' key */
-		return regdb_ops.fetch_values(KEY_WINNT_PRINTERS, values);
+		return regdb_fetch_values(KEY_WINNT_PRINTERS, values);
 	}
 
-	return regdb_ops.fetch_values(printers_key, values);
+	return regdb_fetch_values(printers_key, values);
 }
 
 /**********************************************************************
@@ -140,10 +139,10 @@ static bool key_printers_store_values(const char *key, struct regval_ctr *values
 	printers_key = create_printer_registry_path(ctx, key);
 	if (printers_key == NULL) {
 		/* normalize on the 'HKLM\SOFTWARE\....\Print\Printers' key */
-		return regdb_ops.store_values(KEY_WINNT_PRINTERS, values);
+		return regdb_store_values(KEY_WINNT_PRINTERS, values);
 	}
 
-	return regdb_ops.store_values(printers_key, values);
+	return regdb_store_values(printers_key, values);
 }
 
 /**********************************************************************

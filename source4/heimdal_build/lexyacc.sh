@@ -24,21 +24,20 @@ call_lex() {
 
     cd $dir
 
-    # --noline specified because line directives cause more bother than they solve (issues with lcov finding the source files)
-    $LEX --noline $lfile || exit 1
+    $LEX $lfile || exit 1
 
     if [ -r lex.yy.c ]; then
 	echo "#include \"config.h\"" > $base.c
-	grep -v "^#line" lex.yy.c >> $base.c
+	sed -e "s|lex\.yy\.c|$cfile|" lex.yy.c >> $base.c
 	rm -f $base.yy.c
     elif [ -r $base.yy.c ]; then
 	echo "#include \"config.h\"" > $base.c
-	grep -v "^#line" $base.yy.c >> $base.c
+	sed -e "s|$base\.yy\.c|$cfile|" $base.yy.c >> $base.c
 	rm -f $base.yy.c
     elif [ -r $base.c ]; then
 	mv $base.c $base.c.tmp
 	echo "#include \"config.h\"" > $base.c
-	grep -v "^#line" $base.c.tmp >> $base.c
+	sed -e "s|$base\.yy\.c|$cfile|" $base.c.tmp >> $base.c
 	rm -f $base.c.tmp
     elif [ ! -r base.c ]; then
 	echo "$base.c nor $base.yy.c nor lex.yy.c generated."
@@ -60,11 +59,10 @@ call_yacc() {
 
     cd $dir
 
-    # -l specified because line directives cause more bother than they solve (issues with lcov finding the source files)
-    $YACC -l -d $yfile || exit 1
+    $YACC -d $yfile || exit 1
     if [ -r y.tab.h -a -r y.tab.c ];then
-	cat y.tab.h > $base.h
-	cat y.tab.c > $base.c
+	sed -e "/^#/!b" -e "s|y\.tab\.h|$cfile|" -e "s|\"$base.y|\"$cfile|"  y.tab.h > $base.h
+	sed -e "s|y\.tab\.c|$cfile|" -e "s|\"$base.y|\"$cfile|" y.tab.c > $base.c
 	rm -f y.tab.c y.tab.h
     elif [ ! -r $base.h -a ! -r $base.c]; then
 	echo "$base.h nor $base.c generated."

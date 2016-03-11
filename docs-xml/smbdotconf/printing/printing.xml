@@ -1,6 +1,7 @@
 <samba:parameter name="printing"
                  context="S"
 				 type="enum"
+		 print="1"
                  xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
     <para>This parameters controls how printer status  information is
@@ -17,11 +18,7 @@
     <constant>LPRNG</constant>, <constant>PLP</constant>,
     <constant>SYSV</constant>, <constant>HPUX</constant>,
     <constant>QNX</constant>, <constant>SOFTQ</constant>,
-    <constant>CUPS</constant> and <constant>IPRINT</constant>.</para>
-
-    <para>Be aware that CUPS and IPRINT are only available if the CUPS
-    development library was available at the time Samba was compiled
-    or packaged.</para>
+    and <constant>CUPS</constant>.</para>
 
     <para>To see what the defaults are for the other print 
     commands when using the various options use the <citerefentry><refentrytitle>testparm</refentrytitle>
@@ -35,9 +32,7 @@
 
     <para>See also the discussion in the <link linkend="PRINTERSSECT">
     [printers]</link> section.</para>
-
-    <para>See <command moreinfo="none">testparm -v.</command> for the default
-    value on your system</para>
 </description>
-<value type="default"><comment>Depends on the operating system</comment></value>
+<value type="default">Depends on the operating system, see
+<command moreinfo="none">testparm -v.</command></value>
 </samba:parameter>

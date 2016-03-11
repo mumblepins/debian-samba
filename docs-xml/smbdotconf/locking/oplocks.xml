@@ -25,6 +25,5 @@
 
 <related>kernel oplocks</related>
 <related>level2 oplocks</related>
-<related>smb2 leases</related>
 <value type="default">yes</value>
 </samba:parameter>

@@ -23,7 +23,6 @@
 #include "includes.h"
 #include "system/filesys.h"
 #include "popt_common.h"
-#include "lib/param/param.h"
 
 /* Handle command line options:
  *		-d,--debuglevel 
@@ -100,22 +99,12 @@ static void popt_common_callback(poptContext con,
 
 	switch(opt->val) {
 	case OPT_OPTION:
-	{
-		struct loadparm_context *lp_ctx;
-
-		lp_ctx = loadparm_init_s3(talloc_tos(), loadparm_s3_helpers());
-		if (lp_ctx == NULL) {
-			fprintf(stderr, "loadparm_init_s3() failed!\n");
-			exit(1);
-		}
-
-		if (!lpcfg_set_option(lp_ctx, arg)) {
+		if (!lp_set_option(arg)) {
 			fprintf(stderr, "Error setting option '%s'\n", arg);
 			exit(1);
 		}
-		TALLOC_FREE(lp_ctx);
 		break;
-	}
+
 	case 'd':
 		if (arg) {
 			lp_set_cmdline("log level", arg);
@@ -128,7 +117,7 @@ static void popt_common_callback(poptContext con,
 
 	case 'O':
 		if (arg) {
-			lp_set_cmdline("socket options", arg);
+			lp_do_parameter(-1, "socket options", arg);
 		}
 		break;
 
@@ -140,7 +129,7 @@ static void popt_common_callback(poptContext con,
 
 	case 'n':
 		if (arg) {
-			lp_set_cmdline("netbios name", arg);
+			set_global_myname(arg);
 		}
 		break;
 
@@ -154,13 +143,13 @@ static void popt_common_callback(poptContext con,
 
 	case 'i':
 		if (arg) {
-			lp_set_cmdline("netbios scope", arg);
+			  set_global_scope(arg);
 		}
 		break;
 
 	case 'W':
 		if (arg) {
-			lp_set_cmdline("workgroup", arg);
+			set_global_myworkgroup(arg);
 		}
 		break;
 	}
@@ -211,6 +200,161 @@ struct poptOption popt_common_option[] = {
 	POPT_TABLEEND
 };
 
+/* Handle command line options:
+ *		--sbindir
+ *		--bindir
+ *		--swatdir
+ *		--lmhostsfile
+ *		--libdir
+ *		--modulesdir
+ *		--shlibext
+ *		--lockdir
+ *		--statedir
+ *		--cachedir
+ *		--piddir
+ *		--smb-passwd-file
+ *		--private-dir
+ */
+
+enum dyn_item{
+	DYN_SBINDIR = 1,
+	DYN_BINDIR,
+	DYN_SWATDIR,
+	DYN_LMHOSTSFILE,
+	DYN_LIBDIR,
+	DYN_MODULESDIR,
+	DYN_SHLIBEXT,
+	DYN_LOCKDIR,
+	DYN_STATEDIR,
+	DYN_CACHEDIR,
+	DYN_PIDDIR,
+	DYN_SMB_PASSWD_FILE,
+	DYN_PRIVATE_DIR,
+};
+
+
+static void popt_dynconfig_callback(poptContext con,
+			   enum poptCallbackReason reason,
+			   const struct poptOption *opt,
+			   const char *arg, const void *data)
+{
+
+	switch (opt->val) {
+	case DYN_SBINDIR:
+		if (arg) {
+			set_dyn_SBINDIR(arg);
+		}
+		break;
+
+	case DYN_BINDIR:
+		if (arg) {
+			set_dyn_BINDIR(arg);
+		}
+		break;
+
+	case DYN_SWATDIR:
+		if (arg) {
+			set_dyn_SWATDIR(arg);
+		}
+		break;
+
+	case DYN_LMHOSTSFILE:
+		if (arg) {
+			set_dyn_LMHOSTSFILE(arg);
+		}
+		break;
+
+	case DYN_LIBDIR:
+		if (arg) {
+			set_dyn_LIBDIR(arg);
+		}
+		break;
+
+	case DYN_MODULESDIR:
+		if (arg) {
+			set_dyn_MODULESDIR(arg);
+		}
+		break;
+
+	case DYN_SHLIBEXT:
+		if (arg) {
+			set_dyn_SHLIBEXT(arg);
+		}
+		break;
+
+	case DYN_LOCKDIR:
+		if (arg) {
+			set_dyn_LOCKDIR(arg);
+		}
+		break;
+
+	case DYN_STATEDIR:
+		if (arg) {
+			set_dyn_STATEDIR(arg);
+		}
+		break;
+
+	case DYN_CACHEDIR:
+		if (arg) {
+			set_dyn_CACHEDIR(arg);
+		}
+		break;
+
+	case DYN_PIDDIR:
+		if (arg) {
+			set_dyn_PIDDIR(arg);
+		}
+		break;
+
+	case DYN_SMB_PASSWD_FILE:
+		if (arg) {
+			set_dyn_SMB_PASSWD_FILE(arg);
+		}
+		break;
+
+	case DYN_PRIVATE_DIR:
+		if (arg) {
+			set_dyn_PRIVATE_DIR(arg);
+		}
+		break;
+
+	}
+}
+
+const struct poptOption popt_common_dynconfig[] = {
+
+	{ NULL, '\0', POPT_ARG_CALLBACK, (void *)popt_dynconfig_callback },
+
+	{ "sbindir", '\0' , POPT_ARG_STRING, NULL, DYN_SBINDIR,
+	    "Path to sbin directory", "SBINDIR" },
+	{ "bindir", '\0' , POPT_ARG_STRING, NULL, DYN_BINDIR,
+	    "Path to bin directory", "BINDIR" },
+	{ "swatdir", '\0' , POPT_ARG_STRING, NULL, DYN_SWATDIR,
+	    "Path to SWAT installation directory", "SWATDIR" },
+	{ "lmhostsfile", '\0' , POPT_ARG_STRING, NULL, DYN_LMHOSTSFILE,
+	    "Path to lmhosts file", "LMHOSTSFILE" },
+	{ "libdir", '\0' , POPT_ARG_STRING, NULL, DYN_LIBDIR,
+	    "Path to shared library directory", "LIBDIR" },
+	{ "modulesdir", '\0' , POPT_ARG_STRING, NULL, DYN_MODULESDIR,
+	    "Path to shared modules directory", "MODULESDIR" },
+	{ "shlibext", '\0' , POPT_ARG_STRING, NULL, DYN_SHLIBEXT,
+	    "Shared library extension", "SHLIBEXT" },
+	{ "lockdir", '\0' , POPT_ARG_STRING, NULL, DYN_LOCKDIR,
+	    "Path to lock file directory", "LOCKDIR" },
+	{ "statedir", '\0' , POPT_ARG_STRING, NULL, DYN_STATEDIR,
+	    "Path to persistent state file directory", "STATEDIR" },
+	{ "cachedir", '\0' , POPT_ARG_STRING, NULL, DYN_CACHEDIR,
+	    "Path to temporary cache file directory", "CACHEDIR" },
+	{ "piddir", '\0' , POPT_ARG_STRING, NULL, DYN_PIDDIR,
+	    "Path to PID file directory", "PIDDIR" },
+	{ "smb-passwd-file", '\0' , POPT_ARG_STRING, NULL, DYN_SMB_PASSWD_FILE,
+	    "Path to smbpasswd file", "SMB_PASSWD_FILE" },
+	{ "private-dir", '\0' , POPT_ARG_STRING, NULL, DYN_PRIVATE_DIR,
+	    "Path to private data directory", "PRIVATE_DIR" },
+
+	POPT_TABLEEND
+};
+
 /****************************************************************************
  * get a password from a a file or file descriptor
  * exit on failure
@@ -231,7 +375,7 @@ static void get_password_file(struct user_auth_info *auth_info)
 		sscanf(p, "%d", &fd);
 		close_it = false;
 	} else if ((p = getenv("PASSWD_FILE")) != NULL) {
-		fd = open(p, O_RDONLY, 0);
+		fd = sys_open(p, O_RDONLY, 0);
 		spec = SMB_STRDUP(p);
 		if (fd < 0) {
 			fprintf(stderr, "Error opening PASSWD_FILE %s: %s\n",
@@ -286,7 +430,7 @@ static void get_credentials_file(struct user_auth_info *auth_info,
 {
 	XFILE *auth;
 	fstring buf;
-	uint16_t len = 0;
+	uint16 len = 0;
 	char *ptr, *val, *param;
 
 	if ((auth=x_fopen(file, O_RDONLY, 0)) == NULL)
@@ -329,7 +473,7 @@ static void get_credentials_file(struct user_auth_info *auth_info,
 		} else if (strwicmp("username", param) == 0) {
 			set_cmdline_auth_info_username(auth_info, val);
 		} else if (strwicmp("domain", param) == 0) {
-			set_cmdline_auth_info_domain(auth_info, val);
+			set_global_myworkgroup(val);
 		}
 		memset(buf, 0, sizeof(buf));
 	}
@@ -353,11 +497,9 @@ static void popt_common_credentials_callback(poptContext con,
 					const struct poptOption *opt,
 					const char *arg, const void *data)
 {
-	const void **pp = discard_const(data);
-	void *p = discard_const(*pp);
-	struct user_auth_info *auth_info =
-		talloc_get_type_abort(p,
-		struct user_auth_info);
+	struct user_auth_info *auth_info = talloc_get_type_abort(
+		*((const char **)data), struct user_auth_info);
+	char *p;
 
 	if (reason == POPT_CALLBACK_REASON_PRE) {
 		set_cmdline_auth_info_username(auth_info, "GUEST");
@@ -368,8 +510,20 @@ static void popt_common_credentials_callback(poptContext con,
 		}
 
 		if (getenv("USER")) {
-			set_cmdline_auth_info_username(auth_info,
-						       getenv("USER"));
+			char *puser = SMB_STRDUP(getenv("USER"));
+			if (!puser) {
+				exit(ENOMEM);
+			}
+			set_cmdline_auth_info_username(auth_info, puser);
+
+			if ((p = strchr_m(puser,'%'))) {
+				size_t len;
+				*p = 0;
+				len = strlen(p+1);
+				set_cmdline_auth_info_password(auth_info, p+1);
+				memset(strchr_m(getenv("USER"),'%')+1,'X',len);
+			}
+			SAFE_FREE(puser);
 		}
 
 		if (getenv("PASSWD")) {
@@ -392,13 +546,13 @@ static void popt_common_credentials_callback(poptContext con,
 
 			if ((lp=strchr_m(puser,'%'))) {
 				size_t len;
-				*lp = '\0';
+				*lp = 0;
 				set_cmdline_auth_info_username(auth_info,
 							       puser);
 				set_cmdline_auth_info_password(auth_info,
 							       lp+1);
 				len = strlen(lp+1);
-				memset(lp + 1, '\0', len);
+				memset(strchr_m(arg,'%')+1,'X',len);
 			} else {
 				set_cmdline_auth_info_username(auth_info,
 							       puser);
@@ -438,9 +592,6 @@ static void popt_common_credentials_callback(poptContext con,
 	case 'C':
 		set_cmdline_auth_info_use_ccache(auth_info, true);
 		break;
-	case 'H':
-		set_cmdline_auth_info_use_pw_nt_hash(auth_info, true);
-		break;
 	}
 }
 
@@ -451,57 +602,10 @@ void popt_common_set_auth_info(struct user_auth_info *auth_info)
 	global_auth_info = auth_info;
 }
 
-/**
- * @brief Burn the commandline password.
- *
- * This function removes the password from the command line so we
- * don't leak the password e.g. in 'ps aux'.
- *
- * It should be called after processing the options and you should pass down
- * argv from main().
- *
- * @param[in]  argc     The number of arguments.
- *
- * @param[in]  argv[]   The argument array we will find the array.
- */
-void popt_burn_cmdline_password(int argc, char *argv[])
-{
-	bool found = false;
-	char *p = NULL;
-	int i, ulen = 0;
-
-	for (i = 0; i < argc; i++) {
-		p = argv[i];
-		if (strncmp(p, "-U", 2) == 0) {
-			ulen = 2;
-			found = true;
-		} else if (strncmp(p, "--user", 6) == 0) {
-			ulen = 6;
-			found = true;
-		}
-
-		if (found) {
-			if (p == NULL) {
-				return;
-			}
-
-			if (strlen(p) == ulen) {
-				continue;
-			}
-
-			p = strchr_m(p, '%');
-			if (p != NULL) {
-				memset(p, '\0', strlen(p));
-			}
-			found = false;
-		}
-	}
-}
-
 struct poptOption popt_common_credentials[] = {
 	{ NULL, 0, POPT_ARG_CALLBACK|POPT_CBFLAG_PRE,
 	  (void *)popt_common_credentials_callback, 0,
-	  (const void *)&global_auth_info },
+	  (const char *)&global_auth_info },
 	{ "user", 'U', POPT_ARG_STRING, NULL, 'U', "Set the network username", "USERNAME" },
 	{ "no-pass", 'N', POPT_ARG_NONE, NULL, 'N', "Don't ask for a password" },
 	{ "kerberos", 'k', POPT_ARG_NONE, NULL, 'k', "Use kerberos (active directory) authentication" },
@@ -511,7 +615,5 @@ struct poptOption popt_common_credentials[] = {
 	{"encrypt", 'e', POPT_ARG_NONE, NULL, 'e', "Encrypt SMB transport (UNIX extended servers only)" },
 	{"use-ccache", 'C', POPT_ARG_NONE, NULL, 'C',
 	 "Use the winbind ccache for authentication" },
-	{"pw-nt-hash", '\0', POPT_ARG_NONE, NULL, 'H',
-	 "The supplied password is the NT hash" },
 	POPT_TABLEEND
 };

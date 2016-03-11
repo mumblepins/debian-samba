@@ -28,7 +28,6 @@
 #include <tevent.h>
 #include "../lib/util/dlinklist.h"
 #include "param/param.h"
-#include "lib/util/samba_modules.h"
 
 /* list of registered backends */
 static struct sys_notify_backend *backends;
@@ -62,7 +61,7 @@ _PUBLIC_ struct sys_notify_context *sys_notify_context_create(struct share_confi
 
 	ctx->ev = ev;
 
-	bname = share_string_option(ctx, scfg, NOTIFY_BACKEND, NULL);
+	bname = share_string_option(scfg, NOTIFY_BACKEND, NULL);
 	if (!bname) {
 		if (num_backends) {
 			bname = backends[0].name;

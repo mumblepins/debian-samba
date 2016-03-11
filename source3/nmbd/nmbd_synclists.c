@@ -4,19 +4,20 @@
    Copyright (C) Andrew Tridgell 1994-1998
    Copyright (C) Luke Kenneth Casson Leighton 1994-1998
    Copyright (C) Jeremy Allison 1994-1998
-
+   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+   
 */
 
 /* this file handles asynchronous browse synchronisation requests. The
@@ -31,7 +32,7 @@
 #include "nmbd/nmbd.h"
 #include "libsmb/libsmb.h"
 #include "libsmb/clirap.h"
-#include "../libcli/smb/smbXcli_base.h"
+#include "smbprofile.h"
 
 struct sync_record {
 	struct sync_record *next, *prev;
@@ -52,7 +53,7 @@ static XFILE *fp;
   Note sname and comment are in UNIX codepage format.
   ******************************************************************/
 
-static void callback(const char *sname, uint32_t stype,
+static void callback(const char *sname, uint32 stype, 
                      const char *comment, void *state)
 {
 	x_fprintf(fp,"\"%s\" %08X \"%s\"\n", sname, stype, comment);
@@ -71,7 +72,8 @@ static void sync_child(char *name, int nm_type,
 {
 	fstring unix_workgroup;
 	struct cli_state *cli;
-	uint32_t local_type = local ? SV_TYPE_LOCAL_LIST_ONLY : 0;
+	uint32 local_type = local ? SV_TYPE_LOCAL_LIST_ONLY : 0;
+	struct nmb_name called, calling;
 	struct sockaddr_storage ss;
 	NTSTATUS status;
 
@@ -79,17 +81,29 @@ static void sync_child(char *name, int nm_type,
 	 * Patch from Andy Levine andyl@epicrealm.com.
 	 */
 
-	in_addr_to_sockaddr_storage(&ss, ip);
-
-	status = cli_connect_nb(name, &ss, NBT_SMB_PORT, nm_type,
-				get_local_machine_name(), SMB_SIGNING_DEFAULT,
-				0, &cli);
-	if (!NT_STATUS_IS_OK(status)) {
+	cli = cli_initialise();
+	if (!cli) {
 		return;
 	}
 
-	status = smbXcli_negprot(cli->conn, cli->timeout, PROTOCOL_CORE,
-				 PROTOCOL_NT1);
+	cli_set_port(cli, 139);
+
+	in_addr_to_sockaddr_storage(&ss, ip);
+	status = cli_connect(cli, name, &ss);
+	if (!NT_STATUS_IS_OK(status)) {
+		cli_shutdown(cli);
+		return;
+	}
+
+	make_nmb_name(&calling, get_local_machine_name(), 0x0);
+	make_nmb_name(&called , name, nm_type);
+
+	if (!cli_session_request(cli, &calling, &called)) {
+		cli_shutdown(cli);
+		return;
+	}
+
+	status = cli_negprot(cli);
 	if (!NT_STATUS_IS_OK(status)) {
 		cli_shutdown(cli);
 		return;
@@ -101,7 +115,7 @@ static void sync_child(char *name, int nm_type,
 		return;
 	}
 
-	if (!NT_STATUS_IS_OK(cli_tree_connect(cli, "IPC$", "IPC", "", 1))) {
+	if (!NT_STATUS_IS_OK(cli_tcon_andx(cli, "IPC$", "IPC", "", 1))) {
 		cli_shutdown(cli);
 		return;
 	}
@@ -113,7 +127,7 @@ static void sync_child(char *name, int nm_type,
 	cli_NetServerEnum(cli, unix_workgroup,
 			  local_type|SV_TYPE_DOMAIN_ENUM, 
 			  callback, NULL);
-
+	
 	/* Now fetch a server list. */
 	if (servers) {
 		fstrcpy(unix_workgroup, workgroup);
@@ -121,7 +135,7 @@ static void sync_child(char *name, int nm_type,
 				  local?SV_TYPE_LOCAL_LIST_ONLY:SV_TYPE_ALL,
 				  callback, NULL);
 	}
-
+	
 	cli_shutdown(cli);
 }
 
@@ -138,10 +152,12 @@ void sync_browse_lists(struct work_record *work,
 	struct sync_record *s;
 	static int counter;
 
+	START_PROFILE(sync_browse_lists);
 	/* Check we're not trying to sync with ourselves. This can
 	   happen if we are a domain *and* a local master browser. */
 	if (ismyip_v4(ip)) {
 done:
+		END_PROFILE(sync_browse_lists);
 		return;
 	}
 
@@ -154,7 +170,7 @@ done:
 	unstrcpy(s->server, name);
 	s->ip = ip;
 
-	if (asprintf(&s->fname, "%s/sync.%d", lp_lock_directory(), counter++) < 0) {
+	if (asprintf(&s->fname, "%s/sync.%d", lp_lockdir(), counter++) < 0) {
 		SAFE_FREE(s);
 		goto done;
 	}
@@ -164,9 +180,9 @@ done:
 	DLIST_ADD(syncs, s);
 
 	/* the parent forks and returns, leaving the child to do the
-	   actual sync */
+	   actual sync and call END_PROFILE*/
 	CatchChild();
-	if ((s->pid = fork())) return;
+	if ((s->pid = sys_fork())) return;
 
 	BlockSignals( False, SIGTERM );
 
@@ -175,6 +191,7 @@ done:
 
 	fp = x_fopen(s->fname,O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (!fp) {
+		END_PROFILE(sync_browse_lists);
 		_exit(1);
 	}
 
@@ -182,6 +199,7 @@ done:
 		   s->fname);
 
 	x_fclose(fp);
+	END_PROFILE(sync_browse_lists);
 	_exit(0);
 }
 
@@ -190,7 +208,7 @@ done:
  **********************************************************************/
 
 static void complete_one(struct sync_record *s,
-			 char *sname, uint32_t stype, char *comment)
+			 char *sname, uint32 stype, char *comment)
 {
 	struct work_record *work;
 	struct server_record *servrec;

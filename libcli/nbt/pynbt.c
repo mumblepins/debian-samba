@@ -20,11 +20,15 @@
 #include <Python.h>
 #include "includes.h"
 #include "libcli/util/pyerrors.h"
-#include "python/modules.h"
+#include "scripting/python/modules.h"
 #include "../libcli/nbt/libnbt.h"
 #include "lib/events/events.h"
 
 void initnetbios(void);
+
+#ifndef Py_RETURN_NONE
+#define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
+#endif
 
 extern PyTypeObject nbt_node_Type;
 

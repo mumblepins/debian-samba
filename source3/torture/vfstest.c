@@ -1,4 +1,4 @@
-/*
+/* 
    Unix SMB/CIFS implementation.
    VFS module tester
 
@@ -13,37 +13,27 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "includes.h"
 #include "smbd/smbd.h"
-#include "smbd/globals.h"
 #include "popt_common.h"
 #include "vfstest.h"
 #include "../libcli/smbreadline/smbreadline.h"
-#include "auth.h"
-#include "serverid.h"
-#include "messages.h"
-#include "libcli/security/security.h"
-#include "lib/smbd_shim.h"
-#include "system/filesys.h"
 
 /* List to hold groups of commands */
 static struct cmd_list {
 	struct cmd_list *prev, *next;
 	struct cmd_set *cmd_set;
 } *cmd_list;
-
-/* shall we do talloc_report after each command? */
-static int memreports = 0;
 
 /****************************************************************************
 handle completion of commands for readline
@@ -55,11 +45,11 @@ static char **completion_fn(const char *text, int start, int end)
 	int i, count=0;
 	struct cmd_list *commands = cmd_list;
 
-	if (start)
+	if (start) 
 		return NULL;
 
 	/* make sure we have a list of valid commands */
-	if (!commands)
+	if (!commands) 
 		return NULL;
 
 	matches = SMB_MALLOC_ARRAY(char *, MAX_COMPLETIONS);
@@ -68,24 +58,25 @@ static char **completion_fn(const char *text, int start, int end)
 	matches[count++] = SMB_STRDUP(text);
 	if (!matches[0]) return NULL;
 
-	while (commands && count < MAX_COMPLETIONS-1)
+	while (commands && count < MAX_COMPLETIONS-1) 
 	{
 		if (!commands->cmd_set)
 			break;
-
+		
 		for (i=0; commands->cmd_set[i].name; i++)
 		{
 			if ((strncmp(text, commands->cmd_set[i].name, strlen(text)) == 0) &&
-				commands->cmd_set[i].fn)
+				commands->cmd_set[i].fn) 
 			{
 				matches[count] = SMB_STRDUP(commands->cmd_set[i].name);
-				if (!matches[count])
+				if (!matches[count]) 
 					return NULL;
 				count++;
 			}
 		}
-
+		
 		commands = commands->next;
+		
 	}
 
 	if (count == 2) {
@@ -108,12 +99,7 @@ static char *next_command(TALLOC_CTX *ctx, char **cmdstr)
 	if (p)
 		*p = '\0';
 	command = talloc_strdup(ctx, *cmdstr);
-
-	/* Pass back the remaining cmdstring 
-	   (a trailing delimiter ";" does also work),
-	   or NULL at last cmdstring.
-	*/
-	*cmdstr = p ? p + 1 : p;
+	*cmdstr = p;
 
 	return command;
 }
@@ -127,7 +113,7 @@ static NTSTATUS cmd_conf(struct vfs_state *vfs, TALLOC_CTX *mem_ctx,
 		return NT_STATUS_OK;
 	}
 
-	if (!lp_load_with_shares(argv[1])) {
+	if (!lp_load(argv[1], False, True, False, True)) {
 		printf("Error loading \"%s\"\n", argv[1]);
 		return NT_STATUS_OK;
 	}
@@ -135,7 +121,7 @@ static NTSTATUS cmd_conf(struct vfs_state *vfs, TALLOC_CTX *mem_ctx,
 	printf("\"%s\" successfully loaded\n", argv[1]);
 	return NT_STATUS_OK;
 }
-
+	
 /* Display help on commands */
 static NTSTATUS cmd_help(struct vfs_state *vfs, TALLOC_CTX *mem_ctx,
 			 int argc, const char **argv)
@@ -153,7 +139,7 @@ static NTSTATUS cmd_help(struct vfs_state *vfs, TALLOC_CTX *mem_ctx,
 
 	if (argc == 2) {
 		for (tmp = cmd_list; tmp; tmp = tmp->next) {
-
+			
 			tmp_set = tmp->cmd_set;
 
 			while(tmp_set->name) {
@@ -276,11 +262,11 @@ static void add_command_set(struct cmd_set *cmd_set)
 static NTSTATUS do_cmd(struct vfs_state *vfs, struct cmd_set *cmd_entry, char *cmd)
 {
 	const char *p = cmd;
-	const char **argv = NULL;
+	char **argv = NULL;
 	NTSTATUS result = NT_STATUS_UNSUCCESSFUL;
 	char *buf;
 	TALLOC_CTX *mem_ctx = talloc_stackframe();
-	int argc = 0;
+	int argc = 0, i;
 
 	/* Count number of arguments first time through the loop then
 	   allocate memory and strdup them. */
@@ -288,7 +274,7 @@ static NTSTATUS do_cmd(struct vfs_state *vfs, struct cmd_set *cmd_entry, char *c
  again:
 	while(next_token_talloc(mem_ctx, &p, &buf, " ")) {
 		if (argv) {
-			argv[argc] = talloc_strdup(argv, buf);
+			argv[argc] = SMB_STRDUP(buf);
 		}
 		argc++;
 	}
@@ -296,8 +282,10 @@ static NTSTATUS do_cmd(struct vfs_state *vfs, struct cmd_set *cmd_entry, char *c
 	if (!argv) {
 		/* Create argument list */
 
-		argv = talloc_zero_array(mem_ctx, const char *, argc);
-		if (argv == NULL) {
+		argv = SMB_MALLOC_ARRAY(char *, argc);
+		memset(argv, 0, sizeof(char *) * argc);
+
+		if (!argv) {
 			fprintf(stderr, "out of memory\n");
 			result = NT_STATUS_NO_MEMORY;
 			goto done;
@@ -324,14 +312,12 @@ static NTSTATUS do_cmd(struct vfs_state *vfs, struct cmd_set *cmd_entry, char *c
 	/* Cleanup */
 
 	if (argv) {
-		char **_argv = discard_const_p(char *, argv);
-		TALLOC_FREE(_argv);
-		argv = NULL;
+		for (i = 0; i < argc; i++)
+			SAFE_FREE(argv[i]);
+
+		SAFE_FREE(argv);
 	}
 
-	if (memreports != 0) {
-		talloc_report_full(mem_ctx, stdout);
-	}
 	TALLOC_FREE(mem_ctx);
 	return result;
 }
@@ -415,59 +401,39 @@ static void process_file(struct vfs_state *pvfs, char *filename) {
 	}
 }
 
-static void vfstest_exit_server(const char * const reason) _NORETURN_;
-static void vfstest_exit_server(const char * const reason)
+void exit_server(const char *reason)
 {
 	DEBUG(3,("Server exit (%s)\n", (reason ? reason : "")));
 	exit(0);
 }
 
-static void vfstest_exit_server_cleanly(const char * const reason) _NORETURN_;
-static void vfstest_exit_server_cleanly(const char * const reason)
+void exit_server_cleanly(const char *const reason)
 {
-	vfstest_exit_server("normal exit");
+	exit_server("normal exit");
 }
 
-struct smb_request *vfstest_get_smbreq(TALLOC_CTX *mem_ctx,
-				       struct vfs_state *vfs)
+int last_message = -1;
+
+struct event_context *smbd_event_context(void)
 {
-	struct smb_request *result;
-	uint8_t *inbuf;
+	static struct event_context *ctx;
 
-	result = talloc_zero(mem_ctx, struct smb_request);
-	if (result == NULL) {
-		return NULL;
+	if (!ctx && !(ctx = event_context_init(NULL))) {
+		smb_panic("Could not init smbd event context\n");
 	}
-	result->sconn = vfs->conn->sconn;
-	result->mid = ++vfs->mid;
-
-	inbuf = talloc_array(result, uint8_t, smb_size);
-	if (inbuf == NULL) {
-		goto fail;
-	}
-	SSVAL(inbuf, smb_mid, result->mid);
-	smb_setlen(inbuf, smb_size-4);
-	result->inbuf = inbuf;
-	return result;
-fail:
-	TALLOC_FREE(result);
-	return NULL;
+	return ctx;
 }
 
 /* Main function */
 
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
-	char *cmdstr = NULL;
-	struct cmd_set	**cmd_set;
-	struct vfs_state *vfs;
+	static char		*cmdstr = NULL;
+	struct cmd_set 		**cmd_set;
+	static struct vfs_state vfs;
 	int i;
-	char *filename = NULL;
-	char cwd[MAXPATHLEN];
+	static char		*filename = NULL;
 	TALLOC_CTX *frame = talloc_stackframe();
-	struct tevent_context *ev;
-	struct auth_session_info *session_info = NULL;
-	NTSTATUS status = NT_STATUS_OK;
 
 	/* make sure the vars that get altered (4th field) are in
 	   a fixed location or certain compilers complain */
@@ -476,43 +442,31 @@ int main(int argc, const char *argv[])
 		POPT_AUTOHELP
 		{"file",	'f', POPT_ARG_STRING,	&filename, 0, },
 		{"command",	'c', POPT_ARG_STRING,	&cmdstr, 0, "Execute specified list of commands" },
-		{"memreport",	'm', POPT_ARG_INT,	&memreports, 0,
-		 "Report memory left on talloc stackframe after each command" },
 		POPT_COMMON_SAMBA
 		POPT_TABLEEND
 	};
-	static const struct smbd_shim vfstest_shim_fns =
-	{
-		.exit_server = vfstest_exit_server,
-		.exit_server_cleanly = vfstest_exit_server_cleanly,
-	};
 
-	smb_init_locale();
+	load_case_tables();
 
 	setlinebuf(stdout);
 
-	pc = poptGetContext("vfstest", argc, argv, long_options, 0);
-
+	pc = poptGetContext("vfstest", argc, (const char **) argv,
+			    long_options, 0);
+	
 	while(poptGetNextOpt(pc) != -1);
 
 
 	poptFreeContext(pc);
 
-	/* we want total control over the permissions on created files,
-	   so set our umask to 0 */
-	umask(0);
-
 	lp_load_initial_only(get_dyn_CONFIGFILE());
 
 	/* TODO: check output */
-	reload_services(NULL, NULL, false);
+	reload_services(smbd_messaging_context(), -1, False);
 
 	/* the following functions are part of the Samba debugging
 	   facilities.  See lib/debug.c */
 	setup_logging("vfstest", DEBUG_STDOUT);
-
-	set_smbd_shim(&vfstest_shim_fns);
-
+	
 	/* Load command lists */
 
 	cmd_set = vfstest_command_list;
@@ -525,46 +479,17 @@ int main(int argc, const char *argv[])
 
 	/* some basic initialization stuff */
 	sec_init();
-	init_guest_info();
-	locking_init();
-	serverid_parent_init(NULL);
-	vfs = talloc_zero(NULL, struct vfs_state);
-	if (vfs == NULL) {
-		return 1;
-	}
-	status = make_session_info_guest(vfs, &session_info);
-	if (!NT_STATUS_IS_OK(status)) {
-		return 1;
-	}
-
-	ev = server_event_context();
-
-	status = create_conn_struct(vfs,
-				ev,
-				server_messaging_context(),
-                                &vfs->conn,
-                                -1,
-                                getcwd(cwd, sizeof(cwd)),
-                                session_info);
-	if (!NT_STATUS_IS_OK(status)) {
-		return 1;
-	}
-
-	vfs->conn->share_access = FILE_GENERIC_ALL;
-	vfs->conn->read_only = false;
-
-	serverid_register(messaging_server_id(vfs->conn->sconn->msg_ctx), 0);
-	file_init(vfs->conn->sconn);
+	vfs.conn = TALLOC_ZERO_P(NULL, connection_struct);
+	vfs.conn->params = TALLOC_P(vfs.conn, struct share_params);
 	for (i=0; i < 1024; i++)
-		vfs->files[i] = NULL;
+		vfs.files[i] = NULL;
 
-	if (!posix_locking_init(false)) {
-		return 1;
-	}
+	/* some advanced initiliazation stuff */
+	smbd_vfs_init(vfs.conn);
 
 	/* Do we have a file input? */
 	if (filename && filename[0]) {
-		process_file(vfs, filename);
+		process_file(&vfs, filename);
 		return 0;
 	}
 
@@ -574,11 +499,11 @@ int main(int argc, const char *argv[])
 		char    *p = cmdstr;
 
 		while((cmd=next_command(frame, &p)) != NULL) {
-			status = process_cmd(vfs, cmd);
+			process_cmd(&vfs, cmd);
 		}
 
 		TALLOC_FREE(cmd);
-		return NT_STATUS_IS_OK(status) ? 0 : 1;
+		return 0;
 	}
 
 	/* Loop around accepting commands */
@@ -593,12 +518,12 @@ int main(int argc, const char *argv[])
 		}
 
 		if (line[0] != '\n') {
-			status = process_cmd(vfs, line);
+			process_cmd(&vfs, line);
 		}
 		SAFE_FREE(line);
 	}
 
-	TALLOC_FREE(vfs);
+	TALLOC_FREE(vfs.conn);
 	TALLOC_FREE(frame);
-	return NT_STATUS_IS_OK(status) ? 0 : 1;
+	return 0;
 }

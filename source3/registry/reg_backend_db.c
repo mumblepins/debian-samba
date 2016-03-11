@@ -2,8 +2,7 @@
  *  Unix SMB/CIFS implementation.
  *  Virtual Windows Registry Layer
  *  Copyright (C) Gerald Carter                     2002-2005
- *  Copyright (C) Michael Adam                      2007-2011
- *  Copyright (C) Gregor Beck                       2011
+ *  Copyright (C) Michael Adam                      2007-2009
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,88 +25,30 @@
 #include "registry.h"
 #include "reg_db.h"
 #include "reg_util_internal.h"
-#include "reg_parse_internal.h"
 #include "reg_backend_db.h"
 #include "reg_objects.h"
 #include "nt_printing.h"
 #include "util_tdb.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_open.h"
-#include "../libcli/security/secdesc.h"
+#include "dbwrap.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_REGISTRY
-
-#define REGDB_VERSION_KEYNAME "INFO/version"
 
 static struct db_context *regdb = NULL;
 static int regdb_refcount;
 
 static bool regdb_key_exists(struct db_context *db, const char *key);
+static bool regdb_key_is_base_key(const char *key);
 static WERROR regdb_fetch_keys_internal(struct db_context *db, const char *key,
 					struct regsubkey_ctr *ctr);
 static bool regdb_store_keys_internal(struct db_context *db, const char *key,
 				      struct regsubkey_ctr *ctr);
 static int regdb_fetch_values_internal(struct db_context *db, const char* key,
 				       struct regval_ctr *values);
-static NTSTATUS regdb_store_values_internal(struct db_context *db, const char *key,
-					    struct regval_ctr *values);
-static WERROR regdb_store_subkey_list(struct db_context *db, const char *parent,
-				      const char *key);
+static bool regdb_store_values_internal(struct db_context *db, const char *key,
+					struct regval_ctr *values);
 
-static WERROR regdb_create_basekey(struct db_context *db, const char *key);
-static WERROR regdb_create_subkey_internal(struct db_context *db,
-					   const char *key,
-					   const char *subkey);
-
-
-struct regdb_trans_ctx {
-	NTSTATUS (*action)(struct db_context *, void *);
-	void *private_data;
-};
-
-static NTSTATUS regdb_trans_do_action(struct db_context *db, void *private_data)
-{
-	NTSTATUS status;
-	int32_t version_id;
-	struct regdb_trans_ctx *ctx = (struct regdb_trans_ctx *)private_data;
-
-	status = dbwrap_fetch_int32_bystring(db, REGDB_VERSION_KEYNAME,
-					     &version_id);
-
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("ERROR: could not fetch registry db version: %s. "
-			  "Denying access.\n", nt_errstr(status)));
-		return NT_STATUS_ACCESS_DENIED;
-	}
-
-	if (version_id != REGDB_CODE_VERSION) {
-		DEBUG(0, ("ERROR: changed registry version %d found while "
-			  "trying to write to the registry. Version %d "
-			  "expected.  Denying access.\n",
-			  version_id, REGDB_CODE_VERSION));
-		return NT_STATUS_ACCESS_DENIED;
-	}
-
-	status = ctx->action(db,  ctx->private_data);
-	return status;
-}
-
-static WERROR regdb_trans_do(struct db_context *db,
-			     NTSTATUS (*action)(struct db_context *, void *),
-			     void *private_data)
-{
-	NTSTATUS status;
-	struct regdb_trans_ctx ctx;
-
-
-	ctx.action = action;
-	ctx.private_data = private_data;
-
-	status = dbwrap_trans_do(db, regdb_trans_do_action, &ctx);
-
-	return ntstatus_to_werror(status);
-}
+static NTSTATUS create_sorted_subkeys(const char *key);
 
 /* List the deepest path into the registry.  All part components will be created.*/
 
@@ -153,10 +94,10 @@ static const char *builtin_registry_paths[] = {
 struct builtin_regkey_value {
 	const char *path;
 	const char *valuename;
-	uint32_t type;
+	uint32 type;
 	union {
 		const char *string;
-		uint32_t dw_value;
+		uint32 dw_value;
 	} data;
 };
 
@@ -172,41 +113,6 @@ static struct builtin_regkey_value builtin_registry_values[] = {
 	{ NULL, NULL, 0, { NULL } }
 };
 
-static WERROR create_key_recursive(struct db_context *db,
-				   char *path,
-				   const char *subkey)
-{
-	WERROR werr;
-	char *p;
-
-	if (subkey == NULL) {
-		return WERR_INVALID_PARAM;
-	}
-
-	if (path == NULL) {
-		return regdb_create_basekey(db, subkey);
-	}
-
-	p = strrchr_m(path, '\\');
-
-	if (p == NULL) {
-		werr = create_key_recursive(db, NULL, path);
-	} else {
-		*p = '\0';
-		werr = create_key_recursive(db, path, p+1);
-		*p = '\\';
-	}
-
-	if (!W_ERROR_IS_OK(werr)) {
-		goto done;
-	}
-
-	werr = regdb_create_subkey_internal(db, path, subkey);
-
-done:
-	return werr;
-}
-
 /**
  * Initialize a key in the registry:
  * create each component key of the specified path.
@@ -214,30 +120,106 @@ done:
 static WERROR init_registry_key_internal(struct db_context *db,
 					 const char *add_path)
 {
-	char *subkey, *key;
 	WERROR werr;
 	TALLOC_CTX *frame = talloc_stackframe();
+	char *path = NULL;
+	char *base = NULL;
+	char *remaining = NULL;
+	char *keyname;
+	char *subkeyname;
+	struct regsubkey_ctr *subkeys;
+	const char *p, *p2;
 
-	if (add_path == NULL) {
-		werr = WERR_INVALID_PARAM;
-		goto done;
+	DEBUG(6, ("init_registry_key: Adding [%s]\n", add_path));
+
+	path = talloc_strdup(frame, add_path);
+	base = talloc_strdup(frame, "");
+	if (!path || !base) {
+		werr = WERR_NOMEM;
+		goto fail;
+	}
+	p = path;
+
+	while (next_token_talloc(frame, &p, &keyname, "\\")) {
+
+		/* build up the registry path from the components */
+
+		if (*base) {
+			base = talloc_asprintf(frame, "%s\\", base);
+			if (!base) {
+				werr = WERR_NOMEM;
+				goto fail;
+			}
+		}
+		base = talloc_asprintf_append(base, "%s", keyname);
+		if (!base) {
+			werr = WERR_NOMEM;
+			goto fail;
+		}
+
+		/* get the immediate subkeyname (if we have one ) */
+
+		subkeyname = talloc_strdup(frame, "");
+		if (!subkeyname) {
+			werr = WERR_NOMEM;
+			goto fail;
+		}
+		if (*p) {
+			remaining = talloc_strdup(frame, p);
+			if (!remaining) {
+				werr = WERR_NOMEM;
+				goto fail;
+			}
+			p2 = remaining;
+
+			if (!next_token_talloc(frame, &p2,
+						&subkeyname, "\\"))
+			{
+				subkeyname = talloc_strdup(frame,p2);
+				if (!subkeyname) {
+					werr = WERR_NOMEM;
+					goto fail;
+				}
+			}
+		}
+
+		DEBUG(10,("init_registry_key: Storing key [%s] with "
+			  "subkey [%s]\n", base,
+			  *subkeyname ? subkeyname : "NULL"));
+
+		/* we don't really care if the lookup succeeds or not
+		 * since we are about to update the record.
+		 * We just want any subkeys already present */
+
+		werr = regsubkey_ctr_init(frame, &subkeys);
+		if (!W_ERROR_IS_OK(werr)) {
+			DEBUG(0,("talloc() failure!\n"));
+			goto fail;
+		}
+
+		werr = regdb_fetch_keys_internal(db, base, subkeys);
+		if (!W_ERROR_IS_OK(werr) &&
+		    !W_ERROR_EQUAL(werr, WERR_NOT_FOUND))
+		{
+			goto fail;
+		}
+
+		if (*subkeyname) {
+			werr = regsubkey_ctr_addkey(subkeys, subkeyname);
+			if (!W_ERROR_IS_OK(werr)) {
+				goto fail;
+			}
+		}
+		if (!regdb_store_keys_internal(db, base, subkeys)) {
+			werr = WERR_CAN_NOT_COMPLETE;
+			goto fail;
+		}
 	}
 
-	key = talloc_strdup(frame, add_path);
+	werr = WERR_OK;
 
-	subkey = strrchr_m(key, '\\');
-	if (subkey == NULL) {
-		subkey = key;
-		key = NULL;
-	} else {
-		*subkey = '\0';
-		subkey++;
-	}
-
-	werr = create_key_recursive(db, key, subkey);
-
-done:
-	talloc_free(frame);
+fail:
+	TALLOC_FREE(frame);
 	return werr;
 }
 
@@ -270,9 +252,9 @@ WERROR init_registry_key(const char *add_path)
 
 	init_ctx.add_path = add_path;
 
-	return regdb_trans_do(regdb,
-			      init_registry_key_action,
-			      &init_ctx);
+	return ntstatus_to_werror(dbwrap_trans_do(regdb,
+						  init_registry_key_action,
+						  &init_ctx));
 }
 
 /***********************************************************************
@@ -286,7 +268,7 @@ static void regdb_ctr_add_value(struct regval_ctr *ctr,
 	case REG_DWORD:
 		regval_ctr_addvalue(ctr, value->valuename, REG_DWORD,
 				    (uint8_t *)&value->data.dw_value,
-				    sizeof(uint32_t));
+				    sizeof(uint32));
 		break;
 
 	case REG_SZ:
@@ -343,12 +325,9 @@ static NTSTATUS init_registry_data_action(struct db_context *db,
 		{
 			regdb_ctr_add_value(values,
 					    &builtin_registry_values[i]);
-			status = regdb_store_values_internal(db,
+			regdb_store_values_internal(db,
 					builtin_registry_values[i].path,
 					values);
-			if (!NT_STATUS_IS_OK(status)) {
-				goto done;
-			}
 		}
 		TALLOC_FREE(values);
 	}
@@ -408,9 +387,9 @@ do_init:
 	 * transaction behaviour.
 	 */
 
-	werr = regdb_trans_do(regdb,
-			      init_registry_data_action,
-			      NULL);
+	werr = ntstatus_to_werror(dbwrap_trans_do(regdb,
+						  init_registry_data_action,
+						  NULL));
 
 done:
 	TALLOC_FREE(frame);
@@ -423,50 +402,38 @@ static int regdb_normalize_keynames_fn(struct db_record *rec,
 	TALLOC_CTX *mem_ctx = talloc_tos();
 	const char *keyname;
 	NTSTATUS status;
-	TDB_DATA key;
-	TDB_DATA value;
-	struct db_context *db = (struct db_context *)private_data;
 
-	key = dbwrap_record_get_key(rec);
-	if (key.dptr == NULL || key.dsize == 0) {
+	if (rec->key.dptr == NULL || rec->key.dsize == 0) {
 		return 0;
 	}
 
-	value = dbwrap_record_get_value(rec);
-
-	if (db == NULL) {
-		DEBUG(0, ("regdb_normalize_keynames_fn: ERROR: "
-			  "NULL db context handed in via private_data\n"));
-		return 1;
-	}
-
-	if (strncmp((const char *)key.dptr, REGDB_VERSION_KEYNAME,
-	    strlen(REGDB_VERSION_KEYNAME)) == 0)
-	{
-		return 0;
-	}
-
-	keyname = strchr((const char *)key.dptr, '/');
+	keyname = strchr((const char *) rec->key.dptr, '/');
 	if (keyname) {
+		struct db_record new_rec;
+
 		keyname = talloc_string_sub(mem_ctx,
-					    (const char *)key.dptr,
+					    (const char *) rec->key.dptr,
 					    "/",
 					    "\\");
 
 		DEBUG(2, ("regdb_normalize_keynames_fn: Convert %s to %s\n",
-			  (const char *)key.dptr,
+			  (const char *) rec->key.dptr,
 			  keyname));
 
+		new_rec.value = rec->value;
+		new_rec.key = string_term_tdb_data(keyname);
+		new_rec.private_data = rec->private_data;
+
 		/* Delete the original record and store the normalized key */
-		status = dbwrap_record_delete(rec);
+		status = rec->delete_rec(rec);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(0,("regdb_normalize_keynames_fn: "
 				 "tdb_delete for [%s] failed!\n",
-				 (const char *)key.dptr));
+				 rec->key.dptr));
 			return 1;
 		}
 
-		status = dbwrap_store_bystring(db, keyname, value, TDB_REPLACE);
+		status = rec->store(&new_rec, new_rec.value, TDB_REPLACE);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(0,("regdb_normalize_keynames_fn: "
 				 "failed to store new record for [%s]!\n",
@@ -478,238 +445,47 @@ static int regdb_normalize_keynames_fn(struct db_record *rec,
 	return 0;
 }
 
-static WERROR regdb_store_regdb_version(struct db_context *db, uint32_t version)
+static WERROR regdb_store_regdb_version(uint32_t version)
 {
 	NTSTATUS status;
-	if (db == NULL) {
+	const char *version_keyname = "INFO/version";
+
+	if (!regdb) {
 		return WERR_CAN_NOT_COMPLETE;
 	}
 
-	status = dbwrap_trans_store_int32_bystring(db, REGDB_VERSION_KEYNAME,
-						   version);
+	status = dbwrap_trans_store_int32(regdb, version_keyname, version);
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(1, ("regdb_store_regdb_version: error storing %s = %d: %s\n",
-			  REGDB_VERSION_KEYNAME, version, nt_errstr(status)));
+			  version_keyname, version, nt_errstr(status)));
 		return ntstatus_to_werror(status);
 	} else {
 		DEBUG(10, ("regdb_store_regdb_version: stored %s = %d\n",
-			  REGDB_VERSION_KEYNAME, version));
+			  version_keyname, version));
 		return WERR_OK;
 	}
 }
 
-static WERROR regdb_upgrade_v1_to_v2(struct db_context *db)
+static WERROR regdb_upgrade_v1_to_v2(void)
 {
 	TALLOC_CTX *mem_ctx;
-	NTSTATUS status;
+	int rc;
 	WERROR werr;
 
 	mem_ctx = talloc_stackframe();
-
-	status = dbwrap_traverse(db, regdb_normalize_keynames_fn, db, NULL);
-	if (!NT_STATUS_IS_OK(status)) {
-		werr = WERR_REG_IO_FAILURE;
-		goto done;
+	if (mem_ctx == NULL) {
+		return WERR_NOMEM;
 	}
 
-	werr = regdb_store_regdb_version(db, REGDB_VERSION_V2);
+	rc = regdb->traverse(regdb, regdb_normalize_keynames_fn, mem_ctx);
 
-done:
-	talloc_free(mem_ctx);
-	return werr;
-}
+	talloc_destroy(mem_ctx);
 
-static bool tdb_data_read_uint32(TDB_DATA *buf, uint32_t *result)
-{
-	const size_t len = sizeof(uint32_t);
-	if (buf->dsize >= len) {
-		*result = IVAL(buf->dptr, 0);
-		buf->dptr += len;
-		buf->dsize -= len;
-		return true;
-	}
-	return false;
-}
-
-static bool tdb_data_read_cstr(TDB_DATA *buf, char **result)
-{
-	const size_t len = strnlen((char*)buf->dptr, buf->dsize) + 1;
-	if (buf->dsize >= len) {
-		*result = (char*)buf->dptr;
-		buf->dptr += len;
-		buf->dsize -= len;
-		return true;
-	}
-	return false;
-}
-
-static bool tdb_data_is_cstr(TDB_DATA d) {
-	if (tdb_data_is_empty(d) || (d.dptr[d.dsize-1] != '\0')) {
-		return false;
-	}
-	return strlen((char *)d.dptr) == (d.dsize-1);
-}
-
-static bool upgrade_v2_to_v3_check_subkeylist(struct db_context *db,
-					      const char *key,
-					      const char *subkey)
-{
-	static uint32_t zero = 0;
-	static TDB_DATA empty_subkey_list = {
-		.dptr = (unsigned char*)&zero,
-		.dsize = sizeof(uint32_t),
-	};
-	bool success = false;
-	char *path = talloc_asprintf(talloc_tos(), "%s\\%s", key, subkey);
-	if (!strupper_m(path)) {
-		goto done;
+	if (rc == -1) {
+		return WERR_REG_IO_FAILURE;
 	}
 
-	if (!dbwrap_exists(db, string_term_tdb_data(path))) {
-		NTSTATUS status;
-
-		DEBUG(10, ("regdb_upgrade_v2_to_v3: writing subkey list [%s]\n",
-			   path));
-
-		status = dbwrap_store_bystring(db, path, empty_subkey_list,
-					       TDB_INSERT);
-		if (!NT_STATUS_IS_OK(status)) {
-			DEBUG(0, ("regdb_upgrade_v2_to_v3: writing subkey list "
-				  "[%s] failed\n", path));
-			goto done;
-		}
-	}
-	success = true;
-done:
-	talloc_free(path);
-	return success;
-}
-
-static bool upgrade_v2_to_v3_check_parent(struct db_context *db,
-					  const char *key)
-{
-	const char *sep = strrchr_m(key, '\\');
-	if (sep != NULL) {
-		char *pkey = talloc_strndup(talloc_tos(), key, sep-key);
-		if (!dbwrap_exists(db, string_term_tdb_data(pkey))) {
-			DEBUG(0, ("regdb_upgrade_v2_to_v3: missing subkey list "
-				  "[%s]\nrun \"net registry check\"\n", pkey));
-		}
-		talloc_free(pkey);
-	}
-	return true;
-}
-
-
-#define IS_EQUAL(d,s) (((d).dsize == strlen(s)+1) &&	\
-		       (strcmp((char*)(d).dptr, (s)) == 0))
-#define STARTS_WITH(d,s) (((d).dsize > strlen(s)) &&			\
-			  (strncmp((char*)(d).dptr, (s), strlen(s)) == 0))
-#define SSTR(d) (int)(d).dsize , (char*)(d).dptr
-
-
-static int regdb_upgrade_v2_to_v3_fn(struct db_record *rec, void *private_data)
-{
-	struct db_context *db = (struct db_context *)private_data;
-	TDB_DATA key = dbwrap_record_get_key(rec);
-	TDB_DATA val = dbwrap_record_get_value(rec);
-
-	if (tdb_data_is_empty(key)) {
-		return 0;
-	}
-
-	if (db == NULL) {
-		DEBUG(0, ("regdb_upgrade_v2_to_v3_fn: ERROR: "
-			  "NULL db context handed in via private_data\n"));
-		return 1;
-	}
-
-	if (IS_EQUAL(key, REGDB_VERSION_KEYNAME) ||
-	    STARTS_WITH(key, REG_VALUE_PREFIX) ||
-	    STARTS_WITH(key, REG_SECDESC_PREFIX))
-	{
-		DEBUG(10, ("regdb_upgrade_v2_to_v3: skipping [%.*s]\n",
-			   SSTR(key)));
-		return 0;
-	}
-
-	if (STARTS_WITH(key, REG_SORTED_SUBKEYS_PREFIX)) {
-		NTSTATUS status;
-		/* Delete the deprecated sorted subkeys cache. */
-
-		DEBUG(10, ("regdb_upgrade_v2_to_v3: deleting [%.*s]\n",
-			   SSTR(key)));
-
-		status = dbwrap_record_delete(rec);
-		if (!NT_STATUS_IS_OK(status)) {
-			DEBUG(0, ("regdb_upgrade_v2_to_v3: deleting [%.*s] "
-				  "failed!\n", SSTR(key)));
-			return 1;
-		}
-
-		return 0;
-	}
-
-	if ( tdb_data_is_cstr(key) &&
-	     hive_info((char*)key.dptr) != NULL )
-	{
-		/*
-		 * Found a regular subkey list record.
-		 * Walk the list and create the list record for those
-		 * subkeys that don't already have one.
-		 */
-		TDB_DATA pos = val;
-		char *subkey, *path = (char*)key.dptr;
-		uint32_t num_items, found_items = 0;
-
-
-		DEBUG(10, ("regdb_upgrade_v2_to_v3: scanning subkeylist of "
-			   "[%s]\n", path));
-
-		if (!tdb_data_read_uint32(&pos, &num_items)) {
-			/* invalid or empty - skip */
-			return 0;
-		}
-
-		while (tdb_data_read_cstr(&pos, &subkey)) {
-			found_items++;
-
-			if (!upgrade_v2_to_v3_check_subkeylist(db, path, subkey))
-			{
-				return 1;
-			}
-
-			if (!upgrade_v2_to_v3_check_parent(db, path)) {
-				return 1;
-			}
-		}
-		if (found_items != num_items) {
-			DEBUG(0, ("regdb_upgrade_v2_to_v3: inconsistent subkey "
-				  "list [%s]\nrun \"net registry check\"\n",
-				  path));
-		}
-	} else {
-		DEBUG(10, ("regdb_upgrade_v2_to_v3: skipping invalid [%.*s]\n"
-			   "run \"net registry check\"\n", SSTR(key)));
-	}
-
-	return 0;
-}
-
-static WERROR regdb_upgrade_v2_to_v3(struct db_context *db)
-{
-	NTSTATUS status;
-	WERROR werr;
-
-	status = dbwrap_traverse(db, regdb_upgrade_v2_to_v3_fn, db, NULL);
-	if (!NT_STATUS_IS_OK(status)) {
-		werr = WERR_REG_IO_FAILURE;
-		goto done;
-	}
-
-	werr = regdb_store_regdb_version(db, REGDB_VERSION_V3);
-
-done:
+	werr = regdb_store_regdb_version(REGVER_V2);
 	return werr;
 }
 
@@ -719,10 +495,9 @@ done:
 
 WERROR regdb_init(void)
 {
-	int32_t vers_id;
+	const char *vstring = "INFO/version";
+	uint32 vers_id, expected_version;
 	WERROR werr;
-	NTSTATUS status;
-	char *db_path;
 
 	if (regdb) {
 		DEBUG(10, ("regdb_init: incrementing refcount (%d->%d)\n",
@@ -731,113 +506,66 @@ WERROR regdb_init(void)
 		return WERR_OK;
 	}
 
-	db_path = state_path("registry.tdb");
-	if (db_path == NULL) {
-		return WERR_NOMEM;
-	}
-
-	regdb = db_open(NULL, db_path, 0,
-			REG_TDB_FLAGS, O_RDWR, 0600,
-			DBWRAP_LOCK_ORDER_1, REG_DBWRAP_FLAGS);
+	regdb = db_open(NULL, state_path("registry.tdb"), 0,
+			      REG_TDB_FLAGS, O_RDWR, 0600);
 	if (!regdb) {
-		regdb = db_open(NULL, db_path, 0,
-				REG_TDB_FLAGS, O_RDWR|O_CREAT, 0600,
-				DBWRAP_LOCK_ORDER_1, REG_DBWRAP_FLAGS);
+		regdb = db_open(NULL, state_path("registry.tdb"), 0,
+				      REG_TDB_FLAGS, O_RDWR|O_CREAT, 0600);
 		if (!regdb) {
 			werr = ntstatus_to_werror(map_nt_error_from_unix(errno));
 			DEBUG(1,("regdb_init: Failed to open registry %s (%s)\n",
-				db_path, strerror(errno) ));
-			TALLOC_FREE(db_path);
-			return werr;
-		}
-
-		werr = regdb_store_regdb_version(regdb, REGDB_CODE_VERSION);
-		if (!W_ERROR_IS_OK(werr)) {
-			DEBUG(1, ("regdb_init: Failed to store version: %s\n",
-				  win_errstr(werr)));
-			TALLOC_FREE(db_path);
+				state_path("registry.tdb"), strerror(errno) ));
 			return werr;
 		}
 
 		DEBUG(10,("regdb_init: Successfully created registry tdb\n"));
 	}
-	TALLOC_FREE(db_path);
 
 	regdb_refcount = 1;
 	DEBUG(10, ("regdb_init: registry db openend. refcount reset (%d)\n",
 		   regdb_refcount));
 
-	status = dbwrap_fetch_int32_bystring(regdb, REGDB_VERSION_KEYNAME,
-					     &vers_id);
-	if (!NT_STATUS_IS_OK(status)) {
+	expected_version = REGVER_V2;
+
+	vers_id = dbwrap_fetch_int32(regdb, vstring);
+	if (vers_id == -1) {
 		DEBUG(10, ("regdb_init: registry version uninitialized "
 			   "(got %d), initializing to version %d\n",
-			   vers_id, REGDB_VERSION_V1));
+			   vers_id, expected_version));
 
-		/*
-		 * There was a regdb format version prior to version 1
-		 * which did not store a INFO/version key. The format
-		 * of this version was identical to version 1 except for
-		 * the lack of the sorted subkey cache records.
-		 * Since these are disposable, we can safely assume version
-		 * 1 if no INFO/version key is found and run the db through
-		 * the whole chain of upgrade. If the database was not
-		 * initialized, this does not harm. If it was the unversioned
-		 * version ("0"), then it do the right thing with the records.
-		 */
-		werr = regdb_store_regdb_version(regdb, REGDB_VERSION_V1);
-		if (!W_ERROR_IS_OK(werr)) {
-			return werr;
-		}
-		vers_id = REGDB_VERSION_V1;
+		werr = regdb_store_regdb_version(expected_version);
+		return werr;
 	}
 
-	if (vers_id == REGDB_CODE_VERSION) {
-		return WERR_OK;
-	}
-
-	if (vers_id > REGDB_CODE_VERSION || vers_id == 0) {
-		DEBUG(0, ("regdb_init: unknown registry version %d "
+	if (vers_id > expected_version || vers_id == 0) {
+		DEBUG(1, ("regdb_init: unknown registry version %d "
 			  "(code version = %d), refusing initialization\n",
-			  vers_id, REGDB_CODE_VERSION));
+			  vers_id, expected_version));
 		return WERR_CAN_NOT_COMPLETE;
 	}
 
-	if (dbwrap_transaction_start(regdb) != 0) {
-		return WERR_REG_IO_FAILURE;
-	}
+	if (vers_id == REGVER_V1) {
+		DEBUG(10, ("regdb_init: got registry db version %d, upgrading "
+			   "to version %d\n", REGVER_V1, REGVER_V2));
 
-	if (vers_id == REGDB_VERSION_V1) {
-		DEBUG(10, ("regdb_init: upgrading registry from version %d "
-			   "to %d\n", REGDB_VERSION_V1, REGDB_VERSION_V2));
+		if (regdb->transaction_start(regdb) != 0) {
+			return WERR_REG_IO_FAILURE;
+		}
 
-		werr = regdb_upgrade_v1_to_v2(regdb);
+		werr = regdb_upgrade_v1_to_v2();
 		if (!W_ERROR_IS_OK(werr)) {
-			dbwrap_transaction_cancel(regdb);
+			regdb->transaction_cancel(regdb);
 			return werr;
 		}
 
-		vers_id = REGDB_VERSION_V2;
-	}
-
-	if (vers_id == REGDB_VERSION_V2) {
-		DEBUG(10, ("regdb_init: upgrading registry from version %d "
-			   "to %d\n", REGDB_VERSION_V2, REGDB_VERSION_V3));
-
-		werr = regdb_upgrade_v2_to_v3(regdb);
-		if (!W_ERROR_IS_OK(werr)) {
-			dbwrap_transaction_cancel(regdb);
-			return werr;
+		if (regdb->transaction_commit(regdb) != 0) {
+			return WERR_REG_IO_FAILURE;
 		}
 
-		vers_id = REGDB_VERSION_V3;
+		vers_id = REGVER_V2;
 	}
 
 	/* future upgrade code should go here */
-
-	if (dbwrap_transaction_commit(regdb) != 0) {
-		return WERR_REG_IO_FAILURE;
-	}
 
 	return WERR_OK;
 }
@@ -849,8 +577,6 @@ WERROR regdb_init(void)
 WERROR regdb_open( void )
 {
 	WERROR result = WERR_OK;
-	char *db_path;
-	int saved_errno;
 
 	if ( regdb ) {
 		DEBUG(10, ("regdb_open: incrementing refcount (%d->%d)\n",
@@ -859,32 +585,23 @@ WERROR regdb_open( void )
 		return WERR_OK;
 	}
 
-	db_path = state_path("registry.tdb");
-	if (db_path == NULL) {
-		return WERR_NOMEM;
-	}
-
 	become_root();
 
-	regdb = db_open(NULL, db_path, 0,
-			REG_TDB_FLAGS, O_RDWR, 0600,
-			DBWRAP_LOCK_ORDER_1, REG_DBWRAP_FLAGS);
-	saved_errno = errno;
-	unbecome_root();
+	regdb = db_open(NULL, state_path("registry.tdb"), 0,
+			      REG_TDB_FLAGS, O_RDWR, 0600);
 	if ( !regdb ) {
-		result = ntstatus_to_werror(map_nt_error_from_unix(saved_errno));
+		result = ntstatus_to_werror( map_nt_error_from_unix( errno ) );
 		DEBUG(0,("regdb_open: Failed to open %s! (%s)\n",
-			 db_path, strerror(saved_errno)));
-		TALLOC_FREE(db_path);
-		return result;
+			state_path("registry.tdb"), strerror(errno) ));
 	}
-	TALLOC_FREE(db_path);
+
+	unbecome_root();
 
 	regdb_refcount = 1;
 	DEBUG(10, ("regdb_open: registry db opened. refcount reset (%d)\n",
 		   regdb_refcount));
 
-	return WERR_OK;
+	return result;
 }
 
 /***********************************************************************
@@ -912,19 +629,19 @@ int regdb_close( void )
 
 WERROR regdb_transaction_start(void)
 {
-	return (dbwrap_transaction_start(regdb) == 0) ?
+	return (regdb->transaction_start(regdb) == 0) ?
 		WERR_OK : WERR_REG_IO_FAILURE;
 }
 
 WERROR regdb_transaction_commit(void)
 {
-	return (dbwrap_transaction_commit(regdb) == 0) ?
+	return (regdb->transaction_commit(regdb) == 0) ?
 		WERR_OK : WERR_REG_IO_FAILURE;
 }
 
 WERROR regdb_transaction_cancel(void)
 {
-	return (dbwrap_transaction_cancel(regdb) == 0) ?
+	return (regdb->transaction_cancel(regdb) == 0) ?
 		WERR_OK : WERR_REG_IO_FAILURE;
 }
 
@@ -935,7 +652,7 @@ WERROR regdb_transaction_cancel(void)
  ***********************************************************************/
 int regdb_get_seqnum(void)
 {
-	return dbwrap_get_seqnum(regdb);
+	return regdb->get_seqnum(regdb);
 }
 
 
@@ -968,7 +685,7 @@ static WERROR regdb_delete_key_with_prefix(struct db_context *db,
 
 	werr = ntstatus_to_werror(dbwrap_delete_bystring(db, path));
 
-	/* treat "not found" as ok */
+	/* treat "not" found" as ok */
 	if (W_ERROR_EQUAL(werr, WERR_NOT_FOUND)) {
 		werr = WERR_OK;
 	}
@@ -993,7 +710,6 @@ static WERROR regdb_delete_subkeylist(struct db_context *db, const char *keyname
 {
 	return regdb_delete_key_with_prefix(db, keyname, NULL);
 }
-
 
 static WERROR regdb_delete_key_lists(struct db_context *db, const char *keyname)
 {
@@ -1035,10 +751,10 @@ static WERROR regdb_store_keys_internal2(struct db_context *db,
 					 struct regsubkey_ctr *ctr)
 {
 	TDB_DATA dbuf;
-	uint8_t *buffer = NULL;
+	uint8 *buffer = NULL;
 	int i = 0;
-	uint32_t len, buflen;
-	uint32_t num_subkeys = regsubkey_ctr_numkeys(ctr);
+	uint32 len, buflen;
+	uint32 num_subkeys = regsubkey_ctr_numkeys(ctr);
 	char *keyname = NULL;
 	TALLOC_CTX *ctx = talloc_stackframe();
 	WERROR werr;
@@ -1062,7 +778,7 @@ static WERROR regdb_store_keys_internal2(struct db_context *db,
 
 	/* allocate some initial memory */
 
-	buffer = (uint8_t *)SMB_MALLOC(1024);
+	buffer = (uint8 *)SMB_MALLOC(1024);
 	if (buffer == NULL) {
 		werr = WERR_NOMEM;
 		goto done;
@@ -1115,63 +831,16 @@ static WERROR regdb_store_keys_internal2(struct db_context *db,
 	dbuf.dsize = len;
 	werr = ntstatus_to_werror(dbwrap_store_bystring(db, keyname, dbuf,
 							TDB_REPLACE));
+	W_ERROR_NOT_OK_GOTO_DONE(werr);
+
+	/*
+	 * recreate the sorted subkey cache for regdb_key_exists()
+	 */
+	werr = ntstatus_to_werror(create_sorted_subkeys(keyname));
 
 done:
 	TALLOC_FREE(ctx);
 	SAFE_FREE(buffer);
-	return werr;
-}
-
-/**
- * Utility function to store a new empty list of
- * subkeys of given key specified as parent and subkey name
- * (thereby creating the key).
- * If the parent keyname is NULL, then the "subkey" is
- * interpreted as a base key.
- * If the subkey list does already exist, it is not modified.
- *
- * Must be called from within a transaction.
- */
-static WERROR regdb_store_subkey_list(struct db_context *db, const char *parent,
-				      const char *key)
-{
-	WERROR werr;
-	char *path = NULL;
-	struct regsubkey_ctr *subkeys = NULL;
-	TALLOC_CTX *frame = talloc_stackframe();
-
-	if (parent == NULL) {
-		path = talloc_strdup(frame, key);
-	} else {
-		path = talloc_asprintf(frame, "%s\\%s", parent, key);
-	}
-	if (!path) {
-		werr = WERR_NOMEM;
-		goto done;
-	}
-
-	werr = regsubkey_ctr_init(frame, &subkeys);
-	W_ERROR_NOT_OK_GOTO_DONE(werr);
-
-	werr = regdb_fetch_keys_internal(db, path, subkeys);
-	if (W_ERROR_IS_OK(werr)) {
-		/* subkey list exists already - don't modify */
-		goto done;
-	}
-
-	werr = regsubkey_ctr_reinit(subkeys);
-	W_ERROR_NOT_OK_GOTO_DONE(werr);
-
-	/* create a record with 0 subkeys */
-	werr = regdb_store_keys_internal2(db, path, subkeys);
-	if (!W_ERROR_IS_OK(werr)) {
-		DEBUG(0, ("regdb_store_keys: Failed to store new record for "
-			  "key [%s]: %s\n", path, win_errstr(werr)));
-		goto done;
-	}
-
-done:
-	talloc_free(frame);
 	return werr;
 }
 
@@ -1192,7 +861,7 @@ static NTSTATUS regdb_store_keys_action(struct db_context *db,
 	WERROR werr;
 	int num_subkeys, i;
 	char *path = NULL;
-	struct regsubkey_ctr *old_subkeys = NULL;
+	struct regsubkey_ctr *subkeys = NULL, *old_subkeys = NULL;
 	char *oldkeyname = NULL;
 	TALLOC_CTX *mem_ctx = talloc_stackframe();
 
@@ -1275,20 +944,51 @@ static NTSTATUS regdb_store_keys_action(struct db_context *db,
 
 	num_subkeys = regsubkey_ctr_numkeys(store_ctx->ctr);
 
-	for (i=0; i<num_subkeys; i++) {
-		const char *subkey;
-
-		subkey = regsubkey_ctr_specific_key(store_ctx->ctr, i);
-
-		werr = regdb_store_subkey_list(db, store_ctx->key, subkey);
+	if (num_subkeys == 0) {
+		werr = regsubkey_ctr_init(mem_ctx, &subkeys);
 		W_ERROR_NOT_OK_GOTO_DONE(werr);
+
+		werr = regdb_store_keys_internal2(db, store_ctx->key, subkeys);
+		if (!W_ERROR_IS_OK(werr)) {
+			DEBUG(0,("regdb_store_keys: Failed to store "
+				 "new record for key [%s]: %s\n",
+				 store_ctx->key, win_errstr(werr)));
+			goto done;
+		}
+		TALLOC_FREE(subkeys);
+	}
+
+	for (i=0; i<num_subkeys; i++) {
+		path = talloc_asprintf(mem_ctx, "%s\\%s", store_ctx->key,
+				regsubkey_ctr_specific_key(store_ctx->ctr, i));
+		if (!path) {
+			werr = WERR_NOMEM;
+			goto done;
+		}
+		werr = regsubkey_ctr_init(mem_ctx, &subkeys);
+		W_ERROR_NOT_OK_GOTO_DONE(werr);
+
+		werr = regdb_fetch_keys_internal(db, path, subkeys);
+		if (!W_ERROR_IS_OK(werr)) {
+			/* create a record with 0 subkeys */
+			werr = regdb_store_keys_internal2(db, path, subkeys);
+			if (!W_ERROR_IS_OK(werr)) {
+				DEBUG(0,("regdb_store_keys: Failed to store "
+					 "new record for key [%s]: %s\n", path,
+					 win_errstr(werr)));
+				goto done;
+			}
+		}
+
+		TALLOC_FREE(subkeys);
+		TALLOC_FREE(path);
 	}
 
 	/*
 	 * Update the seqnum in the container to possibly
 	 * prevent next read from going to disk
 	 */
-	werr = regsubkey_ctr_set_seqnum(store_ctx->ctr, dbwrap_get_seqnum(db));
+	werr = regsubkey_ctr_set_seqnum(store_ctx->ctr, db->get_seqnum(db));
 
 done:
 	talloc_free(mem_ctx);
@@ -1305,7 +1005,7 @@ static bool regdb_store_keys_internal(struct db_context *db, const char *key,
 	bool ret = false;
 	struct regdb_store_keys_context store_ctx;
 
-	if (!regdb_key_exists(db, key)) {
+	if (!regdb_key_is_base_key(key) && !regdb_key_exists(db, key)) {
 		goto done;
 	}
 
@@ -1356,9 +1056,9 @@ static bool regdb_store_keys_internal(struct db_context *db, const char *key,
 	store_ctx.key = key;
 	store_ctx.ctr = ctr;
 
-	werr = regdb_trans_do(db,
-			      regdb_store_keys_action,
-			      &store_ctx);
+	werr = ntstatus_to_werror(dbwrap_trans_do(db,
+						  regdb_store_keys_action,
+						  &store_ctx));
 
 	ret = W_ERROR_IS_OK(werr);
 
@@ -1368,7 +1068,7 @@ done:
 	return ret;
 }
 
-static bool regdb_store_keys(const char *key, struct regsubkey_ctr *ctr)
+bool regdb_store_keys(const char *key, struct regsubkey_ctr *ctr)
 {
 	return regdb_store_keys_internal(regdb, key, ctr);
 }
@@ -1408,23 +1108,19 @@ static NTSTATUS regdb_create_subkey_action(struct db_context *db,
 			 win_errstr(werr)));
 	}
 
-	werr = regdb_store_subkey_list(db, create_ctx->key, create_ctx->subkey);
-
 done:
 	talloc_free(mem_ctx);
 	return werror_to_ntstatus(werr);
 }
 
-static WERROR regdb_create_subkey_internal(struct db_context *db,
-					   const char *key,
-					   const char *subkey)
+static WERROR regdb_create_subkey(const char *key, const char *subkey)
 {
 	WERROR werr;
 	struct regsubkey_ctr *subkeys;
 	TALLOC_CTX *mem_ctx = talloc_stackframe();
 	struct regdb_create_subkey_context create_ctx;
 
-	if (!regdb_key_exists(db, key)) {
+	if (!regdb_key_is_base_key(key) && !regdb_key_exists(regdb, key)) {
 		werr = WERR_NOT_FOUND;
 		goto done;
 	}
@@ -1432,22 +1128,12 @@ static WERROR regdb_create_subkey_internal(struct db_context *db,
 	werr = regsubkey_ctr_init(mem_ctx, &subkeys);
 	W_ERROR_NOT_OK_GOTO_DONE(werr);
 
-	werr = regdb_fetch_keys_internal(db, key, subkeys);
+	werr = regdb_fetch_keys_internal(regdb, key, subkeys);
 	W_ERROR_NOT_OK_GOTO_DONE(werr);
 
 	if (regsubkey_ctr_key_exists(subkeys, subkey)) {
-		char *newkey;
-
-		newkey = talloc_asprintf(mem_ctx, "%s\\%s", key, subkey);
-		if (newkey == NULL) {
-			werr = WERR_NOMEM;
-			goto done;
-		}
-
-		if (regdb_key_exists(db, newkey)) {
-			werr = WERR_OK;
-			goto done;
-		}
+		werr = WERR_OK;
+		goto done;
 	}
 
 	talloc_free(subkeys);
@@ -1455,52 +1141,12 @@ static WERROR regdb_create_subkey_internal(struct db_context *db,
 	create_ctx.key = key;
 	create_ctx.subkey = subkey;
 
-	werr = regdb_trans_do(db,
-			      regdb_create_subkey_action,
-			      &create_ctx);
+	werr = ntstatus_to_werror(dbwrap_trans_do(regdb,
+						  regdb_create_subkey_action,
+						  &create_ctx));
 
 done:
 	talloc_free(mem_ctx);
-	return werr;
-}
-
-static WERROR regdb_create_subkey(const char *key, const char *subkey)
-{
-	return regdb_create_subkey_internal(regdb, key, subkey);
-}
-
-/**
- * create a base key
- */
-
-struct regdb_create_basekey_context {
-	const char *key;
-};
-
-static NTSTATUS regdb_create_basekey_action(struct db_context *db,
-					    void *private_data)
-{
-	WERROR werr;
-	struct regdb_create_basekey_context *create_ctx;
-
-	create_ctx = (struct regdb_create_basekey_context *)private_data;
-
-	werr = regdb_store_subkey_list(db, NULL, create_ctx->key);
-
-	return werror_to_ntstatus(werr);
-}
-
-static WERROR regdb_create_basekey(struct db_context *db, const char *key)
-{
-	WERROR werr;
-	struct regdb_create_subkey_context create_ctx;
-
-	create_ctx.key = key;
-
-	werr = regdb_trans_do(db,
-			      regdb_create_basekey_action,
-			      &create_ctx);
-
 	return werr;
 }
 
@@ -1512,7 +1158,6 @@ struct regdb_delete_subkey_context {
 	const char *key;
 	const char *subkey;
 	const char *path;
-	bool lazy;
 };
 
 static NTSTATUS regdb_delete_subkey_action(struct db_context *db,
@@ -1527,10 +1172,6 @@ static NTSTATUS regdb_delete_subkey_action(struct db_context *db,
 
 	werr = regdb_delete_key_lists(db, delete_ctx->path);
 	W_ERROR_NOT_OK_GOTO_DONE(werr);
-
-	if (delete_ctx->lazy) {
-		goto done;
-	}
 
 	werr = regsubkey_ctr_init(mem_ctx, &subkeys);
 	W_ERROR_NOT_OK_GOTO_DONE(werr);
@@ -1553,14 +1194,14 @@ done:
 	return werror_to_ntstatus(werr);
 }
 
-static WERROR regdb_delete_subkey(const char *key, const char *subkey, bool lazy)
+static WERROR regdb_delete_subkey(const char *key, const char *subkey)
 {
 	WERROR werr;
 	char *path;
 	struct regdb_delete_subkey_context delete_ctx;
 	TALLOC_CTX *mem_ctx = talloc_stackframe();
 
-	if (!regdb_key_exists(regdb, key)) {
+	if (!regdb_key_is_base_key(key) && !regdb_key_exists(regdb, key)) {
 		werr = WERR_NOT_FOUND;
 		goto done;
 	}
@@ -1579,11 +1220,10 @@ static WERROR regdb_delete_subkey(const char *key, const char *subkey, bool lazy
 	delete_ctx.key = key;
 	delete_ctx.subkey = subkey;
 	delete_ctx.path = path;
-	delete_ctx.lazy = lazy;
 
-	werr = regdb_trans_do(regdb,
-			      regdb_delete_subkey_action,
-			      &delete_ctx);
+	werr = ntstatus_to_werror(dbwrap_trans_do(regdb,
+						  regdb_delete_subkey_action,
+						  &delete_ctx));
 
 done:
 	talloc_free(mem_ctx);
@@ -1595,17 +1235,13 @@ static TDB_DATA regdb_fetch_key_internal(struct db_context *db,
 {
 	char *path = NULL;
 	TDB_DATA data;
-	NTSTATUS status;
 
 	path = normalize_reg_path(mem_ctx, key);
 	if (!path) {
 		return make_tdb_data(NULL, 0);
 	}
 
-	status = dbwrap_fetch_bystring(db, mem_ctx, path, &data);
-	if (!NT_STATUS_IS_OK(status)) {
-		data = tdb_null;
-	}
+	data = dbwrap_fetch_bystring(db, mem_ctx, path);
 
 	TALLOC_FREE(path);
 	return data;
@@ -1613,27 +1249,14 @@ static TDB_DATA regdb_fetch_key_internal(struct db_context *db,
 
 
 /**
- * Check for the existence of a key.
- *
- * Existence of a key is authoritatively defined by
- * the existence of the record that contains the list
- * of its subkeys.
- *
- * Return false, if the record does not match the correct
- * structure of an initial 4-byte counter and then a
- * list of the corresponding number of zero-terminated
- * strings.
+ * check whether a given key name represents a base key,
+ * i.e one without a subkey separator ('\').
  */
-static bool regdb_key_exists(struct db_context *db, const char *key)
+static bool regdb_key_is_base_key(const char *key)
 {
 	TALLOC_CTX *mem_ctx = talloc_stackframe();
-	TDB_DATA value;
 	bool ret = false;
 	char *path;
-	uint32_t buflen;
-	const char *buf;
-	uint32_t num_items, i;
-	int32_t len;
 
 	if (key == NULL) {
 		goto done;
@@ -1649,70 +1272,326 @@ static bool regdb_key_exists(struct db_context *db, const char *key)
 		goto done;
 	}
 
-	value = regdb_fetch_key_internal(db, mem_ctx, path);
-	if (value.dptr == NULL) {
-		goto done;
-	}
+	ret = (strrchr(path, '\\') == NULL);
 
-	if (value.dsize == 0) {
-		DEBUG(10, ("regdb_key_exists: subkeylist-record for key "
-			  "[%s] is empty: Could be a deleted record in a "
-			  "clustered (ctdb) environment?\n",
-			  path));
-		goto done;
-	}
+done:
+	TALLOC_FREE(mem_ctx);
+	return ret;
+}
 
-	len = tdb_unpack(value.dptr, value.dsize, "d", &num_items);
-	if (len == (int32_t)-1) {
-		DEBUG(1, ("regdb_key_exists: ERROR: subkeylist-record for key "
-			  "[%s] is invalid: Could not parse initial 4-byte "
-			  "counter. record data length is %u.\n",
-			  path, (unsigned int)value.dsize));
-		goto done;
-	}
+/*
+ * regdb_key_exists() is a very frequent operation. It can be quite
+ * time-consuming to fully fetch the parent's subkey list, talloc_strdup all
+ * subkeys and then compare the keyname linearly to all the parent's subkeys.
+ *
+ * The following code tries to make this operation as efficient as possible:
+ * Per registry key we create a list of subkeys that is very efficient to
+ * search for existence of a subkey. Its format is:
+ *
+ * 4 bytes num_subkeys
+ * 4*num_subkey bytes offset into the string array
+ * then follows a sorted list of subkeys in uppercase
+ *
+ * This record is created by create_sorted_subkeys() on demand if it does not
+ * exist. scan_parent_subkeys() uses regdb->parse_record to search the sorted
+ * list, the parsing code and the binary search can be found in
+ * parent_subkey_scanner. The code uses parse_record() to avoid a memcpy of
+ * the potentially large subkey record.
+ *
+ * The sorted subkey record is deleted in regdb_store_keys_internal2 and
+ * recreated on demand.
+ */
+
+static int cmp_keynames(char **p1, char **p2)
+{
+	return StrCaseCmp(*p1, *p2);
+}
+
+struct create_sorted_subkeys_context {
+	const char *key;
+	const char *sorted_keyname;
+};
+
+static NTSTATUS create_sorted_subkeys_action(struct db_context *db,
+					     void *private_data)
+{
+	char **sorted_subkeys;
+	struct regsubkey_ctr *ctr;
+	NTSTATUS status;
+	char *buf;
+	char *p;
+	int i;
+	size_t len;
+	int num_subkeys;
+	struct create_sorted_subkeys_context *sorted_ctx;
+
+	sorted_ctx = (struct create_sorted_subkeys_context *)private_data;
 
 	/*
-	 * Note: the tdb_unpack check above implies that len <= value.dsize
+	 * In this function, we only treat failing of the actual write to
+	 * the db as a real error. All preliminary errors, at a stage when
+	 * nothing has been written to the DB yet are treated as success
+	 * to be committed (as an empty transaction).
+	 *
+	 * The reason is that this (disposable) call might be nested in other
+	 * transactions. Doing a cancel here would destroy the possibility of
+	 * a transaction_commit for transactions that we might be wrapped in.
 	 */
-	buflen = value.dsize - len;
-	buf = (const char *)value.dptr + len;
 
-	len = 0;
+	status = werror_to_ntstatus(regsubkey_ctr_init(talloc_tos(), &ctr));
+	if (!NT_STATUS_IS_OK(status)) {
+		/* don't treat this as an error */
+		status = NT_STATUS_OK;
+		goto done;
+	}
 
-	for (i = 0; i < num_items; i++) {
-		if (buflen == 0) {
-			break;
-		}
-		len = strnlen(buf, buflen) + 1;
-		if (buflen < len) {
-			DEBUG(1, ("regdb_key_exists: ERROR: subkeylist-record "
-				  "for key [%s] is corrupt: %u items expected, "
-				  "item number %u is not zero terminated.\n",
-				  path, num_items, i+1));
+	status = werror_to_ntstatus(regdb_fetch_keys_internal(db,
+							      sorted_ctx->key,
+							      ctr));
+	if (!NT_STATUS_IS_OK(status)) {
+		/* don't treat this as an error */
+		status = NT_STATUS_OK;
+		goto done;
+	}
+
+	num_subkeys = regsubkey_ctr_numkeys(ctr);
+	sorted_subkeys = talloc_array(ctr, char *, num_subkeys);
+	if (sorted_subkeys == NULL) {
+		/* don't treat this as an error */
+		goto done;
+	}
+
+	len = 4 + 4*num_subkeys;
+
+	for (i = 0; i < num_subkeys; i++) {
+		sorted_subkeys[i] = talloc_strdup_upper(sorted_subkeys,
+					regsubkey_ctr_specific_key(ctr, i));
+		if (sorted_subkeys[i] == NULL) {
+			/* don't treat this as an error */
 			goto done;
 		}
-
-		buf += len;
-		buflen -= len;
+		len += strlen(sorted_subkeys[i])+1;
 	}
 
-	if (buflen > 0) {
-		DEBUG(1, ("regdb_key_exists: ERROR: subkeylist-record for key "
-			  "[%s] is corrupt: %u items expected and found, but "
-			  "the record contains additional %u bytes\n",
-			  path, num_items, buflen));
+	TYPESAFE_QSORT(sorted_subkeys, num_subkeys, cmp_keynames);
+
+	buf = talloc_array(ctr, char, len);
+	if (buf == NULL) {
+		/* don't treat this as an error */
+		goto done;
+	}
+	p = buf + 4 + 4*num_subkeys;
+
+	SIVAL(buf, 0, num_subkeys);
+
+	for (i=0; i < num_subkeys; i++) {
+		ptrdiff_t offset = p - buf;
+		SIVAL(buf, 4 + 4*i, offset);
+		strlcpy(p, sorted_subkeys[i], len-offset);
+		p += strlen(sorted_subkeys[i]) + 1;
+	}
+
+	status = dbwrap_store_bystring(
+		db, sorted_ctx->sorted_keyname, make_tdb_data((uint8_t *)buf,
+		len),
+		TDB_REPLACE);
+
+done:
+	talloc_free(ctr);
+	return status;
+}
+
+static NTSTATUS create_sorted_subkeys_internal(const char *key,
+					       const char *sorted_keyname)
+{
+	NTSTATUS status;
+	struct create_sorted_subkeys_context sorted_ctx;
+
+	sorted_ctx.key = key;
+	sorted_ctx.sorted_keyname = sorted_keyname;
+
+	status = dbwrap_trans_do(regdb,
+				 create_sorted_subkeys_action,
+				 &sorted_ctx);
+
+	return status;
+}
+
+static NTSTATUS create_sorted_subkeys(const char *key)
+{
+	char *sorted_subkeys_keyname;
+	NTSTATUS status;
+
+	sorted_subkeys_keyname = talloc_asprintf(talloc_tos(), "%s\\%s",
+						 REG_SORTED_SUBKEYS_PREFIX,
+						 key);
+	if (sorted_subkeys_keyname == NULL) {
+		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 
-	if (i < num_items) {
-		DEBUG(1, ("regdb_key_exists: ERROR: subkeylist-record for key "
-			  "[%s] is corrupt: %u items expected, but only %u "
-			  "items found.\n",
-			  path, num_items, i+1));
+	status = create_sorted_subkeys_internal(key, sorted_subkeys_keyname);
+
+done:
+	return status;
+}
+
+struct scan_subkey_state {
+	char *name;
+	bool scanned;
+	bool found;
+};
+
+static int parent_subkey_scanner(TDB_DATA key, TDB_DATA data,
+				 void *private_data)
+{
+	struct scan_subkey_state *state =
+		(struct scan_subkey_state *)private_data;
+	uint32_t num_subkeys;
+	uint32_t l, u;
+
+	if (data.dsize < sizeof(uint32_t)) {
+		return -1;
+	}
+
+	state->scanned = true;
+	state->found = false;
+
+	tdb_unpack(data.dptr, data.dsize, "d", &num_subkeys);
+
+	l = 0;
+	u = num_subkeys;
+
+	while (l < u) {
+		uint32_t idx = (l+u)/2;
+		char *s = (char *)data.dptr + IVAL(data.dptr, 4 + 4*idx);
+		int comparison = strcmp(state->name, s);
+
+		if (comparison < 0) {
+			u = idx;
+		} else if (comparison > 0) {
+			l = idx + 1;
+		} else {
+			state->found = true;
+			return 0;
+		}
+	}
+	return 0;
+}
+
+static bool scan_parent_subkeys(struct db_context *db, const char *parent,
+				const char *name)
+{
+	char *path = NULL;
+	char *key = NULL;
+	struct scan_subkey_state state = { 0, };
+	bool result = false;
+	int res;
+
+	state.name = NULL;
+
+	path = normalize_reg_path(talloc_tos(), parent);
+	if (path == NULL) {
+		goto fail;
+	}
+
+	key = talloc_asprintf(talloc_tos(), "%s\\%s",
+			      REG_SORTED_SUBKEYS_PREFIX, path);
+	if (key == NULL) {
+		goto fail;
+	}
+
+	state.name = talloc_strdup_upper(talloc_tos(), name);
+	if (state.name == NULL) {
+		goto fail;
+	}
+	state.scanned = false;
+
+	res = db->parse_record(db, string_term_tdb_data(key),
+			       parent_subkey_scanner, &state);
+
+	if (state.scanned) {
+		result = state.found;
+	} else {
+		NTSTATUS status;
+
+		res = db->transaction_start(db);
+		if (res != 0) {
+			DEBUG(0, ("error starting transaction\n"));
+			goto fail;
+		}
+
+		DEBUG(2, (__location__ " WARNING: recreating the sorted "
+			  "subkeys cache for key '%s' from scan_parent_subkeys "
+			  "this should not happen (too frequently)...\n",
+			  path));
+
+		status = create_sorted_subkeys_internal(path, key);
+		if (!NT_STATUS_IS_OK(status)) {
+			res = db->transaction_cancel(db);
+			if (res != 0) {
+				smb_panic("Failed to cancel transaction.");
+			}
+			goto fail;
+		}
+
+		res = db->parse_record(db, string_term_tdb_data(key),
+				       parent_subkey_scanner, &state);
+		if ((res == 0) && (state.scanned)) {
+			result = state.found;
+		}
+
+		res = db->transaction_commit(db);
+		if (res != 0) {
+			DEBUG(0, ("error committing transaction\n"));
+			result = false;
+		}
+	}
+
+ fail:
+	TALLOC_FREE(path);
+	TALLOC_FREE(state.name);
+	return result;
+}
+
+/**
+ * Check for the existence of a key.
+ *
+ * Existence of a key is authoritatively defined by its
+ * existence in the list of subkeys of its parent key.
+ * The exeption of this are keys without a parent key,
+ * i.e. the "base" keys (HKLM, HKCU, ...).
+ */
+static bool regdb_key_exists(struct db_context *db, const char *key)
+{
+	TALLOC_CTX *mem_ctx = talloc_stackframe();
+	TDB_DATA value;
+	bool ret = false;
+	char *path, *p;
+
+	if (key == NULL) {
 		goto done;
 	}
 
-	ret = true;
+	path = normalize_reg_path(mem_ctx, key);
+	if (path == NULL) {
+		DEBUG(0, ("out of memory! (talloc failed)\n"));
+		goto done;
+	}
+
+	if (*path == '\0') {
+		goto done;
+	}
+
+	p = strrchr(path, '\\');
+	if (p == NULL) {
+		/* this is a base key */
+		value = regdb_fetch_key_internal(db, mem_ctx, path);
+		ret = (value.dptr != NULL);
+	} else {
+		*p = '\0';
+		ret = scan_parent_subkeys(db, path, p+1);
+	}
 
 done:
 	TALLOC_FREE(mem_ctx);
@@ -1730,8 +1609,8 @@ static WERROR regdb_fetch_keys_internal(struct db_context *db, const char *key,
 {
 	WERROR werr;
 	uint32_t num_items;
-	uint8_t *buf;
-	uint32_t buflen, len;
+	uint8 *buf;
+	uint32 buflen, len;
 	int i;
 	fstring subkeyname;
 	TALLOC_CTX *frame = talloc_stackframe();
@@ -1751,13 +1630,13 @@ static WERROR regdb_fetch_keys_internal(struct db_context *db, const char *key,
 
 	count = 0;
 	ZERO_STRUCT(value);
-	seqnum[0] = dbwrap_get_seqnum(db);
+	seqnum[0] = db->get_seqnum(db);
 
 	do {
 		count++;
 		TALLOC_FREE(value.dptr);
 		value = regdb_fetch_key_internal(db, frame, key);
-		seqnum[count % 2] = dbwrap_get_seqnum(db);
+		seqnum[count % 2] = db->get_seqnum(db);
 
 	} while (seqnum[0] != seqnum[1]);
 
@@ -1804,7 +1683,7 @@ done:
 	return werr;
 }
 
-static int regdb_fetch_keys(const char *key, struct regsubkey_ctr *ctr)
+int regdb_fetch_keys(const char *key, struct regsubkey_ctr *ctr)
 {
 	WERROR werr;
 
@@ -1820,14 +1699,14 @@ static int regdb_fetch_keys(const char *key, struct regsubkey_ctr *ctr)
  Unpack a list of registry values frem the TDB
  ***************************************************************************/
 
-static int regdb_unpack_values(struct regval_ctr *values, uint8_t *buf, int buflen)
+static int regdb_unpack_values(struct regval_ctr *values, uint8 *buf, int buflen)
 {
 	int 		len = 0;
-	uint32_t	type;
+	uint32		type;
 	fstring valuename;
-	uint32_t	size;
-	uint8_t		*data_p;
-	uint32_t 	num_values = 0;
+	uint32		size;
+	uint8		*data_p;
+	uint32 		num_values = 0;
 	int 		i;
 
 	/* loop and unpack the rest of the registry values */
@@ -1862,7 +1741,7 @@ static int regdb_unpack_values(struct regval_ctr *values, uint8_t *buf, int bufl
  Pack all values in all printer keys
  ***************************************************************************/
 
-static int regdb_pack_values(struct regval_ctr *values, uint8_t *buf, int buflen)
+static int regdb_pack_values(struct regval_ctr *values, uint8 *buf, int buflen)
 {
 	int 		len = 0;
 	int 		i;
@@ -1923,13 +1802,13 @@ static int regdb_fetch_values_internal(struct db_context *db, const char* key,
 
 	ZERO_STRUCT(value);
 	count = 0;
-	seqnum[0] = dbwrap_get_seqnum(db);
+	seqnum[0] = db->get_seqnum(db);
 
 	do {
 		count++;
 		TALLOC_FREE(value.dptr);
 		value = regdb_fetch_key_internal(db, ctx, keystr);
-		seqnum[count % 2] = dbwrap_get_seqnum(db);
+		seqnum[count % 2] = db->get_seqnum(db);
 	} while (seqnum[0] != seqnum[1]);
 
 	if (count > 1) {
@@ -1956,42 +1835,25 @@ done:
 	return ret;
 }
 
-static int regdb_fetch_values(const char* key, struct regval_ctr *values)
+int regdb_fetch_values(const char* key, struct regval_ctr *values)
 {
 	return regdb_fetch_values_internal(regdb, key, values);
 }
 
-static NTSTATUS regdb_store_values_internal(struct db_context *db,
-					    const char *key,
-					    struct regval_ctr *values)
+static bool regdb_store_values_internal(struct db_context *db, const char *key,
+					struct regval_ctr *values)
 {
 	TDB_DATA old_data, data;
 	char *keystr = NULL;
 	TALLOC_CTX *ctx = talloc_stackframe();
 	int len;
 	NTSTATUS status;
+	bool result = false;
 	WERROR werr;
 
 	DEBUG(10,("regdb_store_values: Looking for values of key [%s]\n", key));
 
 	if (!regdb_key_exists(db, key)) {
-		status = NT_STATUS_NOT_FOUND;
-		goto done;
-	}
-
-	if (regval_ctr_numvals(values) == 0) {
-		werr = regdb_delete_values(db, key);
-		if (!W_ERROR_IS_OK(werr)) {
-			status = werror_to_ntstatus(werr);
-			goto done;
-		}
-
-		/*
-		 * update the seqnum in the cache to prevent the next read
-		 * from going to disk
-		 */
-		werr = regval_ctr_set_seqnum(values, dbwrap_get_seqnum(db));
-		status = werror_to_ntstatus(werr);
 		goto done;
 	}
 
@@ -2000,11 +1862,10 @@ static NTSTATUS regdb_store_values_internal(struct db_context *db,
 	len = regdb_pack_values(values, data.dptr, data.dsize);
 	if (len <= 0) {
 		DEBUG(0,("regdb_store_values: unable to pack values. len <= 0\n"));
-		status = NT_STATUS_UNSUCCESSFUL;
 		goto done;
 	}
 
-	data.dptr = talloc_array(ctx, uint8_t, len);
+	data.dptr = TALLOC_ARRAY(ctx, uint8, len);
 	data.dsize = len;
 
 	len = regdb_pack_values(values, data.dptr, data.dsize);
@@ -2013,23 +1874,20 @@ static NTSTATUS regdb_store_values_internal(struct db_context *db,
 
 	keystr = talloc_asprintf(ctx, "%s\\%s", REG_VALUE_PREFIX, key );
 	if (!keystr) {
-		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 	keystr = normalize_reg_path(ctx, keystr);
 	if (!keystr) {
-		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 
-	status = dbwrap_fetch_bystring(db, ctx, keystr, &old_data);
+	old_data = dbwrap_fetch_bystring(db, ctx, keystr);
 
-	if (NT_STATUS_IS_OK(status)
-	    && (old_data.dptr != NULL)
+	if ((old_data.dptr != NULL)
 	    && (old_data.dsize == data.dsize)
 	    && (memcmp(old_data.dptr, data.dptr, data.dsize) == 0))
 	{
-		status = NT_STATUS_OK;
+		result = true;
 		goto done;
 	}
 
@@ -2043,42 +1901,17 @@ static NTSTATUS regdb_store_values_internal(struct db_context *db,
 	 * update the seqnum in the cache to prevent the next read
 	 * from going to disk
 	 */
-	werr = regval_ctr_set_seqnum(values, dbwrap_get_seqnum(db));
-	status = werror_to_ntstatus(werr);
+	werr = regval_ctr_set_seqnum(values, db->get_seqnum(db));
+	result = W_ERROR_IS_OK(status);
 
 done:
 	TALLOC_FREE(ctx);
-	return status;
+	return result;
 }
 
-struct regdb_store_values_ctx {
-	const char *key;
-	struct regval_ctr *values;
-};
-
-static NTSTATUS regdb_store_values_action(struct db_context *db,
-					  void *private_data)
+bool regdb_store_values(const char *key, struct regval_ctr *values)
 {
-	NTSTATUS status;
-	struct regdb_store_values_ctx *ctx =
-		(struct regdb_store_values_ctx *)private_data;
-
-	status = regdb_store_values_internal(db, ctx->key, ctx->values);
-
-	return status;
-}
-
-static bool regdb_store_values(const char *key, struct regval_ctr *values)
-{
-	WERROR werr;
-	struct regdb_store_values_ctx ctx;
-
-	ctx.key = key;
-	ctx.values = values;
-
-	werr = regdb_trans_do(regdb, regdb_store_values_action, &ctx);
-
-	return W_ERROR_IS_OK(werr);
+	return regdb_store_values_internal(regdb, key, values);
 }
 
 static WERROR regdb_get_secdesc(TALLOC_CTX *mem_ctx, const char *key,
@@ -2109,13 +1942,13 @@ static WERROR regdb_get_secdesc(TALLOC_CTX *mem_ctx, const char *key,
 		goto done;
 	}
 
-	status = dbwrap_fetch_bystring(regdb, tmp_ctx, tdbkey, &data);
-	if (!NT_STATUS_IS_OK(status)) {
+	data = dbwrap_fetch_bystring(regdb, tmp_ctx, tdbkey);
+	if (data.dptr == NULL) {
 		err = WERR_BADFILE;
 		goto done;
 	}
 
-	status = unmarshall_sec_desc(mem_ctx, (uint8_t *)data.dptr, data.dsize,
+	status = unmarshall_sec_desc(mem_ctx, (uint8 *)data.dptr, data.dsize,
 				     psecdesc);
 
 	if (NT_STATUS_EQUAL(status, NT_STATUS_NO_MEMORY)) {
@@ -2129,78 +1962,56 @@ done:
 	return err;
 }
 
-struct regdb_set_secdesc_ctx {
-	const char *key;
-	struct security_descriptor *secdesc;
-};
-
-static NTSTATUS regdb_set_secdesc_action(struct db_context *db,
-					 void *private_data)
-{
-	char *tdbkey;
-	NTSTATUS status;
-	TDB_DATA tdbdata;
-	struct regdb_set_secdesc_ctx *ctx =
-		(struct regdb_set_secdesc_ctx *)private_data;
-	TALLOC_CTX *frame = talloc_stackframe();
-
-	tdbkey = talloc_asprintf(frame, "%s\\%s", REG_SECDESC_PREFIX, ctx->key);
-	if (tdbkey == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	tdbkey = normalize_reg_path(frame, tdbkey);
-	if (tdbkey == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	if (ctx->secdesc == NULL) {
-		/* assuming a delete */
-		status = dbwrap_delete_bystring(db, tdbkey);
-		goto done;
-	}
-
-	status = marshall_sec_desc(frame, ctx->secdesc, &tdbdata.dptr,
-				   &tdbdata.dsize);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
-
-	status = dbwrap_store_bystring(db, tdbkey, tdbdata, 0);
-
-done:
-	TALLOC_FREE(frame);
-	return status;
-}
-
 static WERROR regdb_set_secdesc(const char *key,
 				struct security_descriptor *secdesc)
 {
-	WERROR err;
-	struct regdb_set_secdesc_ctx ctx;
+	TALLOC_CTX *mem_ctx = talloc_stackframe();
+	char *tdbkey;
+	WERROR err = WERR_NOMEM;
+	TDB_DATA tdbdata;
 
 	if (!regdb_key_exists(regdb, key)) {
 		err = WERR_BADFILE;
 		goto done;
 	}
 
-	ctx.key = key;
-	ctx.secdesc = secdesc;
+	tdbkey = talloc_asprintf(mem_ctx, "%s\\%s", REG_SECDESC_PREFIX, key);
+	if (tdbkey == NULL) {
+		goto done;
+	}
 
-	err = regdb_trans_do(regdb, regdb_set_secdesc_action, &ctx);
+	tdbkey = normalize_reg_path(mem_ctx, tdbkey);
+	if (tdbkey == NULL) {
+		err = WERR_NOMEM;
+		goto done;
+	}
 
-done:
+	if (secdesc == NULL) {
+		/* assuming a delete */
+		err = ntstatus_to_werror(dbwrap_trans_delete_bystring(regdb,
+								      tdbkey));
+		goto done;
+	}
+
+	err = ntstatus_to_werror(marshall_sec_desc(mem_ctx, secdesc,
+						   &tdbdata.dptr,
+						   &tdbdata.dsize));
+	W_ERROR_NOT_OK_GOTO_DONE(err);
+
+	err = ntstatus_to_werror(dbwrap_trans_store_bystring(regdb, tdbkey,
+							     tdbdata, 0));
+
+ done:
+	TALLOC_FREE(mem_ctx);
 	return err;
 }
 
-static bool regdb_subkeys_need_update(struct regsubkey_ctr *subkeys)
+bool regdb_subkeys_need_update(struct regsubkey_ctr *subkeys)
 {
 	return (regdb_get_seqnum() != regsubkey_ctr_get_seqnum(subkeys));
 }
 
-static bool regdb_values_need_update(struct regval_ctr *values)
+bool regdb_values_need_update(struct regval_ctr *values)
 {
 	return (regdb_get_seqnum() != regval_ctr_get_seqnum(values));
 }

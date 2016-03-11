@@ -5,7 +5,6 @@
  *  Largely re-written : 2005
  *  Copyright (C) Jeremy Allison		1998 - 2005
  *  Copyright (C) Simo Sorce			2010
- *  Copyright (C) Andrew Bartlett		2011
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,149 +30,90 @@
 #include "librpc/gen_ndr/auth.h"
 #include "../auth/auth_sam_reply.h"
 #include "auth.h"
-#include "rpc_server/rpc_pipes.h"
+#include "ntdomain.h"
 #include "../lib/tsocket/tsocket.h"
 #include "../lib/util/tevent_ntstatus.h"
-#include "rpc_contexts.h"
-#include "rpc_server/rpc_config.h"
-#include "librpc/ndr/ndr_table.h"
-#include "rpc_server/rpc_server.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_RPC_SRV
 
-static struct npa_state *npa_state_init(TALLOC_CTX *mem_ctx)
+static int pipes_open;
+
+static struct pipes_struct *InternalPipes;
+
+/* TODO
+ * the following prototypes are declared here to avoid
+ * code being moved about too much for a patch to be
+ * disrupted / less obvious.
+ *
+ * these functions, and associated functions that they
+ * call, should be moved behind a .so module-loading
+ * system _anyway_.  so that's the next step...
+ */
+
+/****************************************************************************
+ Internal Pipe iterator functions.
+****************************************************************************/
+
+struct pipes_struct *get_first_internal_pipe(void)
 {
-	struct npa_state *npa;
-
-	npa = talloc_zero(mem_ctx, struct npa_state);
-	if (npa == NULL) {
-		return NULL;
-	}
-
-	npa->read_queue = tevent_queue_create(npa, "npa_cli_read");
-	if (npa->read_queue == NULL) {
-		DEBUG(0, ("tevent_queue_create failed\n"));
-		goto fail;
-	}
-
-	npa->write_queue = tevent_queue_create(npa, "npa_cli_write");
-	if (npa->write_queue == NULL) {
-		DEBUG(0, ("tevent_queue_create failed\n"));
-		goto fail;
-	}
-
-	return npa;
-fail:
-	talloc_free(npa);
-	return NULL;
+	return InternalPipes;
 }
 
-NTSTATUS make_internal_rpc_pipe_socketpair(TALLOC_CTX *mem_ctx,
-					   struct tevent_context *ev_ctx,
-					   struct messaging_context *msg_ctx,
-					   const char *pipe_name,
-					   const struct ndr_syntax_id *syntax,
-					   const struct tsocket_address *remote_address,
-					   const struct auth_session_info *session_info,
-					   struct npa_state **pnpa)
+struct pipes_struct *get_next_internal_pipe(struct pipes_struct *p)
 {
-	TALLOC_CTX *tmp_ctx = talloc_stackframe();
-	struct named_pipe_client *npc;
-	struct tevent_req *subreq;
-	struct npa_state *npa;
-	NTSTATUS status;
-	int error;
-	int rc;
+	return p->next;
+}
 
-	DEBUG(4, ("Create of internal pipe %s requested\n", pipe_name));
+static void free_pipe_rpc_context_internal( PIPE_RPC_FNS *list )
+{
+	PIPE_RPC_FNS *tmp = list;
+	PIPE_RPC_FNS *tmp2;
 
-	npa = npa_state_init(tmp_ctx);
-	if (npa == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
+	while (tmp) {
+		tmp2 = tmp->next;
+		SAFE_FREE(tmp);
+		tmp = tmp2;
 	}
 
-	npa->file_type = FILE_TYPE_MESSAGE_MODE_PIPE;
-	npa->device_state = 0xff | 0x0400 | 0x0100;
-	npa->allocation_size = 4096;
+	return;
+}
 
-	npc = named_pipe_client_init(npa,
-				     ev_ctx,
-				     msg_ctx,
-				     pipe_name,
-				     NULL, /* term_fn */
-				     npa->file_type,
-				     npa->device_state,
-				     npa->allocation_size,
-				     NULL); /* private_data */
-	if (npc == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
+bool check_open_pipes(void)
+{
+	struct pipes_struct *p;
+
+	for (p = InternalPipes; p != NULL; p = p->next) {
+		if (num_pipe_handles(p) != 0) {
+			return true;
+		}
 	}
-	npa->private_data = (void*) npc;
+	return false;
+}
 
-	rc = tstream_npa_socketpair(npa->file_type,
-				    npa,
-				    &npa->stream,
-				    npc,
-				    &npc->tstream);
-	if (rc == -1) {
-		status = map_nt_error_from_unix(errno);
-		goto out;
+/****************************************************************************
+ Close an rpc pipe.
+****************************************************************************/
+
+int close_internal_rpc_pipe_hnd(struct pipes_struct *p)
+{
+	if (!p) {
+		DEBUG(0,("Invalid pipe in close_internal_rpc_pipe_hnd\n"));
+		return False;
 	}
 
-	npc->client = tsocket_address_copy(remote_address, npc);
-	if (npc->client == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
+	TALLOC_FREE(p->auth.auth_ctx);
 
-	npc->client_name = tsocket_address_inet_addr_string(npc->client, npc);
-	if (npc->client_name == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
+	free_pipe_rpc_context_internal( p->contexts );
 
-	npc->session_info = copy_session_info(npc, session_info);
-	if (npc->session_info == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
+	/* Free the handles database. */
+	close_policy_by_pipe(p);
 
-	rc = make_server_pipes_struct(npc,
-				      npc->msg_ctx,
-				      npc->pipe_name,
-				      NCACN_NP,
-				      npc->server,
-				      npc->client,
-				      npc->session_info,
-				      &npc->p,
-				      &error);
-	if (rc == -1) {
-		status = map_nt_error_from_unix(error);
-		goto out;
-	}
+	DLIST_REMOVE(InternalPipes, p);
 
-	npc->write_queue = tevent_queue_create(npc, "npa_server_write_queue");
-	if (npc->write_queue == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
+	ZERO_STRUCTP(p);
 
-	subreq = dcerpc_read_ncacn_packet_send(npc, npc->ev, npc->tstream);
-	if (subreq == NULL) {
-		DEBUG(2, ("Failed to start receving packets\n"));
-		status = NT_STATUS_PIPE_BROKEN;
-		goto out;
-	}
-	tevent_req_set_callback(subreq, named_pipe_packet_process, npc);
-
-	*pnpa = talloc_steal(mem_ctx, npa);
-	status = NT_STATUS_OK;
-out:
-	talloc_free(tmp_ctx);
-	return status;
+	return 0;
 }
 
 /****************************************************************************
@@ -182,31 +122,28 @@ out:
 
 struct pipes_struct *make_internal_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 					      const struct ndr_syntax_id *syntax,
-					      const struct tsocket_address *remote_address,
-					      const struct auth_session_info *session_info,
+					      struct client_address *client_id,
+					      const struct auth_serversupplied_info *session_info,
 					      struct messaging_context *msg_ctx)
 {
 	struct pipes_struct *p;
-	struct pipe_rpc_fns *context_fns;
-	const char *pipe_name;
-	int ret;
-	const struct ndr_interface_table *table;
 
-	table = ndr_table_by_uuid(&syntax->uuid);
-	if (table == NULL) {
-		DEBUG(0,("unknown interface\n"));
+	DEBUG(4,("Create pipe requested %s\n",
+		 get_pipe_name_from_syntax(talloc_tos(), syntax)));
+
+	p = TALLOC_ZERO_P(mem_ctx, struct pipes_struct);
+
+	if (!p) {
+		DEBUG(0,("ERROR! no memory for pipes_struct!\n"));
 		return NULL;
 	}
 
-	pipe_name = dcerpc_default_transport_endpoint(mem_ctx, NCACN_NP, table);
-
-	DEBUG(4,("Create pipe requested %s\n", pipe_name));
-
-	ret = make_base_pipes_struct(mem_ctx, msg_ctx, pipe_name,
-				     NCALRPC, RPC_LITTLE_ENDIAN,
-				     remote_address, NULL, &p);
-	if (ret) {
-		DEBUG(0,("ERROR! no memory for pipes_struct!\n"));
+	p->mem_ctx = talloc_named(p, 0, "pipe %s %p",
+				 get_pipe_name_from_syntax(talloc_tos(),
+							   syntax), p);
+	if (p->mem_ctx == NULL) {
+		DEBUG(0,("open_rpc_pipe_p: talloc_init failed.\n"));
+		TALLOC_FREE(p);
 		return NULL;
 	}
 
@@ -216,7 +153,7 @@ struct pipes_struct *make_internal_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	p->session_info = copy_session_info(p, session_info);
+	p->session_info = copy_serverinfo(p, session_info);
 	if (p->session_info == NULL) {
 		DEBUG(0, ("open_rpc_pipe_p: copy_serverinfo failed\n"));
 		close_policy_by_pipe(p);
@@ -224,23 +161,21 @@ struct pipes_struct *make_internal_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 
-	context_fns = talloc_zero(p, struct pipe_rpc_fns);
-	if (context_fns == NULL) {
-		DEBUG(0,("talloc() failed!\n"));
-		TALLOC_FREE(p);
-		return NULL;
-	}
+	p->msg_ctx = msg_ctx;
 
-	context_fns->next = context_fns->prev = NULL;
-	context_fns->n_cmds = rpc_srv_get_pipe_num_cmds(syntax);
-	context_fns->cmds = rpc_srv_get_pipe_cmds(syntax);
-	context_fns->context_id = 0;
-	context_fns->syntax = *syntax;
+	DLIST_ADD(InternalPipes, p);
 
-	/* add to the list of open contexts */
-	DLIST_ADD(p->contexts, context_fns);
+	p->client_id = client_id;
 
-	DEBUG(4,("Created internal pipe %s\n", pipe_name));
+	p->endian = RPC_LITTLE_ENDIAN;
+
+	p->syntax = *syntax;
+	p->transport = NCALRPC;
+
+	DEBUG(4,("Created internal pipe %s (pipes_open=%d)\n",
+		 get_pipe_name_from_syntax(talloc_tos(), syntax), pipes_open));
+
+	talloc_set_destructor(p, close_internal_rpc_pipe_hnd);
 
 	return p;
 }
@@ -251,9 +186,8 @@ static NTSTATUS rpcint_dispatch(struct pipes_struct *p,
 				const DATA_BLOB *in_data,
 				DATA_BLOB *out_data)
 {
-	struct pipe_rpc_fns *fns = find_pipe_fns_by_context(p->contexts, 0);
-	uint32_t num_cmds = fns->n_cmds;
-	const struct api_struct *cmds = fns->cmds;
+	uint32_t num_cmds = rpc_srv_get_pipe_num_cmds(&p->syntax);
+	const struct api_struct *cmds = rpc_srv_get_pipe_cmds(&p->syntax);
 	uint32_t i;
 	bool ok;
 
@@ -282,13 +216,24 @@ static NTSTATUS rpcint_dispatch(struct pipes_struct *p,
 	}
 
 	if (p->fault_state) {
-		NTSTATUS status;
-
-		status = NT_STATUS(p->fault_state);
-		p->fault_state = 0;
+		p->fault_state = false;
 		data_blob_free(&p->out_data.rdata);
 		talloc_free_children(p->mem_ctx);
-		return status;
+		return NT_STATUS_RPC_CALL_FAILED;
+	}
+
+	if (p->bad_handle_fault_state) {
+		p->bad_handle_fault_state = false;
+		data_blob_free(&p->out_data.rdata);
+		talloc_free_children(p->mem_ctx);
+		return NT_STATUS_RPC_SS_CONTEXT_MISMATCH;
+	}
+
+	if (p->rng_fault_state) {
+		p->rng_fault_state = false;
+		data_blob_free(&p->out_data.rdata);
+		talloc_free_children(p->mem_ctx);
+		return NT_STATUS_RPC_PROCNUM_OUT_OF_RANGE;
 	}
 
 	*out_data = p->out_data.rdata;
@@ -355,7 +300,7 @@ static struct tevent_req *rpcint_bh_raw_call_send(TALLOC_CTX *mem_ctx,
 
 	ok = rpcint_bh_is_connected(h);
 	if (!ok) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
@@ -417,7 +362,7 @@ static struct tevent_req *rpcint_bh_disconnect_send(TALLOC_CTX *mem_ctx,
 
 	ok = rpcint_bh_is_connected(h);
 	if (!ok) {
-		tevent_req_nterror(req, NT_STATUS_CONNECTION_DISCONNECTED);
+		tevent_req_nterror(req, NT_STATUS_INVALID_CONNECTION);
 		return tevent_req_post(req, ev);
 	}
 
@@ -491,8 +436,8 @@ static const struct dcerpc_binding_handle_ops rpcint_bh_ops = {
 static NTSTATUS rpcint_binding_handle_ex(TALLOC_CTX *mem_ctx,
 			const struct ndr_syntax_id *abstract_syntax,
 			const struct ndr_interface_table *ndr_table,
-			const struct tsocket_address *remote_address,
-			const struct auth_session_info *session_info,
+			struct client_address *client_id,
+			const struct auth_serversupplied_info *session_info,
 			struct messaging_context *msg_ctx,
 			struct dcerpc_binding_handle **binding_handle)
 {
@@ -515,7 +460,7 @@ static NTSTATUS rpcint_binding_handle_ex(TALLOC_CTX *mem_ctx,
 	}
 	hs->p = make_internal_rpc_pipe_p(hs,
 					 abstract_syntax,
-					 remote_address,
+					 client_id,
 					 session_info,
 					 msg_ctx);
 	if (hs->p == NULL) {
@@ -533,7 +478,7 @@ static NTSTATUS rpcint_binding_handle_ex(TALLOC_CTX *mem_ctx,
  *
  * @param[in]  ndr_table Normally the ndr_table_<name>.
  *
- * @param[in]  remote_address The info about the connected client.
+ * @param[in]  client_id The info about the connected client.
  *
  * @param[in]  serversupplied_info The server supplied authentication function.
  *
@@ -551,7 +496,7 @@ static NTSTATUS rpcint_binding_handle_ex(TALLOC_CTX *mem_ctx,
  *
  *   status = rpcint_binding_handle(tmp_ctx,
  *                                  &ndr_table_winreg,
- *                                  p->remote_address,
+ *                                  p->client_id,
  *                                  p->session_info,
  *                                  p->msg_ctx
  *                                  &winreg_binding);
@@ -559,12 +504,12 @@ static NTSTATUS rpcint_binding_handle_ex(TALLOC_CTX *mem_ctx,
  */
 NTSTATUS rpcint_binding_handle(TALLOC_CTX *mem_ctx,
 			       const struct ndr_interface_table *ndr_table,
-			       const struct tsocket_address *remote_address,
-			       const struct auth_session_info *session_info,
+			       struct client_address *client_id,
+			       const struct auth_serversupplied_info *session_info,
 			       struct messaging_context *msg_ctx,
 			       struct dcerpc_binding_handle **binding_handle)
 {
-	return rpcint_binding_handle_ex(mem_ctx, NULL, ndr_table, remote_address,
+	return rpcint_binding_handle_ex(mem_ctx, NULL, ndr_table, client_id,
 					session_info, msg_ctx, binding_handle);
 }
 
@@ -584,7 +529,7 @@ NTSTATUS rpcint_binding_handle(TALLOC_CTX *mem_ctx,
  *
  * @param[in]  serversupplied_info The server supplied authentication function.
  *
- * @param[in]  remote_address The client address information.
+ * @param[in]  client_id The client address information.
  *
  * @param[in]  msg_ctx  The messaging context to use.
  *
@@ -593,39 +538,29 @@ NTSTATUS rpcint_binding_handle(TALLOC_CTX *mem_ctx,
  * @return              NT_STATUS_OK on success, a corresponding NT status if an
  *                      error occured.
  */
-NTSTATUS rpc_pipe_open_internal(TALLOC_CTX *mem_ctx,
+static NTSTATUS rpc_pipe_open_internal(TALLOC_CTX *mem_ctx,
 				const struct ndr_syntax_id *abstract_syntax,
-				const struct auth_session_info *session_info,
-				const struct tsocket_address *remote_address,
+				const struct auth_serversupplied_info *serversupplied_info,
+				struct client_address *client_id,
 				struct messaging_context *msg_ctx,
 				struct rpc_pipe_client **presult)
 {
 	struct rpc_pipe_client *result;
 	NTSTATUS status;
 
-	result = talloc_zero(mem_ctx, struct rpc_pipe_client);
+	result = TALLOC_ZERO_P(mem_ctx, struct rpc_pipe_client);
 	if (result == NULL) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
 	result->abstract_syntax = *abstract_syntax;
-	result->transfer_syntax = ndr_transfer_syntax_ndr;
+	result->transfer_syntax = ndr_transfer_syntax;
 
-	if (remote_address == NULL) {
-		struct tsocket_address *local;
-		int rc;
-
-		rc = tsocket_address_inet_from_strings(mem_ctx,
-						       "ip",
-						       "127.0.0.1",
-						       0,
-						       &local);
-		if (rc < 0) {
-			TALLOC_FREE(result);
-			return NT_STATUS_NO_MEMORY;
-		}
-
-		remote_address = local;
+	if (client_id == NULL) {
+		static struct client_address unknown;
+		strlcpy(unknown.addr, "<UNKNOWN>", sizeof(unknown.addr));
+		unknown.name = "<UNKNOWN>";
+		client_id = &unknown;
 	}
 
 	result->max_xmit_frag = -1;
@@ -634,8 +569,8 @@ NTSTATUS rpc_pipe_open_internal(TALLOC_CTX *mem_ctx,
 	status = rpcint_binding_handle_ex(result,
 					  abstract_syntax,
 					  NULL,
-					  remote_address,
-					  session_info,
+					  client_id,
+					  serversupplied_info,
 					  msg_ctx,
 					  &result->binding_handle);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -651,143 +586,12 @@ NTSTATUS rpc_pipe_open_internal(TALLOC_CTX *mem_ctx,
  * External pipes functions
  ***************************************************************************/
 
-NTSTATUS make_external_rpc_pipe(TALLOC_CTX *mem_ctx,
-				const char *pipe_name,
-				const struct tsocket_address *local_address,
-				const struct tsocket_address *remote_address,
-				const struct auth_session_info *session_info,
-				struct npa_state **pnpa)
-{
-	TALLOC_CTX *tmp_ctx = talloc_stackframe();
-	struct auth_session_info_transport *session_info_t;
-	struct tevent_context *ev_ctx;
-	struct tevent_req *subreq;
-	const char *socket_np_dir;
-	const char *socket_dir;
-	struct npa_state *npa;
-	int sys_errno;
-	NTSTATUS status;
-	int rc = -1;
-	bool ok;
-
-	npa = npa_state_init(tmp_ctx);
-	if (npa == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
-
-	socket_dir = lp_parm_const_string(GLOBAL_SECTION_SNUM,
-					  "external_rpc_pipe",
-					  "socket_dir",
-					  lp_ncalrpc_dir());
-	if (socket_dir == NULL) {
-		DEBUG(0, ("external_rpc_pipe: socket_dir not set\n"));
-		status = NT_STATUS_PIPE_NOT_AVAILABLE;
-		goto out;
-	}
-
-	socket_np_dir = talloc_asprintf(tmp_ctx, "%s/np", socket_dir);
-	if (socket_np_dir == NULL) {
-		DEBUG(0, ("talloc_asprintf failed\n"));
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
-
-	session_info_t = talloc_zero(tmp_ctx,
-				     struct auth_session_info_transport);
-	if (session_info_t == NULL) {
-		DEBUG(0, ("talloc failed\n"));
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
-
-	session_info_t->session_info = copy_session_info(session_info_t,
-							 session_info);
-	if (session_info_t->session_info == NULL) {
-		DEBUG(0, ("copy_session_info failed\n"));
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
-
-	ev_ctx = s3_tevent_context_init(tmp_ctx);
-	if (ev_ctx == NULL) {
-		DEBUG(0, ("s3_tevent_context_init failed\n"));
-		status = NT_STATUS_NO_MEMORY;
-		goto out;
-	}
-
-	become_root();
-	subreq = tstream_npa_connect_send(tmp_ctx,
-					  ev_ctx,
-					  socket_np_dir,
-					  pipe_name,
-					  remote_address, /* client_addr */
-					  NULL, /* client_name */
-					  local_address, /* server_addr */
-					  NULL, /* server_name */
-					  session_info_t);
-	if (subreq == NULL) {
-		unbecome_root();
-		DEBUG(0, ("tstream_npa_connect_send to %s for pipe %s and "
-			  "user %s\\%s failed\n",
-			  socket_np_dir, pipe_name, session_info_t->session_info->info->domain_name,
-			  session_info_t->session_info->info->account_name));
-		status = NT_STATUS_OBJECT_NAME_NOT_FOUND;
-		goto out;
-	}
-	ok = tevent_req_poll(subreq, ev_ctx);
-	unbecome_root();
-	if (!ok) {
-		DEBUG(0, ("tevent_req_poll to %s for pipe %s and user %s\\%s "
-			  "failed for tstream_npa_connect: %s\n",
-			  socket_np_dir,
-			  pipe_name,
-			  session_info_t->session_info->info->domain_name,
-			  session_info_t->session_info->info->account_name,
-			  strerror(errno)));
-		status = NT_STATUS_OBJECT_NAME_NOT_FOUND;
-		goto out;
-	}
-
-	rc = tstream_npa_connect_recv(subreq,
-				      &sys_errno,
-				      npa,
-				      &npa->stream,
-				      &npa->file_type,
-				      &npa->device_state,
-				      &npa->allocation_size);
-	talloc_free(subreq);
-	if (rc != 0) {
-		int l = 1;
-
-		if (errno == ENOENT) {
-			l = 2;
-		}
-
-		DEBUG(l, ("tstream_npa_connect_recv  to %s for pipe %s and "
-			  "user %s\\%s failed: %s\n",
-			  socket_np_dir,
-			  pipe_name,
-			  session_info_t->session_info->info->domain_name,
-			  session_info_t->session_info->info->account_name,
-			  strerror(sys_errno)));
-		status = NT_STATUS_OBJECT_NAME_NOT_FOUND;
-		goto out;
-	}
-
-	*pnpa = talloc_steal(mem_ctx, npa);
-	status = NT_STATUS_OK;
-out:
-	talloc_free(tmp_ctx);
-
-	return status;
-}
 
 struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 				const char *pipe_name,
 				const struct tsocket_address *local_address,
 				const struct tsocket_address *remote_address,
-				const struct auth_session_info *session_info)
+				const struct auth_serversupplied_info *session_info)
 {
 	struct np_proxy_state *result;
 	char *socket_np_dir;
@@ -795,6 +599,9 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 	struct tevent_context *ev;
 	struct tevent_req *subreq;
 	struct auth_session_info_transport *session_info_t;
+	struct auth_user_info_dc *user_info_dc;
+	union netr_Validation val;
+	NTSTATUS status;
 	bool ok;
 	int ret;
 	int sys_errno;
@@ -827,7 +634,7 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 		GLOBAL_SECTION_SNUM, "external_rpc_pipe", "socket_dir",
 		lp_ncalrpc_dir());
 	if (socket_dir == NULL) {
-		DEBUG(0, ("external_rpc_pipe:socket_dir not set\n"));
+		DEBUG(0, ("externan_rpc_pipe:socket_dir not set\n"));
 		goto fail;
 	}
 	socket_np_dir = talloc_asprintf(talloc_tos(), "%s/np", socket_dir);
@@ -842,12 +649,24 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 		goto fail;
 	}
 
-	session_info_t->session_info = copy_session_info(session_info_t,
-							 session_info);
-	if (session_info_t->session_info == NULL) {
-		DEBUG(0, ("copy_session_info failed\n"));
+	/* Send the named_pipe_auth server the user's full token */
+	session_info_t->security_token = session_info->security_token;
+	session_info_t->session_key = session_info->user_session_key;
+
+	val.sam3 = session_info->info3;
+
+	/* Convert into something we can build a struct
+	 * auth_session_info_transport from.  Most of the work here
+	 * will be to convert the SIDS, which we will then ignore, but
+	 * this is the easier way to handle it */
+	status = make_user_info_dc_netlogon_validation(talloc_tos(), "", 3, &val, &user_info_dc);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("conversion of info3 into user_info_dc failed!\n"));
 		goto fail;
 	}
+
+	session_info_t->info = talloc_move(session_info_t, &user_info_dc->info);
+	talloc_free(user_info_dc);
 
 	become_root();
 	subreq = tstream_npa_connect_send(talloc_tos(), ev,
@@ -862,8 +681,8 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 		unbecome_root();
 		DEBUG(0, ("tstream_npa_connect_send to %s for pipe %s and "
 			  "user %s\\%s failed\n",
-			  socket_np_dir, pipe_name, session_info_t->session_info->info->domain_name,
-			  session_info_t->session_info->info->account_name));
+			  socket_np_dir, pipe_name, session_info_t->info->domain_name,
+			  session_info_t->info->account_name));
 		goto fail;
 	}
 	ok = tevent_req_poll(subreq, ev);
@@ -871,8 +690,8 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 	if (!ok) {
 		DEBUG(0, ("tevent_req_poll to %s for pipe %s and user %s\\%s "
 			  "failed for tstream_npa_connect: %s\n",
-			  socket_np_dir, pipe_name, session_info_t->session_info->info->domain_name,
-			  session_info_t->session_info->info->account_name,
+			  socket_np_dir, pipe_name, session_info_t->info->domain_name,
+			  session_info_t->info->account_name,
 			  strerror(errno)));
 		goto fail;
 
@@ -885,14 +704,10 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 				       &result->allocation_size);
 	TALLOC_FREE(subreq);
 	if (ret != 0) {
-		int l = 1;
-		if (errno == ENOENT) {
-			l = 2;
-		}
-		DEBUG(l, ("tstream_npa_connect_recv  to %s for pipe %s and "
+		DEBUG(0, ("tstream_npa_connect_recv  to %s for pipe %s and "
 			  "user %s\\%s failed: %s\n",
-			  socket_np_dir, pipe_name, session_info_t->session_info->info->domain_name,
-			  session_info_t->session_info->info->account_name,
+			  socket_np_dir, pipe_name, session_info_t->info->domain_name,
+			  session_info_t->info->account_name,
 			  strerror(sys_errno)));
 		goto fail;
 	}
@@ -906,8 +721,8 @@ struct np_proxy_state *make_external_rpc_pipe_p(TALLOC_CTX *mem_ctx,
 
 static NTSTATUS rpc_pipe_open_external(TALLOC_CTX *mem_ctx,
 				const char *pipe_name,
-				const struct ndr_interface_table *table,
-				const struct auth_session_info *session_info,
+				const struct ndr_syntax_id *abstract_syntax,
+				const struct auth_serversupplied_info *session_info,
 				struct rpc_pipe_client **_result)
 {
 	struct tsocket_address *local, *remote;
@@ -932,7 +747,6 @@ static NTSTATUS rpc_pipe_open_external(TALLOC_CTX *mem_ctx,
 	proxy_state = make_external_rpc_pipe_p(mem_ctx, pipe_name,
 						local, remote, session_info);
 	if (!proxy_state) {
-		DEBUG(1, ("Unable to make proxy_state for connection to %s.\n", pipe_name));
 		return NT_STATUS_UNSUCCESSFUL;
 	}
 
@@ -942,8 +756,8 @@ static NTSTATUS rpc_pipe_open_external(TALLOC_CTX *mem_ctx,
 		goto done;
 	}
 
-	result->abstract_syntax = table->syntax_id;
-	result->transfer_syntax = ndr_transfer_syntax_ndr;
+	result->abstract_syntax = *abstract_syntax;
+	result->transfer_syntax = ndr_transfer_syntax;
 
 	result->desthost = get_myname(result);
 	result->srv_name_slash = talloc_asprintf_strupper_m(
@@ -963,7 +777,7 @@ static NTSTATUS rpc_pipe_open_external(TALLOC_CTX *mem_ctx,
 		goto done;
 	}
 
-	result->binding_handle = rpccli_bh_create(result, NULL, table);
+	result->binding_handle = rpccli_bh_create(result);
 	if (result->binding_handle == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		DEBUG(0, ("Failed to create binding handle.\n"));
@@ -977,7 +791,6 @@ static NTSTATUS rpc_pipe_open_external(TALLOC_CTX *mem_ctx,
 	}
 	result->auth->auth_type = DCERPC_AUTH_TYPE_NONE;
 	result->auth->auth_level = DCERPC_AUTH_LEVEL_NONE;
-	result->auth->auth_context_id = 0;
 
 	status = rpccli_anon_bind_data(result, &auth);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -1012,7 +825,7 @@ done:
  *
  * @param[in]  serversupplied_info The server supplied authentication function.
  *
- * @param[in]  remote_address The client address information.
+ * @param[in]  client_id The client address information.
  *
  * @param[in]  msg_ctx  The messaging context to use.
  *
@@ -1028,30 +841,28 @@ done:
  *   status = rpc_pipe_open_interface(tmp_ctx,
  *                                    &ndr_table_winreg.syntax_id,
  *                                    p->session_info,
- *                                    remote_address,
+ *                                    client_id,
  *                                    &winreg_pipe);
  * @endcode
  */
 
 NTSTATUS rpc_pipe_open_interface(TALLOC_CTX *mem_ctx,
-				 const struct ndr_interface_table *table,
-				 const struct auth_session_info *session_info,
-				 const struct tsocket_address *remote_address,
+				 const struct ndr_syntax_id *syntax,
+				 const struct auth_serversupplied_info *session_info,
+				 struct client_address *client_id,
 				 struct messaging_context *msg_ctx,
 				 struct rpc_pipe_client **cli_pipe)
 {
 	struct rpc_pipe_client *cli = NULL;
-	enum rpc_service_mode_e pipe_mode;
+	const char *server_type;
 	const char *pipe_name;
 	NTSTATUS status;
 	TALLOC_CTX *tmp_ctx;
 
-	if (cli_pipe != NULL) {
-		if (rpccli_is_connected(*cli_pipe)) {
-			return NT_STATUS_OK;
-		} else {
-			TALLOC_FREE(*cli_pipe);
-		}
+	if (cli_pipe && rpccli_is_connected(*cli_pipe)) {
+		return NT_STATUS_OK;
+	} else {
+		TALLOC_FREE(*cli_pipe);
 	}
 
 	tmp_ctx = talloc_stackframe();
@@ -1059,9 +870,8 @@ NTSTATUS rpc_pipe_open_interface(TALLOC_CTX *mem_ctx,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	pipe_name = dcerpc_default_transport_endpoint(mem_ctx, NCACN_NP, table);
+	pipe_name = get_pipe_name_from_syntax(tmp_ctx, syntax);
 	if (pipe_name == NULL) {
-		DEBUG(1, ("Unable to find pipe name to forward %s to.\n", table->name));
 		status = NT_STATUS_INVALID_PARAMETER;
 		goto done;
 	}
@@ -1072,41 +882,41 @@ NTSTATUS rpc_pipe_open_interface(TALLOC_CTX *mem_ctx,
 
 	DEBUG(5, ("Connecting to %s pipe.\n", pipe_name));
 
-	pipe_mode = rpc_service_mode(pipe_name);
+	server_type = lp_parm_const_string(GLOBAL_SECTION_SNUM,
+					   "rpc_server", pipe_name,
+					   "embedded");
 
-	switch (pipe_mode) {
-	case RPC_SERVICE_MODE_EMBEDDED:
+	if (StrCaseCmp(server_type, "embedded") == 0) {
 		status = rpc_pipe_open_internal(tmp_ctx,
-						&table->syntax_id, session_info,
-						remote_address, msg_ctx,
+						syntax, session_info,
+						client_id, msg_ctx,
 						&cli);
 		if (!NT_STATUS_IS_OK(status)) {
 			goto done;
 		}
-		break;
-	case RPC_SERVICE_MODE_EXTERNAL:
+	} else if (StrCaseCmp(server_type, "daemon") == 0 ||
+		   StrCaseCmp(server_type, "external") == 0) {
 		/* It would be nice to just use rpc_pipe_open_ncalrpc() but
 		 * for now we need to use the special proxy setup to connect
 		 * to spoolssd. */
 
 		status = rpc_pipe_open_external(tmp_ctx,
-						pipe_name, table,
+						pipe_name, syntax,
 						session_info,
 						&cli);
 		if (!NT_STATUS_IS_OK(status)) {
 			goto done;
 		}
-		break;
-	case RPC_SERVICE_MODE_DISABLED:
+	} else {
 		status = NT_STATUS_NOT_IMPLEMENTED;
-		DEBUG(0, ("Service pipe %s is disabled in config file: %s",
-			  pipe_name, nt_errstr(status)));
+		DEBUG(0, ("Wrong servertype specified in config file: %s",
+			  nt_errstr(status)));
 		goto done;
         }
 
 	status = NT_STATUS_OK;
 done:
-	if (NT_STATUS_IS_OK(status) && cli_pipe != NULL) {
+	if (NT_STATUS_IS_OK(status)) {
 		*cli_pipe = talloc_move(mem_ctx, &cli);
 	}
 	TALLOC_FREE(tmp_ctx);

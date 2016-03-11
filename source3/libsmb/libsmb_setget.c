@@ -1,10 +1,10 @@
-/*
+/* 
    Unix SMB/Netbios implementation.
    SMB client library implementation
    Copyright (C) Andrew Tridgell 1998
    Copyright (C) Richard Sharpe 2000, 2002
    Copyright (C) John Terpstra 2000
-   Copyright (C) Tom Jansen (Ninja ISD) 2002
+   Copyright (C) Tom Jansen (Ninja ISD) 2002 
    Copyright (C) Derrell Lipman 2003-2008
    Copyright (C) Jeremy Allison 2007, 2008
 
@@ -91,11 +91,9 @@ void
 smbc_setDebug(SMBCCTX *c, int debug)
 {
 	char buf[32];
-	TALLOC_CTX *frame = talloc_stackframe();
 	snprintf(buf, sizeof(buf), "%d", debug);
         c->debug = debug;
-	lp_set_cmdline("log level", buf);
-	TALLOC_FREE(frame);
+	lp_set_cmdline("log level", buf); 
 }
 
 /**
@@ -118,38 +116,14 @@ smbc_setTimeout(SMBCCTX *c, int timeout)
         c->timeout = timeout;
 }
 
-/**
- * Get the TCP port used to connect.
- */
-uint16_t
-smbc_getPort(SMBCCTX *c)
-{
-        return c->internal->port;
-}
-
-/**
- * Set the TCP port used to connect.
- */
-void
-smbc_setPort(SMBCCTX *c, uint16_t port)
-{
-        c->internal->port = port;
-}
-
-
 /** Get whether to log to standard error instead of standard output */
 smbc_bool
 smbc_getOptionDebugToStderr(SMBCCTX *c)
 {
-	smbc_bool ret;
-	TALLOC_CTX *frame = talloc_stackframe();
-
 	/* Because this is a global concept, it is better to check
 	 * what is really set, rather than what we wanted set
 	 * (particularly as you cannot go back to stdout). */
-	ret = debug_get_output_is_stderr();
-	TALLOC_FREE(frame);
-	return ret;
+        return debug_get_output_is_stderr();
 }
 
 /** Set whether to log to standard error instead of standard output.
@@ -161,7 +135,6 @@ smbc_getOptionDebugToStderr(SMBCCTX *c)
 void
 smbc_setOptionDebugToStderr(SMBCCTX *c, smbc_bool b)
 {
-	TALLOC_CTX *frame = talloc_stackframe();
 	if (b) {
 		/*
 		 * We do not have a unique per-thread debug state? For
@@ -172,7 +145,6 @@ smbc_setOptionDebugToStderr(SMBCCTX *c, smbc_bool b)
 		 */
 		setup_logging("libsmbclient", DEBUG_STDERR);
 	}
-	TALLOC_FREE(frame);
 }
 
 /**
@@ -467,14 +439,14 @@ smbc_setOptionNoAutoAnonymousLogin(SMBCCTX *c, smbc_bool b)
         }
 }
 
-/** Get whether to enable use of the winbind ccache */
+/** Get whether to enable use of kerberos */
 smbc_bool
 smbc_getOptionUseCCache(SMBCCTX *c)
 {
         return c->flags & SMB_CTX_FLAG_USE_CCACHE ? True : False;
 }
 
-/** Set whether to enable use of the winbind ccache */
+/** Set whether to enable use of kerberos */
 void
 smbc_setOptionUseCCache(SMBCCTX *c, smbc_bool b)
 {
@@ -485,33 +457,11 @@ smbc_setOptionUseCCache(SMBCCTX *c, smbc_bool b)
         }
 }
 
-/** Get indication whether the password supplied is the NT hash */
-smbc_bool
-smbc_getOptionUseNTHash(SMBCCTX *c)
-{
-        return (c->flags & SMB_CTX_FLAG_USE_NT_HASH) != 0;
-}
-
-/** Set indication that the password supplied is the NT hash */
-void
-smbc_setOptionUseNTHash(SMBCCTX *c, smbc_bool b)
-{
-        if (b) {
-                c->flags |= SMB_CTX_FLAG_USE_NT_HASH;
-        } else {
-                c->flags &= ~SMB_CTX_FLAG_USE_NT_HASH;
-        }
-}
-
 /** Get the function for obtaining authentication data */
 smbc_get_auth_data_fn
 smbc_getFunctionAuthData(SMBCCTX *c)
 {
-	smbc_get_auth_data_fn ret;
-	TALLOC_CTX *frame = talloc_stackframe();
-	ret = c->callbacks.auth_fn;
-	TALLOC_FREE(frame);
-	return ret;
+        return c->callbacks.auth_fn;
 }
 
 /** Set the function for obtaining authentication data */
@@ -693,18 +643,6 @@ void
 smbc_setFunctionWrite(SMBCCTX *c, smbc_write_fn fn)
 {
         c->write = fn;
-}
-
-smbc_splice_fn
-smbc_getFunctionSplice(SMBCCTX *c)
-{
-        return c->internal->smb.splice_fn;
-}
-
-void
-smbc_setFunctionSplice(SMBCCTX *c, smbc_splice_fn fn)
-{
-        c->internal->smb.splice_fn = fn;
 }
 
 smbc_unlink_fn
@@ -926,18 +864,6 @@ void
 smbc_setFunctionFstatdir(SMBCCTX *c, smbc_fstatdir_fn fn)
 {
         c->fstatdir = fn;
-}
-
-smbc_notify_fn
-smbc_getFunctionNotify(SMBCCTX *c)
-{
-        return c->internal->smb.notify_fn;
-}
-
-void
-smbc_setFunctionNotify(SMBCCTX *c, smbc_notify_fn fn)
-{
-        c->internal->smb.notify_fn = fn;
 }
 
 

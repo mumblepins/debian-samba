@@ -5,20 +5,20 @@
  */
 
 #include "includes.h"
-#include "torture/proto.h"
+#include <assert.h>
 
-bool run_local_sprintf_append(int dummy)
+int main(int argc, char *argv[])
 {
 	TALLOC_CTX *mem_ctx;
 	char *string = NULL;
-	ssize_t len = 0;
-	size_t bufsize = 4;
+	int len = 0;
+	int bufsize = 4;
 	int i;
 
 	mem_ctx = talloc_init("t_strappend");
 	if (mem_ctx == NULL) {
 		fprintf(stderr, "talloc_init failed\n");
-		return false;
+		return 1;
 	}
 
 	sprintf_append(mem_ctx, &string, &len, &bufsize, "");
@@ -30,20 +30,16 @@ bool run_local_sprintf_append(int dummy)
 	assert(strlen(string) == len);
 
 
-	for (i=0; i<(10000); i++) {
+	for (i=0; i<(100000); i++) {
 		if (i%1000 == 0) {
-			printf("%d %lld\r", i, (long long int)bufsize);
+			printf("%d %d\r", i, bufsize);
 			fflush(stdout);
 		}
 		sprintf_append(mem_ctx, &string, &len, &bufsize, "%d\n", i);
-		if (strlen(string) != len) {
-			fprintf(stderr, "sprintf_append failed: strlen(string) %lld != len %lld\n",
-				(long long int)strlen(string), (long long int)len);
-			return false;
-		}
+		assert(strlen(string) == len);
 	}
 
 	talloc_destroy(mem_ctx);
 
-	return true;
+	return 0;
 }

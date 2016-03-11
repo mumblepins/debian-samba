@@ -24,8 +24,7 @@
 #include "librpc/gen_ndr/xattr.h"
 #include "librpc/gen_ndr/ndr_xattr.h"
 #include "../lib/crypto/crypto.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_open.h"
+#include "dbwrap.h"
 #include "auth.h"
 #include "util_tdb.h"
 
@@ -59,8 +58,7 @@ static bool acl_tdb_init(void)
 	}
 
 	become_root();
-	acl_db = db_open(NULL, dbname, 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600,
-			 DBWRAP_LOCK_ORDER_1, DBWRAP_FLAG_NONE);
+	acl_db = db_open(NULL, dbname, 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 	unbecome_root();
 
 	if (acl_db == NULL) {
@@ -99,14 +97,14 @@ static struct db_record *acl_tdb_lock(TALLOC_CTX *mem_ctx,
 					struct db_context *db,
 					const struct file_id *id)
 {
-	uint8_t id_buf[16];
+	uint8 id_buf[16];
 
 	/* For backwards compatibility only store the dev/inode. */
 	push_file_id_16((char *)id_buf, id);
-	return dbwrap_fetch_locked(db,
-				   mem_ctx,
-				   make_tdb_data(id_buf,
-						 sizeof(id_buf)));
+	return db->fetch_locked(db,
+				mem_ctx,
+				make_tdb_data(id_buf,
+					sizeof(id_buf)));
 }
 
 /*******************************************************************
@@ -131,7 +129,7 @@ static NTSTATUS acl_tdb_delete(vfs_handle_struct *handle,
 		return NT_STATUS_OK;
 	}
 
-	status = dbwrap_record_delete(rec);
+	status = rec->delete_rec(rec);
 	TALLOC_FREE(rec);
 	return status;
 }
@@ -146,7 +144,7 @@ static NTSTATUS get_acl_blob(TALLOC_CTX *ctx,
 			const char *name,
 			DATA_BLOB *pblob)
 {
-	uint8_t id_buf[16];
+	uint8 id_buf[16];
 	TDB_DATA data;
 	struct file_id id;
 	struct db_context *db = acl_db;
@@ -159,7 +157,7 @@ static NTSTATUS get_acl_blob(TALLOC_CTX *ctx,
 		status = vfs_stat_fsp(fsp);
 		sbuf = fsp->fsp_name->st;
 	} else {
-		int ret = vfs_stat_smb_basename(handle->conn, name, &sbuf);
+		int ret = vfs_stat_smb_fname(handle->conn, name, &sbuf);
 		if (ret == -1) {
 			status = map_nt_error_from_unix(errno);
 		}
@@ -174,11 +172,10 @@ static NTSTATUS get_acl_blob(TALLOC_CTX *ctx,
 	/* For backwards compatibility only store the dev/inode. */
 	push_file_id_16((char *)id_buf, &id);
 
-	status = dbwrap_fetch(db,
-			      ctx,
-			      make_tdb_data(id_buf, sizeof(id_buf)),
-			      &data);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (db->fetch(db,
+			ctx,
+			make_tdb_data(id_buf, sizeof(id_buf)),
+			&data) == -1) {
 		return NT_STATUS_INTERNAL_DB_CORRUPTION;
 	}
 
@@ -202,7 +199,7 @@ static NTSTATUS store_acl_blob_fsp(vfs_handle_struct *handle,
 				files_struct *fsp,
 				DATA_BLOB *pblob)
 {
-	uint8_t id_buf[16];
+	uint8 id_buf[16];
 	struct file_id id;
 	TDB_DATA data;
 	struct db_context *db = acl_db;
@@ -221,16 +218,16 @@ static NTSTATUS store_acl_blob_fsp(vfs_handle_struct *handle,
 
 	/* For backwards compatibility only store the dev/inode. */
 	push_file_id_16((char *)id_buf, &id);
-	rec = dbwrap_fetch_locked(db, talloc_tos(),
-				  make_tdb_data(id_buf,
-						sizeof(id_buf)));
+	rec = db->fetch_locked(db, talloc_tos(),
+				make_tdb_data(id_buf,
+					sizeof(id_buf)));
 	if (rec == NULL) {
 		DEBUG(0, ("store_acl_blob_fsp_tdb: fetch_lock failed\n"));
 		return NT_STATUS_INTERNAL_DB_CORRUPTION;
 	}
 	data.dptr = pblob->data;
 	data.dsize = pblob->length;
-	return dbwrap_record_store(rec, data, 0);
+	return rec->store(rec, data, 0);
 }
 
 /*********************************************************************
@@ -242,11 +239,12 @@ static int unlink_acl_tdb(vfs_handle_struct *handle,
 {
 	struct smb_filename *smb_fname_tmp = NULL;
 	struct db_context *db = acl_db;
+	NTSTATUS status;
 	int ret = -1;
 
-	smb_fname_tmp = cp_smb_filename(talloc_tos(), smb_fname);
-	if (smb_fname_tmp == NULL) {
-		errno = ENOMEM;
+	status = copy_smb_filename(talloc_tos(), smb_fname, &smb_fname_tmp);
+	if (!NT_STATUS_IS_OK(status)) {
+		errno = map_errno_from_nt_status(status);
 		goto out;
 	}
 
@@ -282,7 +280,12 @@ static int rmdir_acl_tdb(vfs_handle_struct *handle, const char *path)
 	struct db_context *db = acl_db;
 	int ret = -1;
 
-	ret = vfs_stat_smb_basename(handle->conn, path, &sbuf);
+	if (lp_posix_pathnames()) {
+		ret = vfs_lstat_smb_fname(handle->conn, path, &sbuf);
+	} else {
+		ret = vfs_stat_smb_fname(handle->conn, path, &sbuf);
+	}
+
 	if (ret == -1) {
 		return -1;
 	}
@@ -342,7 +345,12 @@ static int sys_acl_set_file_tdb(vfs_handle_struct *handle,
 	struct db_context *db = acl_db;
 	int ret = -1;
 
-	ret = vfs_stat_smb_basename(handle->conn, path, &sbuf);
+	if (lp_posix_pathnames()) {
+		ret = vfs_lstat_smb_fname(handle->conn, path, &sbuf);
+	} else {
+		ret = vfs_stat_smb_fname(handle->conn, path, &sbuf);
+	}
+
 	if (ret == -1) {
 		return -1;
 	}
@@ -389,18 +397,22 @@ static int sys_acl_set_fd_tdb(vfs_handle_struct *handle,
 
 static struct vfs_fn_pointers vfs_acl_tdb_fns = {
 	.connect_fn = connect_acl_tdb,
-	.disconnect_fn = disconnect_acl_tdb,
-	.rmdir_fn = rmdir_acl_tdb,
-	.unlink_fn = unlink_acl_tdb,
-	.chmod_fn = chmod_acl_module_common,
-	.fchmod_fn = fchmod_acl_module_common,
-	.fget_nt_acl_fn = fget_nt_acl_common,
-	.get_nt_acl_fn = get_nt_acl_common,
-	.fset_nt_acl_fn = fset_nt_acl_common,
-	.chmod_acl_fn = chmod_acl_acl_module_common,
-	.fchmod_acl_fn = fchmod_acl_acl_module_common,
-	.sys_acl_set_file_fn = sys_acl_set_file_tdb,
-	.sys_acl_set_fd_fn = sys_acl_set_fd_tdb
+	.disconnect = disconnect_acl_tdb,
+	.opendir = opendir_acl_common,
+	.mkdir = mkdir_acl_common,
+	.rmdir = rmdir_acl_tdb,
+	.open_fn = open_acl_common,
+	.create_file = create_file_acl_common,
+	.unlink = unlink_acl_tdb,
+	.chmod = chmod_acl_module_common,
+	.fchmod = fchmod_acl_module_common,
+	.fget_nt_acl = fget_nt_acl_common,
+	.get_nt_acl = get_nt_acl_common,
+	.fset_nt_acl = fset_nt_acl_common,
+	.chmod_acl = chmod_acl_acl_module_common,
+	.fchmod_acl = fchmod_acl_acl_module_common,
+	.sys_acl_set_file = sys_acl_set_file_tdb,
+	.sys_acl_set_fd = sys_acl_set_fd_tdb
 };
 
 NTSTATUS vfs_acl_tdb_init(void)

@@ -24,17 +24,16 @@
 */
 
 #include "includes.h"
-#include "system/filesys.h"
 #include "libnet/libnet_samsync.h"
+#include "smbldap.h"
 #include "transfer_file.h"
 #include "passdb.h"
-#include "passdb/pdb_ldap_schema.h"
 
 #ifdef HAVE_LDAP
 
 /* uid's and gid's for writing deltas to ldif */
-static uint32_t ldif_gid = 999;
-static uint32_t ldif_uid = 999;
+static uint32 ldif_gid = 999;
+static uint32 ldif_uid = 999;
 
 /* global counters */
 static uint32_t g_index = 0;
@@ -68,33 +67,6 @@ struct samsync_ldif_context {
 	const char *suffix;
 	int num_alloced;
 };
-
-/*
-   Returns the substring from src between the first occurrence of
-   the char "front" and the first occurence of the char "back".
-   Mallocs the return string which must be freed.  Not for use
-   with wide character strings.
-*/
-static char *sstring_sub(const char *src, char front, char back)
-{
-	char *temp1, *temp2, *temp3;
-	ptrdiff_t len;
-
-	temp1 = strchr(src, front);
-	if (temp1 == NULL) return NULL;
-	temp2 = strchr(src, back);
-	if (temp2 == NULL) return NULL;
-	len = temp2 - temp1;
-	if (len <= 0) return NULL;
-	temp3 = (char*)SMB_MALLOC(len);
-	if (temp3 == NULL) {
-		DEBUG(1,("Malloc failure in sstring_sub\n"));
-		return NULL;
-	}
-	memcpy(temp3, temp1+1, len-1);
-	temp3[len-1] = '\0';
-	return temp3;
-}
 
 /****************************************************************
 ****************************************************************/
@@ -131,7 +103,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 	fprintf(add_fd, "\n");
 	fflush(add_fd);
 
-	user_suffix = lp_ldap_user_suffix(talloc_tos());
+	user_suffix = lp_ldap_user_suffix();
 	if (user_suffix == NULL) {
 		SAFE_FREE(suffix_attr);
 		return NT_STATUS_NO_MEMORY;
@@ -139,7 +111,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 	/* If it exists and is distinct from other containers,
 	   Write the Users entity */
 	if (*user_suffix && strcmp(user_suffix, suffix)) {
-		user_attr = sstring_sub(lp_ldap_user_suffix(talloc_tos()), '=', ',');
+		user_attr = sstring_sub(lp_ldap_user_suffix(), '=', ',');
 		fprintf(add_fd, "# %s\n", user_suffix);
 		fprintf(add_fd, "dn: %s\n", user_suffix);
 		fprintf(add_fd, "objectClass: organizationalUnit\n");
@@ -149,7 +121,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 	}
 
 
-	group_suffix = lp_ldap_group_suffix(talloc_tos());
+	group_suffix = lp_ldap_group_suffix();
 	if (group_suffix == NULL) {
 		SAFE_FREE(suffix_attr);
 		SAFE_FREE(user_attr);
@@ -158,7 +130,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 	/* If it exists and is distinct from other containers,
 	   Write the Groups entity */
 	if (*group_suffix && strcmp(group_suffix, suffix)) {
-		group_attr = sstring_sub(lp_ldap_group_suffix(talloc_tos()), '=', ',');
+		group_attr = sstring_sub(lp_ldap_group_suffix(), '=', ',');
 		fprintf(add_fd, "# %s\n", group_suffix);
 		fprintf(add_fd, "dn: %s\n", group_suffix);
 		fprintf(add_fd, "objectClass: organizationalUnit\n");
@@ -169,7 +141,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 
 	/* If it exists and is distinct from other containers,
 	   Write the Computers entity */
-	machine_suffix = lp_ldap_machine_suffix(talloc_tos());
+	machine_suffix = lp_ldap_machine_suffix();
 	if (machine_suffix == NULL) {
 		SAFE_FREE(suffix_attr);
 		SAFE_FREE(user_attr);
@@ -184,7 +156,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 		fprintf(add_fd, "objectClass: organizationalUnit\n");
 		/* this isn't totally correct as it assumes that
 		   there _must_ be an ou. just fixing memleak now. jmcd */
-		machine_ou = sstring_sub(lp_ldap_machine_suffix(talloc_tos()), '=', ',');
+		machine_ou = sstring_sub(lp_ldap_machine_suffix(), '=', ',');
 		fprintf(add_fd, "ou: %s\n", machine_ou);
 		SAFE_FREE(machine_ou);
 		fprintf(add_fd, "\n");
@@ -193,7 +165,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 
 	/* If it exists and is distinct from other containers,
 	   Write the IdMap entity */
-	idmap_suffix = lp_ldap_idmap_suffix(talloc_tos());
+	idmap_suffix = lp_ldap_idmap_suffix();
 	if (idmap_suffix == NULL) {
 		SAFE_FREE(suffix_attr);
 		SAFE_FREE(user_attr);
@@ -207,7 +179,7 @@ static NTSTATUS populate_ldap_for_ldif(const char *sid,
 		fprintf(add_fd, "# %s\n", idmap_suffix);
 		fprintf(add_fd, "dn: %s\n", idmap_suffix);
 		fprintf(add_fd, "ObjectClass: organizationalUnit\n");
-		s = sstring_sub(lp_ldap_idmap_suffix(talloc_tos()), '=', ',');
+		s = sstring_sub(lp_ldap_idmap_suffix(), '=', ',');
 		fprintf(add_fd, "ou: %s\n", s);
 		SAFE_FREE(s);
 		fprintf(add_fd, "\n");
@@ -371,7 +343,7 @@ static NTSTATUS map_populate_groups(TALLOC_CTX *mem_ctx,
 				    const char *suffix,
 				    const char *builtin_sid)
 {
-	char *group_attr = sstring_sub(lp_ldap_group_suffix(talloc_tos()), '=', ',');
+	char *group_attr = sstring_sub(lp_ldap_group_suffix(), '=', ',');
 
 	/* Map the groups created by populate_ldap_for_ldif */
 	groupmap[0].rid		= 512;
@@ -576,8 +548,8 @@ static NTSTATUS fetch_group_info_to_ldif(TALLOC_CTX *mem_ctx,
 					 const char *suffix)
 {
 	const char *groupname = r->group_name.string;
-	uint32_t grouptype = 0, g_rid = 0;
-	char *group_attr = sstring_sub(lp_ldap_group_suffix(talloc_tos()), '=', ',');
+	uint32 grouptype = 0, g_rid = 0;
+	char *group_attr = sstring_sub(lp_ldap_group_suffix(), '=', ',');
 
 	/* Set up the group type (always 2 for group info) */
 	grouptype = 2;
@@ -649,7 +621,7 @@ static NTSTATUS fetch_account_info_to_ldif(TALLOC_CTX *mem_ctx,
 	const char *ou;
 	const char* nopasswd = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 	uchar zero_buf[16];
-	uint32_t rid = 0, group_rid = 0, gidNumber = 0;
+	uint32 rid = 0, group_rid = 0, gidNumber = 0;
 	time_t unix_time;
 	int i, ret;
 
@@ -674,9 +646,9 @@ static NTSTATUS fetch_account_info_to_ldif(TALLOC_CTX *mem_ctx,
 		} else {
 			snprintf(homedir, sizeof(homedir), "/nobodyshomedir");
 		}
-		ou = lp_ldap_user_suffix(talloc_tos());
+		ou = lp_ldap_user_suffix();
 	} else {
-		ou = lp_ldap_machine_suffix(talloc_tos());
+		ou = lp_ldap_machine_suffix();
 		snprintf(homedir, sizeof(homedir), "/machinehomedir");
 	}
 
@@ -795,8 +767,8 @@ static NTSTATUS fetch_alias_info_to_ldif(TALLOC_CTX *mem_ctx,
 					 enum netr_SamDatabaseID database_id)
 {
 	fstring aliasname, description;
-	uint32_t grouptype = 0, g_rid = 0;
-	char *group_attr = sstring_sub(lp_ldap_group_suffix(talloc_tos()), '=', ',');
+	uint32 grouptype = 0, g_rid = 0;
+	char *group_attr = sstring_sub(lp_ldap_group_suffix(), '=', ',');
 
 	/* Get the alias name */
 	fstrcpy(aliasname, r->alias_name.string);
@@ -878,7 +850,7 @@ static NTSTATUS fetch_groupmem_info_to_ldif(struct netr_DELTA_GROUP_MEMBER *r,
 					    FILE *mod_fd, int alloced)
 {
 	fstring group_dn;
-	uint32_t group_rid = 0, rid = 0;
+	uint32 group_rid = 0, rid = 0;
 	int i, j, k;
 
 	/* Get the dn for the group */
@@ -930,14 +902,6 @@ static NTSTATUS ldif_init_context(TALLOC_CTX *mem_ctx,
 	const char *add_template = "/tmp/add.ldif.XXXXXX";
 	const char *mod_template = "/tmp/mod.ldif.XXXXXX";
 	const char *builtin_sid = "S-1-5-32";
-	mode_t mask;
-	int fd;
-
-	r = talloc_zero(mem_ctx, struct samsync_ldif_context);
-	NT_STATUS_HAVE_NO_MEMORY(r);
-
-	/* Get the ldap suffix */
-	r->suffix = lp_ldap_suffix(talloc_tos());
 
 	/* Get other smb.conf data */
 	if (!(lp_workgroup()) || !*(lp_workgroup())) {
@@ -946,7 +910,7 @@ static NTSTATUS ldif_init_context(TALLOC_CTX *mem_ctx,
 	}
 
 	/* Get the ldap suffix */
-	if (!r->suffix || !*r->suffix) {
+	if (!(lp_ldap_suffix()) || !*(lp_ldap_suffix())) {
 		DEBUG(0,("ldap suffix missing from smb.conf--exiting\n"));
 		exit(1);
 	}
@@ -954,6 +918,12 @@ static NTSTATUS ldif_init_context(TALLOC_CTX *mem_ctx,
 	if (*ctx && (*ctx)->initialized) {
 		return NT_STATUS_OK;
 	}
+
+	r = TALLOC_ZERO_P(mem_ctx, struct samsync_ldif_context);
+	NT_STATUS_HAVE_NO_MEMORY(r);
+
+	/* Get the ldap suffix */
+	r->suffix = lp_ldap_suffix();
 
 	/* Ensure we have an output file */
 	if (ldif_filename) {
@@ -983,44 +953,21 @@ static NTSTATUS ldif_init_context(TALLOC_CTX *mem_ctx,
 		goto done;
 	}
 
-	mask = umask(S_IRWXO | S_IRWXG);
-	fd = mkstemp(r->add_name);
-	umask(mask);
-	if (fd < 0) {
-		DEBUG(1, ("Could not create %s\n", r->add_name));
-		status = NT_STATUS_UNSUCCESSFUL;
-		goto done;
-	}
-
 	/* Open the add and mod ldif files */
-	r->add_file = fdopen(fd, "w");
-	if (r->add_file == NULL) {
+	if (!(r->add_file = fdopen(mkstemp(r->add_name),"w"))) {
 		DEBUG(1, ("Could not open %s\n", r->add_name));
-		close(fd);
 		status = NT_STATUS_UNSUCCESSFUL;
 		goto done;
 	}
-
-	mask = umask(S_IRWXO | S_IRWXG);
-	fd = mkstemp(r->module_name);
-	umask(mask);
-	if (fd < 0) {
-		DEBUG(1, ("Could not create %s\n", r->module_name));
-		status = NT_STATUS_UNSUCCESSFUL;
-		goto done;
-	}
-
-	r->mod_file = fdopen(fd, "w");
-	if (r->mod_file == NULL) {
+	if (!(r->mod_file = fdopen(mkstemp(r->module_name),"w"))) {
 		DEBUG(1, ("Could not open %s\n", r->module_name));
-		close(fd);
 		status = NT_STATUS_UNSUCCESSFUL;
 		goto done;
 	}
 
 	/* Allocate initial memory for groupmap and accountmap arrays */
-	r->groupmap = talloc_zero_array(mem_ctx, GROUPMAP, 8);
-	r->accountmap = talloc_zero_array(mem_ctx, ACCOUNTMAP, 8);
+	r->groupmap = TALLOC_ZERO_ARRAY(mem_ctx, GROUPMAP, 8);
+	r->accountmap = TALLOC_ZERO_ARRAY(mem_ctx, ACCOUNTMAP, 8);
 	if (r->groupmap == NULL || r->accountmap == NULL) {
 		DEBUG(1,("GROUPMAP talloc failed\n"));
 		status = NT_STATUS_NO_MEMORY;
@@ -1226,12 +1173,12 @@ static NTSTATUS ldif_realloc_maps(TALLOC_CTX *mem_ctx,
 				  uint32_t num_entries)
 {
 	/* Re-allocate memory for groupmap and accountmap arrays */
-	l->groupmap = talloc_realloc(mem_ctx,
+	l->groupmap = TALLOC_REALLOC_ARRAY(mem_ctx,
 					   l->groupmap,
 					   GROUPMAP,
 					   num_entries + l->num_alloced);
 
-	l->accountmap = talloc_realloc(mem_ctx,
+	l->accountmap = TALLOC_REALLOC_ARRAY(mem_ctx,
 					     l->accountmap,
 					     ACCOUNTMAP,
 					     num_entries + l->num_alloced);

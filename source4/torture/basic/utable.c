@@ -23,7 +23,6 @@
 #include "libcli/libcli.h"
 #include "torture/util.h"
 #include "param/param.h"
-#include "torture/basic/proto.h"
 
 bool torture_utable(struct torture_context *tctx, 
 					struct smbcli_state *cli)
@@ -50,15 +49,9 @@ bool torture_utable(struct torture_context *tctx,
 		SSVAL(c2, 0, c);
 		strncpy(fname, "\\utable\\x", sizeof(fname)-1);
 		p = fname+strlen(fname);
-		len = 0;
-		if (!convert_string(CH_UTF16, CH_UNIX,
+		len = convert_string(CH_UTF16, CH_UNIX, 
 				     c2, 2, 
-				     p, sizeof(fname)-strlen(fname), &len)) {
-			torture_comment(tctx, "convert_string failed [%s]\n",
-				fname);
-			continue;
-		}
-
+				     p, sizeof(fname)-strlen(fname), false);
 		p[len] = 0;
 		strncat(fname,"_a_long_extension",sizeof(fname)-1);
 
@@ -109,17 +102,17 @@ static char *form_name(int c)
 	static char fname[256];
 	uint8_t c2[4];
 	char *p;
-	size_t len = 0;
+	size_t len;
 
 	strncpy(fname, "\\utable\\", sizeof(fname)-1);
 	p = fname+strlen(fname);
 	SSVAL(c2, 0, c);
 
-	if (!convert_string(CH_UTF16, CH_UNIX,
+	len = convert_string(CH_UTF16, CH_UNIX, 
 			     c2, 2, 
-			     p, sizeof(fname)-strlen(fname), &len)) {
+			     p, sizeof(fname)-strlen(fname), false);
+	if (len == -1)
 		return NULL;
-	}
 	p[len] = 0;
 	return fname;
 }
@@ -148,7 +141,6 @@ bool torture_casetable(struct torture_context *tctx,
 		torture_comment(tctx, "%04x (%c)\n", c, isprint(c)?c:'.');
 
 		fname = form_name(c);
-		if (fname == NULL) continue;
 		fnum = smbcli_nt_create_full(cli->tree, fname, 0,
 #if 0
 					     SEC_RIGHT_MAXIMUM_ALLOWED, 
@@ -159,10 +151,9 @@ bool torture_casetable(struct torture_context *tctx,
 					     NTCREATEX_SHARE_ACCESS_NONE,
 					     NTCREATEX_DISP_OPEN_IF, 0, 0);
 
-		if (fnum == -1) {
-			torture_comment(tctx, "Failed to create file with char %04x\n", c);
-			continue;
-		}
+		torture_assert(tctx, fnum != -1, 
+					   talloc_asprintf(tctx, 
+			"Failed to create file with char %04x\n", c));
 
 		size = 0;
 

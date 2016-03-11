@@ -43,7 +43,6 @@ struct libnet_JoinDomain {
 		enum libnet_JoinDomain_level level;
 		uint32_t  acct_type;
 		bool recreate_account;
-		const char *account_pass;
 	} in;
 
 	struct {
@@ -57,19 +56,19 @@ struct libnet_JoinDomain {
 		const char *server_dn_str;
 		uint32_t kvno; /* msDS-KeyVersionNumber */
 		struct dcerpc_pipe *samr_pipe;
-		const struct dcerpc_binding *samr_binding;
+		struct dcerpc_binding *samr_binding;
 		struct policy_handle *user_handle;
 		struct dom_sid *account_sid;
 		struct GUID account_guid;
 	} out;
 };
 
-struct libnet_Join_member {
+struct libnet_Join {
 	struct {
 		const char *domain_name;
 		const char *netbios_name;
+		enum netr_SchannelType join_type;
 		enum libnet_Join_level level;
-		const char *account_pass;
 	} in;
 	
 	struct {

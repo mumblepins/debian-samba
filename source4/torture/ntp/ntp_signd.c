@@ -32,7 +32,6 @@
 #include "librpc/gen_ndr/ndr_ntp_signd.h"
 #include "param/param.h"
 #include "system/network.h"
-#include "torture/ntp/proto.h"
 
 #define TEST_MACHINE_NAME "ntpsigndtest"
 
@@ -79,7 +78,7 @@ static bool test_ntp_signd(struct torture_context *tctx,
 	char *unix_address;
 	int sys_errno;
 
-	MD5_CTX ctx;
+	struct MD5Context ctx;
 	uint8_t sig[16];
 	enum ndr_err_code ndr_err;
 	bool ok;
@@ -114,7 +113,6 @@ static bool test_ntp_signd(struct torture_context *tctx,
 
 	creds = netlogon_creds_client_init(tctx, a.in.account_name,
 					   a.in.computer_name,
-					   a.in.secure_channel_type,
 					   &credentials1, &credentials2, 
 					   pwhash, &credentials3,
 					   negotiate_flags);

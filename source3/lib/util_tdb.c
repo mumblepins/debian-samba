@@ -22,7 +22,6 @@
 #include "includes.h"
 #include "system/filesys.h"
 #include "util_tdb.h"
-#include "cbuf.h"
 
 #undef malloc
 #undef realloc
@@ -31,6 +30,87 @@
 
 /* these are little tdb utility functions that are meant to make
    dealing with a tdb database a little less cumbersome in Samba */
+
+static SIG_ATOMIC_T gotalarm;
+
+/***************************************************************
+ Signal function to tell us we timed out.
+****************************************************************/
+
+static void gotalarm_sig(int signum)
+{
+	gotalarm = 1;
+}
+
+/****************************************************************************
+ Lock a chain with timeout (in seconds).
+****************************************************************************/
+
+static int tdb_chainlock_with_timeout_internal( TDB_CONTEXT *tdb, TDB_DATA key, unsigned int timeout, int rw_type)
+{
+	/* Allow tdb_chainlock to be interrupted by an alarm. */
+	int ret;
+	gotalarm = 0;
+
+	if (timeout) {
+		CatchSignal(SIGALRM, gotalarm_sig);
+		tdb_setalarm_sigptr(tdb, &gotalarm);
+		alarm(timeout);
+	}
+
+	if (rw_type == F_RDLCK)
+		ret = tdb_chainlock_read(tdb, key);
+	else
+		ret = tdb_chainlock(tdb, key);
+
+	if (timeout) {
+		alarm(0);
+		tdb_setalarm_sigptr(tdb, NULL);
+		CatchSignal(SIGALRM, SIG_IGN);
+		if (gotalarm && (ret == -1)) {
+			DEBUG(0,("tdb_chainlock_with_timeout_internal: alarm (%u) timed out for key %s in tdb %s\n",
+				timeout, key.dptr, tdb_name(tdb)));
+			/* TODO: If we time out waiting for a lock, it might
+			 * be nice to use F_GETLK to get the pid of the
+			 * process currently holding the lock and print that
+			 * as part of the debugging message. -- mbp */
+			return -1;
+		}
+	}
+
+	return ret;
+}
+
+/****************************************************************************
+ Write lock a chain. Return -1 if timeout or lock failed.
+****************************************************************************/
+
+int tdb_chainlock_with_timeout( TDB_CONTEXT *tdb, TDB_DATA key, unsigned int timeout)
+{
+	return tdb_chainlock_with_timeout_internal(tdb, key, timeout, F_WRLCK);
+}
+
+int tdb_lock_bystring_with_timeout(TDB_CONTEXT *tdb, const char *keyval,
+				   int timeout)
+{
+	TDB_DATA key = string_term_tdb_data(keyval);
+
+	return tdb_chainlock_with_timeout(tdb, key, timeout);
+}
+
+/****************************************************************************
+ Read lock a chain by string. Return -1 if timeout or lock failed.
+****************************************************************************/
+
+int tdb_read_lock_bystring_with_timeout(TDB_CONTEXT *tdb, const char *keyval, unsigned int timeout)
+{
+	TDB_DATA key = string_term_tdb_data(keyval);
+
+	return tdb_chainlock_with_timeout_internal(tdb, key, timeout, F_RDLCK);
+}
+
+
+
 
 int tdb_trans_store_bystring(TDB_CONTEXT *tdb, const char *keystr,
 			     TDB_DATA data, int flags)
@@ -45,17 +125,17 @@ int tdb_trans_store_bystring(TDB_CONTEXT *tdb, const char *keystr,
  integers and strings.
 ****************************************************************************/
 
-static size_t tdb_pack_va(uint8_t *buf, int bufsize, const char *fmt, va_list ap)
+static size_t tdb_pack_va(uint8 *buf, int bufsize, const char *fmt, va_list ap)
 {
-	uint8_t bt;
-	uint16_t w;
-	uint32_t d;
+	uint8 bt;
+	uint16 w;
+	uint32 d;
 	int i;
 	void *p;
 	int len;
 	char *s;
 	char c;
-	uint8_t *buf0 = buf;
+	uint8 *buf0 = buf;
 	const char *fmt0 = fmt;
 	int bufsize0 = bufsize;
 
@@ -63,19 +143,19 @@ static size_t tdb_pack_va(uint8_t *buf, int bufsize, const char *fmt, va_list ap
 		switch ((c = *fmt++)) {
 		case 'b': /* unsigned 8-bit integer */
 			len = 1;
-			bt = (uint8_t)va_arg(ap, int);
+			bt = (uint8)va_arg(ap, int);
 			if (bufsize && bufsize >= len)
 				SSVAL(buf, 0, bt);
 			break;
 		case 'w': /* unsigned 16-bit integer */
 			len = 2;
-			w = (uint16_t)va_arg(ap, int);
+			w = (uint16)va_arg(ap, int);
 			if (bufsize && bufsize >= len)
 				SSVAL(buf, 0, w);
 			break;
 		case 'd': /* signed 32-bit integer (standard int in most systems) */
 			len = 4;
-			d = va_arg(ap, uint32_t);
+			d = va_arg(ap, uint32);
 			if (bufsize && bufsize >= len)
 				SIVAL(buf, 0, d);
 			break;
@@ -129,7 +209,7 @@ static size_t tdb_pack_va(uint8_t *buf, int bufsize, const char *fmt, va_list ap
 	return PTR_DIFF(buf, buf0);
 }
 
-size_t tdb_pack(uint8_t *buf, int bufsize, const char *fmt, ...)
+size_t tdb_pack(uint8 *buf, int bufsize, const char *fmt, ...)
 {
 	va_list ap;
 	size_t result;
@@ -140,7 +220,7 @@ size_t tdb_pack(uint8_t *buf, int bufsize, const char *fmt, ...)
 	return result;
 }
 
-bool tdb_pack_append(TALLOC_CTX *mem_ctx, uint8_t **buf, size_t *len,
+bool tdb_pack_append(TALLOC_CTX *mem_ctx, uint8 **buf, size_t *len,
 		     const char *fmt, ...)
 {
 	va_list ap;
@@ -151,10 +231,10 @@ bool tdb_pack_append(TALLOC_CTX *mem_ctx, uint8_t **buf, size_t *len,
 	va_end(ap);
 
 	if (mem_ctx != NULL) {
-		*buf = talloc_realloc(mem_ctx, *buf, uint8_t,
+		*buf = TALLOC_REALLOC_ARRAY(mem_ctx, *buf, uint8,
 					    (*len) + len1);
 	} else {
-		*buf = SMB_REALLOC_ARRAY(*buf, uint8_t, (*len) + len1);
+		*buf = SMB_REALLOC_ARRAY(*buf, uint8, (*len) + len1);
 	}
 
 	if (*buf == NULL) {
@@ -179,18 +259,18 @@ bool tdb_pack_append(TALLOC_CTX *mem_ctx, uint8_t **buf, size_t *len,
  integers and strings.
 ****************************************************************************/
 
-int tdb_unpack(const uint8_t *buf, int bufsize, const char *fmt, ...)
+int tdb_unpack(const uint8 *buf, int bufsize, const char *fmt, ...)
 {
 	va_list ap;
-	uint8_t *bt;
-	uint16_t *w;
-	uint32_t *d;
+	uint8 *bt;
+	uint16 *w;
+	uint32 *d;
 	int len;
 	int *i;
 	void **p;
 	char *s, **b, **ps;
 	char c;
-	const uint8_t *buf0 = buf;
+	const uint8 *buf0 = buf;
 	const char *fmt0 = fmt;
 	int bufsize0 = bufsize;
 
@@ -200,21 +280,21 @@ int tdb_unpack(const uint8_t *buf, int bufsize, const char *fmt, ...)
 		switch ((c=*fmt++)) {
 		case 'b': /* unsigned 8-bit integer */
 			len = 1;
-			bt = va_arg(ap, uint8_t *);
+			bt = va_arg(ap, uint8 *);
 			if (bufsize < len)
 				goto no_space;
 			*bt = SVAL(buf, 0);
 			break;
 		case 'w': /* unsigned 16-bit integer */
 			len = 2;
-			w = va_arg(ap, uint16_t *);
+			w = va_arg(ap, uint16 *);
 			if (bufsize < len)
 				goto no_space;
 			*w = SVAL(buf, 0);
 			break;
-		case 'd': /* unsigned 32-bit integer (standard int in most systems) */
+		case 'd': /* signed 32-bit integer (standard int in most systems) */
 			len = 4;
-			d = va_arg(ap, uint32_t *);
+			d = va_arg(ap, uint32 *);
 			if (bufsize < len)
 				goto no_space;
 			*d = IVAL(buf, 0);
@@ -234,17 +314,12 @@ int tdb_unpack(const uint8_t *buf, int bufsize, const char *fmt, ...)
 		case 'P': /* null-terminated string */
 			/* Return malloc'ed string. */
 			ps = va_arg(ap,char **);
-			len = strnlen((const char *)buf, bufsize) + 1;
-			if (bufsize < len)
-				goto no_space;
+			len = strlen((const char *)buf) + 1;
 			*ps = SMB_STRDUP((const char *)buf);
-			if (*ps == NULL) {
-				goto no_space;
-			}
 			break;
 		case 'f': /* null-terminated string */
 			s = va_arg(ap,char *);
-			len = strnlen((const char *)buf, bufsize) + 1;
+			len = strlen((const char *)buf) + 1;
 			if (bufsize < len || len > sizeof(fstring))
 				goto no_space;
 			memcpy(s, buf, len);
@@ -323,10 +398,13 @@ TDB_CONTEXT *tdb_open_log(const char *name, int hash_size, int tdb_flags,
 			  int open_flags, mode_t mode)
 {
 	TDB_CONTEXT *tdb;
-	struct tdb_logging_context log_ctx = { .log_fn = tdb_log };
+	struct tdb_logging_context log_ctx;
 
 	if (!lp_use_mmap())
 		tdb_flags |= TDB_NOMMAP;
+
+	log_ctx.log_fn = tdb_log;
+	log_ctx.log_private = NULL;
 
 	if ((hash_size == 0) && (name != NULL)) {
 		const char *base = strrchr_m(name, '/');
@@ -339,7 +417,7 @@ TDB_CONTEXT *tdb_open_log(const char *name, int hash_size, int tdb_flags,
 		hash_size = lp_parm_int(-1, "tdb_hashsize", base, 0);
 	}
 
-	tdb = tdb_open_ex(name, hash_size, tdb_flags,
+	tdb = tdb_open_ex(name, hash_size, tdb_flags, 
 			  open_flags, mode, &log_ctx, NULL);
 	if (!tdb)
 		return NULL;
@@ -364,7 +442,9 @@ int tdb_trans_store(struct tdb_context *tdb, TDB_DATA key, TDB_DATA dbuf,
 
 	if ((res = tdb_store(tdb, key, dbuf, flag)) != 0) {
 		DEBUG(10, ("tdb_store failed\n"));
-		tdb_transaction_cancel(tdb);
+		if (tdb_transaction_cancel(tdb) != 0) {
+			smb_panic("Cancelling transaction failed");
+		}
 		return res;
 	}
 
@@ -391,7 +471,9 @@ int tdb_trans_delete(struct tdb_context *tdb, TDB_DATA key)
 
 	if ((res = tdb_delete(tdb, key)) != 0) {
 		DEBUG(10, ("tdb_delete failed\n"));
-		tdb_transaction_cancel(tdb);
+		if (tdb_transaction_cancel(tdb) != 0) {
+			smb_panic("Cancelling transaction failed");
+		}
 		return res;
 	}
 
@@ -400,6 +482,60 @@ int tdb_trans_delete(struct tdb_context *tdb, TDB_DATA key)
 	}
 
 	return res;
+}
+
+NTSTATUS map_nt_error_from_tdb(enum TDB_ERROR err)
+{
+	NTSTATUS result = NT_STATUS_INTERNAL_ERROR;
+
+	switch (err) {
+	case TDB_SUCCESS:
+		result = NT_STATUS_OK;
+		break;
+	case TDB_ERR_CORRUPT:
+		result = NT_STATUS_INTERNAL_DB_CORRUPTION;
+		break;
+	case TDB_ERR_IO:
+		result = NT_STATUS_UNEXPECTED_IO_ERROR;
+		break;
+	case TDB_ERR_OOM:
+		result = NT_STATUS_NO_MEMORY;
+		break;
+	case TDB_ERR_EXISTS:
+		result = NT_STATUS_OBJECT_NAME_COLLISION;
+		break;
+
+	case TDB_ERR_LOCK:
+		/*
+		 * TDB_ERR_LOCK is very broad, we could for example
+		 * distinguish between fcntl locks and invalid lock
+		 * sequences. So NT_STATUS_FILE_LOCK_CONFLICT is a
+		 * compromise.
+		 */
+		result = NT_STATUS_FILE_LOCK_CONFLICT;
+		break;
+
+	case TDB_ERR_NOLOCK:
+	case TDB_ERR_LOCK_TIMEOUT:
+		/*
+		 * These two ones in the enum are not actually used
+		 */
+		result = NT_STATUS_FILE_LOCK_CONFLICT;
+		break;
+	case TDB_ERR_NOEXIST:
+		result = NT_STATUS_NOT_FOUND;
+		break;
+	case TDB_ERR_EINVAL:
+		result = NT_STATUS_INVALID_PARAMETER;
+		break;
+	case TDB_ERR_RDONLY:
+		result = NT_STATUS_ACCESS_DENIED;
+		break;
+	case TDB_ERR_NESTING:
+		result = NT_STATUS_INTERNAL_ERROR;
+		break;
+	};
+	return result;
 }
 
 int tdb_data_cmp(TDB_DATA t1, TDB_DATA t2)
@@ -419,114 +555,4 @@ int tdb_data_cmp(TDB_DATA t1, TDB_DATA t2)
 		return t1.dsize - t2.dsize;
 	}
 	return ret;
-}
-
-char *tdb_data_string(TALLOC_CTX *mem_ctx, TDB_DATA d)
-{
-	int len;
-	char *ret = NULL;
-	cbuf *ost = cbuf_new(mem_ctx);
-
-	if (ost == NULL) {
-		return NULL;
-	}
-
-	len = cbuf_printf(ost, "%d:");
-	if (len == -1) {
-		goto done;
-	}
-
-	if (d.dptr == NULL) {
-		len = cbuf_puts(ost, "<NULL>", -1);
-	} else {
-		len = cbuf_print_quoted(ost, (const char*)d.dptr, d.dsize);
-	}
-	if (len == -1) {
-		goto done;
-	}
-
-	cbuf_swapptr(ost, &ret, 0);
-	talloc_steal(mem_ctx, ret);
-
-done:
-	talloc_free(ost);
-	return ret;
-}
-
-static sig_atomic_t gotalarm;
-
-/***************************************************************
- Signal function to tell us we timed out.
-****************************************************************/
-
-static void gotalarm_sig(int signum)
-{
-	gotalarm = 1;
-}
-
-/****************************************************************************
- Lock a chain with timeout (in seconds).
-****************************************************************************/
-
-static int tdb_chainlock_with_timeout_internal( TDB_CONTEXT *tdb, TDB_DATA key, unsigned int timeout, int rw_type)
-{
-	/* Allow tdb_chainlock to be interrupted by an alarm. */
-	int ret;
-	gotalarm = 0;
-
-	if (timeout) {
-		CatchSignal(SIGALRM, gotalarm_sig);
-		tdb_setalarm_sigptr(tdb, &gotalarm);
-		alarm(timeout);
-	}
-
-	if (rw_type == F_RDLCK)
-		ret = tdb_chainlock_read(tdb, key);
-	else
-		ret = tdb_chainlock(tdb, key);
-
-	if (timeout) {
-		alarm(0);
-		tdb_setalarm_sigptr(tdb, NULL);
-		CatchSignal(SIGALRM, SIG_IGN);
-		if (gotalarm && (ret != 0)) {
-			DEBUG(0,("tdb_chainlock_with_timeout_internal: alarm (%u) timed out for key %s in tdb %s\n",
-				timeout, key.dptr, tdb_name(tdb)));
-			/* TODO: If we time out waiting for a lock, it might
-			 * be nice to use F_GETLK to get the pid of the
-			 * process currently holding the lock and print that
-			 * as part of the debugging message. -- mbp */
-			return -1;
-		}
-	}
-
-	return ret == 0 ? 0 : -1;
-}
-
-/****************************************************************************
- Write lock a chain. Return non-zero if timeout or lock failed.
-****************************************************************************/
-
-int tdb_chainlock_with_timeout( TDB_CONTEXT *tdb, TDB_DATA key, unsigned int timeout)
-{
-	return tdb_chainlock_with_timeout_internal(tdb, key, timeout, F_WRLCK);
-}
-
-int tdb_lock_bystring_with_timeout(TDB_CONTEXT *tdb, const char *keyval,
-				   int timeout)
-{
-	TDB_DATA key = string_term_tdb_data(keyval);
-
-	return tdb_chainlock_with_timeout(tdb, key, timeout);
-}
-
-/****************************************************************************
- Read lock a chain by string. Return non-zero if timeout or lock failed.
-****************************************************************************/
-
-int tdb_read_lock_bystring_with_timeout(TDB_CONTEXT *tdb, const char *keyval, unsigned int timeout)
-{
-	TDB_DATA key = string_term_tdb_data(keyval);
-
-	return tdb_chainlock_with_timeout_internal(tdb, key, timeout, F_RDLCK);
 }

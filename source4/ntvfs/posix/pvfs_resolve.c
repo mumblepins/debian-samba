@@ -518,14 +518,13 @@ NTSTATUS pvfs_resolve_name(struct pvfs_state *pvfs,
 
 	(*name)->exists = false;
 	(*name)->stream_exists = false;
-	(*name)->allow_override = false;
 
 	if (!(pvfs->fs_attribs & FS_ATTR_NAMED_STREAMS)) {
 		flags &= ~PVFS_RESOLVE_STREAMS;
 	}
 
 	/* SMB2 doesn't allow a leading slash */
-	if (req->ctx->protocol >= PROTOCOL_SMB2_02 &&
+	if (req->ctx->protocol == PROTOCOL_SMB2 &&
 	    *cifs_name == '\\') {
 		return NT_STATUS_INVALID_PARAMETER;
 	}
@@ -631,7 +630,6 @@ NTSTATUS pvfs_resolve_partial(struct pvfs_state *pvfs, TALLOC_CTX *mem_ctx,
 	(*name)->original_name = talloc_strdup(*name, fname);
 	(*name)->stream_name = NULL;
 	(*name)->stream_id = 0;
-	(*name)->allow_override = false;
 
 	status = pvfs_fill_dos_info(pvfs, *name, flags, -1);
 
@@ -694,7 +692,7 @@ NTSTATUS pvfs_resolve_name_handle(struct pvfs_state *pvfs,
 
 	if (h->have_opendb_entry) {
 		struct odb_lock *lck;
-		const char *name = NULL;
+		char *name = NULL;
 
 		lck = odb_lock(h, h->pvfs->odb_context, &h->odb_locking_key);
 		if (lck == NULL) {
@@ -705,7 +703,7 @@ NTSTATUS pvfs_resolve_name_handle(struct pvfs_state *pvfs,
 			return NT_STATUS_INTERNAL_DB_CORRUPTION;
 		}
 
-		status = odb_get_path(lck, &name);
+		status = odb_get_path(lck, (const char **) &name);
 		if (NT_STATUS_IS_OK(status)) {
 			/*
 			 * This relies an the fact that
@@ -719,7 +717,6 @@ NTSTATUS pvfs_resolve_name_handle(struct pvfs_state *pvfs,
 				const char *new_file;
 				char *new_orig;
 				char *delim;
-				char *full_name = discard_const_p(char, name);
 
 				delim = strrchr(name, '/');
 				if (!delim) {
@@ -748,7 +745,7 @@ NTSTATUS pvfs_resolve_name_handle(struct pvfs_state *pvfs,
 
 				talloc_free(h->name->original_name);
 				talloc_free(h->name->full_name);
-				h->name->full_name = talloc_steal(h->name, full_name);
+				h->name->full_name = talloc_steal(h->name, name);
 				h->name->original_name = new_orig;
 			}
 		}
@@ -818,7 +815,6 @@ NTSTATUS pvfs_resolve_parent(struct pvfs_state *pvfs, TALLOC_CTX *mem_ctx,
 	}
 	(*name)->stream_name = NULL;
 	(*name)->stream_id = 0;
-	(*name)->allow_override = false;
 
 	status = pvfs_fill_dos_info(pvfs, *name, PVFS_RESOLVE_NO_OPENDB, -1);
 

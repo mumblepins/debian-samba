@@ -38,7 +38,7 @@ static enum tree_level level = LEV_SHARE;
 struct smb_name_list {
         struct smb_name_list *prev, *next;
         char *name, *comment;
-        uint32_t server_type;
+        uint32 server_type;
 };
 
 static struct smb_name_list *workgroups, *servers, *shares;
@@ -49,7 +49,7 @@ static void free_name_list(struct smb_name_list *list)
                 DLIST_REMOVE(list, list);
 }
 
-static void add_name(const char *machine_name, uint32_t server_type,
+static void add_name(const char *machine_name, uint32 server_type,
                      const char *comment, void *state)
 {
         struct smb_name_list **name_list = (struct smb_name_list **)state;
@@ -95,32 +95,24 @@ static bool get_workgroups(struct user_auth_info *user_info)
 		return false;
 	}
 
-	if (!use_bcast && !find_master_ip(lp_workgroup(), &server_ss)) {
-		DEBUG(4,("Unable to find master browser for workgroup %s, "
-			 "falling back to broadcast\n",
-			 master_workgroup));
-		use_bcast = true;
-	}
-
-	if (!use_bcast) {
-		char addr[INET6_ADDRSTRLEN];
-
-		print_sockaddr(addr, sizeof(addr), &server_ss);
-
-		cli = get_ipc_connect(addr, &server_ss, user_info);
-		if (cli == NULL) {
-			return false;
+        if (!use_bcast && !find_master_ip(lp_workgroup(), &server_ss)) {
+                DEBUG(4, ("Unable to find master browser for workgroup %s, falling back to broadcast\n", 
+			  master_workgroup));
+				use_bcast = True;
+		} else if(!use_bcast) {
+			char addr[INET6_ADDRSTRLEN];
+			print_sockaddr(addr, sizeof(addr), &server_ss);
+			if (!(cli = get_ipc_connect(addr, &server_ss, user_info)))
+				return False;
 		}
-	} else {
-		cli = get_ipc_connect_master_ip_bcast(talloc_tos(),
-						      user_info,
-						      &master_workgroup);
-		if (cli == NULL) {
+
+		if (!(cli = get_ipc_connect_master_ip_bcast(talloc_tos(),
+							user_info,
+							&master_workgroup))) {
 			DEBUG(4, ("Unable to find master browser by "
 				  "broadcast\n"));
-			return false;
-		}
-	}
+			return False;
+        }
 
         if (!cli_NetServerEnum(cli, master_workgroup,
                                SV_TYPE_DOMAIN_ENUM, add_name, &workgroups))
@@ -157,7 +149,7 @@ static bool get_servers(char *workgroup, struct user_auth_info *user_info)
 }
 
 static bool get_rpc_shares(struct cli_state *cli,
-			   void (*fn)(const char *, uint32_t, const char *, void *),
+			   void (*fn)(const char *, uint32, const char *, void *),
 			   void *state)
 {
 	NTSTATUS status;
@@ -177,7 +169,7 @@ static bool get_rpc_shares(struct cli_state *cli,
 		return False;
 	}
 
-	status = cli_rpc_pipe_open_noauth(cli, &ndr_table_srvsvc,
+	status = cli_rpc_pipe_open_noauth(cli, &ndr_table_srvsvc.syntax_id,
 					  &pipe_hnd);
 
 	if (!NT_STATUS_IS_OK(status)) {
@@ -209,7 +201,7 @@ static bool get_rpc_shares(struct cli_state *cli,
 		return False;
 	}
 
-	for (i=0; i < info_ctr.ctr.ctr1->count; i++) {
+	for (i=0; i<total_entries; i++) {
 		struct srvsvc_NetShareInfo1 info = info_ctr.ctr.ctr1->array[i];
 		fn(info.name, info.type, info.comment, state);
 	}
@@ -285,10 +277,9 @@ static bool print_tree(struct user_auth_info *user_info)
 /****************************************************************************
   main program
 ****************************************************************************/
-int main(int argc, char *argv[])
+ int main(int argc,char *argv[])
 {
 	TALLOC_CTX *frame = talloc_stackframe();
-	const char **argv_const = discard_const_p(const char *, argv);
 	struct user_auth_info *auth_info;
 	struct poptOption long_options[] = {
 		POPT_AUTOHELP
@@ -302,7 +293,7 @@ int main(int argc, char *argv[])
 	poptContext pc;
 
 	/* Initialise samba stuff */
-	smb_init_locale();
+	load_case_tables();
 
 	setlinebuf(stdout);
 
@@ -314,13 +305,12 @@ int main(int argc, char *argv[])
 	}
 	popt_common_set_auth_info(auth_info);
 
-	pc = poptGetContext("smbtree", argc, argv_const, long_options,
-			    POPT_CONTEXT_KEEP_FIRST);
+	pc = poptGetContext("smbtree", argc, (const char **)argv, long_options,
+						POPT_CONTEXT_KEEP_FIRST);
 	while(poptGetNextOpt(pc) != -1);
 	poptFreeContext(pc);
-	popt_burn_cmdline_password(argc, argv);
 
-	lp_load_global(get_dyn_CONFIGFILE());
+	lp_load(get_dyn_CONFIGFILE(),True,False,False,True);
 	load_interfaces();
 
 	/* Parse command line args */

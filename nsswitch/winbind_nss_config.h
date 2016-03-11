@@ -27,6 +27,15 @@
 #undef SIZEOF_LONG
 #endif
 
+/*
+ * we don't need socket wrapper
+ * nor nss wrapper here and we don't
+ * want to depend on swrap_close()
+ * so we better disable both
+ */
+#define SOCKET_WRAPPER_NOT_REPLACE
+#define NSS_WRAPPER_NOT_REPLACE
+
 /* Include header files from data in config.h file */
 
 #ifndef NO_CONFIG_H
@@ -45,13 +54,7 @@
 #ifndef FSTRING_LEN
 #define FSTRING_LEN 256
 typedef char fstring[FSTRING_LEN];
-#ifndef fstrcpy
-#define fstrcpy(d,s) \
-do { \
-        const char *_fstrcpy_src = (const char *)(s); \
-        strlcpy((d),_fstrcpy_src ? _fstrcpy_src : "",sizeof(fstring)); \
-} while (0)
-#endif
+#define fstrcpy(d,s) safe_strcpy((d),(s),sizeof(fstring)-1)
 #endif
 
 /* Some systems (SCO) treat UNIX domain sockets as FIFOs */

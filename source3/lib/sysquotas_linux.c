@@ -39,7 +39,7 @@
 static int sys_get_linux_v1_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
-	uint32_t qflags = 0;
+	uint32 qflags = 0;
 	struct v1_kern_dqblk D;
 	uint64_t bsize = (uint64_t)QUOTABLOCK_SIZE;
 
@@ -107,6 +107,8 @@ static int sys_get_linux_v1_quota(const char *path, const char *bdev, enum SMB_Q
 static int sys_set_linux_v1_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
+	uint32 qflags = 0;
+	uint32 oldqflags = 0;
 	struct v1_kern_dqblk D;
 	uint64_t bsize = (uint64_t)QUOTABLOCK_SIZE;
 
@@ -123,6 +125,8 @@ static int sys_set_linux_v1_quota(const char *path, const char *bdev, enum SMB_Q
 		D.dqb_ihardlimit = (dp->ihardlimit*dp->bsize)/bsize;
 		D.dqb_isoftlimit = (dp->isoftlimit*dp->bsize)/bsize;
 	}
+
+	qflags = dp->qflags;
 
 	switch (qtype) {
 		case SMB_USER_QUOTA_TYPE:
@@ -142,7 +146,7 @@ static int sys_set_linux_v1_quota(const char *path, const char *bdev, enum SMB_Q
 				path, bdev, (unsigned)id.uid));
 
 			if ((ret = quotactl(QCMD(Q_V1_GETQUOTA,USRQUOTA), bdev, id.uid, (caddr_t)&D))==0) {
-				dp->qflags |= QUOTAS_DENY_DISK;
+				oldqflags |= QUOTAS_DENY_DISK;
 			}
 
 			break;
@@ -151,7 +155,7 @@ static int sys_set_linux_v1_quota(const char *path, const char *bdev, enum SMB_Q
 				path, bdev, (unsigned)id.gid));
 
 			if ((ret = quotactl(QCMD(Q_V1_GETQUOTA,GRPQUOTA), bdev, id.gid, (caddr_t)&D))==0) {
-				dp->qflags |= QUOTAS_DENY_DISK;
+				oldqflags |= QUOTAS_DENY_DISK;
 			}
 
 			break;
@@ -169,7 +173,7 @@ static int sys_set_linux_v1_quota(const char *path, const char *bdev, enum SMB_Q
 static int sys_get_linux_v2_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
-	uint32_t qflags = 0;
+	uint32 qflags = 0;
 	struct v2_kern_dqblk D;
 	uint64_t bsize = (uint64_t)QUOTABLOCK_SIZE;
 
@@ -237,6 +241,8 @@ static int sys_get_linux_v2_quota(const char *path, const char *bdev, enum SMB_Q
 static int sys_set_linux_v2_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
+	uint32 qflags = 0;
+	uint32 oldqflags = 0;
 	struct v2_kern_dqblk D;
 	uint64_t bsize = (uint64_t)QUOTABLOCK_SIZE;
 
@@ -253,6 +259,8 @@ static int sys_set_linux_v2_quota(const char *path, const char *bdev, enum SMB_Q
 		D.dqb_ihardlimit = (dp->ihardlimit*dp->bsize)/bsize;
 		D.dqb_isoftlimit = (dp->isoftlimit*dp->bsize)/bsize;
 	}
+
+	qflags = dp->qflags;
 
 	switch (qtype) {
 		case SMB_USER_QUOTA_TYPE:
@@ -272,7 +280,7 @@ static int sys_set_linux_v2_quota(const char *path, const char *bdev, enum SMB_Q
 				path, bdev, (unsigned)id.uid));
 
 			if ((ret = quotactl(QCMD(Q_V2_GETQUOTA,USRQUOTA), bdev, id.uid, (caddr_t)&D))==0) {
-				dp->qflags |= QUOTAS_DENY_DISK;
+				oldqflags |= QUOTAS_DENY_DISK;
 			}
 
 			break;
@@ -281,7 +289,7 @@ static int sys_set_linux_v2_quota(const char *path, const char *bdev, enum SMB_Q
 				path, bdev, (unsigned)id.gid));
 
 			if ((ret = quotactl(QCMD(Q_V2_GETQUOTA,GRPQUOTA), bdev, id.gid, (caddr_t)&D))==0) {
-				dp->qflags |= QUOTAS_DENY_DISK;
+				oldqflags |= QUOTAS_DENY_DISK;
 			}
 
 			break;
@@ -299,7 +307,7 @@ static int sys_set_linux_v2_quota(const char *path, const char *bdev, enum SMB_Q
 static int sys_get_linux_gen_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
-	uint32_t qflags = 0;
+	uint32 qflags = 0;
 	struct if_dqblk D;
 	uint64_t bsize = (uint64_t)QUOTABLOCK_SIZE;
 
@@ -367,6 +375,8 @@ static int sys_get_linux_gen_quota(const char *path, const char *bdev, enum SMB_
 static int sys_set_linux_gen_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
+	uint32 qflags = 0;
+	uint32 oldqflags = 0;
 	struct if_dqblk D;
 	uint64_t bsize = (uint64_t)QUOTABLOCK_SIZE;
 
@@ -384,6 +394,8 @@ static int sys_set_linux_gen_quota(const char *path, const char *bdev, enum SMB_
 		D.dqb_isoftlimit = (dp->isoftlimit*dp->bsize)/bsize;
 	}
 	D.dqb_valid = QIF_LIMITS;
+
+	qflags = dp->qflags;
 
 	switch (qtype) {
 		case SMB_USER_QUOTA_TYPE:
@@ -403,7 +415,7 @@ static int sys_set_linux_gen_quota(const char *path, const char *bdev, enum SMB_
 				path, bdev, (unsigned)id.uid));
 
 			if ((ret = quotactl(QCMD(Q_GETQUOTA,USRQUOTA), bdev, id.uid, (caddr_t)&D))==0) {
-				dp->qflags |= QUOTAS_DENY_DISK;
+				oldqflags |= QUOTAS_DENY_DISK;
 			}
 
 			break;
@@ -412,7 +424,7 @@ static int sys_set_linux_gen_quota(const char *path, const char *bdev, enum SMB_
 				path, bdev, (unsigned)id.gid));
 
 			if ((ret = quotactl(QCMD(Q_GETQUOTA,GRPQUOTA), bdev, id.gid, (caddr_t)&D))==0) {
-				dp->qflags |= QUOTAS_DENY_DISK;
+				oldqflags |= QUOTAS_DENY_DISK;
 			}
 
 			break;
@@ -492,7 +504,7 @@ int sys_get_vfs_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qt
 int sys_set_vfs_quota(const char *path, const char *bdev, enum SMB_QUOTA_TYPE qtype, unid_t id, SMB_DISK_QUOTA *dp)
 {
 	int ret = -1;
-	uint32_t oldqflags = 0;
+	uint32 oldqflags = 0;
 
 	if (!path||!bdev||!dp)
 		smb_panic("sys_set_vfs_quota: called with NULL pointer");

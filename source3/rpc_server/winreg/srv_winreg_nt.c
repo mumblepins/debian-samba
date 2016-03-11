@@ -30,7 +30,6 @@
 #include "rpc_misc.h"
 #include "auth.h"
 #include "lib/privileges.h"
-#include "libcli/security/secdesc.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_RPC_SRV
@@ -411,7 +410,6 @@ WERROR _winreg_EnumKey(struct pipes_struct *p,
 {
 	WERROR err = WERR_OK;
 	struct registry_key *key = find_regkey_by_hnd( p, r->in.handle );
-	char *name;
 
 	if ( !key )
 		return WERR_BADFID;
@@ -421,12 +419,11 @@ WERROR _winreg_EnumKey(struct pipes_struct *p,
 
 	DEBUG(8,("_winreg_EnumKey: enumerating key [%s]\n", key->key->name));
 
-	err = reg_enumkey(p->mem_ctx, key, r->in.enum_index, &name,
+	err = reg_enumkey(p->mem_ctx, key, r->in.enum_index, (char **)&r->out.name->name,
 			  r->out.last_changed_time);
 	if (!W_ERROR_IS_OK(err)) {
 		return err;
 	}
-	r->out.name->name = name;
 	r->out.keyclass->name = "";
 	return WERR_OK;
 }
@@ -530,7 +527,7 @@ WERROR _winreg_InitiateSystemShutdownEx(struct pipes_struct *p,
 	int ret = -1;
 	bool can_shutdown = false;
 
-	shutdown_script = lp_shutdown_script(p->mem_ctx);
+	shutdown_script = talloc_strdup(p->mem_ctx, lp_shutdown_script());
 	if (!shutdown_script) {
 		return WERR_NOMEM;
 	}
@@ -544,7 +541,7 @@ WERROR _winreg_InitiateSystemShutdownEx(struct pipes_struct *p,
 		if ( (msg = talloc_strdup(p->mem_ctx, r->in.message->string )) == NULL ) {
 			return WERR_NOMEM;
 		}
-		chkmsg = talloc_array(p->mem_ctx, char, strlen(msg)+1);
+		chkmsg = TALLOC_ARRAY(p->mem_ctx, char, strlen(msg)+1);
 		if (!chkmsg) {
 			return WERR_NOMEM;
 		}
@@ -612,7 +609,7 @@ WERROR _winreg_InitiateSystemShutdownEx(struct pipes_struct *p,
 WERROR _winreg_AbortSystemShutdown(struct pipes_struct *p,
 				   struct winreg_AbortSystemShutdown *r)
 {
-	const char *abort_shutdown_script = lp_abort_shutdown_script(talloc_tos());
+	const char *abort_shutdown_script = lp_abort_shutdown_script();
 	int ret = -1;
 	bool can_shutdown = false;
 
@@ -659,11 +656,11 @@ static int validate_reg_filename(TALLOC_CTX *ctx, char **pp_fname )
 	/* has to exist within a valid file share */
 
 	for (snum=0; snum<num_services; snum++) {
-		if (!lp_snum_ok(snum) || lp_printable(snum)) {
+		if (!lp_snum_ok(snum) || lp_print_ok(snum)) {
 			continue;
 		}
 
-		share_path = lp_path(talloc_tos(), snum);
+		share_path = lp_pathname(snum);
 
 		/* make sure we have a path (e.g. [homes] ) */
 		if (strlen(share_path) == 0) {
@@ -714,7 +711,7 @@ WERROR _winreg_RestoreKey(struct pipes_struct *p,
 	}
 
 	DEBUG(2,("_winreg_RestoreKey: Restoring [%s] from %s in share %s\n",
-		 regkey->key->name, fname, lp_servicename(talloc_tos(), snum) ));
+		 regkey->key->name, fname, lp_servicename(snum) ));
 
 	return reg_restorekey(regkey, fname);
 }
@@ -748,7 +745,7 @@ WERROR _winreg_SaveKey(struct pipes_struct *p,
 		return WERR_OBJECT_PATH_INVALID;
 
 	DEBUG(2,("_winreg_SaveKey: Saving [%s] to %s in share %s\n",
-		 regkey->key->name, fname, lp_servicename(talloc_tos(), snum) ));
+		 regkey->key->name, fname, lp_servicename(snum) ));
 
 	return reg_savekey(regkey, fname);
 }
@@ -763,7 +760,7 @@ WERROR _winreg_SaveKeyEx(struct pipes_struct *p,
 	/* fill in your code here if you think this call should
 	   do anything */
 
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return WERR_NOT_SUPPORTED;
 }
 
@@ -866,7 +863,7 @@ WERROR _winreg_GetKeySecurity(struct pipes_struct *p,
 	struct registry_key *key = find_regkey_by_hnd(p, r->in.handle);
 	WERROR err = WERR_OK;
 	struct security_descriptor *secdesc = NULL;
-	uint8_t *data = NULL;
+	uint8 *data = NULL;
 	size_t len = 0;
 
 	if ( !key )
@@ -951,7 +948,7 @@ WERROR _winreg_UnLoadKey(struct pipes_struct *p,
 	/* fill in your code here if you think this call should
 	   do anything */
 
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return WERR_NOT_SUPPORTED;
 }
 
@@ -965,7 +962,7 @@ WERROR _winreg_ReplaceKey(struct pipes_struct *p,
 	/* fill in your code here if you think this call should
 	   do anything */
 
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return WERR_NOT_SUPPORTED;
 }
 
@@ -979,7 +976,7 @@ WERROR _winreg_LoadKey(struct pipes_struct *p,
 	/* fill in your code here if you think this call should
 	   do anything */
 
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return WERR_NOT_SUPPORTED;
 }
 
@@ -1142,6 +1139,6 @@ WERROR _winreg_DeleteKeyEx(struct pipes_struct *p,
 	/* fill in your code here if you think this call should
 	   do anything */
 
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return WERR_NOT_SUPPORTED;
 }

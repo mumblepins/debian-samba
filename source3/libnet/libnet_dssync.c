@@ -54,7 +54,7 @@ NTSTATUS libnet_dssync_init_context(TALLOC_CTX *mem_ctx,
 {
 	struct dssync_context *ctx;
 
-	ctx = talloc_zero(mem_ctx, struct dssync_context);
+	ctx = TALLOC_ZERO_P(mem_ctx, struct dssync_context);
 	NT_STATUS_HAVE_NO_MEMORY(ctx);
 
 	talloc_set_destructor(ctx, libnet_dssync_free_context);
@@ -195,19 +195,9 @@ static NTSTATUS libnet_dssync_bind(TALLOC_CTX *mem_ctx,
 		ctx->remote_info28.repl_epoch		= 0;
 		break;
 	}
-	case 28: {
+	case 28:
 		ctx->remote_info28 = bind_info.info.info28;
 		break;
-	}
-	case 32: {
-		struct drsuapi_DsBindInfo32 *info32;
-		info32 = &bind_info.info.info32;
-		ctx->remote_info28.site_guid		= info32->site_guid;
-		ctx->remote_info28.supported_extensions	= info32->supported_extensions;
-		ctx->remote_info28.pid			= info32->pid;
-		ctx->remote_info28.repl_epoch		= info32->repl_epoch;
-		break;
-	}
 	case 48: {
 		struct drsuapi_DsBindInfo48 *info48;
 		info48 = &bind_info.info.info48;
@@ -215,15 +205,6 @@ static NTSTATUS libnet_dssync_bind(TALLOC_CTX *mem_ctx,
 		ctx->remote_info28.supported_extensions	= info48->supported_extensions;
 		ctx->remote_info28.pid			= info48->pid;
 		ctx->remote_info28.repl_epoch		= info48->repl_epoch;
-		break;
-	}
-	case 52: {
-		struct drsuapi_DsBindInfo52 *info52;
-		info52 = &bind_info.info.info52;
-		ctx->remote_info28.site_guid		= info52->site_guid;
-		ctx->remote_info28.supported_extensions	= info52->supported_extensions;
-		ctx->remote_info28.pid			= info52->pid;
-		ctx->remote_info28.repl_epoch		= info52->repl_epoch;
 		break;
 	}
 	default:
@@ -358,7 +339,7 @@ static NTSTATUS libnet_dssync_build_request(TALLOC_CTX *mem_ctx,
 		level = 5;
 	}
 
-	nc = talloc_zero(mem_ctx, struct drsuapi_DsReplicaObjectIdentifier);
+	nc = TALLOC_ZERO_P(mem_ctx, struct drsuapi_DsReplicaObjectIdentifier);
 	if (!nc) {
 		status = NT_STATUS_NO_MEMORY;
 		goto fail;
@@ -370,7 +351,7 @@ static NTSTATUS libnet_dssync_build_request(TALLOC_CTX *mem_ctx,
 	if (!ctx->single_object_replication &&
 	    !ctx->force_full_replication && utdv)
 	{
-		cursors = talloc_zero(mem_ctx,
+		cursors = TALLOC_ZERO_P(mem_ctx,
 					 struct drsuapi_DsReplicaCursorCtrEx);
 		if (!cursors) {
 			status = NT_STATUS_NO_MEMORY;
@@ -461,7 +442,7 @@ static NTSTATUS libnet_dssync_getncchanges(TALLOC_CTX *mem_ctx,
 	struct dcerpc_binding_handle *b = ctx->cli->binding_handle;
 
 	if (!ctx->single_object_replication) {
-		new_utdv = talloc_zero(mem_ctx, struct replUpToDateVectorBlob);
+		new_utdv = TALLOC_ZERO_P(mem_ctx, struct replUpToDateVectorBlob);
 		if (!new_utdv) {
 			status = NT_STATUS_NO_MEMORY;
 			goto out;
@@ -671,11 +652,9 @@ static NTSTATUS libnet_dssync_process(TALLOC_CTX *mem_ctx,
 		status = libnet_dssync_getncchanges(mem_ctx, ctx, level, &req,
 						    &pnew_utdv);
 		if (!NT_STATUS_IS_OK(status)) {
-			if (!ctx->error_message) {
-				ctx->error_message = talloc_asprintf(ctx,
-					"Failed to call DsGetNCCHanges: %s",
-					nt_errstr(status));
-			}
+			ctx->error_message = talloc_asprintf(ctx,
+				"Failed to call DsGetNCCHanges: %s",
+				nt_errstr(status));
 			goto out;
 		}
 	}

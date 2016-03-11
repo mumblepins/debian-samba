@@ -21,7 +21,7 @@
 */
 
 #include "includes.h"
-#include "../lib/util/memcache.h"
+#include "memcache.h"
 #include "smbd/smbd.h"
 #include "messages.h"
 #include "smbprofile.h"
@@ -349,8 +349,8 @@ bool stat_cache_lookup(connection_struct *conn,
  Tell all smbd's to delete an entry.
 **************************************************************************/
 
-void smbd_send_stat_cache_delete_message(struct messaging_context *msg_ctx,
-					 const char *name)
+void send_stat_cache_delete_message(struct messaging_context *msg_ctx,
+				    const char *name)
 {
 #ifdef DEVELOPER
 	message_send_all(msg_ctx,
@@ -386,7 +386,7 @@ void stat_cache_delete(const char *name)
  JRA. Use a djb-algorithm hash for speed.
 ***************************************************************/
 
-unsigned int fast_string_hash(TDB_DATA *key)
+unsigned int fast_string_hash(struct TDB_DATA *key)
 {
         unsigned int n = 0;
         const char *p;

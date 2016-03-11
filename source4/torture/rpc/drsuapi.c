@@ -774,9 +774,7 @@ bool torture_rpc_drsuapi_get_dcinfo(struct torture_context *torture,
  */
 bool torture_drsuapi_tcase_setup_common(struct torture_context *tctx, struct DsPrivate *priv)
 {
-	NTSTATUS status;
-	int rnd = rand() % 1000;
-	char *name = talloc_asprintf(tctx, "%s%d", TEST_MACHINE_NAME, rnd);
+        NTSTATUS status;
 	struct cli_credentials *machine_credentials;
 
 	torture_assert(tctx, priv, "Invalid argument");
@@ -787,8 +785,8 @@ bool torture_drsuapi_tcase_setup_common(struct torture_context *tctx, struct DsP
 					&ndr_table_drsuapi);
 	torture_assert(tctx, NT_STATUS_IS_OK(status), "Unable to connect to DRSUAPI pipe");
 
-	torture_comment(tctx, "About to join domain with name %s\n", name);
-	priv->join = torture_join_domain(tctx, name, ACB_SVRTRUST,
+	torture_comment(tctx, "About to join domain\n");
+	priv->join = torture_join_domain(tctx, TEST_MACHINE_NAME, ACB_SVRTRUST,
 					 &machine_credentials);
 	torture_assert(tctx, priv->join, "Failed to join as BDC");
 
@@ -850,6 +848,7 @@ void torture_rpc_drsuapi_tcase(struct torture_suite *suite)
 {
 	typedef bool (*run_func) (struct torture_context *test, void *tcase_data);
 
+	struct torture_test *test;
 	struct torture_tcase *tcase = torture_suite_add_tcase(suite, "drsuapi");
 
 	torture_tcase_set_fixture(tcase, torture_drsuapi_tcase_setup,
@@ -859,17 +858,17 @@ void torture_rpc_drsuapi_tcase(struct torture_suite *suite)
 	test = torture_tcase_add_simple_test(tcase, "QuerySitesByCost", (run_func)test_QuerySitesByCost);
 #endif
 
-	torture_tcase_add_simple_test(tcase, "DsGetDomainControllerInfo", (run_func)test_DsGetDomainControllerInfo);
+	test = torture_tcase_add_simple_test(tcase, "DsGetDomainControllerInfo", (run_func)test_DsGetDomainControllerInfo);
 
-	torture_tcase_add_simple_test(tcase, "DsCrackNames", (run_func)test_DsCrackNames);
+	test = torture_tcase_add_simple_test(tcase, "DsCrackNames", (run_func)test_DsCrackNames);
 
-	torture_tcase_add_simple_test(tcase, "DsWriteAccountSpn", (run_func)test_DsWriteAccountSpn);
+	test = torture_tcase_add_simple_test(tcase, "DsWriteAccountSpn", (run_func)test_DsWriteAccountSpn);
 
-	torture_tcase_add_simple_test(tcase, "DsReplicaGetInfo", (run_func)test_DsReplicaGetInfo);
+	test = torture_tcase_add_simple_test(tcase, "DsReplicaGetInfo", (run_func)test_DsReplicaGetInfo);
 
-	torture_tcase_add_simple_test(tcase, "DsReplicaSync", (run_func)test_DsReplicaSync);
+	test = torture_tcase_add_simple_test(tcase, "DsReplicaSync", (run_func)test_DsReplicaSync);
 
-	torture_tcase_add_simple_test(tcase, "DsReplicaUpdateRefs", (run_func)test_DsReplicaUpdateRefs);
+	test = torture_tcase_add_simple_test(tcase, "DsReplicaUpdateRefs", (run_func)test_DsReplicaUpdateRefs);
 
-	torture_tcase_add_simple_test(tcase, "DsGetNCChanges", (run_func)test_DsGetNCChanges);
+	test = torture_tcase_add_simple_test(tcase, "DsGetNCChanges", (run_func)test_DsGetNCChanges);
 }

@@ -1,10 +1,10 @@
-/*
+/* 
    Unix SMB/Netbios implementation.
    SMB client library implementation
    Copyright (C) Andrew Tridgell 1998
    Copyright (C) Richard Sharpe 2000, 2002
    Copyright (C) John Terpstra 2000
-   Copyright (C) Tom Jansen (Ninja ISD) 2002
+   Copyright (C) Tom Jansen (Ninja ISD) 2002 
    Copyright (C) Derrell Lipman 2003-2008
    Copyright (C) Jeremy Allison 2007, 2008
    Copyright (C) SATOH Fumiyasu <fumiyas@osstech.co.jp> 2009.
@@ -32,46 +32,29 @@
 #include "rpc_client/cli_lsarpc.h"
 #include "libcli/security/security.h"
 #include "libsmb/nmblib.h"
-#include "../libcli/smb/smbXcli_base.h"
 
-/*
+/* 
  * Check a server for being alive and well.
- * returns 0 if the server is in shape. Returns 1 on error
- *
+ * returns 0 if the server is in shape. Returns 1 on error 
+ * 
  * Also useable outside libsmbclient to enable external cache
  * to do some checks too.
  */
 int
 SMBC_check_server(SMBCCTX * context,
-                  SMBCSRV * server)
+                  SMBCSRV * server) 
 {
-	time_t now;
+        socklen_t size;
+        struct sockaddr addr;
 
-	if (!cli_state_is_connected(server->cli)) {
-		return 1;
-	}
-
-	now = time_mono(NULL);
-
-	if (server->last_echo_time == (time_t)0 ||
-			now > server->last_echo_time +
-				(server->cli->timeout/1000)) {
-		unsigned char data[16] = {0};
-		NTSTATUS status = cli_echo(server->cli,
-					1,
-					data_blob_const(data, sizeof(data)));
-		if (!NT_STATUS_IS_OK(status)) {
-			return 1;
-		}
-		server->last_echo_time = now;
-	}
-	return 0;
+        size = sizeof(addr);
+        return (getpeername(server->cli->fd, &addr, &size) == -1);
 }
 
-/*
+/* 
  * Remove a server from the cached server list it's unused.
  * On success, 0 is returned. 1 is returned if the server could not be removed.
- *
+ * 
  * Also useable outside libsmbclient
  */
 int
@@ -112,7 +95,7 @@ SMBC_remove_unused_server(SMBCCTX * context,
 /****************************************************************
  * Call the auth_fn with fixed size (fstring) buffers.
  ***************************************************************/
-static void
+void
 SMBC_call_auth_fn(TALLOC_CTX *ctx,
                   SMBCCTX *context,
                   const char *server,
@@ -215,7 +198,7 @@ check_server_cache:
                          * servers in the cache
                          */
 			if (smbc_getFunctionRemoveUnusedServer(context)(context,
-                                                                        srv)) {
+                                                                        srv)) { 
                                 /*
                                  * We could not remove the server completely,
                                  * remove it from the cache so we will not get
@@ -255,7 +238,6 @@ SMBC_server_internal(TALLOC_CTX *ctx,
             SMBCCTX *context,
             bool connect_if_not_found,
             const char *server,
-            uint16_t port,
             const char *share,
             char **pp_workgroup,
             char **pp_username,
@@ -264,17 +246,20 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 {
 	SMBCSRV *srv=NULL;
 	char *workgroup = NULL;
-	struct cli_state *c = NULL;
+	struct cli_state *c;
+	struct nmb_name called, calling;
 	const char *server_n = server;
+	struct sockaddr_storage ss;
+	int tried_reverse = 0;
+        int port_try_first;
+        int port_try_next;
         int is_ipc = (share != NULL && strcmp(share, "IPC$") == 0);
-	uint32_t fs_attrs = 0;
+	uint32 fs_attrs = 0;
         const char *username_used;
  	NTSTATUS status;
 	char *newserver, *newshare;
-	int flags = 0;
-	struct smbXcli_tcon *tcon = NULL;
-	int signing_state = SMB_SIGNING_DEFAULT;
 
+	zero_sockaddr(&ss);
 	ZERO_STRUCT(c);
 	*in_cache = false;
 
@@ -292,7 +277,7 @@ SMBC_server_internal(TALLOC_CTX *ctx,
          * server...
          */
         if (srv &&
-	    share != NULL && *share != '\0' &&
+            *share != '\0' &&
             smbc_getOptionOneSharePerServer(context)) {
 
                 /*
@@ -310,10 +295,10 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 		 * i.e., a normal share or a referred share from
 		 * 'msdfs proxy' share.
 		 */
-                if (!cli_state_has_tcon(srv->cli)) {
+                if (srv->cli->cnum == (uint16) -1) {
                         /* Ensure we have accurate auth info */
 			SMBC_call_auth_fn(ctx, context,
-					  smbXcli_conn_remote_name(srv->cli->conn),
+					  srv->cli->desthost,
 					  srv->cli->share,
                                           pp_workgroup,
                                           pp_username,
@@ -334,11 +319,9 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 			 * tid.
 			 */
 
-			status = cli_tree_connect(srv->cli,
-						  srv->cli->share,
-						  "?????",
-						  *pp_password,
-						  strlen(*pp_password)+1);
+			status = cli_tcon_andx(srv->cli, srv->cli->share, "?????",
+					       *pp_password,
+					       strlen(*pp_password)+1);
 			if (!NT_STATUS_IS_OK(status)) {
                                 errno = map_errno_from_nt_status(status);
                                 cli_shutdown(srv->cli);
@@ -352,15 +335,10 @@ SMBC_server_internal(TALLOC_CTX *ctx,
                         if (is_ipc) {
                                 DEBUG(4,
                                       ("IPC$ so ignore case sensitivity\n"));
-                                status = NT_STATUS_OK;
-                        } else {
-                                status = cli_get_fs_attr_info(c, &fs_attrs);
-                        }
-
-                        if (!NT_STATUS_IS_OK(status)) {
+                        } else if (!NT_STATUS_IS_OK(cli_get_fs_attr_info(c, &fs_attrs))) {
                                 DEBUG(4, ("Could not retrieve "
                                           "case sensitivity flag: %s.\n",
-                                          nt_errstr(status)));
+                                          cli_errstr(c)));
 
                                 /*
                                  * We can't determine the case sensitivity of
@@ -372,7 +350,7 @@ SMBC_server_internal(TALLOC_CTX *ctx,
                                 } else {
                                         cli_set_case_sensitive(c, False);
                                 }
-                        } else if (!is_ipc) {
+                        } else {
                                 DEBUG(4,
                                       ("Case sensitive: %s\n",
                                        (fs_attrs & FILE_CASE_SENSITIVE_SEARCH
@@ -390,10 +368,7 @@ SMBC_server_internal(TALLOC_CTX *ctx,
                          * server and share
                          */
                         if (srv) {
-				const char *remote_name =
-					smbXcli_conn_remote_name(srv->cli->conn);
-
-				srv->dev = (dev_t)(str_checksum(remote_name) ^
+                                srv->dev = (dev_t)(str_checksum(srv->cli->desthost) ^
                                                    str_checksum(srv->cli->share));
                         }
                 }
@@ -418,71 +393,110 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 		return NULL;
 	}
 
+	make_nmb_name(&calling, smbc_getNetbiosName(context), 0x0);
+	make_nmb_name(&called , server, 0x20);
+
 	DEBUG(4,("SMBC_server: server_n=[%s] server=[%s]\n", server_n, server));
 
 	DEBUG(4,(" -> server_n=[%s] server=[%s]\n", server_n, server));
 
-	status = NT_STATUS_UNSUCCESSFUL;
+again:
 
-	if (smbc_getOptionUseKerberos(context)) {
-		flags |= CLI_FULL_CONNECTION_USE_KERBEROS;
-	}
+	zero_sockaddr(&ss);
 
-	if (smbc_getOptionFallbackAfterKerberos(context)) {
-		flags |= CLI_FULL_CONNECTION_FALLBACK_AFTER_KERBEROS;
-	}
-
-	if (smbc_getOptionUseCCache(context)) {
-		flags |= CLI_FULL_CONNECTION_USE_CCACHE;
-	}
-
-	if (smbc_getOptionUseNTHash(context)) {
-		flags |= CLI_FULL_CONNECTION_USE_NT_HASH;
-	}
-
-	if (context->internal->smb_encryption_level != SMBC_ENCRYPTLEVEL_NONE) {
-		signing_state = SMB_SIGNING_REQUIRED;
-	}
-
-	if (port == 0) {
-	        if (share == NULL || *share == '\0' || is_ipc) {
-			/*
-			 * Try 139 first for IPC$
-			 */
-			status = cli_connect_nb(server_n, NULL, NBT_SMB_PORT, 0x20,
-					smbc_getNetbiosName(context),
-					signing_state, flags, &c);
-		}
-	}
-
-	if (!NT_STATUS_IS_OK(status)) {
-		/*
-		 * No IPC$ or 139 did not work
-		 */
-		status = cli_connect_nb(server_n, NULL, port, 0x20,
-					smbc_getNetbiosName(context),
-					signing_state, flags, &c);
-	}
-
-	if (!NT_STATUS_IS_OK(status)) {
-		errno = map_errno_from_nt_status(status);
+	/* have to open a new connection */
+	if ((c = cli_initialise()) == NULL) {
+		errno = ENOMEM;
 		return NULL;
 	}
 
-	cli_set_timeout(c, smbc_getTimeout(context));
+        if (smbc_getOptionUseKerberos(context)) {
+		c->use_kerberos = True;
+	}
 
-	status = smbXcli_negprot(c->conn, c->timeout,
-				 lp_client_min_protocol(),
-				 lp_client_max_protocol());
+        if (smbc_getOptionFallbackAfterKerberos(context)) {
+		c->fallback_after_kerberos = True;
+	}
+
+        if (smbc_getOptionUseCCache(context)) {
+		c->use_ccache = True;
+	}
+
+	c->timeout = smbc_getTimeout(context);
+
+        /*
+         * Force use of port 139 for first try if share is $IPC, empty, or
+         * null, so browse lists can work
+         */
+        if (share == NULL || *share == '\0' || is_ipc) {
+                port_try_first = 139;
+                port_try_next = 445;
+        } else {
+                port_try_first = 445;
+                port_try_next = 139;
+        }
+
+        c->port = port_try_first;
+
+	status = cli_connect(c, server_n, &ss);
 	if (!NT_STATUS_IS_OK(status)) {
+
+                /* First connection attempt failed.  Try alternate port. */
+                c->port = port_try_next;
+
+                status = cli_connect(c, server_n, &ss);
+		if (!NT_STATUS_IS_OK(status)) {
+			cli_shutdown(c);
+			errno = ETIMEDOUT;
+			return NULL;
+		}
+	}
+
+	if (!cli_session_request(c, &calling, &called)) {
 		cli_shutdown(c);
+		if (strcmp(called.name, "*SMBSERVER")) {
+			make_nmb_name(&called , "*SMBSERVER", 0x20);
+			goto again;
+		} else {  /* Try one more time, but ensure we don't loop */
+
+			/* Only try this if server is an IP address ... */
+
+			if (is_ipaddress(server) && !tried_reverse) {
+				fstring remote_name;
+				struct sockaddr_storage rem_ss;
+
+				if (!interpret_string_addr(&rem_ss, server,
+                                                           NI_NUMERICHOST)) {
+					DEBUG(4, ("Could not convert IP address "
+                                                  "%s to struct sockaddr_storage\n",
+                                                  server));
+					errno = ETIMEDOUT;
+					return NULL;
+				}
+
+				tried_reverse++; /* Yuck */
+
+				if (name_status_find("*", 0, 0,
+                                                     &rem_ss, remote_name)) {
+					make_nmb_name(&called,
+                                                      remote_name,
+                                                      0x20);
+					goto again;
+				}
+			}
+		}
 		errno = ETIMEDOUT;
 		return NULL;
 	}
 
-	if (smbXcli_conn_protocol(c->conn) >= PROTOCOL_SMB2_02) {
-		/* Ensure we ask for some initial credits. */
-		smb2cli_conn_set_max_credits(c->conn, DEFAULT_SMB2_MAX_CREDITS);
+	DEBUG(4,(" session request ok\n"));
+
+	status = cli_negprot(c);
+
+	if (!NT_STATUS_IS_OK(status)) {
+		cli_shutdown(c);
+		errno = ETIMEDOUT;
+		return NULL;
 	}
 
         username_used = *pp_username;
@@ -509,6 +523,14 @@ SMBC_server_internal(TALLOC_CTX *ctx,
                 }
 	}
 
+	status = cli_init_creds(c, username_used,
+				*pp_workgroup, *pp_password);
+	if (!NT_STATUS_IS_OK(status)) {
+		errno = map_errno_from_nt_status(status);
+		cli_shutdown(c);
+		return NULL;
+	}
+
 	DEBUG(4,(" session setup ok\n"));
 
 	/* here's the fun part....to support 'msdfs proxy' shares
@@ -516,7 +538,7 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	   here before trying to connect to the original share.
 	   cli_check_msdfs_proxy() will fail if it is a normal share. */
 
-	if (smbXcli_conn_dfs_supported(c->conn) &&
+	if ((c->capabilities & CAP_DFS) &&
 			cli_check_msdfs_proxy(ctx, c, share,
 				&newserver, &newshare,
 				/* FIXME: cli_check_msdfs_proxy() does
@@ -528,7 +550,7 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 				*pp_workgroup)) {
 		cli_shutdown(c);
 		srv = SMBC_server_internal(ctx, context, connect_if_not_found,
-				newserver, port, newshare, pp_workgroup,
+				newserver, newshare, pp_workgroup,
 				pp_username, pp_password, in_cache);
 		TALLOC_FREE(newserver);
 		TALLOC_FREE(newshare);
@@ -537,8 +559,8 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 
 	/* must be a normal share */
 
-	status = cli_tree_connect(c, share, "?????", *pp_password,
-				  strlen(*pp_password)+1);
+	status = cli_tcon_andx(c, share, "?????", *pp_password,
+			       strlen(*pp_password)+1);
 	if (!NT_STATUS_IS_OK(status)) {
 		errno = map_errno_from_nt_status(status);
 		cli_shutdown(c);
@@ -547,23 +569,12 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 
 	DEBUG(4,(" tconx ok\n"));
 
-	if (smbXcli_conn_protocol(c->conn) >= PROTOCOL_SMB2_02) {
-		tcon = c->smb2.tcon;
-	} else {
-		tcon = c->smb1.tcon;
-	}
-
         /* Determine if this share supports case sensitivity */
 	if (is_ipc) {
                 DEBUG(4, ("IPC$ so ignore case sensitivity\n"));
-                status = NT_STATUS_OK;
-        } else {
-                status = cli_get_fs_attr_info(c, &fs_attrs);
-        }
-
-        if (!NT_STATUS_IS_OK(status)) {
+        } else if (!NT_STATUS_IS_OK(cli_get_fs_attr_info(c, &fs_attrs))) {
                 DEBUG(4, ("Could not retrieve case sensitivity flag: %s.\n",
-                          nt_errstr(status)));
+                          cli_errstr(c)));
 
                 /*
                  * We can't determine the case sensitivity of the share. We
@@ -575,12 +586,15 @@ SMBC_server_internal(TALLOC_CTX *ctx,
                 } else {
                         cli_set_case_sensitive(c, False);
                 }
-	} else if (!is_ipc) {
+	} else {
                 DEBUG(4, ("Case sensitive: %s\n",
                           (fs_attrs & FILE_CASE_SENSITIVE_SEARCH
                            ? "True"
                            : "False")));
-		smbXcli_tcon_set_fs_attributes(tcon, fs_attrs);
+                cli_set_case_sensitive(c,
+                                       (fs_attrs & FILE_CASE_SENSITIVE_SEARCH
+                                        ? True
+                                        : False));
         }
 
 	if (context->internal->smb_encryption_level) {
@@ -620,11 +634,10 @@ SMBC_server_internal(TALLOC_CTX *ctx,
 	}
 
 	ZERO_STRUCTP(srv);
-	DLIST_ADD(srv->cli, c);
+	srv->cli = c;
 	srv->dev = (dev_t)(str_checksum(server) ^ str_checksum(share));
         srv->no_pathinfo = False;
         srv->no_pathinfo2 = False;
-	srv->no_pathinfo3 = False;
         srv->no_nt_session = False;
 
 done:
@@ -634,10 +647,6 @@ done:
 		workgroup = *pp_workgroup;
 	}
 	if(!workgroup) {
-		if (c != NULL) {
-			cli_shutdown(c);
-		}
-		SAFE_FREE(srv);
 		return NULL;
 	}
 
@@ -655,7 +664,6 @@ SMBC_server(TALLOC_CTX *ctx,
 		SMBCCTX *context,
 		bool connect_if_not_found,
 		const char *server,
-		uint16_t port,
 		const char *share,
 		char **pp_workgroup,
 		char **pp_username,
@@ -665,7 +673,7 @@ SMBC_server(TALLOC_CTX *ctx,
 	bool in_cache = false;
 
 	srv = SMBC_server_internal(ctx, context, connect_if_not_found,
-			server, port, share, pp_workgroup,
+			server, share, pp_workgroup,
 			pp_username, pp_password, &in_cache);
 
 	if (!srv) {
@@ -707,13 +715,13 @@ SMBCSRV *
 SMBC_attr_server(TALLOC_CTX *ctx,
                  SMBCCTX *context,
                  const char *server,
-                 uint16_t port,
                  const char *share,
                  char **pp_workgroup,
                  char **pp_username,
                  char **pp_password)
 {
         int flags;
+        struct sockaddr_storage ss;
 	struct cli_state *ipc_cli = NULL;
 	struct rpc_pipe_client *pipe_hnd = NULL;
         NTSTATUS nt_status;
@@ -726,12 +734,12 @@ SMBC_attr_server(TALLOC_CTX *ctx,
 	 * i.e., a normal share or a referred share from
 	 * 'msdfs proxy' share.
 	 */
-	srv = SMBC_server(ctx, context, true, server, port, share,
+	srv = SMBC_server(ctx, context, true, server, share,
 			pp_workgroup, pp_username, pp_password);
 	if (!srv) {
 		return NULL;
 	}
-	server = smbXcli_conn_remote_name(srv->cli->conn);
+	server = srv->cli->desthost;
 	share = srv->cli->share;
 
         /*
@@ -742,7 +750,6 @@ SMBC_attr_server(TALLOC_CTX *ctx,
         ipc_srv = SMBC_find_server(ctx, context, server, "*IPC$",
                                    pp_workgroup, pp_username, pp_password);
         if (!ipc_srv) {
-		int signing_state = SMB_SIGNING_DEFAULT;
 
                 /* We didn't find a cached connection.  Get the password */
 		if (!*pp_password || (*pp_password)[0] == '\0') {
@@ -764,18 +771,16 @@ SMBC_attr_server(TALLOC_CTX *ctx,
                 if (smbc_getOptionUseCCache(context)) {
                         flags |= CLI_FULL_CONNECTION_USE_CCACHE;
                 }
-		if (context->internal->smb_encryption_level != SMBC_ENCRYPTLEVEL_NONE) {
-			signing_state = SMB_SIGNING_REQUIRED;
-		}
 
+                zero_sockaddr(&ss);
                 nt_status = cli_full_connection(&ipc_cli,
-						lp_netbios_name(), server,
-						NULL, 0, "IPC$", "?????",
+						global_myname(), server,
+						&ss, 0, "IPC$", "?????",
 						*pp_username,
 						*pp_workgroup,
 						*pp_password,
 						flags,
-						signing_state);
+						Undefined);
                 if (! NT_STATUS_IS_OK(nt_status)) {
                         DEBUG(1,("cli_full_connection failed! (%s)\n",
                                  nt_errstr(nt_status)));
@@ -816,10 +821,10 @@ SMBC_attr_server(TALLOC_CTX *ctx,
                 }
 
                 ZERO_STRUCTP(ipc_srv);
-                DLIST_ADD(ipc_srv->cli, ipc_cli);
+                ipc_srv->cli = ipc_cli;
 
                 nt_status = cli_rpc_pipe_open_noauth(
-			ipc_srv->cli, &ndr_table_lsarpc, &pipe_hnd);
+			ipc_srv->cli, &ndr_table_lsarpc.syntax_id, &pipe_hnd);
                 if (!NT_STATUS_IS_OK(nt_status)) {
                         DEBUG(1, ("cli_nt_session_open fail!\n"));
                         errno = ENOTSUP;
@@ -844,7 +849,6 @@ SMBC_attr_server(TALLOC_CTX *ctx,
                 if (!NT_STATUS_IS_OK(nt_status)) {
                         errno = SMBC_errno(context, ipc_srv->cli);
                         cli_shutdown(ipc_srv->cli);
-                        free(ipc_srv);
                         return NULL;
                 }
 

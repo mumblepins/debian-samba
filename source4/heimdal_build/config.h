@@ -11,8 +11,6 @@
 #include "../lib/util/attr.h"
 #define HEIMDAL_NORETURN_ATTRIBUTE _NORETURN_
 #define HEIMDAL_PRINTF_ATTRIBUTE(x) FORMAT_ATTRIBUTE(x)
-#define HEIMDAL_UNUSED_ATTRIBUTE _UNUSED_
-
 #define VERSIONLIST {"Lorikeet-Heimdal, Modified for Samba4"}
 
 #define VERSION "Samba"
@@ -41,8 +39,7 @@
 #endif
 
 /*Workaround for heimdal define vs samba define*/
-#if defined(HAVE_LIBINTL_H) && defined(HAVE_BINDTEXTDOMAIN) &&\
-    defined(HAVE_TEXTDOMAIN)
+#ifdef HAVE_LIBINTL_H
 #define LIBINTL
 #endif
 

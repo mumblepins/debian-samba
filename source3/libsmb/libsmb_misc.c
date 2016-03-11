@@ -1,10 +1,10 @@
-/*
+/* 
    Unix SMB/Netbios implementation.
    SMB client library implementation
    Copyright (C) Andrew Tridgell 1998
    Copyright (C) Richard Sharpe 2000, 2002
    Copyright (C) John Terpstra 2000
-   Copyright (C) Tom Jansen (Ninja ISD) 2002
+   Copyright (C) Tom Jansen (Ninja ISD) 2002 
    Copyright (C) Derrell Lipman 2003-2008
    Copyright (C) Jeremy Allison 2007, 2008
 
@@ -28,8 +28,8 @@
 #include "libsmb_internal.h"
 
 
-/*
- * check if an element is part of the list.
+/* 
+ * check if an element is part of the list. 
  */
 int
 SMBC_dlist_contains(SMBCFILE * list, SMBCFILE *p)
@@ -53,12 +53,12 @@ SMBC_errno(SMBCCTX *context,
 	int ret = cli_errno(c);
 
         if (cli_is_dos_error(c)) {
-                uint8_t eclass;
-                uint32_t ecode;
+                uint8 eclass;
+                uint32 ecode;
 
                 cli_dos_error(c, &eclass, &ecode);
 
-                DEBUG(3,("smbc_error %d %d (0x%x) -> %d\n",
+                DEBUG(3,("smbc_error %d %d (0x%x) -> %d\n", 
                          (int)eclass, (int)ecode, (int)ecode, ret));
         } else {
                 NTSTATUS status;

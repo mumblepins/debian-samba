@@ -25,7 +25,6 @@
 #include "rpc_server/dcerpc_server.h"
 #include "rpc_server/common/common.h"
 #include "dsdb/samdb/samdb.h"
-#include "dsdb/common/util.h"
 #include "libcli/security/security.h"
 #include "libcli/security/session.h"
 #include "rpc_server/drsuapi/dcesrv_drsuapi.h"
@@ -38,14 +37,6 @@
 	if (DEBUGLVL(2)) NDR_PRINT_IN_DEBUG(fname, r); \
 	DCESRV_FAULT(DCERPC_FAULT_OP_RNG_ERROR); \
 } while (0)
-
-#define DCESRV_INTERFACE_DRSUAPI_BIND(call, iface) \
-	dcesrv_interface_drsuapi_bind(call, iface)
-static NTSTATUS dcesrv_interface_drsuapi_bind(struct dcesrv_call_state *dce_call,
-					      const struct dcesrv_interface *iface)
-{
-	return dcesrv_interface_bind_require_privacy(dce_call, iface);
-}
 
 /* 
   drsuapi_DsBind 
@@ -132,7 +123,7 @@ static WERROR dcesrv_drsuapi_DsBind(struct dcesrv_call_state *dce_call, TALLOC_C
 	/*
 	 * lookup the local servers Replication Epoch
 	 */
-	ntds_dn = samdb_ntds_settings_dn(b_state->sam_ctx, mem_ctx);
+	ntds_dn = samdb_ntds_settings_dn(b_state->sam_ctx);
 	W_ERROR_HAVE_NO_MEMORY(ntds_dn);
 
 	ret = ldb_search(b_state->sam_ctx, mem_ctx, &ntds_res,
@@ -228,7 +219,7 @@ static WERROR dcesrv_drsuapi_DsBind(struct dcesrv_call_state *dce_call, TALLOC_C
 	/*
 	 * allocate the return bind_info
 	 */
-	bind_info = talloc_zero(mem_ctx, struct drsuapi_DsBindInfoCtr);
+	bind_info = talloc(mem_ctx, struct drsuapi_DsBindInfoCtr);
 	W_ERROR_HAVE_NO_MEMORY(bind_info);
 
 	bind_info->length	= 28;
@@ -438,26 +429,25 @@ static WERROR dcesrv_drsuapi_DsCrackNames(struct dcesrv_call_state *dce_call, TA
 	switch (r->in.level) {
 		case 1: {
 			switch(r->in.req->req1.format_offered){
+			case DRSUAPI_DS_NAME_FORMAT_UPN_AND_ALTSECID:
 			case DRSUAPI_DS_NAME_FORMAT_NT4_ACCOUNT_NAME_SANS_DOMAIN_EX:
-			case DRSUAPI_DS_NAME_FORMAT_NT4_ACCOUNT_NAME_SANS_DOMAIN:
+			case DRSUAPI_DS_NAME_FORMAT_LIST_GLOBAL_CATALOG_SERVERS:
+			case DRSUAPI_DS_NAME_FORMAT_UPN_FOR_LOGON:
+			case DRSUAPI_DS_NAME_FORMAT_LIST_SERVERS_WITH_DCS_IN_SITE:
 			case DRSUAPI_DS_NAME_FORMAT_STRING_SID_NAME:
 			case DRSUAPI_DS_NAME_FORMAT_ALT_SECURITY_IDENTITIES_NAME:
-			case DRSUAPI_DS_NAME_FORMAT_MAP_SCHEMA_GUID:
 			case DRSUAPI_DS_NAME_FORMAT_LIST_NCS:
 			case DRSUAPI_DS_NAME_FORMAT_LIST_DOMAINS:
-			case DRSUAPI_DS_NAME_FORMAT_LIST_GLOBAL_CATALOG_SERVERS:
-			case DRSUAPI_DS_NAME_FORMAT_LIST_SERVERS_WITH_DCS_IN_SITE:
+			case DRSUAPI_DS_NAME_FORMAT_MAP_SCHEMA_GUID:
+			case DRSUAPI_DS_NAME_FORMAT_NT4_ACCOUNT_NAME_SANS_DOMAIN:
+			case DRSUAPI_DS_NAME_FORMAT_LIST_INFO_FOR_SERVER:
 			case DRSUAPI_DS_NAME_FORMAT_LIST_SERVERS_FOR_DOMAIN_IN_SITE:
 			case DRSUAPI_DS_NAME_FORMAT_LIST_DOMAINS_IN_SITE:
 			case DRSUAPI_DS_NAME_FORMAT_LIST_SERVERS_IN_SITE:
 			case DRSUAPI_DS_NAME_FORMAT_LIST_SITES:
-			case DRSUAPI_DS_NAME_FORMAT_UPN_AND_ALTSECID:
-			case DRSUAPI_DS_NAME_FORMAT_UPN_FOR_LOGON:
 				DEBUG(0, ("DsCrackNames: Unsupported operation requested: %X",
 					  r->in.req->req1.format_offered));
 				return WERR_OK;
-			case DRSUAPI_DS_NAME_FORMAT_LIST_INFO_FOR_SERVER:
-				return dcesrv_drsuapi_ListInfoServer(b_state->sam_ctx, mem_ctx, &r->in.req->req1, &r->out.ctr->ctr1);
 			case DRSUAPI_DS_NAME_FORMAT_LIST_ROLES:
 				return dcesrv_drsuapi_ListRoles(b_state->sam_ctx, mem_ctx,
 								&r->in.req->req1, &r->out.ctr->ctr1);
@@ -512,7 +502,7 @@ static WERROR dcesrv_drsuapi_DsRemoveDSServer(struct dcesrv_call_state *dce_call
 		}
 
 		if (r->in.req->req1.commit) {
-			ret = dsdb_delete(b_state->sam_ctx, ntds_dn, DSDB_TREE_DELETE);
+			ret = ldb_delete(b_state->sam_ctx, ntds_dn);
 			if (ret != LDB_SUCCESS) {
 				return WERR_FOOBAR;
 			}
@@ -585,8 +575,13 @@ static WERROR dcesrv_drsuapi_DsGetDomainControllerInfo_1(struct drsuapi_bind_sta
 	unsigned int i;
 
 	*r->out.level_out = r->in.req->req1.level;
-	r->out.ctr = talloc_zero(mem_ctx, union drsuapi_DsGetDCInfoCtr);
+	r->out.ctr = talloc(mem_ctx, union drsuapi_DsGetDCInfoCtr);
 	W_ERROR_HAVE_NO_MEMORY(r->out.ctr);
+
+	sites_dn = samdb_sites_dn(b_state->sam_ctx, mem_ctx);
+	if (!sites_dn) {
+		return WERR_DS_OBJ_NOT_FOUND;
+	}
 
 	switch (*r->out.level_out) {
 	case -1:
@@ -602,13 +597,8 @@ static WERROR dcesrv_drsuapi_DsGetDomainControllerInfo_1(struct drsuapi_bind_sta
 		return WERR_UNKNOWN_LEVEL;
 	}
 
-	sites_dn = samdb_sites_dn(b_state->sam_ctx, mem_ctx);
-	if (!sites_dn) {
-		return WERR_DS_OBJ_NOT_FOUND;
-	}
-
 	ret = ldb_search(b_state->sam_ctx, mem_ctx, &res, sites_dn, LDB_SCOPE_SUBTREE, attrs,
-				 "(&(objectClass=server)(serverReference=*))");
+				 "objectClass=server");
 	
 	if (ret) {
 		DEBUG(1, ("searching for servers in sites DN %s failed: %s\n", 
@@ -639,9 +629,7 @@ static WERROR dcesrv_drsuapi_DsGetDomainControllerInfo_1(struct drsuapi_bind_sta
 			}
 
 			ret = ldb_search(b_state->sam_ctx, mem_ctx, &res_account, ref_dn,
-						 LDB_SCOPE_BASE, attrs_account_1,
-						"(&(objectClass=computer)(userAccountControl:1.2.840.113556.1.4.803:=%u))",
-						UF_SERVER_TRUST_ACCOUNT);
+						 LDB_SCOPE_BASE, attrs_account_1, "objectClass=computer");
 			if (ret == LDB_SUCCESS && res_account->count == 1) {
 				const char *errstr;
 				ctr1->array[i].dns_name
@@ -781,8 +769,6 @@ static WERROR dcesrv_drsuapi_DsGetDomainControllerInfo_1(struct drsuapi_bind_sta
 
 		}
 		break;
-	default:
-		return WERR_UNKNOWN_LEVEL;
 	}
 	return WERR_OK;
 }
@@ -815,29 +801,15 @@ static WERROR dcesrv_drsuapi_DsExecuteKCC(struct dcesrv_call_state *dce_call, TA
 				  struct drsuapi_DsExecuteKCC *r)
 {
 	WERROR status;
-	uint32_t timeout;
 	status = drs_security_level_check(dce_call, "DsExecuteKCC", SECURITY_DOMAIN_CONTROLLER, NULL);
 
 	if (!W_ERROR_IS_OK(status)) {
 		return status;
 	}
-	if (r->in.req->ctr1.taskID != 0) {
-		return WERR_INVALID_PARAM;
-	}
-	if (r->in.req->ctr1.flags & DRSUAPI_DS_EXECUTE_KCC_ASYNCHRONOUS_OPERATION) {
-		timeout = IRPC_CALL_TIMEOUT;
-	} else {
-		/*
-		 * use Infinite time for timeout in case
-		 * the caller made a sync call
-		 */
-		timeout = IRPC_CALL_TIMEOUT_INF;
-	}
 
 	dcesrv_irpc_forward_rpc_call(dce_call, mem_ctx, r, NDR_DRSUAPI_DSEXECUTEKCC,
 				     &ndr_table_drsuapi, "kccsrv", "DsExecuteKCC",
-				     timeout);
-	DEBUG(0, ("Forwarded the call to execute the KCC\n"));
+				     IRPC_CALL_TIMEOUT);
 	return WERR_OK;
 }
 

@@ -124,6 +124,33 @@ sub print_footer($$)
 	$file->("\n#endif /* $header_name */\n\n");
 }
 
+sub handle_loadparm($$) 
+{
+	my ($file,$line) = @_;
+
+	if ($line =~ /^FN_(GLOBAL|LOCAL)_(CONST_STRING|STRING|BOOL|bool|CHAR|INTEGER|LIST)\((\w+),.*\)/o) {
+		my $scope = $1;
+		my $type = $2;
+		my $name = $3;
+
+		my %tmap = (
+			    "BOOL" => "bool ",
+			    "CONST_STRING" => "const char *",
+			    "STRING" => "const char *",
+			    "INTEGER" => "int ",
+			    "CHAR" => "char ",
+			    "LIST" => "const char **",
+			    );
+
+		my %smap = (
+			    "GLOBAL" => "struct loadparm_context *",
+			    "LOCAL" => "struct loadparm_service *, struct loadparm_service *"
+			    );
+
+		$file->("$tmap{$type}lpcfg_$name($smap{$scope});\n");
+	}
+}
+
 sub process_file($$$) 
 {
 	my ($public_file, $private_file, $filename) = @_;
@@ -164,6 +191,8 @@ sub process_file($$$)
 		next if ($line =~ /^\/|[;]/);
 
 		if ($line =~ /^FN_/) {
+			handle_loadparm($public_file, $line);
+			handle_loadparm($private_file, $line);
 			next;
 		}
 

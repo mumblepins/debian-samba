@@ -45,7 +45,7 @@ WERROR libnetapi_samr_open_domain(struct libnetapi_ctx *mem_ctx,
 	struct samr_SamArray *sam = NULL;
 	const char *domain_name = NULL;
 	struct lsa_String lsa_domain_name;
-	bool domain_found = false;
+	bool domain_found = true;
 	int i;
 	struct dcerpc_binding_handle *b = pipe_cli->binding_handle;
 
@@ -240,7 +240,7 @@ WERROR libnetapi_samr_open_builtin_domain(struct libnetapi_ctx *mem_ctx,
 	status = dcerpc_samr_OpenDomain(b, mem_ctx,
 					connect_handle,
 					builtin_mask,
-					discard_const_p(struct dom_sid, &global_sid_Builtin),
+					CONST_DISCARD(struct dom_sid *, &global_sid_Builtin),
 					builtin_handle,
 					&result);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -283,7 +283,7 @@ void libnetapi_samr_close_domain_handle(struct libnetapi_ctx *ctx,
 	priv = talloc_get_type_abort(ctx->private_data,
 		struct libnetapi_private_ctx);
 
-	if (!ndr_policy_handle_equal(handle, &priv->samr.domain_handle)) {
+	if (!policy_handle_equal(handle, &priv->samr.domain_handle)) {
 		return;
 	}
 
@@ -311,7 +311,7 @@ void libnetapi_samr_close_builtin_handle(struct libnetapi_ctx *ctx,
 	priv = talloc_get_type_abort(ctx->private_data,
 		struct libnetapi_private_ctx);
 
-	if (!ndr_policy_handle_equal(handle, &priv->samr.builtin_handle)) {
+	if (!policy_handle_equal(handle, &priv->samr.builtin_handle)) {
 		return;
 	}
 
@@ -339,7 +339,7 @@ void libnetapi_samr_close_connect_handle(struct libnetapi_ctx *ctx,
 	priv = talloc_get_type_abort(ctx->private_data,
 		struct libnetapi_private_ctx);
 
-	if (!ndr_policy_handle_equal(handle, &priv->samr.connect_handle)) {
+	if (!policy_handle_equal(handle, &priv->samr.connect_handle)) {
 		return;
 	}
 

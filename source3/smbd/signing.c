@@ -22,52 +22,45 @@
 #include "includes.h"
 #include "smbd/smbd.h"
 #include "smbd/globals.h"
-#include "../libcli/smb/smb_signing.h"
-#include "lib/param/param.h"
+#include "smb_signing.h"
 
 /***********************************************************
  Called to validate an incoming packet from the client.
 ************************************************************/
 
-bool srv_check_sign_mac(struct smbXsrv_connection *conn,
+bool srv_check_sign_mac(struct smbd_server_connection *conn,
 			const char *inbuf, uint32_t *seqnum,
 			bool trusted_channel)
 {
-	const uint8_t *inhdr;
-	size_t len;
-
 	/* Check if it's a non-session message. */
 	if(CVAL(inbuf,0)) {
 		return true;
 	}
 
-	len = smb_len(inbuf);
-	inhdr = (const uint8_t *)inbuf + NBT_HDR_SIZE;
-
 	if (trusted_channel) {
 		NTSTATUS status;
 
-		if (len < (HDR_SS_FIELD + 8)) {
+		if (smb_len(inbuf) < (smb_ss_field + 8 - 4)) {
 			DEBUG(1,("smb_signing_check_pdu: Can't check signature "
 				 "on short packet! smb_len = %u\n",
-				 (unsigned)len));
+				 smb_len(inbuf)));
 			return false;
 		}
 
-		status = NT_STATUS(IVAL(inhdr, HDR_SS_FIELD + 4));
+		status = NT_STATUS(IVAL(inbuf, smb_ss_field + 4));
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(1,("smb_signing_check_pdu: trusted channel passed %s\n",
 				 nt_errstr(status)));
 			return false;
 		}
 
-		*seqnum = IVAL(inhdr, HDR_SS_FIELD);
+		*seqnum = IVAL(inbuf, smb_ss_field);
 		return true;
 	}
 
 	*seqnum = smb_signing_next_seqnum(conn->smb1.signing_state, false);
 	return smb_signing_check_pdu(conn->smb1.signing_state,
-				     inhdr, len,
+				     (const uint8_t *)inbuf,
 				     *seqnum);
 }
 
@@ -75,28 +68,22 @@ bool srv_check_sign_mac(struct smbXsrv_connection *conn,
  Called to sign an outgoing packet to the client.
 ************************************************************/
 
-void srv_calculate_sign_mac(struct smbXsrv_connection *conn,
+void srv_calculate_sign_mac(struct smbd_server_connection *conn,
 			    char *outbuf, uint32_t seqnum)
 {
-	uint8_t *outhdr;
-	size_t len;
-
 	/* Check if it's a non-session message. */
 	if(CVAL(outbuf,0)) {
 		return;
 	}
 
-	len = smb_len(outbuf);
-	outhdr = (uint8_t *)outbuf + NBT_HDR_SIZE;
-
-	smb_signing_sign_pdu(conn->smb1.signing_state, outhdr, len, seqnum);
+	smb_signing_sign_pdu(conn->smb1.signing_state, (uint8_t *)outbuf, seqnum);
 }
 
 
 /***********************************************************
  Called to indicate a oneway request
 ************************************************************/
-void srv_cancel_sign_response(struct smbXsrv_connection *conn)
+void srv_cancel_sign_response(struct smbd_server_connection *conn)
 {
 	smb_signing_cancel_reply(conn->smb1.signing_state, true);
 }
@@ -167,38 +154,29 @@ static void smbd_shm_signing_free(TALLOC_CTX *mem_ctx, void *ptr)
  Called by server negprot when signing has been negotiated.
 ************************************************************/
 
-bool srv_init_signing(struct smbXsrv_connection *conn)
+bool srv_init_signing(struct smbd_server_connection *conn)
 {
 	bool allowed = true;
-	bool desired;
 	bool mandatory = false;
 
-	struct loadparm_context *lp_ctx = loadparm_init_s3(conn, loadparm_s3_helpers());
-	if (lp_ctx == NULL) {
-		DEBUG(10, ("loadparm_init_s3 failed\n"));
-		return false;
+	switch (lp_server_signing()) {
+	case Required:
+		mandatory = true;
+		break;
+	case Auto:
+		break;
+	case True:
+		break;
+	case False:
+		allowed = false;
+		break;
 	}
-
-	/*
-	 * if the client and server allow signing,
-	 * we desire to use it.
-	 *
-	 * This matches Windows behavior and is needed
-	 * because not every client that requires signing
-	 * sends FLAGS2_SMB_SECURITY_SIGNATURES_REQUIRED.
-	 *
-	 * Note that we'll always allow signing if the client
-	 * does send FLAGS2_SMB_SECURITY_SIGNATURES_REQUIRED.
-	 */
-
-	desired = lpcfg_server_signing_allowed(lp_ctx, &mandatory);
-	talloc_unlink(conn, lp_ctx);
 
 	if (lp_async_smb_echo_handler()) {
 		struct smbd_shm_signing *s;
 
 		/* setup the signing state in shared memory */
-		s = talloc_zero(conn, struct smbd_shm_signing);
+		s = talloc_zero(smbd_event_context(), struct smbd_shm_signing);
 		if (s == NULL) {
 			return false;
 		}
@@ -211,7 +189,7 @@ bool srv_init_signing(struct smbXsrv_connection *conn)
 		}
 		talloc_set_destructor(s, smbd_shm_signing_destructor);
 		conn->smb1.signing_state = smb_signing_init_ex(s,
-							allowed, desired, mandatory,
+							allowed, mandatory,
 							smbd_shm_signing_alloc,
 							smbd_shm_signing_free);
 		if (!conn->smb1.signing_state) {
@@ -220,8 +198,8 @@ bool srv_init_signing(struct smbXsrv_connection *conn)
 		return true;
 	}
 
-	conn->smb1.signing_state = smb_signing_init(conn,
-						    allowed, desired, mandatory);
+	conn->smb1.signing_state = smb_signing_init(smbd_event_context(),
+						    allowed, mandatory);
 	if (!conn->smb1.signing_state) {
 		return false;
 	}
@@ -229,11 +207,9 @@ bool srv_init_signing(struct smbXsrv_connection *conn)
 	return true;
 }
 
-void srv_set_signing_negotiated(struct smbXsrv_connection *conn,
-				bool allowed, bool mandatory)
+void srv_set_signing_negotiated(struct smbd_server_connection *conn)
 {
-	smb_signing_set_negotiated(conn->smb1.signing_state,
-				   allowed, mandatory);
+	smb_signing_set_negotiated(conn->smb1.signing_state);
 }
 
 /***********************************************************
@@ -241,7 +217,7 @@ void srv_set_signing_negotiated(struct smbXsrv_connection *conn,
  reads/writes if it is.
 ************************************************************/
 
-bool srv_is_signing_active(struct smbXsrv_connection *conn)
+bool srv_is_signing_active(struct smbd_server_connection *conn)
 {
 	return smb_signing_is_active(conn->smb1.signing_state);
 }
@@ -252,7 +228,7 @@ bool srv_is_signing_active(struct smbXsrv_connection *conn)
  in the negprot.
 ************************************************************/
 
-bool srv_is_signing_negotiated(struct smbXsrv_connection *conn)
+bool srv_is_signing_negotiated(struct smbd_server_connection *conn)
 {
 	return smb_signing_is_negotiated(conn->smb1.signing_state);
 }
@@ -261,7 +237,7 @@ bool srv_is_signing_negotiated(struct smbXsrv_connection *conn)
  Turn on signing from this packet onwards.
 ************************************************************/
 
-void srv_set_signing(struct smbXsrv_connection *conn,
+void srv_set_signing(struct smbd_server_connection *conn,
 		     const DATA_BLOB user_session_key,
 		     const DATA_BLOB response)
 {

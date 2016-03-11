@@ -1,23 +1,23 @@
-/*
+/* 
    Unix SMB/Netbios implementation.
    SMB client library implementation
    Copyright (C) Andrew Tridgell 1998
    Copyright (C) Richard Sharpe 2000, 2002
    Copyright (C) John Terpstra 2000
-   Copyright (C) Tom Jansen (Ninja ISD) 2002
+   Copyright (C) Tom Jansen (Ninja ISD) 2002 
    Copyright (C) Derrell Lipman 2003-2008
    Copyright (C) Jeremy Allison 2007, 2008
-
+   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -40,7 +40,7 @@
  */
 typedef struct DOS_ATTR_DESC {
 	int mode;
-	off_t size;
+	SMB_OFF_T size;
 	time_t create_time;
 	time_t access_time;
 	time_t write_time;
@@ -48,10 +48,6 @@ typedef struct DOS_ATTR_DESC {
 	SMB_INO_T inode;
 } DOS_ATTR_DESC;
 
-/*
- * Extension of libsmbclient.h's #defines
- */
-#define SMB_CTX_FLAG_USE_NT_HASH (1 << 4)
 
 /*
  * Internal flags for extended attributes
@@ -78,16 +74,15 @@ struct _SMBCSRV {
 	dev_t dev;
 	bool no_pathinfo;
 	bool no_pathinfo2;
-	bool no_pathinfo3;
         bool no_nt_session;
         struct policy_handle pol;
-	time_t last_echo_time;
 
 	SMBCSRV *next, *prev;
+	
 };
 
-/*
- * Keep directory entries in a list
+/* 
+ * Keep directory entries in a list 
  */
 struct smbc_dir_list {
 	struct smbc_dir_list *next;
@@ -97,16 +92,11 @@ struct smbc_dir_list {
 
 /*
  * Structure for open file management
- */
+ */ 
 struct _SMBCFILE {
-	int cli_fd;
-	/*
-	 * cache of cli_state we opened cli_fd on.
-	 * Due to DFS can be a subsidiary connection to srv->cli
-	 */
-	struct cli_state *targetcli;
+	int cli_fd; 
 	char *fname;
-	off_t offset;
+	SMB_OFF_T offset;
 	struct _SMBCSRV *srv;
 	bool file;
 	struct smbc_dir_list *dir_list, *dir_end, *dir_next;
@@ -142,7 +132,7 @@ struct SMBC_internal_data {
          * server connection list
 	 */
 	SMBCSRV *                               servers;
-
+	
 	/*
          * open file/dir list
 	 */
@@ -176,7 +166,7 @@ struct SMBC_internal_data {
         void *                                  user_data;
 
         /*
-         * Should we attempt UNIX smb encryption ?
+         * Should we attempt UNIX smb encryption ? 
          * Set to 0 if we should never attempt, set to 1 if
          * encryption requested, set to 2 if encryption required.
          */
@@ -243,14 +233,13 @@ struct SMBC_internal_data {
         }               printing;
 #endif
 
+#if 0 /* None available yet */
         /* SMB high-level functions */
         struct
         {
-                smbc_splice_fn                  splice_fn;
-		smbc_notify_fn			notify_fn;
         }               smb;
 
-	uint16_t	port;
+#endif
 };	
 
 /* Functions in libsmb_cache.c */
@@ -258,13 +247,13 @@ int
 SMBC_add_cached_server(SMBCCTX * context,
                        SMBCSRV * newsrv,
                        const char * server,
-                       const char * share,
+                       const char * share, 
                        const char * workgroup,
                        const char * username);
 
 SMBCSRV *
 SMBC_get_cached_server(SMBCCTX * context,
-                       const char * server,
+                       const char * server, 
                        const char * share,
                        const char * workgroup,
                        const char * user);
@@ -341,15 +330,9 @@ SMBC_unlink_ctx(SMBCCTX *context,
 
 int
 SMBC_rename_ctx(SMBCCTX *ocontext,
-                const char *oname,
+                const char *oname, 
                 SMBCCTX *ncontext,
                 const char *nname);
-
-int
-SMBC_notify_ctx(SMBCCTX *c, SMBCFILE *dir, smbc_bool recursive,
-		uint32_t completion_filter, unsigned callback_timeout_ms,
-		smbc_notify_callback_fn cb, void *private_data);
-
 
 
 /* Functions in libsmb_file.c */
@@ -376,14 +359,6 @@ SMBC_write_ctx(SMBCCTX *context,
                const void *buf,
                size_t count);
 
-off_t
-SMBC_splice_ctx(SMBCCTX *context,
-                SMBCFILE *srcfile,
-                SMBCFILE *dstfile,
-                off_t count,
-                int (*splice_cb)(off_t n, void *priv),
-                void *priv);
-
 int
 SMBC_close_ctx(SMBCCTX *context,
                SMBCFILE *file);
@@ -391,9 +366,9 @@ SMBC_close_ctx(SMBCCTX *context,
 bool
 SMBC_getatr(SMBCCTX * context,
             SMBCSRV *srv,
-            const char *path,
-            uint16_t *mode,
-            off_t *size,
+            char *path,
+            uint16 *mode,
+            SMB_OFF_T *size,
             struct timespec *create_time_ts,
             struct timespec *access_time_ts,
             struct timespec *write_time_ts,
@@ -401,12 +376,12 @@ SMBC_getatr(SMBCCTX * context,
             SMB_INO_T *ino);
 
 bool
-SMBC_setatr(SMBCCTX * context, SMBCSRV *srv, char *path,
+SMBC_setatr(SMBCCTX * context, SMBCSRV *srv, char *path, 
             time_t create_time,
             time_t access_time,
             time_t write_time,
             time_t change_time,
-            uint16_t mode);
+            uint16 mode);
 
 off_t
 SMBC_lseek_ctx(SMBCCTX *context,
@@ -436,7 +411,6 @@ SMBC_parse_path(TALLOC_CTX *ctx,
                 const char *fname,
                 char **pp_workgroup,
                 char **pp_server,
-                uint16_t *p_port,
                 char **pp_share,
                 char **pp_path,
 		char **pp_user,
@@ -476,6 +450,15 @@ SMBC_remove_unused_server(SMBCCTX * context,
                           SMBCSRV * srv);
 
 void
+SMBC_call_auth_fn(TALLOC_CTX *ctx,
+                  SMBCCTX *context,
+                  const char *server,
+                  const char *share,
+                  char **pp_workgroup,
+                  char **pp_username,
+                  char **pp_password);
+
+void
 SMBC_get_auth_data(const char *server, const char *share,
                    char *workgroup_buf, int workgroup_buf_len,
                    char *username_buf, int username_buf_len,
@@ -495,7 +478,6 @@ SMBC_server(TALLOC_CTX *ctx,
             SMBCCTX *context,
             bool connect_if_not_found,
             const char *server,
-            uint16_t port,
             const char *share,
             char **pp_workgroup,
             char **pp_username,
@@ -505,7 +487,6 @@ SMBCSRV *
 SMBC_attr_server(TALLOC_CTX *ctx,
                  SMBCCTX *context,
                  const char *server,
-                 uint16_t port,
                  const char *share,
                  char **pp_workgroup,
                  char **pp_username,

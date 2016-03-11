@@ -23,9 +23,10 @@
 #include "system/locale.h"
 #include "librpc/ndr/libndr.h"
 #include "librpc/ndr/ndr_table.h"
-#include "librpc/gen_ndr/ndr_dcerpc.h"
+#if (_SAMBA_BUILD_ >= 4)
 #include "lib/cmdline/popt_common.h"
 #include "param/param.h"
+#endif
 
 static const struct ndr_interface_call *find_function(
 	const struct ndr_interface_table *p,
@@ -118,7 +119,6 @@ static const struct ndr_interface_table *load_iface_from_plugin(const char *plug
 	if (!p) {
 		printf("%s: Unable to find DCE/RPC interface table for '%s': %s\n", plugin, pipe_name, dlerror());
 		talloc_free(symbol);
-		dlclose(handle);
 		return NULL;
 	}
 
@@ -127,9 +127,14 @@ static const struct ndr_interface_table *load_iface_from_plugin(const char *plug
 	return p;
 }
 
+static void printf_cb(const char *buf, void *private_data)
+{
+	printf("%s", buf);
+}
+
 static void ndrdump_data(uint8_t *d, uint32_t l, bool force)
 {
-	dump_data_file(d, l, !force, stdout);
+	dump_data_cb(d, l, !force, printf_cb, NULL);
 }
 
 static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
@@ -144,7 +149,6 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 	for (i=0; i < pipes->num_pipes; i++) {
 		uint64_t idx = 0;
 		while (true) {
-			void *saved_mem_ctx;
 			uint32_t *count;
 			void *c;
 			char *n;
@@ -161,19 +165,15 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 					function, pipes->pipes[i].name,
 					(unsigned long long)idx);
 
-			saved_mem_ctx = ndr_pull->current_mem_ctx;
-			ndr_pull->current_mem_ctx = c;
 			ndr_err = pipes->pipes[i].ndr_pull(ndr_pull, NDR_SCALARS, c);
-			ndr_pull->current_mem_ctx = saved_mem_ctx;
 			status = ndr_map_error2ntstatus(ndr_err);
 
 			printf("pull returned %s\n", nt_errstr(status));
 			if (!NT_STATUS_IS_OK(status)) {
-				talloc_free(c);
 				return status;
 			}
 			pipes->pipes[i].ndr_print(ndr_print, n, c);
-			talloc_free(c);
+
 			if (*count == 0) {
 				break;
 			}
@@ -219,15 +219,13 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 		POPT_COMMON_VERSION
 		{ NULL }
 	};
-	const struct ndr_interface_call_pipes *in_pipes = NULL;
-	const struct ndr_interface_call_pipes *out_pipes = NULL;
-	uint32_t highest_ofs;
-	struct dcerpc_sec_verification_trailer *sec_vt = NULL;
+	struct ndr_interface_call_pipes *in_pipes = NULL;
+	struct ndr_interface_call_pipes *out_pipes = NULL;
 
 	ndr_table_init();
 
 	/* Initialise samba stuff */
-	smb_init_locale();
+	load_case_tables();
 
 	setlinebuf(stdout);
 
@@ -343,10 +341,6 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 		blob.length = size;
 
 		ndr_pull = ndr_pull_init_blob(&blob, mem_ctx);
-		if (ndr_pull == NULL) {
-			perror("ndr_pull_init_blob");
-			exit(1);
-		}
 		ndr_pull->flags |= LIBNDR_FLAG_REF_ALLOC;
 		if (assume_ndr64) {
 			ndr_pull->flags |= LIBNDR_FLAG_NDR64;
@@ -354,14 +348,8 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 
 		ndr_err = f->ndr_pull(ndr_pull, NDR_IN, st);
 
-		if (ndr_pull->offset > ndr_pull->relative_highest_offset) {
-			highest_ofs = ndr_pull->offset;
-		} else {
-			highest_ofs = ndr_pull->relative_highest_offset;
-		}
-
-		if (highest_ofs != ndr_pull->data_size) {
-			printf("WARNING! %d unread bytes while parsing context file\n", ndr_pull->data_size - highest_ofs);
+		if (ndr_pull->offset != ndr_pull->data_size) {
+			printf("WARNING! %d unread bytes while parsing context file\n", ndr_pull->data_size - ndr_pull->offset);
 		}
 
 		if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
@@ -389,10 +377,6 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 	blob.length = size;
 
 	ndr_pull = ndr_pull_init_blob(&blob, mem_ctx);
-	if (ndr_pull == NULL) {
-		perror("ndr_pull_init_blob");
-		exit(1);
-	}
 	ndr_pull->flags |= LIBNDR_FLAG_REF_ALLOC;
 	if (assume_ndr64) {
 		ndr_pull->flags |= LIBNDR_FLAG_NDR64;
@@ -401,25 +385,6 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 	ndr_print = talloc_zero(mem_ctx, struct ndr_print);
 	ndr_print->print = ndr_print_printf_helper;
 	ndr_print->depth = 1;
-
-	ndr_err = ndr_pop_dcerpc_sec_verification_trailer(ndr_pull, mem_ctx, &sec_vt);
-	status = ndr_map_error2ntstatus(ndr_err);
-	if (!NT_STATUS_IS_OK(status)) {
-		printf("ndr_pop_dcerpc_sec_verification_trailer returned %s\n",
-		       nt_errstr(status));
-	}
-
-	if (sec_vt != NULL && sec_vt->count.count > 0) {
-		printf("SEC_VT: consumed %d bytes\n",
-		       (int)(blob.length - ndr_pull->data_size));
-		if (dumpdata) {
-			ndrdump_data(blob.data + ndr_pull->data_size,
-				     blob.length - ndr_pull->data_size,
-				     dumpdata);
-		}
-		ndr_print_dcerpc_sec_verification_trailer(ndr_print, "SEC_VT", sec_vt);
-	}
-	TALLOC_FREE(sec_vt);
 
 	if (out_pipes) {
 		status = ndrdump_pull_and_print_pipes(function, ndr_pull, ndr_print, out_pipes);
@@ -434,16 +399,10 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 
 	printf("pull returned %s\n", nt_errstr(status));
 
-	if (ndr_pull->offset > ndr_pull->relative_highest_offset) {
-		highest_ofs = ndr_pull->offset;
-	} else {
-		highest_ofs = ndr_pull->relative_highest_offset;
-	}
-
-	if (highest_ofs != ndr_pull->data_size) {
-		printf("WARNING! %d unread bytes\n", ndr_pull->data_size - highest_ofs);
-		ndrdump_data(ndr_pull->data+highest_ofs,
-			     ndr_pull->data_size - highest_ofs,
+	if (ndr_pull->offset != ndr_pull->data_size) {
+		printf("WARNING! %d unread bytes\n", ndr_pull->data_size - ndr_pull->offset);
+		ndrdump_data(ndr_pull->data+ndr_pull->offset,
+			     ndr_pull->data_size - ndr_pull->offset,
 			     dumpdata);
 	}
 
@@ -494,10 +453,6 @@ static NTSTATUS ndrdump_pull_and_print_pipes(const char *function,
 		}
 
 		ndr_v_pull = ndr_pull_init_blob(&v_blob, mem_ctx);
-		if (ndr_v_pull == NULL) {
-			perror("ndr_pull_init_blob");
-			exit(1);
-		}
 		ndr_v_pull->flags |= LIBNDR_FLAG_REF_ALLOC;
 
 		ndr_err = f->ndr_pull(ndr_v_pull, flags, v_st);

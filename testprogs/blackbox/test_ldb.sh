@@ -32,16 +32,11 @@ check() {
 	return $status
 }
 
-export PATH="$BINDIR:$PATH"
+export PATH="$BUILDDIR/bin:$PATH"
 
-ldbsearch="$VALGRIND ldbsearch"
+ldbsearch="$VALGRIND ldbsearch$EXEEXT"
 
 check "RootDSE" $ldbsearch $CONFIGURATION $options --basedn='' -H $p://$SERVER -s base DUMMY=x dnsHostName highestCommittedUSN || failed=`expr $failed + 1`
-check "RootDSE (full)" $ldbsearch $CONFIGURATION $options --basedn='' -H $p://$SERVER -s base '(objectClass=*)' || failed=`expr $failed + 1`
-check "RootDSE (extended)" $ldbsearch $CONFIGURATION $options --basedn='' -H $p://$SERVER -s base '(objectClass=*)' --extended-dn || failed=`expr $failed + 1`
-if [ x$p = x"ldaps" ]; then
-   testit_expect_failure "RootDSE over SSLv3 should fail" $ldbsearch $CONFIGURATION $options --basedn='' -H $p://$SERVER -s base DUMMY=x dnsHostName highestCommittedUSN --option='tlspriority=NONE:+VERS-SSL3.0:+MAC-ALL:+CIPHER-ALL:+RSA:+SIGN-ALL:+COMP-NULL' && failed=`expr $failed + 1`
-fi
 
 echo "Getting defaultNamingContext"
 BASEDN=`$ldbsearch $CONFIGURATION $options --basedn='' -H $p://$SERVER -s base DUMMY=x defaultNamingContext | grep defaultNamingContext | awk '{print $2}'`
@@ -126,11 +121,15 @@ echo "Search Options Control Query test returned 0 items"
 failed=`expr $failed + 1`
 fi
 
-wellknown_object_test()
-(
-	guid=$1
-	object=$2
-	failed=0
+wellknown_object_test() {
+	local guid=$1
+	local object=$2
+	local basedns
+	local dn
+	local r
+	local c
+	local n
+	local failed=0
 
 	basedns="<WKGUID=${guid},${BASEDN}> <wkGuId=${guid},${BASEDN}>"
 	for dn in ${basedns}; do
@@ -152,7 +151,7 @@ wellknown_object_test()
 	done
 
 	return $failed
-)
+}
 
 wellknown_object_test 22B70C67D56E4EFB91E9300FCA3DC1AA ForeignSecurityPrincipals
 st=$?

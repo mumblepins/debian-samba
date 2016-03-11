@@ -32,7 +32,7 @@ bool torture_utable(int dummy)
 	smb_ucs2_t c2;
 	int c, len, fd;
 	int chars_allowed=0, alt_allowed=0;
-	uint8_t valid[0x10000];
+	uint8 valid[0x10000];
 
 	printf("starting utable\n");
 
@@ -46,23 +46,18 @@ bool torture_utable(int dummy)
 	cli_unlink(cli, "\\utable\\*", FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN);
 
 	for (c=1; c < 0x10000; c++) {
-		size_t size = 0;
 		char *p;
 
 		SSVAL(&c2, 0, c);
 		fstrcpy(fname, "\\utable\\x");
 		p = fname+strlen(fname);
-		if (!convert_string(CH_UTF16LE, CH_UNIX,
+		len = convert_string(CH_UTF16LE, CH_UNIX, 
 				     &c2, 2, 
-				     p, sizeof(fname)-strlen(fname),&size)) {
-			d_printf("convert_string %s failed !\n", fname);
-			continue;
-		}
-		len = size;
+				     p, sizeof(fname)-strlen(fname), True);
 		p[len] = 0;
 		fstrcat(fname,"_a_long_extension");
 
-		if (!NT_STATUS_IS_OK(cli_openx(cli, fname, O_RDWR | O_CREAT | O_TRUNC, 
+		if (!NT_STATUS_IS_OK(cli_open(cli, fname, O_RDWR | O_CREAT | O_TRUNC, 
 				DENY_NONE, &fnum))) {
 			continue;
 		}
@@ -112,19 +107,15 @@ static char *form_name(int c)
 	static fstring fname;
 	smb_ucs2_t c2;
 	char *p;
-	size_t len = 0;
+	int len;
 
 	fstrcpy(fname, "\\utable\\");
 	p = fname+strlen(fname);
 	SSVAL(&c2, 0, c);
 
-	if (!convert_string(CH_UTF16LE, CH_UNIX,
+	len = convert_string(CH_UTF16LE, CH_UNIX, 
 			     &c2, 2, 
-			     p, sizeof(fname)-strlen(fname), &len)) {
-		d_printf("form_name: convert string %s failed\n",
-			fname);
-		return NULL;
-	}
+			     p, sizeof(fname)-strlen(fname), True);
 	p[len] = 0;
 	return fname;
 }
@@ -153,7 +144,7 @@ bool torture_casetable(int dummy)
 	}
 
 	for (c=1; c < 0x10000; c++) {
-		off_t size;
+		SMB_OFF_T size;
 
 		if (c == '.' || c == '\\') continue;
 
@@ -164,7 +155,7 @@ bool torture_casetable(int dummy)
 					  GENERIC_ALL_ACCESS, 
 					  FILE_ATTRIBUTE_NORMAL,
 					  FILE_SHARE_NONE,
-					  FILE_OPEN_IF, 0, 0, &fnum, NULL))) {
+					  FILE_OPEN_IF, 0, 0, &fnum))) {
 			printf("Failed to create file with char %04x\n", c);
 			continue;
 		}
@@ -188,7 +179,7 @@ bool torture_casetable(int dummy)
 				return False;
 			}
 
-			cli_read(cli, fnum, (char *)c2, 0, size, NULL);
+			cli_read(cli, fnum, (char *)c2, 0, size);
 			printf("%04x: ", c);
 			equiv[c][0] = c;
 			for (i=0; i<size/sizeof(int); i++) {

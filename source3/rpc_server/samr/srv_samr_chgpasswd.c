@@ -54,7 +54,6 @@
 #include "rpc_server/samr/srv_samr_util.h"
 #include "passdb.h"
 #include "auth.h"
-#include "lib/sys_rw.h"
 
 #ifndef ALLOW_CHANGE_PASSWORD
 #if (defined(HAVE_TERMIOS_H) && defined(HAVE_DUP2) && defined(HAVE_SETSID))
@@ -68,19 +67,14 @@ static int findpty(char **slave)
 {
 	int master = -1;
 	char *line = NULL;
-	DIR *dirp = NULL;
+	SMB_STRUCT_DIR *dirp = NULL;
 	const char *dpname;
 
 	*slave = NULL;
 
 #if defined(HAVE_GRANTPT)
-#if defined(HAVE_POSIX_OPENPT)
-	master = posix_openpt(O_RDWR|O_NOCTTY);
-#else
 	/* Try to open /dev/ptmx. If that fails, fall through to old method. */
-	master = open("/dev/ptmx", O_RDWR, 0);
-#endif
-	if (master >= 0) {
+	if ((master = sys_open("/dev/ptmx", O_RDWR, 0)) >= 0) {
 		grantpt(master);
 		unlockpt(master);
 		line = (char *)ptsname(master);
@@ -107,7 +101,7 @@ static int findpty(char **slave)
 		return (-1);
 	}
 
-	dirp = opendir("/dev");
+	dirp = sys_opendir("/dev");
 	if (!dirp) {
 		SAFE_FREE(line);
 		return (-1);
@@ -120,16 +114,16 @@ static int findpty(char **slave)
 			       line));
 			line[8] = dpname[3];
 			line[9] = dpname[4];
-			if ((master = open(line, O_RDWR, 0)) >= 0) {
+			if ((master = sys_open(line, O_RDWR, 0)) >= 0) {
 				DEBUG(3, ("pty: opened %s\n", line));
 				line[5] = 't';
 				*slave = line;
-				closedir(dirp);
+				sys_closedir(dirp);
 				return (master);
 			}
 		}
 	}
-	closedir(dirp);
+	sys_closedir(dirp);
 	SAFE_FREE(line);
 	return (-1);
 }
@@ -164,7 +158,7 @@ static int dochild(int master, const char *slavedev, const struct passwd *pass,
 	}
 
 	/* Open slave pty and acquire as new controlling terminal. */
-	if ((slave = open(slavedev, O_RDWR, 0)) < 0)
+	if ((slave = sys_open(slavedev, O_RDWR, 0)) < 0)
 	{
 		DEBUG(3, ("More weirdness, could not open %s\n", slavedev));
 		return (False);
@@ -392,7 +386,6 @@ static bool chat_with_program(char *passwordprogram, const struct passwd *pass,
 	pid_t pid, wpid;
 	int wstat;
 	bool chstat = False;
-	void (*saved_handler)(int);
 
 	if (pass == NULL) {
 		DEBUG(0, ("chat_with_program: user doesn't exist in the UNIX password database.\n"));
@@ -410,13 +403,13 @@ static bool chat_with_program(char *passwordprogram, const struct passwd *pass,
 	 * SIGCLD signals as it also eats the exit status code. JRA.
 	 */
 
-	saved_handler = CatchChildLeaveStatus();
+	CatchChildLeaveStatus();
 
-	if ((pid = fork()) < 0) {
+	if ((pid = sys_fork()) < 0) {
 		DEBUG(3, ("chat_with_program: Cannot fork() child for password change: %s\n", pass->pw_name));
 		SAFE_FREE(slavedev);
 		close(master);
-		(void)CatchSignal(SIGCLD, saved_handler);
+		CatchChild();
 		return (False);
 	}
 
@@ -441,14 +434,14 @@ static bool chat_with_program(char *passwordprogram, const struct passwd *pass,
 		if (wpid < 0) {
 			DEBUG(3, ("chat_with_program: The process is no longer waiting!\n\n"));
 			close(master);
-			(void)CatchSignal(SIGCLD, saved_handler);
+			CatchChild();
 			return (False);
 		}
 
 		/*
 		 * Go back to ignoring children.
 		 */
-		(void)CatchSignal(SIGCLD, saved_handler);
+		CatchChild();
 
 		close(master);
 
@@ -589,12 +582,12 @@ bool chgpasswd(const char *name, const char *rhost, const struct passwd *pass,
 		return false;
 	}
 
-	passwordprogram = lp_passwd_program(ctx);
+	passwordprogram = talloc_strdup(ctx, lp_passwd_program());
 	if (!passwordprogram || !*passwordprogram) {
 		DEBUG(2, ("chgpasswd: Null password program - no password changing\n"));
 		return false;
 	}
-	chatsequence = lp_passwd_chat(ctx);
+	chatsequence = talloc_strdup(ctx, lp_passwd_chat());
 	if (!chatsequence || !*chatsequence) {
 		DEBUG(2, ("chgpasswd: Null chat sequence - no password changing\n"));
 		return false;
@@ -671,10 +664,10 @@ static NTSTATUS check_oem_password(const char *user,
 {
 	uchar null_pw[16];
 	uchar null_ntpw[16];
-	uint8_t *password_encrypted;
-	const uint8_t *encryption_key;
-	const uint8_t *lanman_pw, *nt_pw;
-	uint32_t acct_ctrl;
+	uint8 *password_encrypted;
+	const uint8 *encryption_key;
+	const uint8 *lanman_pw, *nt_pw;
+	uint32 acct_ctrl;
 	size_t new_pw_len;
 	uchar new_nt_hash[16];
 	uchar new_lm_hash[16];
@@ -896,9 +889,9 @@ static bool password_in_history(uint8_t nt_pw[NT_HASH_LEN],
 static bool check_passwd_history(struct samu *sampass, const char *plaintext)
 {
 	uchar new_nt_p16[NT_HASH_LEN];
-	const uint8_t *nt_pw;
-	const uint8_t *pwhistory;
-	uint32_t pwHisLen, curr_pwHisLen;
+	const uint8 *nt_pw;
+	const uint8 *pwhistory;
+	uint32 pwHisLen, curr_pwHisLen;
 
 	pdb_get_account_policy(PDB_POLICY_PASSWORD_HISTORY, &pwHisLen);
 	if (pwHisLen == 0) {
@@ -945,12 +938,12 @@ NTSTATUS check_password_complexity(const char *username,
 	char *cmd;
 
 	/* Use external script to check password complexity */
-	if ((lp_check_password_script(tosctx) == NULL)
-	    || (*(lp_check_password_script(tosctx)) == '\0')) {
+	if ((lp_check_password_script() == NULL)
+	    || (*(lp_check_password_script()) == '\0')) {
 		return NT_STATUS_OK;
 	}
 
-	cmd = talloc_string_sub(tosctx, lp_check_password_script(tosctx), "%u",
+	cmd = talloc_string_sub(tosctx, lp_check_password_script(), "%u",
 				username);
 	if (!cmd) {
 		return NT_STATUS_PASSWORD_RESTRICTION;
@@ -986,8 +979,8 @@ static NTSTATUS change_oem_password(struct samu *hnd, const char *rhost,
 				    bool as_root,
 				    enum samPwdChangeReason *samr_reject_reason)
 {
-	uint32_t min_len;
-	uint32_t refuse;
+	uint32 min_len;
+	uint32 refuse;
 	TALLOC_CTX *tosctx = talloc_tos();
 	struct passwd *pass = NULL;
 	const char *username = pdb_get_username(hnd);
@@ -1108,8 +1101,6 @@ NTSTATUS pass_oem_change(char *user, const char *rhost,
 	struct samu *sampass = NULL;
 	NTSTATUS nt_status;
 	bool ret = false;
-	bool updated_badpw = false;
-	NTSTATUS update_login_attempts_status;
 
 	if (!(sampass = samu_new(NULL))) {
 		return NT_STATUS_NO_MEMORY;
@@ -1125,13 +1116,6 @@ NTSTATUS pass_oem_change(char *user, const char *rhost,
 		return NT_STATUS_NO_SUCH_USER;
 	}
 
-	/* Quit if the account was locked out. */
-	if (pdb_get_acct_ctrl(sampass) & ACB_AUTOLOCK) {
-		DEBUG(3,("check_sam_security: Account for user %s was locked out.\n", user));
-		TALLOC_FREE(sampass);
-		return NT_STATUS_ACCOUNT_LOCKED_OUT;
-	}
-
 	nt_status = check_oem_password(user,
 				       password_encrypted_with_lm_hash,
 				       old_lm_hash_encrypted,
@@ -1139,52 +1123,6 @@ NTSTATUS pass_oem_change(char *user, const char *rhost,
 				       old_nt_hash_encrypted,
 				       sampass,
 				       &new_passwd);
-
-	/*
-	 * Notify passdb backend of login success/failure. If not
-	 * NT_STATUS_OK the backend doesn't like the login
-	 */
-	update_login_attempts_status = pdb_update_login_attempts(sampass,
-						NT_STATUS_IS_OK(nt_status));
-
-	if (!NT_STATUS_IS_OK(nt_status)) {
-		bool increment_bad_pw_count = false;
-
-		if (NT_STATUS_EQUAL(nt_status, NT_STATUS_WRONG_PASSWORD) &&
-		    (pdb_get_acct_ctrl(sampass) & ACB_NORMAL) &&
-		    NT_STATUS_IS_OK(update_login_attempts_status))
-		{
-			increment_bad_pw_count = true;
-		}
-
-		if (increment_bad_pw_count) {
-			pdb_increment_bad_password_count(sampass);
-			updated_badpw = true;
-		} else {
-			pdb_update_bad_password_count(sampass,
-						      &updated_badpw);
-		}
-	} else {
-
-		if ((pdb_get_acct_ctrl(sampass) & ACB_NORMAL) &&
-		    (pdb_get_bad_password_count(sampass) > 0)){
-			pdb_set_bad_password_count(sampass, 0, PDB_CHANGED);
-			pdb_set_bad_password_time(sampass, 0, PDB_CHANGED);
-			updated_badpw = true;
-		}
-	}
-
-	if (updated_badpw) {
-		NTSTATUS update_status;
-		become_root();
-		update_status = pdb_update_sam_account(sampass);
-		unbecome_root();
-
-		if (!NT_STATUS_IS_OK(update_status)) {
-			DEBUG(1, ("Failed to modify entry: %s\n",
-				  nt_errstr(update_status)));
-		}
-	}
 
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		TALLOC_FREE(sampass);

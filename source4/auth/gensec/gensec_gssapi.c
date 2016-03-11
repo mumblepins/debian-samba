@@ -24,63 +24,123 @@
 #include "includes.h"
 #include "lib/events/events.h"
 #include "system/kerberos.h"
-#include "system/gssapi.h"
 #include "auth/kerberos/kerberos.h"
 #include "librpc/gen_ndr/krb5pac.h"
 #include "auth/auth.h"
 #include <ldb.h>
 #include "auth/auth_sam.h"
-#include "librpc/gen_ndr/dcerpc.h"
+#include "librpc/rpc/dcerpc.h"
 #include "auth/credentials/credentials.h"
 #include "auth/credentials/credentials_krb5.h"
 #include "auth/gensec/gensec.h"
-#include "auth/gensec/gensec_internal.h"
 #include "auth/gensec/gensec_proto.h"
-#include "auth/gensec/gensec_toplevel_proto.h"
 #include "param/param.h"
 #include "auth/session_proto.h"
-#include "gensec_gssapi.h"
+#include <gssapi/gssapi.h>
+#include <gssapi/gssapi_krb5.h>
+#include <gssapi/gssapi_spnego.h>
+#include "auth/gensec/gensec_gssapi.h"
 #include "lib/util/util_net.h"
-#include "auth/kerberos/pac_utils.h"
-#include "auth/kerberos/gssapi_helper.h"
-
-#ifndef gss_mech_spnego
-gss_OID_desc spnego_mech_oid_desc =
-		{ 6, discard_const_p(void, "\x2b\x06\x01\x05\x05\x02") };
-#define gss_mech_spnego (&spnego_mech_oid_desc)
-#endif
-
-_PUBLIC_ NTSTATUS gensec_gssapi_init(void);
 
 static size_t gensec_gssapi_max_input_size(struct gensec_security *gensec_security);
 static size_t gensec_gssapi_max_wrapped_size(struct gensec_security *gensec_security);
-static size_t gensec_gssapi_sig_size(struct gensec_security *gensec_security, size_t data_size);
+
+static char *gssapi_error_string(TALLOC_CTX *mem_ctx, 
+				 OM_uint32 maj_stat, OM_uint32 min_stat, 
+				 const gss_OID mech)
+{
+	OM_uint32 disp_min_stat, disp_maj_stat;
+	gss_buffer_desc maj_error_message;
+	gss_buffer_desc min_error_message;
+	char *maj_error_string, *min_error_string;
+	OM_uint32 msg_ctx = 0;
+
+	char *ret;
+
+	maj_error_message.value = NULL;
+	min_error_message.value = NULL;
+	maj_error_message.length = 0;
+	min_error_message.length = 0;
+	
+	disp_maj_stat = gss_display_status(&disp_min_stat, maj_stat, GSS_C_GSS_CODE,
+			   mech, &msg_ctx, &maj_error_message);
+	disp_maj_stat = gss_display_status(&disp_min_stat, min_stat, GSS_C_MECH_CODE,
+			   mech, &msg_ctx, &min_error_message);
+	
+	maj_error_string = talloc_strndup(mem_ctx, (char *)maj_error_message.value, maj_error_message.length);
+
+	min_error_string = talloc_strndup(mem_ctx, (char *)min_error_message.value, min_error_message.length);
+
+	ret = talloc_asprintf(mem_ctx, "%s: %s", maj_error_string, min_error_string);
+
+	talloc_free(maj_error_string);
+	talloc_free(min_error_string);
+
+	gss_release_buffer(&disp_min_stat, &maj_error_message);
+	gss_release_buffer(&disp_min_stat, &min_error_message);
+
+	return ret;
+}
+
 
 static int gensec_gssapi_destructor(struct gensec_gssapi_state *gensec_gssapi_state)
 {
-	OM_uint32 min_stat;
-
+	OM_uint32 maj_stat, min_stat;
+	
 	if (gensec_gssapi_state->delegated_cred_handle != GSS_C_NO_CREDENTIAL) {
-		gss_release_cred(&min_stat,
-				 &gensec_gssapi_state->delegated_cred_handle);
+		maj_stat = gss_release_cred(&min_stat, 
+					    &gensec_gssapi_state->delegated_cred_handle);
 	}
 
 	if (gensec_gssapi_state->gssapi_context != GSS_C_NO_CONTEXT) {
-		gss_delete_sec_context(&min_stat,
-				       &gensec_gssapi_state->gssapi_context,
-				       GSS_C_NO_BUFFER);
+		maj_stat = gss_delete_sec_context (&min_stat,
+						   &gensec_gssapi_state->gssapi_context,
+						   GSS_C_NO_BUFFER);
 	}
 
 	if (gensec_gssapi_state->server_name != GSS_C_NO_NAME) {
-		gss_release_name(&min_stat,
-				 &gensec_gssapi_state->server_name);
+		maj_stat = gss_release_name(&min_stat, &gensec_gssapi_state->server_name);
 	}
 	if (gensec_gssapi_state->client_name != GSS_C_NO_NAME) {
-		gss_release_name(&min_stat,
-				 &gensec_gssapi_state->client_name);
+		maj_stat = gss_release_name(&min_stat, &gensec_gssapi_state->client_name);
+	}
+
+	if (gensec_gssapi_state->lucid) {
+		gss_krb5_free_lucid_sec_context(&min_stat, gensec_gssapi_state->lucid);
 	}
 
 	return 0;
+}
+
+static NTSTATUS gensec_gssapi_init_lucid(struct gensec_gssapi_state *gensec_gssapi_state)
+{
+	OM_uint32 maj_stat, min_stat;
+
+	if (gensec_gssapi_state->lucid) {
+		return NT_STATUS_OK;
+	}
+
+	maj_stat = gss_krb5_export_lucid_sec_context(&min_stat,
+						     &gensec_gssapi_state->gssapi_context,
+						     1,
+						     (void **)&gensec_gssapi_state->lucid);
+	if (maj_stat != GSS_S_COMPLETE) {
+		DEBUG(0,("gensec_gssapi_init_lucid: %s\n",
+			gssapi_error_string(gensec_gssapi_state,
+					    maj_stat, min_stat,
+					    gensec_gssapi_state->gss_oid)));
+		return NT_STATUS_INTERNAL_ERROR;
+	}
+
+	if (gensec_gssapi_state->lucid->version != 1) {
+		DEBUG(0,("gensec_gssapi_init_lucid: lucid version[%d] != 1\n",
+			gensec_gssapi_state->lucid->version));
+		gss_krb5_free_lucid_sec_context(&min_stat, gensec_gssapi_state->lucid);
+		gensec_gssapi_state->lucid = NULL;
+		return NT_STATUS_INTERNAL_ERROR;
+	}
+
+	return NT_STATUS_OK;
 }
 
 static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
@@ -104,37 +164,35 @@ static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
 	gensec_gssapi_state->server_name = GSS_C_NO_NAME;
 	gensec_gssapi_state->client_name = GSS_C_NO_NAME;
 	
-	gensec_gssapi_state->gss_want_flags = 0;
-	gensec_gssapi_state->expire_time = GENSEC_EXPIRE_TIME_INFINITY;
+	gensec_gssapi_state->want_flags = 0;
 
 	if (gensec_setting_bool(gensec_security->settings, "gensec_gssapi", "delegation_by_kdc_policy", true)) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_DELEG_POLICY_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_DELEG_POLICY_FLAG;
 	}
 	if (gensec_setting_bool(gensec_security->settings, "gensec_gssapi", "mutual", true)) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_MUTUAL_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_MUTUAL_FLAG;
 	}
 	if (gensec_setting_bool(gensec_security->settings, "gensec_gssapi", "delegation", true)) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_DELEG_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_DELEG_FLAG;
 	}
 	if (gensec_setting_bool(gensec_security->settings, "gensec_gssapi", "replay", true)) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_REPLAY_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_REPLAY_FLAG;
 	}
 	if (gensec_setting_bool(gensec_security->settings, "gensec_gssapi", "sequence", true)) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_SEQUENCE_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_SEQUENCE_FLAG;
 	}
 
 	if (gensec_security->want_features & GENSEC_FEATURE_SIGN) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_INTEG_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_INTEG_FLAG;
 	}
 	if (gensec_security->want_features & GENSEC_FEATURE_SEAL) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_INTEG_FLAG;
-		gensec_gssapi_state->gss_want_flags |= GSS_C_CONF_FLAG;
+		gensec_gssapi_state->want_flags |= GSS_C_CONF_FLAG;
 	}
 	if (gensec_security->want_features & GENSEC_FEATURE_DCE_STYLE) {
-		gensec_gssapi_state->gss_want_flags |= GSS_C_DCE_STYLE;
+		gensec_gssapi_state->want_flags |= GSS_C_DCE_STYLE;
 	}
 
-	gensec_gssapi_state->gss_got_flags = 0;
+	gensec_gssapi_state->got_flags = 0;
 
 	switch (gensec_security->ops->auth_type) {
 	case DCERPC_AUTH_TYPE_SPNEGO:
@@ -142,16 +200,19 @@ static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
 		break;
 	case DCERPC_AUTH_TYPE_KRB5:
 	default:
-		gensec_gssapi_state->gss_oid =
-			discard_const_p(void, gss_mech_krb5);
+		gensec_gssapi_state->gss_oid = gss_mech_krb5;
 		break;
 	}
 
+	gensec_gssapi_state->session_key = data_blob(NULL, 0);
+	gensec_gssapi_state->pac = data_blob(NULL, 0);
+
 	ret = smb_krb5_init_context(gensec_gssapi_state,
+				    NULL,
 				    gensec_security->settings->lp_ctx,
 				    &gensec_gssapi_state->smb_krb5_context);
 	if (ret) {
-		DEBUG(1,("gensec_gssapi_start: smb_krb5_init_context failed (%s)\n",
+		DEBUG(1,("gensec_krb5_start: krb5_init_context failed (%s)\n",
 			 error_message(ret)));
 		talloc_free(gensec_gssapi_state);
 		return NT_STATUS_INTERNAL_ERROR;
@@ -159,6 +220,8 @@ static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
 
 	gensec_gssapi_state->client_cred = NULL;
 	gensec_gssapi_state->server_cred = NULL;
+
+	gensec_gssapi_state->lucid = NULL;
 
 	gensec_gssapi_state->delegated_cred_handle = GSS_C_NO_CREDENTIAL;
 
@@ -173,12 +236,11 @@ static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
 
 	talloc_set_destructor(gensec_gssapi_state, gensec_gssapi_destructor);
 
-#ifdef SAMBA4_USES_HEIMDAL
 	realm = lpcfg_realm(gensec_security->settings->lp_ctx);
 	if (realm != NULL) {
 		ret = gsskrb5_set_default_realm(realm);
 		if (ret) {
-			DEBUG(1,("gensec_gssapi_start: gsskrb5_set_default_realm failed\n"));
+			DEBUG(1,("gensec_krb5_start: gsskrb5_set_default_realm failed\n"));
 			talloc_free(gensec_gssapi_state);
 			return NT_STATUS_INTERNAL_ERROR;
 		}
@@ -187,11 +249,11 @@ static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
 	/* don't do DNS lookups of any kind, it might/will fail for a netbios name */
 	ret = gsskrb5_set_dns_canonicalize(gensec_setting_bool(gensec_security->settings, "krb5", "set_dns_canonicalize", false));
 	if (ret) {
-		DEBUG(1,("gensec_gssapi_start: gsskrb5_set_dns_canonicalize failed\n"));
+		DEBUG(1,("gensec_krb5_start: gsskrb5_set_dns_canonicalize failed\n"));
 		talloc_free(gensec_gssapi_state);
 		return NT_STATUS_INTERNAL_ERROR;
 	}
-#endif
+
 	return NT_STATUS_OK;
 }
 
@@ -243,71 +305,21 @@ static NTSTATUS gensec_gssapi_sasl_server_start(struct gensec_security *gensec_s
 	return nt_status;
 }
 
-static NTSTATUS gensec_gssapi_client_creds(struct gensec_security *gensec_security,
-					   struct tevent_context *ev)
-{
-	struct gensec_gssapi_state *gensec_gssapi_state;
-	struct gssapi_creds_container *gcc;
-	struct cli_credentials *creds = gensec_get_credentials(gensec_security);
-	const char *error_string;
-	int ret;
-
-	gensec_gssapi_state = talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-
-	/* Only run this the first time the update() call is made */
-	if (gensec_gssapi_state->client_cred) {
-		return NT_STATUS_OK;
-	}
-
-	ret = cli_credentials_get_client_gss_creds(creds,
-						   ev,
-						   gensec_security->settings->lp_ctx, &gcc, &error_string);
-	switch (ret) {
-	case 0:
-		break;
-	case EINVAL:
-		DEBUG(3, ("Cannot obtain client GSS credentials we need to contact %s : %s\n", gensec_gssapi_state->target_principal, error_string));
-		return NT_STATUS_INVALID_PARAMETER;
-	case KRB5KDC_ERR_PREAUTH_FAILED:
-	case KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN:
-	case KRB5KRB_AP_ERR_BAD_INTEGRITY:
-		DEBUG(1, ("Wrong username or password: %s\n", error_string));
-		return NT_STATUS_LOGON_FAILURE;
-	case KRB5KDC_ERR_CLIENT_REVOKED:
-		DEBUG(1, ("Account locked out: %s\n", error_string));
-		return NT_STATUS_ACCOUNT_LOCKED_OUT;
-	case KRB5_KDC_UNREACH:
-		DEBUG(3, ("Cannot reach a KDC we require to contact %s : %s\n", gensec_gssapi_state->target_principal, error_string));
-		return NT_STATUS_NO_LOGON_SERVERS;
-	case KRB5_CC_NOTFOUND:
-	case KRB5_CC_END:
-		DEBUG(2, ("Error obtaining ticket we require to contact %s: (possibly due to clock skew between us and the KDC) %s\n", gensec_gssapi_state->target_principal, error_string));
-		return NT_STATUS_TIME_DIFFERENCE_AT_DC;
-	default:
-		DEBUG(1, ("Aquiring initiator credentials failed: %s\n", error_string));
-		return NT_STATUS_UNSUCCESSFUL;
-	}
-
-	gensec_gssapi_state->client_cred = gcc;
-	if (!talloc_reference(gensec_gssapi_state, gcc)) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	return NT_STATUS_OK;
-}
-
 static NTSTATUS gensec_gssapi_client_start(struct gensec_security *gensec_security)
 {
 	struct gensec_gssapi_state *gensec_gssapi_state;
 	struct cli_credentials *creds = gensec_get_credentials(gensec_security);
+	krb5_error_code ret;
 	NTSTATUS nt_status;
 	gss_buffer_desc name_token;
 	gss_OID name_type;
 	OM_uint32 maj_stat, min_stat;
 	const char *hostname = gensec_get_target_hostname(gensec_security);
+	struct gssapi_creds_container *gcc;
+	const char *error_string;
 
 	if (!hostname) {
-		DEBUG(3, ("No hostname for target computer passed in, cannot use kerberos for this connection\n"));
+		DEBUG(1, ("Could not determine hostname for target computer, cannot use kerberos\n"));
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 	if (is_ipaddress(hostname)) {
@@ -325,10 +337,6 @@ static NTSTATUS gensec_gssapi_client_start(struct gensec_security *gensec_securi
 	}
 
 	gensec_gssapi_state = talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-
-	if (cli_credentials_get_impersonate_principal(creds)) {
-		gensec_gssapi_state->gss_want_flags &= ~(GSS_C_DELEG_FLAG|GSS_C_DELEG_POLICY_FLAG);
-	}
 
 	gensec_gssapi_state->target_principal = gensec_get_target_principal(gensec_security);
 	if (gensec_gssapi_state->target_principal) {
@@ -355,6 +363,33 @@ static NTSTATUS gensec_gssapi_client_start(struct gensec_security *gensec_securi
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
+	ret = cli_credentials_get_client_gss_creds(creds, 
+						   gensec_security->event_ctx, 
+						   gensec_security->settings->lp_ctx, &gcc, &error_string);
+	switch (ret) {
+	case 0:
+		break;
+	case KRB5KDC_ERR_PREAUTH_FAILED:
+	case KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN:
+		DEBUG(1, ("Wrong username or password: %s\n", error_string));
+		return NT_STATUS_LOGON_FAILURE;
+	case KRB5_KDC_UNREACH:
+		DEBUG(3, ("Cannot reach a KDC we require to contact %s : %s\n", gensec_gssapi_state->target_principal, error_string));
+		return NT_STATUS_NO_LOGON_SERVERS;
+	case KRB5_CC_NOTFOUND:
+	case KRB5_CC_END:
+		DEBUG(2, ("Error obtaining ticket we require to contact %s: (possibly due to clock skew between us and the KDC) %s\n", gensec_gssapi_state->target_principal, error_string));
+		return NT_STATUS_TIME_DIFFERENCE_AT_DC;
+	default:
+		DEBUG(1, ("Aquiring initiator credentials failed: %s\n", error_string));
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	gensec_gssapi_state->client_cred = gcc;
+	if (!talloc_reference(gensec_gssapi_state, gcc)) {
+		return NT_STATUS_NO_MEMORY;
+	}
+	
 	return NT_STATUS_OK;
 }
 
@@ -373,6 +408,26 @@ static NTSTATUS gensec_gssapi_sasl_client_start(struct gensec_security *gensec_s
 
 
 /**
+ * Check if the packet is one for this mechansim
+ * 
+ * @param gensec_security GENSEC state
+ * @param in The request, as a DATA_BLOB
+ * @return Error, INVALID_PARAMETER if it's not a packet for us
+ *                or NT_STATUS_OK if the packet is ok. 
+ */
+
+static NTSTATUS gensec_gssapi_magic(struct gensec_security *gensec_security, 
+				    const DATA_BLOB *in) 
+{
+	if (gensec_gssapi_check_oid(in, GENSEC_OID_KERBEROS5)) {
+		return NT_STATUS_OK;
+	} else {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+}
+
+
+/**
  * Next state function for the GSSAPI GENSEC mechanism
  * 
  * @param gensec_gssapi_state GSSAPI State
@@ -384,27 +439,16 @@ static NTSTATUS gensec_gssapi_sasl_client_start(struct gensec_security *gensec_s
  */
 
 static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security, 
-				     TALLOC_CTX *out_mem_ctx,
-				     struct tevent_context *ev,
-				     const DATA_BLOB in, DATA_BLOB *out)
+				   TALLOC_CTX *out_mem_ctx, 
+				   const DATA_BLOB in, DATA_BLOB *out) 
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
 	NTSTATUS nt_status = NT_STATUS_LOGON_FAILURE;
 	OM_uint32 maj_stat, min_stat;
 	OM_uint32 min_stat2;
-	gss_buffer_desc input_token = { 0, NULL };
-	gss_buffer_desc output_token = { 0, NULL };
-
+	gss_buffer_desc input_token, output_token;
 	gss_OID gss_oid_p = NULL;
-	OM_uint32 time_req = 0;
-	OM_uint32 time_rec = 0;
-	struct timeval tv;
-
-	time_req = gensec_setting_int(gensec_security->settings,
-				      "gensec_gssapi", "requested_life_time",
-				      time_req);
-
 	input_token.length = in.length;
 	input_token.value = in.data;
 
@@ -414,53 +458,43 @@ static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security,
 		switch (gensec_security->gensec_role) {
 		case GENSEC_CLIENT:
 		{
-#ifdef SAMBA4_USES_HEIMDAL
 			struct gsskrb5_send_to_kdc send_to_kdc;
-#endif
 			krb5_error_code ret;
-
-			nt_status = gensec_gssapi_client_creds(gensec_security, ev);
-			if (!NT_STATUS_IS_OK(nt_status)) {
-				return nt_status;
-			}
-
-#ifdef SAMBA4_USES_HEIMDAL
 			send_to_kdc.func = smb_krb5_send_and_recv_func;
-			send_to_kdc.ptr = ev;
+			send_to_kdc.ptr = gensec_security->event_ctx;
 
 			min_stat = gsskrb5_set_send_to_kdc(&send_to_kdc);
 			if (min_stat) {
-				DEBUG(1,("gensec_gssapi_update: gsskrb5_set_send_to_kdc failed\n"));
+				DEBUG(1,("gensec_krb5_start: gsskrb5_set_send_to_kdc failed\n"));
 				return NT_STATUS_INTERNAL_ERROR;
 			}
-#endif
+
 			maj_stat = gss_init_sec_context(&min_stat, 
 							gensec_gssapi_state->client_cred->creds,
 							&gensec_gssapi_state->gssapi_context, 
 							gensec_gssapi_state->server_name, 
 							gensec_gssapi_state->gss_oid,
-							gensec_gssapi_state->gss_want_flags, 
-							time_req,
+							gensec_gssapi_state->want_flags, 
+							0, 
 							gensec_gssapi_state->input_chan_bindings,
 							&input_token, 
 							&gss_oid_p,
 							&output_token, 
-							&gensec_gssapi_state->gss_got_flags, /* ret flags */
-							&time_rec);
+							&gensec_gssapi_state->got_flags, /* ret flags */
+							NULL);
 			if (gss_oid_p) {
 				gensec_gssapi_state->gss_oid = gss_oid_p;
 			}
 
-#ifdef SAMBA4_USES_HEIMDAL
 			send_to_kdc.func = smb_krb5_send_and_recv_func;
 			send_to_kdc.ptr = NULL;
 
 			ret = gsskrb5_set_send_to_kdc(&send_to_kdc);
 			if (ret) {
-				DEBUG(1,("gensec_gssapi_update: gsskrb5_set_send_to_kdc failed\n"));
+				DEBUG(1,("gensec_krb5_start: gsskrb5_set_send_to_kdc failed\n"));
 				return NT_STATUS_INTERNAL_ERROR;
 			}
-#endif
+
 			break;
 		}
 		case GENSEC_SERVER:
@@ -473,8 +507,8 @@ static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security,
 							  &gensec_gssapi_state->client_name, 
 							  &gss_oid_p,
 							  &output_token, 
-							  &gensec_gssapi_state->gss_got_flags, 
-							  &time_rec,
+							  &gensec_gssapi_state->got_flags, 
+							  NULL, 
 							  &gensec_gssapi_state->delegated_cred_handle);
 			if (gss_oid_p) {
 				gensec_gssapi_state->gss_oid = gss_oid_p;
@@ -492,15 +526,11 @@ static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security,
 			*out = data_blob_talloc(out_mem_ctx, output_token.value, output_token.length);
 			gss_release_buffer(&min_stat2, &output_token);
 			
-			if (gensec_gssapi_state->gss_got_flags & GSS_C_DELEG_FLAG &&
-			    gensec_gssapi_state->delegated_cred_handle != GSS_C_NO_CREDENTIAL) {
+			if (gensec_gssapi_state->got_flags & GSS_C_DELEG_FLAG) {
 				DEBUG(5, ("gensec_gssapi: credentials were delegated\n"));
 			} else {
 				DEBUG(5, ("gensec_gssapi: NO credentials were delegated\n"));
 			}
-
-			tv = timeval_current_ofs(time_rec, 0);
-			gensec_gssapi_state->expire_time = timeval_to_nttime(&tv);
 
 			/* We may have been invoked as SASL, so there
 			 * is more work to do */
@@ -525,69 +555,7 @@ static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security,
 			gss_release_buffer(&min_stat2, &output_token);
 			
 			return NT_STATUS_MORE_PROCESSING_REQUIRED;
-		} else if (maj_stat == GSS_S_CONTEXT_EXPIRED) {
-			gss_cred_id_t creds = NULL;
-			gss_name_t name;
-			gss_buffer_desc buffer;
-			OM_uint32 lifetime = 0;
-			gss_cred_usage_t usage;
-			const char *role = NULL;
-			DEBUG(0, ("GSS %s Update(krb5)(%d) Update failed, credentials expired during GSSAPI handshake!\n",
-				  role,
-				  gensec_gssapi_state->gss_exchange_count));
-
-			
-			switch (gensec_security->gensec_role) {
-			case GENSEC_CLIENT:
-				creds = gensec_gssapi_state->client_cred->creds;
-				role = "client";
-				break;
-			case GENSEC_SERVER:
-				creds = gensec_gssapi_state->server_cred->creds;
-				role = "server";
-				break;
-			}
-
-			maj_stat = gss_inquire_cred(&min_stat, 
-						    creds,
-						    &name, &lifetime, &usage, NULL);
-
-			if (maj_stat == GSS_S_COMPLETE) {
-				const char *usage_string = NULL;
-				switch (usage) {
-				case GSS_C_BOTH:
-					usage_string = "GSS_C_BOTH";
-					break;
-				case GSS_C_ACCEPT:
-					usage_string = "GSS_C_ACCEPT";
-					break;
-				case GSS_C_INITIATE:
-					usage_string = "GSS_C_INITIATE";
-					break;
-				}
-				maj_stat = gss_display_name(&min_stat, name, &buffer, NULL);
-				if (maj_stat) {
-					buffer.value = NULL;
-					buffer.length = 0;
-				}
-				if (lifetime > 0) {
-					DEBUG(0, ("GSSAPI gss_inquire_cred indicates expiry of %*.*s in %u sec for %s\n", 
-						  (int)buffer.length, (int)buffer.length, (char *)buffer.value, 
-						  lifetime, usage_string));
-				} else {
-					DEBUG(0, ("GSSAPI gss_inquire_cred indicates %*.*s has already expired for %s\n", 
-						  (int)buffer.length, (int)buffer.length, (char *)buffer.value, 
-						  usage_string));
-				}
-				gss_release_buffer(&min_stat, &buffer);
-				gss_release_name(&min_stat, &name);
-			} else if (maj_stat != GSS_S_COMPLETE) {
-				DEBUG(0, ("inquiry of credential lifefime via GSSAPI gss_inquire_cred failed: %s\n",
-					  gssapi_error_string(out_mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
-			}
-			return NT_STATUS_INVALID_PARAMETER;
-		} else if (smb_gss_oid_equal(gensec_gssapi_state->gss_oid,
-					     gss_mech_krb5)) {
+		} else if (gss_oid_equal(gensec_gssapi_state->gss_oid, gss_mech_krb5)) {
 			switch (min_stat) {
 			case KRB5KRB_AP_ERR_TKT_NYV:
 				DEBUG(1, ("Error with ticket to contact %s: possible clock skew between us and the KDC or target server: %s\n",
@@ -600,7 +568,7 @@ static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security,
 					  gssapi_error_string(out_mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
 				return NT_STATUS_INVALID_PARAMETER; /* Make SPNEGO ignore us, we can't go any further here */
 			case KRB5_KDC_UNREACH:
-				DEBUG(3, ("Cannot reach a KDC we require in order to obtain a ticket to %s: %s\n",
+				DEBUG(3, ("Cannot reach a KDC we require in order to obtain a ticetk to %s: %s\n",
 					  gensec_gssapi_state->target_principal,
 					  gssapi_error_string(out_mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
 				return NT_STATUS_NO_LOGON_SERVERS; /* Make SPNEGO ignore us, we can't go any further here */
@@ -617,14 +585,14 @@ static NTSTATUS gensec_gssapi_update(struct gensec_security *gensec_security,
 					  gensec_security->gensec_role == GENSEC_CLIENT ? "client" : "server",
 					  gensec_gssapi_state->gss_exchange_count,
 					  gssapi_error_string(out_mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
-				return NT_STATUS_LOGON_FAILURE;
+				return nt_status;
 			}
 		} else {
 			DEBUG(1, ("GSS %s Update(%d) failed: %s\n",
 				  gensec_security->gensec_role == GENSEC_CLIENT ? "client" : "server",
 				  gensec_gssapi_state->gss_exchange_count,
 				  gssapi_error_string(out_mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
-			return NT_STATUS_LOGON_FAILURE;
+			return nt_status;
 		}
 		break;
 	}
@@ -973,7 +941,7 @@ static size_t gensec_gssapi_max_input_size(struct gensec_security *gensec_securi
 				       &max_input_size);
 	if (GSS_ERROR(maj_stat)) {
 		TALLOC_CTX *mem_ctx = talloc_new(NULL); 
-		DEBUG(1, ("gensec_gssapi_max_input_size: determining signature size with gss_wrap_size_limit failed: %s\n",
+		DEBUG(1, ("gensec_gssapi_max_input_size: determinaing signature size with gss_wrap_size_limit failed: %s\n", 
 			  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
 		talloc_free(mem_ctx);
 		return 0;
@@ -997,61 +965,98 @@ static NTSTATUS gensec_gssapi_seal_packet(struct gensec_security *gensec_securit
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-	bool hdr_signing = false;
-	size_t sig_size = 0;
-	NTSTATUS status;
+	OM_uint32 maj_stat, min_stat;
+	gss_buffer_desc input_token, output_token;
+	int conf_state;
+	ssize_t sig_length;
 
-	if (gensec_security->want_features & GENSEC_FEATURE_SIGN_PKT_HEADER) {
-		hdr_signing = true;
+	input_token.length = length;
+	input_token.value = data;
+	
+	maj_stat = gss_wrap(&min_stat, 
+			    gensec_gssapi_state->gssapi_context,
+			    gensec_have_feature(gensec_security, GENSEC_FEATURE_SEAL),
+			    GSS_C_QOP_DEFAULT,
+			    &input_token,
+			    &conf_state,
+			    &output_token);
+	if (GSS_ERROR(maj_stat)) {
+		DEBUG(1, ("gensec_gssapi_seal_packet: GSS Wrap failed: %s\n", 
+			  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+		return NT_STATUS_ACCESS_DENIED;
 	}
 
-	sig_size = gensec_gssapi_sig_size(gensec_security, length);
-
-	status = gssapi_seal_packet(gensec_gssapi_state->gssapi_context,
-				    gensec_gssapi_state->gss_oid,
-				    hdr_signing, sig_size,
-				    data, length,
-				    whole_pdu, pdu_length,
-				    mem_ctx, sig);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("gssapi_seal_packet(hdr_signing=%u,sig_size=%zu,"
-			  "data=%zu,pdu=%zu) failed: %s\n",
-			  hdr_signing, sig_size, length, pdu_length,
-			  nt_errstr(status)));
-		return status;
+	if (output_token.length < input_token.length) {
+		DEBUG(1, ("gensec_gssapi_seal_packet: GSS Wrap length [%ld] *less* than caller length [%ld]\n", 
+			  (long)output_token.length, (long)length));
+		return NT_STATUS_INTERNAL_ERROR;
 	}
+	sig_length = output_token.length - input_token.length;
 
+	memcpy(data, ((uint8_t *)output_token.value) + sig_length, length);
+	*sig = data_blob_talloc(mem_ctx, (uint8_t *)output_token.value, sig_length);
+
+	dump_data_pw("gensec_gssapi_seal_packet: sig\n", sig->data, sig->length);
+	dump_data_pw("gensec_gssapi_seal_packet: clear\n", data, length);
+	dump_data_pw("gensec_gssapi_seal_packet: sealed\n", ((uint8_t *)output_token.value) + sig_length, output_token.length - sig_length);
+
+	gss_release_buffer(&min_stat, &output_token);
+
+	if (gensec_have_feature(gensec_security, GENSEC_FEATURE_SEAL)
+	    && !conf_state) {
+		return NT_STATUS_ACCESS_DENIED;
+	}
 	return NT_STATUS_OK;
 }
 
 static NTSTATUS gensec_gssapi_unseal_packet(struct gensec_security *gensec_security, 
+					    TALLOC_CTX *mem_ctx, 
 					    uint8_t *data, size_t length, 
 					    const uint8_t *whole_pdu, size_t pdu_length,
 					    const DATA_BLOB *sig)
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-	bool hdr_signing = false;
-	NTSTATUS status;
+	OM_uint32 maj_stat, min_stat;
+	gss_buffer_desc input_token, output_token;
+	int conf_state;
+	gss_qop_t qop_state;
+	DATA_BLOB in;
 
-	if (gensec_security->want_features & GENSEC_FEATURE_SIGN_PKT_HEADER) {
-		hdr_signing = true;
+	dump_data_pw("gensec_gssapi_unseal_packet: sig\n", sig->data, sig->length);
+
+	in = data_blob_talloc(mem_ctx, NULL, sig->length + length);
+
+	memcpy(in.data, sig->data, sig->length);
+	memcpy(in.data + sig->length, data, length);
+
+	input_token.length = in.length;
+	input_token.value = in.data;
+	
+	maj_stat = gss_unwrap(&min_stat, 
+			      gensec_gssapi_state->gssapi_context, 
+			      &input_token,
+			      &output_token, 
+			      &conf_state,
+			      &qop_state);
+	if (GSS_ERROR(maj_stat)) {
+		DEBUG(1, ("gensec_gssapi_unseal_packet: GSS UnWrap failed: %s\n", 
+			  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+		return NT_STATUS_ACCESS_DENIED;
 	}
 
-	status = gssapi_unseal_packet(gensec_gssapi_state->gssapi_context,
-				      gensec_gssapi_state->gss_oid,
-				      hdr_signing,
-				      data, length,
-				      whole_pdu, pdu_length,
-				      sig);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("gssapi_unseal_packet(hdr_signing=%u,sig_size=%zu,"
-			  "data=%zu,pdu=%zu) failed: %s\n",
-			  hdr_signing, sig->length, length, pdu_length,
-			  nt_errstr(status)));
-		return status;
+	if (output_token.length != length) {
+		return NT_STATUS_INTERNAL_ERROR;
 	}
 
+	memcpy(data, output_token.value, length);
+
+	gss_release_buffer(&min_stat, &output_token);
+	
+	if (gensec_have_feature(gensec_security, GENSEC_FEATURE_SEAL)
+	    && !conf_state) {
+		return NT_STATUS_ACCESS_DENIED;
+	}
 	return NT_STATUS_OK;
 }
 
@@ -1063,56 +1068,72 @@ static NTSTATUS gensec_gssapi_sign_packet(struct gensec_security *gensec_securit
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-	bool hdr_signing = false;
-	NTSTATUS status;
+	OM_uint32 maj_stat, min_stat;
+	gss_buffer_desc input_token, output_token;
 
 	if (gensec_security->want_features & GENSEC_FEATURE_SIGN_PKT_HEADER) {
-		hdr_signing = true;
+		input_token.length = pdu_length;
+		input_token.value = discard_const_p(uint8_t *, whole_pdu);
+	} else {
+		input_token.length = length;
+		input_token.value = discard_const_p(uint8_t *, data);
 	}
 
-	status = gssapi_sign_packet(gensec_gssapi_state->gssapi_context,
-				    gensec_gssapi_state->gss_oid,
-				    hdr_signing,
-				    data, length,
-				    whole_pdu, pdu_length,
-				    mem_ctx, sig);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("gssapi_sign_packet(hdr_signing=%u,"
-			  "data=%zu,pdu=%zu) failed: %s\n",
-			  hdr_signing, length, pdu_length,
-			  nt_errstr(status)));
-		return status;
+	maj_stat = gss_get_mic(&min_stat,
+			    gensec_gssapi_state->gssapi_context,
+			    GSS_C_QOP_DEFAULT,
+			    &input_token,
+			    &output_token);
+	if (GSS_ERROR(maj_stat)) {
+		DEBUG(1, ("GSS GetMic failed: %s\n",
+			  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+		return NT_STATUS_ACCESS_DENIED;
 	}
+
+	*sig = data_blob_talloc(mem_ctx, (uint8_t *)output_token.value, output_token.length);
+
+	dump_data_pw("gensec_gssapi_seal_packet: sig\n", sig->data, sig->length);
+
+	gss_release_buffer(&min_stat, &output_token);
 
 	return NT_STATUS_OK;
 }
 
 static NTSTATUS gensec_gssapi_check_packet(struct gensec_security *gensec_security, 
+					   TALLOC_CTX *mem_ctx, 
 					   const uint8_t *data, size_t length, 
 					   const uint8_t *whole_pdu, size_t pdu_length, 
 					   const DATA_BLOB *sig)
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-	bool hdr_signing = false;
-	NTSTATUS status;
+	OM_uint32 maj_stat, min_stat;
+	gss_buffer_desc input_token;
+	gss_buffer_desc input_message;
+	gss_qop_t qop_state;
+
+	dump_data_pw("gensec_gssapi_seal_packet: sig\n", sig->data, sig->length);
 
 	if (gensec_security->want_features & GENSEC_FEATURE_SIGN_PKT_HEADER) {
-		hdr_signing = true;
+		input_message.length = pdu_length;
+		input_message.value = discard_const(whole_pdu);
+	} else {
+		input_message.length = length;
+		input_message.value = discard_const(data);
 	}
 
-	status = gssapi_check_packet(gensec_gssapi_state->gssapi_context,
-				     gensec_gssapi_state->gss_oid,
-				     hdr_signing,
-				     data, length,
-				     whole_pdu, pdu_length,
-				     sig);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("gssapi_check_packet(hdr_signing=%u,sig_size=%zu,"
-			  "data=%zu,pdu=%zu) failed: %s\n",
-			  hdr_signing, sig->length, length, pdu_length,
-			  nt_errstr(status)));
-		return status;
+	input_token.length = sig->length;
+	input_token.value = sig->data;
+
+	maj_stat = gss_verify_mic(&min_stat,
+			      gensec_gssapi_state->gssapi_context, 
+			      &input_message,
+			      &input_token,
+			      &qop_state);
+	if (GSS_ERROR(maj_stat)) {
+		DEBUG(1, ("GSS VerifyMic failed: %s\n",
+			  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+		return NT_STATUS_ACCESS_DENIED;
 	}
 
 	return NT_STATUS_OK;
@@ -1129,34 +1150,32 @@ static bool gensec_gssapi_have_feature(struct gensec_security *gensec_security,
 		if (gensec_gssapi_state->sasl 
 		    && gensec_gssapi_state->sasl_state == STAGE_DONE) {
 			return ((gensec_gssapi_state->sasl_protection & NEG_SIGN) 
-				&& (gensec_gssapi_state->gss_got_flags & GSS_C_INTEG_FLAG));
+				&& (gensec_gssapi_state->got_flags & GSS_C_INTEG_FLAG));
 		}
-		return gensec_gssapi_state->gss_got_flags & GSS_C_INTEG_FLAG;
+		return gensec_gssapi_state->got_flags & GSS_C_INTEG_FLAG;
 	}
 	if (feature & GENSEC_FEATURE_SEAL) {
 		/* If we are going GSSAPI SASL, then we honour the second negotiation */
 		if (gensec_gssapi_state->sasl 
 		    && gensec_gssapi_state->sasl_state == STAGE_DONE) {
 			return ((gensec_gssapi_state->sasl_protection & NEG_SEAL) 
-				 && (gensec_gssapi_state->gss_got_flags & GSS_C_CONF_FLAG));
+				 && (gensec_gssapi_state->got_flags & GSS_C_CONF_FLAG));
 		}
-		return gensec_gssapi_state->gss_got_flags & GSS_C_CONF_FLAG;
+		return gensec_gssapi_state->got_flags & GSS_C_CONF_FLAG;
 	}
 	if (feature & GENSEC_FEATURE_SESSION_KEY) {
 		/* Only for GSSAPI/Krb5 */
-		if (smb_gss_oid_equal(gensec_gssapi_state->gss_oid,
-				      gss_mech_krb5)) {
+		if (gss_oid_equal(gensec_gssapi_state->gss_oid, gss_mech_krb5)) {
 			return true;
 		}
 	}
 	if (feature & GENSEC_FEATURE_DCE_STYLE) {
-		return gensec_gssapi_state->gss_got_flags & GSS_C_DCE_STYLE;
+		return gensec_gssapi_state->got_flags & GSS_C_DCE_STYLE;
 	}
 	if (feature & GENSEC_FEATURE_NEW_SPNEGO) {
 		NTSTATUS status;
-		uint32_t keytype;
 
-		if (!(gensec_gssapi_state->gss_got_flags & GSS_C_INTEG_FLAG)) {
+		if (!(gensec_gssapi_state->got_flags & GSS_C_INTEG_FLAG)) {
 			return false;
 		}
 
@@ -1167,53 +1186,22 @@ static bool gensec_gssapi_have_feature(struct gensec_security *gensec_security,
 			return false;
 		}
 
-		status = gssapi_get_session_key(gensec_gssapi_state,
-						gensec_gssapi_state->gssapi_context, NULL, &keytype);
-		/* 
-		 * We should do a proper sig on the mechListMic unless
-		 * we know we have to be backwards compatible with
-		 * earlier windows versions.  
-		 * 
-		 * Negotiating a non-krb5
-		 * mech for example should be regarded as having
-		 * NEW_SPNEGO
-		 */
-		if (NT_STATUS_IS_OK(status)) {
-			switch (keytype) {
-			case ENCTYPE_DES_CBC_CRC:
-			case ENCTYPE_DES_CBC_MD5:
-			case ENCTYPE_ARCFOUR_HMAC:
-			case ENCTYPE_DES3_CBC_SHA1:
-				return false;
-			}
-		}
-		return true;
-	}
-	/* We can always do async (rather than strict request/reply) packets.  */
-	if (feature & GENSEC_FEATURE_ASYNC_REPLIES) {
-		return true;
-	}
-	if (feature & GENSEC_FEATURE_SIGN_PKT_HEADER) {
-		if (gensec_security->want_features & GENSEC_FEATURE_SEAL) {
-			return true;
+		status = gensec_gssapi_init_lucid(gensec_gssapi_state);
+		if (!NT_STATUS_IS_OK(status)) {
+			return false;
 		}
 
-		if (gensec_security->want_features & GENSEC_FEATURE_SIGN) {
+		if (gensec_gssapi_state->lucid->protocol == 1) {
 			return true;
 		}
 
 		return false;
 	}
+	/* We can always do async (rather than strict request/reply) packets.  */
+	if (feature & GENSEC_FEATURE_ASYNC_REPLIES) {
+		return true;
+	}
 	return false;
-}
-
-static NTTIME gensec_gssapi_expire_time(struct gensec_security *gensec_security)
-{
-	struct gensec_gssapi_state *gensec_gssapi_state =
-		talloc_get_type_abort(gensec_security->private_data,
-		struct gensec_gssapi_state);
-
-	return gensec_gssapi_state->expire_time;
 }
 
 /*
@@ -1223,94 +1211,188 @@ static NTTIME gensec_gssapi_expire_time(struct gensec_security *gensec_security)
  * This breaks all the abstractions, but what do you expect...
  */
 static NTSTATUS gensec_gssapi_session_key(struct gensec_security *gensec_security, 
-					  TALLOC_CTX *mem_ctx,
 					  DATA_BLOB *session_key) 
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-	return gssapi_get_session_key(mem_ctx, gensec_gssapi_state->gssapi_context, session_key, NULL);
+	OM_uint32 maj_stat, min_stat;
+	krb5_keyblock *subkey;
+
+	if (gensec_gssapi_state->sasl_state != STAGE_DONE) {
+		return NT_STATUS_NO_USER_SESSION_KEY;
+	}
+
+	if (gensec_gssapi_state->session_key.data) {
+		*session_key = gensec_gssapi_state->session_key;
+		return NT_STATUS_OK;
+	}
+
+	maj_stat = gsskrb5_get_subkey(&min_stat,
+				      gensec_gssapi_state->gssapi_context,
+				      &subkey);
+	if (maj_stat != 0) {
+		DEBUG(1, ("NO session key for this mech\n"));
+		return NT_STATUS_NO_USER_SESSION_KEY;
+	}
+	
+	DEBUG(10, ("Got KRB5 session key of length %d%s\n",
+		   (int)KRB5_KEY_LENGTH(subkey),
+		   (gensec_gssapi_state->sasl_state == STAGE_DONE)?" (done)":""));
+	*session_key = data_blob_talloc(gensec_gssapi_state,
+					KRB5_KEY_DATA(subkey), KRB5_KEY_LENGTH(subkey));
+	krb5_free_keyblock(gensec_gssapi_state->smb_krb5_context->krb5_context, subkey);
+	gensec_gssapi_state->session_key = *session_key;
+	dump_data_pw("KRB5 Session Key:\n", session_key->data, session_key->length);
+
+	return NT_STATUS_OK;
 }
 
 /* Get some basic (and authorization) information about the user on
  * this session.  This uses either the PAC (if present) or a local
  * database lookup */
 static NTSTATUS gensec_gssapi_session_info(struct gensec_security *gensec_security,
-					   TALLOC_CTX *mem_ctx,
 					   struct auth_session_info **_session_info) 
 {
 	NTSTATUS nt_status;
-	TALLOC_CTX *tmp_ctx;
+	TALLOC_CTX *mem_ctx;
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
+	struct auth_user_info_dc *user_info_dc = NULL;
 	struct auth_session_info *session_info = NULL;
 	OM_uint32 maj_stat, min_stat;
-	DATA_BLOB pac_blob, *pac_blob_ptr = NULL;
-
-	gss_buffer_desc name_token;
-	char *principal_string;
+	gss_buffer_desc pac;
+	DATA_BLOB pac_blob;
+	struct PAC_SIGNATURE_DATA *pac_srv_sig = NULL;
+	struct PAC_SIGNATURE_DATA *pac_kdc_sig = NULL;
 	
-	tmp_ctx = talloc_named(mem_ctx, 0, "gensec_gssapi_session_info context");
-	NT_STATUS_HAVE_NO_MEMORY(tmp_ctx);
-
-	maj_stat = gss_display_name (&min_stat,
-				     gensec_gssapi_state->client_name,
-				     &name_token,
-				     NULL);
-	if (GSS_ERROR(maj_stat)) {
-		DEBUG(1, ("GSS display_name failed: %s\n",
-			  gssapi_error_string(tmp_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
-		talloc_free(tmp_ctx);
-		return NT_STATUS_FOOBAR;
+	if ((gensec_gssapi_state->gss_oid->length != gss_mech_krb5->length)
+	    || (memcmp(gensec_gssapi_state->gss_oid->elements, gss_mech_krb5->elements, 
+		       gensec_gssapi_state->gss_oid->length) != 0)) {
+		DEBUG(1, ("NO session info available for this mech\n"));
+		return NT_STATUS_INVALID_PARAMETER;
 	}
+		
+	mem_ctx = talloc_named(gensec_gssapi_state, 0, "gensec_gssapi_session_info context"); 
+	NT_STATUS_HAVE_NO_MEMORY(mem_ctx);
 
-	principal_string = talloc_strndup(tmp_ctx,
-					  (const char *)name_token.value,
-					  name_token.length);
+	maj_stat = gsskrb5_extract_authz_data_from_sec_context(&min_stat, 
+							       gensec_gssapi_state->gssapi_context, 
+							       KRB5_AUTHDATA_WIN2K_PAC,
+							       &pac);
+	
+	
+	if (maj_stat == 0) {
+		pac_blob = data_blob_talloc(mem_ctx, pac.value, pac.length);
+		gss_release_buffer(&min_stat, &pac);
 
-	gss_release_buffer(&min_stat, &name_token);
-
-	if (!principal_string) {
-		talloc_free(tmp_ctx);
-		return NT_STATUS_NO_MEMORY;
+	} else {
+		pac_blob = data_blob(NULL, 0);
 	}
-
-	nt_status = gssapi_obtain_pac_blob(tmp_ctx,  gensec_gssapi_state->gssapi_context,
-					   gensec_gssapi_state->client_name,
-					   &pac_blob);
 	
 	/* IF we have the PAC - otherwise we need to get this
 	 * data from elsewere - local ldb, or (TODO) lookup of some
 	 * kind... 
 	 */
-	if (NT_STATUS_IS_OK(nt_status)) {
-		pac_blob_ptr = &pac_blob;
+	if (pac_blob.length) {
+		pac_srv_sig = talloc(mem_ctx, struct PAC_SIGNATURE_DATA);
+		if (!pac_srv_sig) {
+			talloc_free(mem_ctx);
+			return NT_STATUS_NO_MEMORY;
+		}
+		pac_kdc_sig = talloc(mem_ctx, struct PAC_SIGNATURE_DATA);
+		if (!pac_kdc_sig) {
+			talloc_free(mem_ctx);
+			return NT_STATUS_NO_MEMORY;
+		}
+
+		nt_status = kerberos_pac_blob_to_user_info_dc(mem_ctx,
+							      pac_blob,
+							      gensec_gssapi_state->smb_krb5_context->krb5_context,
+							      &user_info_dc,
+							      pac_srv_sig,
+							      pac_kdc_sig);
+		if (!NT_STATUS_IS_OK(nt_status)) {
+			talloc_free(mem_ctx);
+			return nt_status;
+		}
+	} else {
+		gss_buffer_desc name_token;
+		char *principal_string;
+
+		maj_stat = gss_display_name (&min_stat,
+					     gensec_gssapi_state->client_name,
+					     &name_token,
+					     NULL);
+		if (GSS_ERROR(maj_stat)) {
+			DEBUG(1, ("GSS display_name failed: %s\n", 
+				  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+			talloc_free(mem_ctx);
+			return NT_STATUS_FOOBAR;
+		}
+		
+		principal_string = talloc_strndup(mem_ctx, 
+						  (const char *)name_token.value, 
+						  name_token.length);
+		
+		gss_release_buffer(&min_stat, &name_token);
+		
+		if (!principal_string) {
+			talloc_free(mem_ctx);
+			return NT_STATUS_NO_MEMORY;
+		}
+
+		if (gensec_security->auth_context && 
+		    !gensec_setting_bool(gensec_security->settings, "gensec", "require_pac", false)) {
+			DEBUG(1, ("Unable to find PAC, resorting to local user lookup: %s\n",
+				  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+			nt_status = gensec_security->auth_context->get_user_info_dc_principal(mem_ctx,
+											     gensec_security->auth_context, 
+											     principal_string,
+											     NULL,
+											     &user_info_dc);
+			
+			if (!NT_STATUS_IS_OK(nt_status)) {
+				talloc_free(mem_ctx);
+				return nt_status;
+			}
+		} else {
+			DEBUG(1, ("Unable to find PAC in ticket from %s, failing to allow access: %s\n",
+				  principal_string,
+				  gssapi_error_string(mem_ctx, maj_stat, min_stat, gensec_gssapi_state->gss_oid)));
+			return NT_STATUS_ACCESS_DENIED;
+		}
 	}
-	nt_status = gensec_generate_session_info_pac(tmp_ctx,
-						     gensec_security,
-						     gensec_gssapi_state->smb_krb5_context,
-						     pac_blob_ptr, principal_string,
-						     gensec_get_remote_address(gensec_security),
-						     &session_info);
+
+	/* references the user_info_dc into the session_info */
+	nt_status = gensec_generate_session_info(mem_ctx, gensec_security,
+						 user_info_dc, &session_info);
 	if (!NT_STATUS_IS_OK(nt_status)) {
-		talloc_free(tmp_ctx);
+		talloc_free(mem_ctx);
 		return nt_status;
 	}
 
-	nt_status = gensec_gssapi_session_key(gensec_security, session_info, &session_info->session_key);
+	nt_status = gensec_gssapi_session_key(gensec_security, &session_info->session_key);
 	if (!NT_STATUS_IS_OK(nt_status)) {
-		talloc_free(tmp_ctx);
+		talloc_free(mem_ctx);
 		return nt_status;
 	}
 
-	if (gensec_gssapi_state->gss_got_flags & GSS_C_DELEG_FLAG &&
-	    gensec_gssapi_state->delegated_cred_handle != GSS_C_NO_CREDENTIAL) {
+	/* Allow torture tests to check the PAC signatures */
+	if (session_info->torture) {
+		session_info->torture->pac_srv_sig = talloc_steal(session_info->torture, pac_srv_sig);
+		session_info->torture->pac_kdc_sig = talloc_steal(session_info->torture, pac_kdc_sig);
+	}
+
+	if (!(gensec_gssapi_state->got_flags & GSS_C_DELEG_FLAG)) {
+		DEBUG(10, ("gensec_gssapi: NO delegated credentials supplied by client\n"));
+	} else {
 		krb5_error_code ret;
 		const char *error_string;
 
 		DEBUG(10, ("gensec_gssapi: delegated credentials supplied by client\n"));
 		session_info->credentials = cli_credentials_init(session_info);
 		if (!session_info->credentials) {
-			talloc_free(tmp_ctx);
+			talloc_free(mem_ctx);
 			return NT_STATUS_NO_MEMORY;
 		}
 
@@ -1323,7 +1405,7 @@ static NTSTATUS gensec_gssapi_session_info(struct gensec_security *gensec_securi
 							   gensec_gssapi_state->delegated_cred_handle,
 							   CRED_SPECIFIED, &error_string);
 		if (ret) {
-			talloc_free(tmp_ctx);
+			talloc_free(mem_ctx);
 			DEBUG(2,("Failed to get gss creds: %s\n", error_string));
 			return NT_STATUS_NO_MEMORY;
 		}
@@ -1333,12 +1415,10 @@ static NTSTATUS gensec_gssapi_session_info(struct gensec_security *gensec_securi
 
 		/* It has been taken from this place... */
 		gensec_gssapi_state->delegated_cred_handle = GSS_C_NO_CREDENTIAL;
-	} else {
-		DEBUG(10, ("gensec_gssapi: NO delegated credentials supplied by client\n"));
 	}
-
-	*_session_info = talloc_steal(mem_ctx, session_info);
-	talloc_free(tmp_ctx);
+	talloc_steal(gensec_gssapi_state, session_info);
+	talloc_free(mem_ctx);
+	*_session_info = session_info;
 
 	return NT_STATUS_OK;
 }
@@ -1347,18 +1427,54 @@ static size_t gensec_gssapi_sig_size(struct gensec_security *gensec_security, si
 {
 	struct gensec_gssapi_state *gensec_gssapi_state
 		= talloc_get_type(gensec_security->private_data, struct gensec_gssapi_state);
-	size_t sig_size;
+	NTSTATUS status;
 
-	if (gensec_gssapi_state->sig_size > 0) {
+	if (gensec_gssapi_state->sig_size) {
 		return gensec_gssapi_state->sig_size;
 	}
 
-	sig_size = gssapi_get_sig_size(gensec_gssapi_state->gssapi_context,
-				       gensec_gssapi_state->gss_oid,
-				       gensec_gssapi_state->gss_want_flags,
-				       data_size);
+	if (gensec_gssapi_state->got_flags & GSS_C_CONF_FLAG) {
+		gensec_gssapi_state->sig_size = 45;
+	} else {
+		gensec_gssapi_state->sig_size = 37;
+	}
 
-	gensec_gssapi_state->sig_size = sig_size;
+	status = gensec_gssapi_init_lucid(gensec_gssapi_state);
+	if (!NT_STATUS_IS_OK(status)) {
+		return gensec_gssapi_state->sig_size;
+	}
+
+	if (gensec_gssapi_state->lucid->protocol == 1) {
+		if (gensec_gssapi_state->got_flags & GSS_C_CONF_FLAG) {
+			/*
+			 * TODO: windows uses 76 here, but we don't know
+			 *       gss_wrap works with aes keys yet
+			 */
+			gensec_gssapi_state->sig_size = 76;
+		} else {
+			gensec_gssapi_state->sig_size = 28;
+		}
+	} else if (gensec_gssapi_state->lucid->protocol == 0) {
+		switch (gensec_gssapi_state->lucid->rfc1964_kd.ctx_key.type) {
+		case KEYTYPE_DES:
+		case KEYTYPE_ARCFOUR:
+		case KEYTYPE_ARCFOUR_56:
+			if (gensec_gssapi_state->got_flags & GSS_C_CONF_FLAG) {
+				gensec_gssapi_state->sig_size = 45;
+			} else {
+				gensec_gssapi_state->sig_size = 37;
+			}
+			break;
+		case KEYTYPE_DES3:
+			if (gensec_gssapi_state->got_flags & GSS_C_CONF_FLAG) {
+				gensec_gssapi_state->sig_size = 57;
+			} else {
+				gensec_gssapi_state->sig_size = 49;
+			}
+			break;
+		}
+	}
+
 	return gensec_gssapi_state->sig_size;
 }
 
@@ -1381,7 +1497,7 @@ static const struct gensec_security_ops gensec_gssapi_spnego_security_ops = {
 	.oid            = gensec_gssapi_spnego_oids,
 	.client_start   = gensec_gssapi_client_start,
 	.server_start   = gensec_gssapi_server_start,
-	.magic  	= gensec_magic_check_krb5_oid,
+	.magic  	= gensec_gssapi_magic,
 	.update 	= gensec_gssapi_update,
 	.session_key	= gensec_gssapi_session_key,
 	.session_info	= gensec_gssapi_session_info,
@@ -1389,12 +1505,9 @@ static const struct gensec_security_ops gensec_gssapi_spnego_security_ops = {
 	.check_packet	= gensec_gssapi_check_packet,
 	.seal_packet	= gensec_gssapi_seal_packet,
 	.unseal_packet	= gensec_gssapi_unseal_packet,
-	.max_input_size	  = gensec_gssapi_max_input_size,
-	.max_wrapped_size = gensec_gssapi_max_wrapped_size,
 	.wrap           = gensec_gssapi_wrap,
 	.unwrap         = gensec_gssapi_unwrap,
 	.have_feature   = gensec_gssapi_have_feature,
-	.expire_time    = gensec_gssapi_expire_time,
 	.enabled        = false,
 	.kerberos       = true,
 	.priority       = GENSEC_GSSAPI
@@ -1407,7 +1520,7 @@ static const struct gensec_security_ops gensec_gssapi_krb5_security_ops = {
 	.oid            = gensec_gssapi_krb5_oids,
 	.client_start   = gensec_gssapi_client_start,
 	.server_start   = gensec_gssapi_server_start,
-	.magic  	= gensec_magic_check_krb5_oid,
+	.magic  	= gensec_gssapi_magic,
 	.update 	= gensec_gssapi_update,
 	.session_key	= gensec_gssapi_session_key,
 	.session_info	= gensec_gssapi_session_info,
@@ -1416,12 +1529,9 @@ static const struct gensec_security_ops gensec_gssapi_krb5_security_ops = {
 	.check_packet	= gensec_gssapi_check_packet,
 	.seal_packet	= gensec_gssapi_seal_packet,
 	.unseal_packet	= gensec_gssapi_unseal_packet,
-	.max_input_size	  = gensec_gssapi_max_input_size,
-	.max_wrapped_size = gensec_gssapi_max_wrapped_size,
 	.wrap           = gensec_gssapi_wrap,
 	.unwrap         = gensec_gssapi_unwrap,
 	.have_feature   = gensec_gssapi_have_feature,
-	.expire_time    = gensec_gssapi_expire_time,
 	.enabled        = true,
 	.kerberos       = true,
 	.priority       = GENSEC_GSSAPI
@@ -1441,7 +1551,6 @@ static const struct gensec_security_ops gensec_gssapi_sasl_krb5_security_ops = {
 	.wrap             = gensec_gssapi_wrap,
 	.unwrap           = gensec_gssapi_unwrap,
 	.have_feature     = gensec_gssapi_have_feature,
-	.expire_time      = gensec_gssapi_expire_time,
 	.enabled          = true,
 	.kerberos         = true,
 	.priority         = GENSEC_GSSAPI

@@ -41,7 +41,7 @@
 static OM_uint32
 set_addresses (krb5_context context,
 	       krb5_auth_context ac,
-	       const gss_channel_bindings_t input_chan_bindings)
+	       const gss_channel_bindings_t input_chan_bindings)	
 {
     /* Port numbers are expected to be in application_data.value,
      * initator's port first */
@@ -137,7 +137,6 @@ _gsskrb5_create_ctx(
     if (kret) {
 	*minor_status = kret;
 	HEIMDAL_MUTEX_destroy(&ctx->ctx_id_mutex);
-	free(ctx);
 	return GSS_S_FAILURE;
     }
 
@@ -146,7 +145,6 @@ _gsskrb5_create_ctx(
 	*minor_status = kret;
 	krb5_auth_con_free(context, ctx->auth_context);
 	HEIMDAL_MUTEX_destroy(&ctx->ctx_id_mutex);
-	free(ctx);
 	return GSS_S_FAILURE;
     }
 
@@ -158,7 +156,7 @@ _gsskrb5_create_ctx(
 	krb5_auth_con_free(context, ctx->deleg_auth_context);
 
 	HEIMDAL_MUTEX_destroy(&ctx->ctx_id_mutex);
-	free(ctx);
+
 	return GSS_S_BAD_BINDINGS;
     }
 
@@ -170,7 +168,7 @@ _gsskrb5_create_ctx(
 	krb5_auth_con_free(context, ctx->deleg_auth_context);
 
 	HEIMDAL_MUTEX_destroy(&ctx->ctx_id_mutex);
-	free(ctx);
+
 	return GSS_S_BAD_BINDINGS;
     }
 
@@ -424,6 +422,11 @@ init_auth
 	goto failure;
     }
 
+    ret = _gss_DES3_get_mic_compat(minor_status, ctx, context);
+    if (ret)
+	goto failure;
+
+
     /*
      * This is hideous glue for (NFS) clients that wants to limit the
      * available enctypes to what it can support (encryption in
@@ -455,20 +458,16 @@ init_auth
      * DNS canonicalizion.
      */
     ret = gsskrb5_get_creds(minor_status, context, ctx->ccache,
-			    ctx, name, 0, time_req,
+			    ctx, name, 0, time_req, 
 			    time_rec);
     if (ret && allow_dns)
 	ret = gsskrb5_get_creds(minor_status, context, ctx->ccache,
-				ctx, name, 1, time_req,
+				ctx, name, 1, time_req, 
 				time_rec);
     if (ret)
 	goto failure;
 
     ctx->lifetime = ctx->kcred->times.endtime;
-
-    ret = _gss_DES3_get_mic_compat(minor_status, ctx, context);
-    if (ret)
-	goto failure;
 
     ret = _gsskrb5_lifetime_left(minor_status,
 				 context,
@@ -531,7 +530,7 @@ init_auth_restart
     Checksum cksum;
     krb5_enctype enctype;
     krb5_data fwd_data, timedata;
-    int32_t offset = 0, oldoffset = 0;
+    int32_t offset = 0, oldoffset;
     uint32_t flagmask;
 
     krb5_data_zero(&outbuf);
@@ -545,7 +544,7 @@ init_auth_restart
      */
     if (!ctx->kcred->flags.b.ok_as_delegate) {
 	krb5_data data;
-
+	
 	ret = krb5_cc_get_config(context, ctx->ccache, NULL,
 				 "realm-config", &data);
 	if (ret == 0) {
@@ -677,8 +676,7 @@ init_auth_restart
 	output_token->length = outbuf.length;
     } else {
         ret = _gsskrb5_encapsulate (minor_status, &outbuf, output_token,
-				    (u_char *)(intptr_t)"\x01\x00",
-				    GSS_KRB5_MECHANISM);
+				    (u_char *)"\x01\x00", GSS_KRB5_MECHANISM);
 	krb5_data_free (&outbuf);
 	if (ret)
 	    goto failure;
@@ -850,9 +848,9 @@ repl_mutual
 	    *minor_status = kret;
 	    return GSS_S_FAILURE;
 	}
-
+	
 	/* reset local seq number */
-	krb5_auth_con_setlocalseqnumber(context, ctx->auth_context, local_seq);
+	krb5_auth_con_setlocalseqnumber(context, ctx->auth_context, local_seq);	
 
 	output_token->length = outbuf.length;
 	output_token->value  = outbuf.data;
@@ -913,20 +911,20 @@ OM_uint32 GSSAPI_CALLCONV _gsskrb5_init_sec_context
 	return GSS_S_BAD_MECH;
 
     if (input_token == GSS_C_NO_BUFFER || input_token->length == 0) {
-	OM_uint32 ret1;
+	OM_uint32 ret;
 
 	if (*context_handle != GSS_C_NO_CONTEXT) {
 	    *minor_status = 0;
 	    return GSS_S_FAILURE | GSS_S_CALL_BAD_STRUCTURE;
 	}
 
-	ret1 = _gsskrb5_create_ctx(minor_status,
+	ret = _gsskrb5_create_ctx(minor_status,
 				  context_handle,
 				  context,
 				  input_chan_bindings,
 				  INITIATOR_START);
-	if (ret1)
-	    return ret1;
+	if (ret)
+	    return ret;
     }
 
     if (*context_handle == GSS_C_NO_CONTEXT) {
@@ -955,7 +953,7 @@ OM_uint32 GSSAPI_CALLCONV _gsskrb5_init_sec_context
 			ret_flags,
 			time_rec);
 	if (ret != GSS_S_COMPLETE)
-	    break;
+	    break;	
 	/* FALL THOUGH */
     case INITIATOR_RESTART:
 	ret = init_auth_restart(minor_status,

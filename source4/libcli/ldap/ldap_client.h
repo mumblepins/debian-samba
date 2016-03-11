@@ -20,7 +20,6 @@
 */
 
 
-#include "system/network.h" /* for struct iovec */
 #include "libcli/ldap/libcli_ldap.h"
 
 enum ldap_request_state { LDAP_REQUEST_SEND=1, LDAP_REQUEST_PENDING=2, LDAP_REQUEST_DONE=3, LDAP_REQUEST_ERROR=4 };
@@ -40,8 +39,6 @@ struct ldap_request {
 
 	NTSTATUS status;
 	DATA_BLOB data;
-	struct iovec write_iov;
-
 	struct {
 		void (*fn)(struct ldap_request *);
 		void *private_data;
@@ -53,16 +50,7 @@ struct ldap_request {
 
 /* main context for a ldap client connection */
 struct ldap_connection {
-	struct {
-		struct tstream_context *raw;
-		struct tstream_context *tls;
-		struct tstream_context *sasl;
-		struct tstream_context *active;
-
-		struct tevent_queue *send_queue;
-		struct tevent_req *recv_subreq;
-	} sockets;
-
+	struct socket_context *sock;
 	struct loadparm_context *lp_ctx;
 
 	char *host;
@@ -101,7 +89,10 @@ struct ldap_connection {
 
 	struct {
 		struct tevent_context *event_ctx;
+		struct tevent_fd *fde;
 	} event;
+
+	struct packet_context *packet;
 };
 
 struct ldap_connection *ldap4_new_connection(TALLOC_CTX *mem_ctx, 

@@ -25,7 +25,6 @@
 #include "msdfs.h"
 #include "trans2.h"
 #include "libsmb/nmblib.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 /********************************************************************
  Important point.
@@ -48,23 +47,7 @@ NTSTATUS cli_cm_force_encryption(struct cli_state *c,
 			const char *domain,
 			const char *sharename)
 {
-	NTSTATUS status;
-
-	if (smbXcli_conn_protocol(c->conn) >= PROTOCOL_SMB2_02) {
-		status = smb2cli_session_encryption_on(c->smb2.session);
-		if (NT_STATUS_EQUAL(status,NT_STATUS_NOT_SUPPORTED)) {
-			d_printf("Encryption required and "
-				"server doesn't support "
-				"SMB3 encryption - failing connect\n");
-		} else if (!NT_STATUS_IS_OK(status)) {
-			d_printf("Encryption required and "
-				"setup failed with error %s.\n",
-				nt_errstr(status));
-		}
-		return status;
-	}
-
-	status = cli_force_encryption(c,
+	NTSTATUS status = cli_force_encryption(c,
 					username,
 					password,
 					domain);
@@ -94,7 +77,7 @@ NTSTATUS cli_cm_force_encryption(struct cli_state *c,
  Return a connection to a server.
 ********************************************************************/
 
-static NTSTATUS do_connect(TALLOC_CTX *ctx,
+static struct cli_state *do_connect(TALLOC_CTX *ctx,
 					const char *server,
 					const char *share,
 					const struct user_auth_info *auth_info,
@@ -102,127 +85,140 @@ static NTSTATUS do_connect(TALLOC_CTX *ctx,
 					bool force_encrypt,
 					int max_protocol,
 					int port,
-					int name_type,
-					struct cli_state **pcli)
+					int name_type)
 {
 	struct cli_state *c = NULL;
+	struct nmb_name called, calling;
+	const char *called_str;
+	const char *server_n;
+	struct sockaddr_storage ss;
 	char *servicename;
 	char *sharename;
 	char *newserver, *newshare;
 	const char *username;
 	const char *password;
-	const char *domain;
 	NTSTATUS status;
-	int flags = 0;
-	int signing_state = get_cmdline_auth_info_signing_state(auth_info);
-
-	if (force_encrypt) {
-		signing_state = SMB_SIGNING_REQUIRED;
-	}
 
 	/* make a copy so we don't modify the global string 'service' */
 	servicename = talloc_strdup(ctx,share);
 	if (!servicename) {
-		return NT_STATUS_NO_MEMORY;
+		return NULL;
 	}
 	sharename = servicename;
 	if (*sharename == '\\') {
 		sharename += 2;
+		called_str = sharename;
 		if (server == NULL) {
 			server = sharename;
 		}
 		sharename = strchr_m(sharename,'\\');
 		if (!sharename) {
-			return NT_STATUS_NO_MEMORY;
+			return NULL;
 		}
 		*sharename = 0;
 		sharename++;
-	}
-	if (server == NULL) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	if (get_cmdline_auth_info_use_kerberos(auth_info)) {
-		flags |= CLI_FULL_CONNECTION_USE_KERBEROS;
-	}
-	if (get_cmdline_auth_info_fallback_after_kerberos(auth_info)) {
-		flags |= CLI_FULL_CONNECTION_FALLBACK_AFTER_KERBEROS;
-	}
-	if (get_cmdline_auth_info_use_ccache(auth_info)) {
-		flags |= CLI_FULL_CONNECTION_USE_CCACHE;
-	}
-	if (get_cmdline_auth_info_use_pw_nt_hash(auth_info)) {
-		flags |= CLI_FULL_CONNECTION_USE_NT_HASH;
+	} else {
+		called_str = server;
 	}
 
-	status = cli_connect_nb(
-		server, NULL, port, name_type, NULL,
-		signing_state,
-		flags, &c);
+	server_n = server;
 
+	zero_sockaddr(&ss);
+
+	make_nmb_name(&calling, global_myname(), 0x0);
+	make_nmb_name(&called , called_str, name_type);
+
+ again:
+	zero_sockaddr(&ss);
+
+	/* have to open a new connection */
+	c = cli_initialise_ex(get_cmdline_auth_info_signing_state(auth_info));
+	if (c == NULL) {
+		d_printf("Connection to %s failed\n", server_n);
+		return NULL;
+	}
+	if (port) {
+		cli_set_port(c, port);
+	}
+
+	status = cli_connect(c, server_n, &ss);
 	if (!NT_STATUS_IS_OK(status)) {
 		d_printf("Connection to %s failed (Error %s)\n",
-				server,
+				server_n,
 				nt_errstr(status));
-		return status;
+		cli_shutdown(c);
+		return NULL;
 	}
 
 	if (max_protocol == 0) {
 		max_protocol = PROTOCOL_NT1;
 	}
+	c->protocol = max_protocol;
+	c->use_kerberos = get_cmdline_auth_info_use_kerberos(auth_info);
+	c->fallback_after_kerberos =
+		get_cmdline_auth_info_fallback_after_kerberos(auth_info);
+	c->use_ccache = get_cmdline_auth_info_use_ccache(auth_info);
+
+	if (!cli_session_request(c, &calling, &called)) {
+		char *p;
+		d_printf("session request to %s failed (%s)\n",
+			 called.name, cli_errstr(c));
+		cli_shutdown(c);
+		c = NULL;
+		if ((p=strchr_m(called.name, '.'))) {
+			*p = 0;
+			goto again;
+		}
+		if (strcmp(called.name, "*SMBSERVER")) {
+			make_nmb_name(&called , "*SMBSERVER", 0x20);
+			goto again;
+		}
+		return NULL;
+	}
+
 	DEBUG(4,(" session request ok\n"));
 
-	status = smbXcli_negprot(c->conn, c->timeout,
-				 lp_client_min_protocol(),
-				 max_protocol);
+	status = cli_negprot(c);
 
 	if (!NT_STATUS_IS_OK(status)) {
 		d_printf("protocol negotiation failed: %s\n",
 			 nt_errstr(status));
 		cli_shutdown(c);
-		return status;
-	}
-
-	if (smbXcli_conn_protocol(c->conn) >= PROTOCOL_SMB2_02) {
-		/* Ensure we ask for some initial credits. */
-		smb2cli_conn_set_max_credits(c->conn, DEFAULT_SMB2_MAX_CREDITS);
+		return NULL;
 	}
 
 	username = get_cmdline_auth_info_username(auth_info);
 	password = get_cmdline_auth_info_password(auth_info);
-	domain = get_cmdline_auth_info_domain(auth_info);
-	if ((domain == NULL) || (domain[0] == '\0')) {
-		domain = lp_workgroup();
-	}
 
-	status = cli_session_setup(c, username,
-				   password, strlen(password),
-				   password, strlen(password),
-				   domain);
-	if (!NT_STATUS_IS_OK(status)) {
+	if (!NT_STATUS_IS_OK(cli_session_setup(c, username,
+					       password, strlen(password),
+					       password, strlen(password),
+					       lp_workgroup()))) {
 		/* If a password was not supplied then
 		 * try again with a null username. */
 		if (password[0] || !username[0] ||
 			get_cmdline_auth_info_use_kerberos(auth_info) ||
-			!NT_STATUS_IS_OK(status = cli_session_setup(c, "",
+			!NT_STATUS_IS_OK(cli_session_setup(c, "",
 				    		"", 0,
 						"", 0,
 					       lp_workgroup()))) {
-			d_printf("session setup failed: %s\n",
-				 nt_errstr(status));
-			if (NT_STATUS_EQUAL(status,
-					    NT_STATUS_MORE_PROCESSING_REQUIRED))
+			d_printf("session setup failed: %s\n", cli_errstr(c));
+			if (NT_STATUS_V(cli_nt_error(c)) ==
+			    NT_STATUS_V(NT_STATUS_MORE_PROCESSING_REQUIRED))
 				d_printf("did you forget to run kinit?\n");
 			cli_shutdown(c);
-			return status;
+			return NULL;
 		}
 		d_printf("Anonymous login successful\n");
+		status = cli_init_creds(c, "", lp_workgroup(), "");
+	} else {
+		status = cli_init_creds(c, username, lp_workgroup(), password);
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(10,("cli_init_creds() failed: %s\n", nt_errstr(status)));
 		cli_shutdown(c);
-		return status;
+		return NULL;
 	}
 
 	if ( show_sessetup ) {
@@ -241,45 +237,44 @@ static NTSTATUS do_connect(TALLOC_CTX *ctx,
 	   here before trying to connect to the original share.
 	   cli_check_msdfs_proxy() will fail if it is a normal share. */
 
-	if (smbXcli_conn_dfs_supported(c->conn) &&
+	if ((c->capabilities & CAP_DFS) &&
 			cli_check_msdfs_proxy(ctx, c, sharename,
 				&newserver, &newshare,
 				force_encrypt,
 				username,
 				password,
-				domain)) {
+				lp_workgroup())) {
 		cli_shutdown(c);
 		return do_connect(ctx, newserver,
 				newshare, auth_info, false,
 				force_encrypt, max_protocol,
-				port, name_type, pcli);
+				port, name_type);
 	}
 
 	/* must be a normal share */
 
-	status = cli_tree_connect(c, sharename, "?????",
-				  password, strlen(password)+1);
+	status = cli_tcon_andx(c, sharename, "?????",
+			       password, strlen(password)+1);
 	if (!NT_STATUS_IS_OK(status)) {
 		d_printf("tree connect failed: %s\n", nt_errstr(status));
 		cli_shutdown(c);
-		return status;
+		return NULL;
 	}
 
 	if (force_encrypt) {
 		status = cli_cm_force_encryption(c,
 					username,
 					password,
-					domain,
+					lp_workgroup(),
 					sharename);
 		if (!NT_STATUS_IS_OK(status)) {
 			cli_shutdown(c);
-			return status;
+			return NULL;
 		}
 	}
 
 	DEBUG(4,(" tconx ok\n"));
-	*pcli = c;
-	return NT_STATUS_OK;
+	return c;
 }
 
 /****************************************************************************
@@ -287,15 +282,13 @@ static NTSTATUS do_connect(TALLOC_CTX *ctx,
 
 static void cli_set_mntpoint(struct cli_state *cli, const char *mnt)
 {
-	TALLOC_CTX *frame = talloc_stackframe();
-	char *name = clean_name(frame, mnt);
+	char *name = clean_name(NULL, mnt);
 	if (!name) {
-		TALLOC_FREE(frame);
 		return;
 	}
 	TALLOC_FREE(cli->dfs_mountpoint);
 	cli->dfs_mountpoint = talloc_strdup(cli, name);
-	TALLOC_FREE(frame);
+	TALLOC_FREE(name);
 }
 
 /********************************************************************
@@ -303,28 +296,26 @@ static void cli_set_mntpoint(struct cli_state *cli, const char *mnt)
  referring_cli == NULL means a new initial connection.
 ********************************************************************/
 
-static NTSTATUS cli_cm_connect(TALLOC_CTX *ctx,
-			       struct cli_state *referring_cli,
-			       const char *server,
-			       const char *share,
-			       const struct user_auth_info *auth_info,
-			       bool show_hdr,
-			       bool force_encrypt,
-			       int max_protocol,
-			       int port,
-			       int name_type,
-			       struct cli_state **pcli)
+static struct cli_state *cli_cm_connect(TALLOC_CTX *ctx,
+					struct cli_state *referring_cli,
+	 				const char *server,
+					const char *share,
+					const struct user_auth_info *auth_info,
+					bool show_hdr,
+					bool force_encrypt,
+					int max_protocol,
+					int port,
+					int name_type)
 {
 	struct cli_state *cli;
-	NTSTATUS status;
 
-	status = do_connect(ctx, server, share,
+	cli = do_connect(ctx, server, share,
 				auth_info,
 				show_hdr, force_encrypt, max_protocol,
-				port, name_type, &cli);
+				port, name_type);
 
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+	if (!cli ) {
+		return NULL;
 	}
 
 	/* Enter into the list. */
@@ -333,8 +324,9 @@ static NTSTATUS cli_cm_connect(TALLOC_CTX *ctx,
 	}
 
 	if (referring_cli && referring_cli->requested_posix_capabilities) {
-		uint16_t major, minor;
-		uint32_t caplow, caphigh;
+		uint16 major, minor;
+		uint32 caplow, caphigh;
+		NTSTATUS status;
 		status = cli_unix_extensions_version(cli, &major, &minor,
 						     &caplow, &caphigh);
 		if (NT_STATUS_IS_OK(status)) {
@@ -344,8 +336,7 @@ static NTSTATUS cli_cm_connect(TALLOC_CTX *ctx,
 		}
 	}
 
-	*pcli = cli;
-	return NT_STATUS_OK;
+	return cli;
 }
 
 /********************************************************************
@@ -364,10 +355,7 @@ static struct cli_state *cli_cm_find(struct cli_state *cli,
 
 	/* Search to the start of the list. */
 	for (p = cli; p; p = DLIST_PREV(p)) {
-		const char *remote_name =
-			smbXcli_conn_remote_name(p->conn);
-
-		if (strequal(server, remote_name) &&
+		if (strequal(server, p->desthost) &&
 				strequal(share,p->share)) {
 			return p;
 		}
@@ -375,10 +363,7 @@ static struct cli_state *cli_cm_find(struct cli_state *cli,
 
 	/* Search to the end of the list. */
 	for (p = cli->next; p; p = p->next) {
-		const char *remote_name =
-			smbXcli_conn_remote_name(p->conn);
-
-		if (strequal(server, remote_name) &&
+		if (strequal(server, p->desthost) &&
 				strequal(share,p->share)) {
 			return p;
 		}
@@ -391,7 +376,7 @@ static struct cli_state *cli_cm_find(struct cli_state *cli,
  Open a client connection to a \\server\share.
 ****************************************************************************/
 
-NTSTATUS cli_cm_open(TALLOC_CTX *ctx,
+struct cli_state *cli_cm_open(TALLOC_CTX *ctx,
 				struct cli_state *referring_cli,
 				const char *server,
 				const char *share,
@@ -400,16 +385,13 @@ NTSTATUS cli_cm_open(TALLOC_CTX *ctx,
 				bool force_encrypt,
 				int max_protocol,
 				int port,
-				int name_type,
-				struct cli_state **pcli)
+				int name_type)
 {
 	/* Try to reuse an existing connection in this list. */
 	struct cli_state *c = cli_cm_find(referring_cli, server, share);
-	NTSTATUS status;
 
 	if (c) {
-		*pcli = c;
-		return NT_STATUS_OK;
+		return c;
 	}
 
 	if (auth_info == NULL) {
@@ -418,10 +400,10 @@ NTSTATUS cli_cm_open(TALLOC_CTX *ctx,
 		d_printf("cli_cm_open() Unable to open connection [\\%s\\%s] "
 			"without auth info\n",
 			server, share );
-		return NT_STATUS_INVALID_PARAMETER;
+		return NULL;
 	}
 
-	status = cli_cm_connect(ctx,
+	return cli_cm_connect(ctx,
 				referring_cli,
 				server,
 				share,
@@ -430,25 +412,19 @@ NTSTATUS cli_cm_open(TALLOC_CTX *ctx,
 				force_encrypt,
 				max_protocol,
 				port,
-				name_type,
-				&c);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	}
-	*pcli = c;
-	return NT_STATUS_OK;
+				name_type);
 }
 
 /****************************************************************************
 ****************************************************************************/
 
-void cli_cm_display(struct cli_state *cli)
+void cli_cm_display(const struct cli_state *cli)
 {
 	int i;
 
 	for (i=0; cli; cli = cli->next,i++ ) {
 		d_printf("%d:\tserver=%s, share=%s\n",
-			i, smbXcli_conn_remote_name(cli->conn), cli->share);
+			i, cli->desthost, cli->share );
 	}
 }
 
@@ -615,7 +591,7 @@ static char *cli_dfs_make_full_path(TALLOC_CTX *ctx,
 	}
 	return talloc_asprintf(ctx, "%c%s%c%s%c%s",
 			path_sep,
-			smbXcli_conn_remote_name(cli->conn),
+			cli->desthost,
 			path_sep,
 			cli->share,
 			path_sep,
@@ -631,10 +607,10 @@ static bool cli_dfs_check_error(struct cli_state *cli, NTSTATUS expected,
 {
 	/* only deal with DS when we negotiated NT_STATUS codes and UNICODE */
 
-	if (!(smbXcli_conn_use_unicode(cli->conn))) {
+	if (!(cli->capabilities & CAP_UNICODE)) {
 		return false;
 	}
-	if (!(smb1cli_conn_capabilities(cli->conn) & CAP_STATUS32)) {
+	if (!(cli->capabilities & CAP_STATUS32)) {
 		return false;
 	}
 	if (NT_STATUS_EQUAL(status, expected)) {
@@ -654,97 +630,55 @@ NTSTATUS cli_dfs_get_referral(TALLOC_CTX *ctx,
 			size_t *num_refs,
 			size_t *consumed)
 {
+	unsigned int data_len = 0;
 	unsigned int param_len = 0;
-	uint16_t recv_flags2;
+	uint16 setup[1];
 	uint8_t *param = NULL;
 	uint8_t *rdata = NULL;
 	char *p;
 	char *endp;
+	size_t pathlen = 2*(strlen(path)+1);
 	smb_ucs2_t *path_ucs;
 	char *consumed_path = NULL;
 	uint16_t consumed_ucs;
-	uint16_t num_referrals;
+	uint16 num_referrals;
 	struct client_dfs_referral *referrals = NULL;
 	NTSTATUS status;
-	TALLOC_CTX *frame = talloc_stackframe();
 
 	*num_refs = 0;
 	*refs = NULL;
 
-	param = talloc_array(talloc_tos(), uint8_t, 2);
+	SSVAL(setup, 0, TRANSACT2_GET_DFS_REFERRAL);
+
+	param = SMB_MALLOC_ARRAY(uint8_t, 2+pathlen+2);
 	if (!param) {
 		status = NT_STATUS_NO_MEMORY;
 		goto out;
 	}
 	SSVAL(param, 0, 0x03);	/* max referral level */
+	p = (char *)(&param[2]);
 
-	param = trans2_bytes_push_str(param, smbXcli_conn_use_unicode(cli->conn),
-				      path, strlen(path)+1,
-				      NULL);
-	if (!param) {
-		status = NT_STATUS_NO_MEMORY;
+	path_ucs = (smb_ucs2_t *)p;
+	p += clistr_push(cli, p, path, pathlen, STR_TERMINATE);
+	param_len = PTR_DIFF(p, param);
+
+	status = cli_trans(talloc_tos(), cli, SMBtrans2,
+			   NULL, 0xffff, 0, 0,
+			   setup, 1, 0,
+			   param, param_len, 2,
+			   NULL, 0, cli->max_xmit,
+			   NULL,
+			   NULL, 0, NULL, /* rsetup */
+			   NULL, 0, NULL,
+			   &rdata, 4, &data_len);
+	if (!NT_STATUS_IS_OK(status)) {
 		goto out;
 	}
-	param_len = talloc_get_size(param);
-	path_ucs = (smb_ucs2_t *)&param[2];
-
-	if (smbXcli_conn_protocol(cli->conn) >= PROTOCOL_SMB2_02) {
-		DATA_BLOB in_input_buffer;
-		DATA_BLOB in_output_buffer = data_blob_null;
-		DATA_BLOB out_input_buffer = data_blob_null;
-		DATA_BLOB out_output_buffer = data_blob_null;
-
-		in_input_buffer.data = param;
-		in_input_buffer.length = param_len;
-
-		status = smb2cli_ioctl(cli->conn,
-				       cli->timeout,
-				       cli->smb2.session,
-				       cli->smb2.tcon,
-				       UINT64_MAX, /* in_fid_persistent */
-				       UINT64_MAX, /* in_fid_volatile */
-				       FSCTL_DFS_GET_REFERRALS,
-				       0, /* in_max_input_length */
-				       &in_input_buffer,
-				       CLI_BUFFER_SIZE, /* in_max_output_length */
-				       &in_output_buffer,
-				       SMB2_IOCTL_FLAG_IS_FSCTL,
-				       talloc_tos(),
-				       &out_input_buffer,
-				       &out_output_buffer);
-		if (!NT_STATUS_IS_OK(status)) {
-			goto out;
-		}
-
-		if (out_output_buffer.length < 4) {
-			status = NT_STATUS_INVALID_NETWORK_RESPONSE;
-			goto out;
-		}
-
-		recv_flags2 = FLAGS2_UNICODE_STRINGS;
-		rdata = out_output_buffer.data;
-		endp = (char *)rdata + out_output_buffer.length;
-	} else {
-		unsigned int data_len = 0;
-		uint16_t setup[1];
-
-		SSVAL(setup, 0, TRANSACT2_GET_DFS_REFERRAL);
-
-		status = cli_trans(talloc_tos(), cli, SMBtrans2,
-				   NULL, 0xffff, 0, 0,
-				   setup, 1, 0,
-				   param, param_len, 2,
-				   NULL, 0, CLI_BUFFER_SIZE,
-				   &recv_flags2,
-				   NULL, 0, NULL, /* rsetup */
-				   NULL, 0, NULL,
-				   &rdata, 4, &data_len);
-		if (!NT_STATUS_IS_OK(status)) {
-			goto out;
-		}
-
-		endp = (char *)rdata + data_len;
+	if (data_len < 4) {
+		goto out;
 	}
+
+	endp = (char *)rdata + data_len;
 
 	consumed_ucs  = SVAL(rdata, 0);
 	num_referrals = SVAL(rdata, 2);
@@ -756,7 +690,6 @@ NTSTATUS cli_dfs_get_referral(TALLOC_CTX *ctx,
 	 * to get the number of bytes consumed from
 	 * the incoming path. */
 
-	errno = 0;
 	if (pull_string_talloc(talloc_tos(),
 			NULL,
 			0,
@@ -764,30 +697,23 @@ NTSTATUS cli_dfs_get_referral(TALLOC_CTX *ctx,
 			path_ucs,
 			consumed_ucs,
 			STR_UNICODE) == 0) {
-		if (errno != 0) {
-			status = map_nt_error_from_unix(errno);
-		} else {
-			status = NT_STATUS_INVALID_NETWORK_RESPONSE;
-		}
 		goto out;
 	}
 	if (consumed_path == NULL) {
-		status = map_nt_error_from_unix(errno);
 		goto out;
 	}
 	*consumed = strlen(consumed_path);
 
 	if (num_referrals != 0) {
-		uint16_t ref_version;
-		uint16_t ref_size;
+		uint16 ref_version;
+		uint16 ref_size;
 		int i;
-		uint16_t node_offset;
+		uint16 node_offset;
 
 		referrals = talloc_array(ctx, struct client_dfs_referral,
 					 num_referrals);
 
 		if (!referrals) {
-			status = NT_STATUS_NO_MEMORY;
 			goto out;
 		}
 		/* start at the referrals array */
@@ -810,25 +736,20 @@ NTSTATUS cli_dfs_get_referral(TALLOC_CTX *ctx,
 			referrals[i].ttl       = SVAL(p, 10);
 
 			if (p + node_offset > endp) {
-				status = NT_STATUS_INVALID_NETWORK_RESPONSE;
 				goto out;
 			}
-			clistr_pull_talloc(referrals,
-					   (const char *)rdata,
-					   recv_flags2,
+			clistr_pull_talloc(ctx, cli->inbuf,
+					   SVAL(cli->inbuf, smb_flg2),
 					   &referrals[i].dfspath,
-					   p+node_offset,
-					   PTR_DIFF(endp, p+node_offset),
+					   p+node_offset, -1,
 					   STR_TERMINATE|STR_UNICODE);
 
 			if (!referrals[i].dfspath) {
-				status = map_nt_error_from_unix(errno);
 				goto out;
 			}
 			p += ref_size;
 		}
 		if (i < num_referrals) {
-			status = NT_STATUS_INVALID_NETWORK_RESPONSE;
 			goto out;
 		}
 	}
@@ -838,25 +759,22 @@ NTSTATUS cli_dfs_get_referral(TALLOC_CTX *ctx,
 
   out:
 
-	TALLOC_FREE(frame);
+	TALLOC_FREE(consumed_path);
+	SAFE_FREE(param);
+	TALLOC_FREE(rdata);
 	return status;
 }
 
 /********************************************************************
 ********************************************************************/
-struct cli_dfs_path_split {
-	char *server;
-	char *share;
-	char *extrapath;
-};
 
-NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
-			  const char *mountpt,
-			  const struct user_auth_info *dfs_auth_info,
-			  struct cli_state *rootcli,
-			  const char *path,
-			  struct cli_state **targetcli,
-			  char **pp_targetpath)
+bool cli_resolve_path(TALLOC_CTX *ctx,
+			const char *mountpt,
+			const struct user_auth_info *dfs_auth_info,
+			struct cli_state *rootcli,
+			const char *path,
+			struct cli_state **targetcli,
+			char **pp_targetpath)
 {
 	struct client_dfs_referral *refs = NULL;
 	size_t num_refs = 0;
@@ -866,38 +784,29 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 	char *cleanpath = NULL;
 	char *extrapath = NULL;
 	int pathlen;
+	char *server = NULL;
+	char *share = NULL;
 	struct cli_state *newcli = NULL;
-	struct cli_state *ccli = NULL;
-	int count = 0;
 	char *newpath = NULL;
 	char *newmount = NULL;
 	char *ppath = NULL;
 	SMB_STRUCT_STAT sbuf;
-	uint32_t attributes;
+	uint32 attributes;
 	NTSTATUS status;
-	struct smbXcli_tcon *root_tcon = NULL;
-	struct smbXcli_tcon *target_tcon = NULL;
-	struct cli_dfs_path_split *dfs_refs = NULL;
 
 	if ( !rootcli || !path || !targetcli ) {
-		return NT_STATUS_INVALID_PARAMETER;
+		return false;
 	}
 
 	/* Don't do anything if this is not a DFS root. */
 
-	if (smbXcli_conn_protocol(rootcli->conn) >= PROTOCOL_SMB2_02) {
-		root_tcon = rootcli->smb2.tcon;
-	} else {
-		root_tcon = rootcli->smb1.tcon;
-	}
-
-	if (!smbXcli_tcon_is_dfs_share(root_tcon)) {
+	if ( !rootcli->dfsroot) {
 		*targetcli = rootcli;
 		*pp_targetpath = talloc_strdup(ctx, path);
 		if (!*pp_targetpath) {
-			return NT_STATUS_NO_MEMORY;
+			return false;
 		}
-		return NT_STATUS_OK;
+		return true;
 	}
 
 	*targetcli = NULL;
@@ -906,12 +815,12 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 
 	cleanpath = clean_path(ctx, path);
 	if (!cleanpath) {
-		return NT_STATUS_NO_MEMORY;
+		return false;
 	}
 
 	dfs_path = cli_dfs_make_full_path(ctx, rootcli, cleanpath);
 	if (!dfs_path) {
-		return NT_STATUS_NO_MEMORY;
+		return false;
 	}
 
 	status = cli_qpathinfo_basic( rootcli, dfs_path, &sbuf, &attributes);
@@ -920,7 +829,7 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 		*targetcli = rootcli;
 		*pp_targetpath = talloc_strdup(ctx, path);
 		if (!*pp_targetpath) {
-			return NT_STATUS_NO_MEMORY;
+			return false;
 		}
 		goto done;
 	}
@@ -932,7 +841,7 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 		*targetcli = rootcli;
 		*pp_targetpath = talloc_strdup(ctx, path);
 		if (!*pp_targetpath) {
-			return NT_STATUS_NO_MEMORY;
+			return false;
 		}
 		goto done;
 	}
@@ -941,110 +850,51 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 
 	if (!cli_dfs_check_error(rootcli, NT_STATUS_PATH_NOT_COVERED,
 				 status)) {
-		return status;
+		return false;
 	}
 
 	/* Check for the referral. */
 
-	status = cli_cm_open(ctx,
-			     rootcli,
-			     smbXcli_conn_remote_name(rootcli->conn),
-			     "IPC$",
-			     dfs_auth_info,
-			     false,
-			     smb1cli_conn_encryption_on(rootcli->conn),
-			     smbXcli_conn_protocol(rootcli->conn),
-			     0,
-			     0x20,
-			     &cli_ipc);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+	if (!(cli_ipc = cli_cm_open(ctx,
+				rootcli,
+				rootcli->desthost,
+				"IPC$",
+				dfs_auth_info,
+				false,
+				(rootcli->trans_enc_state != NULL),
+				rootcli->protocol,
+				0,
+				0x20))) {
+		return false;
 	}
 
 	status = cli_dfs_get_referral(ctx, cli_ipc, dfs_path, &refs,
 				      &num_refs, &consumed);
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+	if (!NT_STATUS_IS_OK(status) || !num_refs) {
+		return false;
 	}
 
-	if (!num_refs || !refs[0].dfspath) {
-		return NT_STATUS_NOT_FOUND;
+	/* Just store the first referral for now. */
+
+	if (!refs[0].dfspath) {
+		return false;
 	}
-
-	/*
-	 * Bug#10123 - DFS referal entries can be provided in a random order,
-	 * so check the connection cache for each item to avoid unnecessary
-	 * reconnections.
-	 */
-	dfs_refs = talloc_array(ctx, struct cli_dfs_path_split, num_refs);
-	if (dfs_refs == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	for (count = 0; count < num_refs; count++) {
-		if (!split_dfs_path(dfs_refs, refs[count].dfspath,
-				    &dfs_refs[count].server,
-				    &dfs_refs[count].share,
-				    &dfs_refs[count].extrapath)) {
-			TALLOC_FREE(dfs_refs);
-			return NT_STATUS_NOT_FOUND;
-		}
-
-		ccli = cli_cm_find(rootcli, dfs_refs[count].server,
-				   dfs_refs[count].share);
-		if (ccli != NULL) {
-			extrapath = dfs_refs[count].extrapath;
-			*targetcli = ccli;
-			break;
-		}
-	}
-
-	/*
-	 * If no cached connection was found, then connect to the first live
-	 * referral server in the list.
-	 */
-	for (count = 0; (ccli == NULL) && (count < num_refs); count++) {
-		/* Connect to the target server & share */
-		status = cli_cm_connect(ctx, rootcli,
-				dfs_refs[count].server,
-				dfs_refs[count].share,
-				dfs_auth_info,
-				false,
-				smb1cli_conn_encryption_on(rootcli->conn),
-				smbXcli_conn_protocol(rootcli->conn),
-				0,
-				0x20,
-				targetcli);
-		if (!NT_STATUS_IS_OK(status)) {
-			d_printf("Unable to follow dfs referral [\\%s\\%s]\n",
-				 dfs_refs[count].server,
-				 dfs_refs[count].share);
-			continue;
-		} else {
-			extrapath = dfs_refs[count].extrapath;
-			break;
-		}
-	}
-
-	/* No available referral server for the connection */
-	if (*targetcli == NULL) {
-		TALLOC_FREE(dfs_refs);
-		return status;
+	if (!split_dfs_path(ctx, refs[0].dfspath, &server, &share,
+			    &extrapath)) {
+		return false;
 	}
 
 	/* Make sure to recreate the original string including any wildcards. */
 
 	dfs_path = cli_dfs_make_full_path(ctx, rootcli, path);
 	if (!dfs_path) {
-		TALLOC_FREE(dfs_refs);
-		return NT_STATUS_NO_MEMORY;
+		return false;
 	}
 	pathlen = strlen(dfs_path);
 	consumed = MIN(pathlen, consumed);
 	*pp_targetpath = talloc_strdup(ctx, &dfs_path[consumed]);
 	if (!*pp_targetpath) {
-		TALLOC_FREE(dfs_refs);
-		return NT_STATUS_NO_MEMORY;
+		return false;
 	}
 	dfs_path[consumed] = '\0';
 
@@ -1053,6 +903,21 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
  	 * dfs_path is now the consumed part of the path
 	 * (in \server\share\path format).
  	 */
+
+	/* Open the connection to the target server & share */
+	if ((*targetcli = cli_cm_open(ctx, rootcli,
+					server,
+					share,
+					dfs_auth_info,
+					false,
+					(rootcli->trans_enc_state != NULL),
+					rootcli->protocol,
+					0,
+					0x20)) == NULL) {
+		d_printf("Unable to follow dfs referral [\\%s\\%s]\n",
+			server, share );
+		return false;
+	}
 
 	if (extrapath && strlen(extrapath) > 0) {
 		/* EMC Celerra NAS version 5.6.50 (at least) doesn't appear to */
@@ -1069,8 +934,7 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 						  *pp_targetpath);
 		}
 		if (!*pp_targetpath) {
-			TALLOC_FREE(dfs_refs);
-			return NT_STATUS_NO_MEMORY;
+			return false;
 		}
 	}
 
@@ -1083,30 +947,26 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 		d_printf("cli_resolve_path: "
 			"dfs_path (%s) not in correct format.\n",
 			dfs_path );
-		TALLOC_FREE(dfs_refs);
-		return NT_STATUS_NOT_FOUND;
+		return false;
 	}
 
 	ppath++; /* Now pointing at start of server name. */
 
 	if ((ppath = strchr_m( dfs_path, '\\' )) == NULL) {
-		TALLOC_FREE(dfs_refs);
-		return NT_STATUS_NOT_FOUND;
+		return false;
 	}
 
 	ppath++; /* Now pointing at start of share name. */
 
 	if ((ppath = strchr_m( ppath+1, '\\' )) == NULL) {
-		TALLOC_FREE(dfs_refs);
-		return NT_STATUS_NOT_FOUND;
+		return false;
 	}
 
 	ppath++; /* Now pointing at path component. */
 
 	newmount = talloc_asprintf(ctx, "%s\\%s", mountpt, ppath );
 	if (!newmount) {
-		TALLOC_FREE(dfs_refs);
-		return NT_STATUS_NOT_FOUND;
+		return false;
 	}
 
 	cli_set_mntpoint(*targetcli, newmount);
@@ -1115,14 +975,13 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
 	   checking for loops here. */
 
 	if (!strequal(*pp_targetpath, "\\") && !strequal(*pp_targetpath, "/")) {
-		status = cli_resolve_path(ctx,
-					  newmount,
-					  dfs_auth_info,
-					  *targetcli,
-					  *pp_targetpath,
-					  &newcli,
-					  &newpath);
-		if (NT_STATUS_IS_OK(status)) {
+		if (cli_resolve_path(ctx,
+					newmount,
+					dfs_auth_info,
+					*targetcli,
+					*pp_targetpath,
+					&newcli,
+					&newpath)) {
 			/*
 			 * When cli_resolve_path returns true here it's always
  			 * returning the complete path in newpath, so we're done
@@ -1130,35 +989,22 @@ NTSTATUS cli_resolve_path(TALLOC_CTX *ctx,
  			 */
 			*targetcli = newcli;
 			*pp_targetpath = newpath;
-			TALLOC_FREE(dfs_refs);
-			return status;
+			return true;
 		}
 	}
 
   done:
 
-	if (smbXcli_conn_protocol((*targetcli)->conn) >= PROTOCOL_SMB2_02) {
-		target_tcon = (*targetcli)->smb2.tcon;
-	} else {
-		target_tcon = (*targetcli)->smb1.tcon;
-	}
-
 	/* If returning true ensure we return a dfs root full path. */
-	if (smbXcli_tcon_is_dfs_share(target_tcon)) {
+	if ((*targetcli)->dfsroot) {
 		dfs_path = talloc_strdup(ctx, *pp_targetpath);
 		if (!dfs_path) {
-			TALLOC_FREE(dfs_refs);
-			return NT_STATUS_NO_MEMORY;
+			return false;
 		}
 		*pp_targetpath = cli_dfs_make_full_path(ctx, *targetcli, dfs_path);
-		if (*pp_targetpath == NULL) {
-			TALLOC_FREE(dfs_refs);
-			return NT_STATUS_NO_MEMORY;
-		}
 	}
 
-	TALLOC_FREE(dfs_refs);
-	return NT_STATUS_OK;
+	return true;
 }
 
 /********************************************************************
@@ -1179,17 +1025,15 @@ bool cli_check_msdfs_proxy(TALLOC_CTX *ctx,
 	size_t consumed = 0;
 	char *fullpath = NULL;
 	bool res;
-	uint16_t cnum;
+	uint16 cnum;
 	char *newextrapath = NULL;
 	NTSTATUS status;
-	const char *remote_name;
 
 	if (!cli || !sharename) {
 		return false;
 	}
 
-	remote_name = smbXcli_conn_remote_name(cli->conn);
-	cnum = cli_state_get_tid(cli);
+	cnum = cli->cnum;
 
 	/* special case.  never check for a referral on the IPC$ share */
 
@@ -1199,14 +1043,14 @@ bool cli_check_msdfs_proxy(TALLOC_CTX *ctx,
 
 	/* send a trans2_query_path_info to check for a referral */
 
-	fullpath = talloc_asprintf(ctx, "\\%s\\%s", remote_name, sharename);
+	fullpath = talloc_asprintf(ctx, "\\%s\\%s", cli->desthost, sharename );
 	if (!fullpath) {
 		return false;
 	}
 
 	/* check for the referral */
 
-	if (!NT_STATUS_IS_OK(cli_tree_connect(cli, "IPC$", "IPC", NULL, 0))) {
+	if (!NT_STATUS_IS_OK(cli_tcon_andx(cli, "IPC$", "IPC", NULL, 0))) {
 		return false;
 	}
 
@@ -1214,7 +1058,7 @@ bool cli_check_msdfs_proxy(TALLOC_CTX *ctx,
 		status = cli_cm_force_encryption(cli,
 					username,
 					password,
-					domain,
+					lp_workgroup(),
 					"IPC$");
 		if (!NT_STATUS_IS_OK(status)) {
 			return false;
@@ -1230,7 +1074,7 @@ bool cli_check_msdfs_proxy(TALLOC_CTX *ctx,
 		return false;
 	}
 
-	cli_state_set_tid(cli, cnum);
+	cli->cnum = cnum;
 
 	if (!res || !num_refs) {
 		return false;
@@ -1247,7 +1091,7 @@ bool cli_check_msdfs_proxy(TALLOC_CTX *ctx,
 
 	/* check that this is not a self-referral */
 
-	if (strequal(remote_name, *pp_newserver) &&
+	if (strequal(cli->desthost, *pp_newserver) &&
 			strequal(sharename, *pp_newshare)) {
 		return false;
 	}

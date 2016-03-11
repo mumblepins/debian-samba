@@ -77,29 +77,12 @@ static int instancetype_add(struct ldb_module *module, struct ldb_request *req)
 		} else {
 			/*
 			 * If we have a NC add operation then we need also the
-			 * "TYPE_WRITE" flag in order to succeed,
-			 * unless this NC is not instantiated
-			 */
-			if (ldb_request_get_control(req, DSDB_CONTROL_PARTIAL_REPLICA)) {
-				if (!(instanceType & INSTANCE_TYPE_UNINSTANT)) {
-					ldb_set_errstring(ldb, "instancetype: if TYPE_IS_NC_HEAD "
-							  "was set, and we are creating a new NC "
-							  "over DsAddEntry then also TYPE_UNINSTANT is requested!");
-					return LDB_ERR_UNWILLING_TO_PERFORM;
-				}
-			} else {
-				if (!(instanceType & INSTANCE_TYPE_WRITE)) {
-					ldb_set_errstring(ldb, "instancetype: if TYPE_IS_NC_HEAD "
-							  "was set, then also TYPE_WRITE is requested!");
-					return LDB_ERR_UNWILLING_TO_PERFORM;
-				}
+			 * "TYPE_WRITE" flag in order to succeed.
+			*/
+			if (!(instanceType & INSTANCE_TYPE_WRITE)) {
+				ldb_set_errstring(ldb, "instancetype: if TYPE_IS_NC_HEAD was set, then also TYPE_WRITE is requested!");
+				return LDB_ERR_UNWILLING_TO_PERFORM;
 			}
-
-			/*
-			 * TODO: Confirm we are naming master or start
-			 * a remote call to the naming master to
-			 * create the crossRef object
-			 */
 		}
 
 		/* we did only tests, so proceed with the original request */
@@ -151,12 +134,10 @@ static int instancetype_mod(struct ldb_module *module, struct ldb_request *req)
 
 	el = ldb_msg_find_element(req->op.mod.message, "instanceType");
 	if (el != NULL) {
-		/* Except to allow dbcheck to fix things, this must never be modified */
-		if (!ldb_request_get_control(req, DSDB_CONTROL_DBCHECK)) {
-			ldb_set_errstring(ldb, "instancetype: the 'instanceType' attribute can never be changed!");
-			return LDB_ERR_CONSTRAINT_VIOLATION;
-		}
+		ldb_set_errstring(ldb, "instancetype: the 'instanceType' attribute can never be changed!");
+		return LDB_ERR_CONSTRAINT_VIOLATION;
 	}
+
 	return ldb_next_request(module, req);
 }
 

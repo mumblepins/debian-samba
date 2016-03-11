@@ -26,16 +26,9 @@
 #include <ldb.h>
 #include "auth/auth.h"
 #include "auth/auth_sam_reply.h"
-#include "system/kerberos.h"
-#include "auth/kerberos/kerberos.h"
-#include <hdb.h>
-#include "kdc/samba_kdc.h"
-#include "kdc/pac-glue.h"
+#include "kdc/kdc-glue.h"
 #include "param/param.h"
 #include "librpc/gen_ndr/ndr_krb5pac.h"
-#include "libcli/security/security.h"
-#include "dsdb/samdb/samdb.h"
-#include "auth/kerberos/pac_utils.h"
 
 static
 NTSTATUS samba_get_logon_info_pac_blob(TALLOC_CTX *mem_ctx,
@@ -57,7 +50,7 @@ NTSTATUS samba_get_logon_info_pac_blob(TALLOC_CTX *mem_ctx,
 	}
 
 	pac_info.logon_info.info = talloc_zero(mem_ctx, struct PAC_LOGON_INFO);
-	if (!pac_info.logon_info.info) {
+	if (!mem_ctx) {
 		return NT_STATUS_NO_MEMORY;
 	}
 
@@ -78,11 +71,9 @@ NTSTATUS samba_get_logon_info_pac_blob(TALLOC_CTX *mem_ctx,
 
 krb5_error_code samba_make_krb5_pac(krb5_context context,
 				    DATA_BLOB *pac_blob,
-				    DATA_BLOB *deleg_blob,
 				    krb5_pac *pac)
 {
 	krb5_data pac_data;
-	krb5_data deleg_data;
 	krb5_error_code ret;
 
         /* The user account may be set not to want the PAC */
@@ -90,58 +81,35 @@ krb5_error_code samba_make_krb5_pac(krb5_context context,
 		return 0;
 	}
 
-	ret = krb5_copy_data_contents(&pac_data,
-				      pac_blob->data,
-				      pac_blob->length);
+	ret = krb5_data_copy(&pac_data, pac_blob->data, pac_blob->length);
 	if (ret != 0) {
 		return ret;
-	}
-
-	ZERO_STRUCT(deleg_data);
-	if (deleg_blob) {
-		ret = krb5_copy_data_contents(&deleg_data,
-					      deleg_blob->data,
-					      deleg_blob->length);
-		if (ret != 0) {
-			kerberos_free_data_contents(context, &pac_data);
-			return ret;
-		}
 	}
 
 	ret = krb5_pac_init(context, pac);
 	if (ret != 0) {
-		kerberos_free_data_contents(context, &pac_data);
-		kerberos_free_data_contents(context, &deleg_data);
+		krb5_data_free(&pac_data);
 		return ret;
 	}
 
 	ret = krb5_pac_add_buffer(context, *pac, PAC_TYPE_LOGON_INFO, &pac_data);
-	kerberos_free_data_contents(context, &pac_data);
+	krb5_data_free(&pac_data);
 	if (ret != 0) {
-		kerberos_free_data_contents(context, &deleg_data);
 		return ret;
-	}
-
-	if (deleg_blob) {
-		ret = krb5_pac_add_buffer(context, *pac,
-					  PAC_TYPE_CONSTRAINED_DELEGATION,
-					  &deleg_data);
-		kerberos_free_data_contents(context, &deleg_data);
-		if (ret != 0) {
-			return ret;
-		}
 	}
 
 	return ret;
 }
 
-bool samba_princ_needs_pac(struct samba_kdc_entry *skdc_entry)
+bool samba_princ_needs_pac(struct hdb_entry_ex *princ)
 {
 
+	struct samba_kdc_entry *p = talloc_get_type(princ->ctx, struct samba_kdc_entry);
 	uint32_t userAccountControl;
 
+
 	/* The service account may be set not to want the PAC */
-	userAccountControl = ldb_msg_find_attr_as_uint(skdc_entry->msg, "userAccountControl", 0);
+	userAccountControl = ldb_msg_find_attr_as_uint(p->msg, "userAccountControl", 0);
 	if (userAccountControl & UF_NO_AUTH_DATA_REQUIRED) {
 		return false;
 	}
@@ -149,87 +117,35 @@ bool samba_princ_needs_pac(struct samba_kdc_entry *skdc_entry)
 	return true;
 }
 
-/* Was the krbtgt in this DB (ie, should we check the incoming signature) and was it an RODC */
-int samba_krbtgt_is_in_db(struct samba_kdc_entry *p,
-			  bool *is_in_db,
-			  bool *is_untrusted)
+/* Was the krbtgt an RODC (and we are not) */
+bool samba_krbtgt_was_untrusted_rodc(struct hdb_entry_ex *princ)
 {
-	NTSTATUS status;
-	int rodc_krbtgt_number, trust_direction;
-	uint32_t rid;
 
-	TALLOC_CTX *mem_ctx = talloc_new(NULL);
-	if (!mem_ctx) {
-		return ENOMEM;
-	}
-	
-	trust_direction = ldb_msg_find_attr_as_int(p->msg, "trustDirection", 0);
+	struct samba_kdc_entry *p = talloc_get_type(princ->ctx, struct samba_kdc_entry);
+	int rodc_krbtgt_number;
 
-	if (trust_direction != 0) {
-		/* Domain trust - we cannot check the sig, but we trust it for a correct PAC
-		   
-		   This is exactly where we should flag for SID
-		   validation when we do inter-foreest trusts
-		 */
-		talloc_free(mem_ctx);
-		*is_untrusted = false;
-		*is_in_db = false;
-		return 0;
-	}
-
-	/* The lack of password controls etc applies to krbtgt by
-	 * virtue of being that particular RID */
-	status = dom_sid_split_rid(NULL, samdb_result_dom_sid(mem_ctx, p->msg, "objectSid"), NULL, &rid);
-
-	if (!NT_STATUS_IS_OK(status)) {
-		talloc_free(mem_ctx);
-		return EINVAL;
-	}
-
+	/* Determine if this was printed by an RODC */
 	rodc_krbtgt_number = ldb_msg_find_attr_as_int(p->msg, "msDS-SecondaryKrbTgtNumber", -1);
-
-	if (p->kdc_db_ctx->my_krbtgt_number == 0) {
-		if (rid == DOMAIN_RID_KRBTGT) {
-			*is_untrusted = false;
-			*is_in_db = true;
-			talloc_free(mem_ctx);
-			return 0;
-		} else if (rodc_krbtgt_number != -1) {
-			*is_in_db = true;
-			*is_untrusted = true;
-			talloc_free(mem_ctx);
-			return 0;
-		}
-	} else if ((rid != DOMAIN_RID_KRBTGT) && (rodc_krbtgt_number == p->kdc_db_ctx->my_krbtgt_number)) {
-		talloc_free(mem_ctx);
-		*is_untrusted = false;
-		*is_in_db = true;
-		return 0;
-	} else if (rid == DOMAIN_RID_KRBTGT) {
-		/* krbtgt viewed from an RODC */
-		talloc_free(mem_ctx);
-		*is_untrusted = false;
-		*is_in_db = false;
-		return 0;
+	if (rodc_krbtgt_number == -1) {
+		return false;
+	} else if (rodc_krbtgt_number != p->kdc_db_ctx->my_krbtgt_number) {
+		return true;
 	}
 
-	/* Another RODC */
-	talloc_free(mem_ctx);
-	*is_untrusted = true;
-	*is_in_db = false;
-	return 0;
+	return false;
 }
 
 NTSTATUS samba_kdc_get_pac_blob(TALLOC_CTX *mem_ctx,
-				struct samba_kdc_entry *p,
+				struct hdb_entry_ex *client,
 				DATA_BLOB **_pac_blob)
 {
+	struct samba_kdc_entry *p = talloc_get_type(client->ctx, struct samba_kdc_entry);
 	struct auth_user_info_dc *user_info_dc;
 	DATA_BLOB *pac_blob;
 	NTSTATUS nt_status;
 
 	/* The user account may be set not to want the PAC */
-	if ( ! samba_princ_needs_pac(p)) {
+	if ( ! samba_princ_needs_pac(client)) {
 		*_pac_blob = NULL;
 		return NT_STATUS_OK;
 	}
@@ -266,16 +182,14 @@ NTSTATUS samba_kdc_get_pac_blob(TALLOC_CTX *mem_ctx,
 
 NTSTATUS samba_kdc_update_pac_blob(TALLOC_CTX *mem_ctx,
 				   krb5_context context,
-				   const krb5_pac pac, DATA_BLOB *pac_blob,
-				   struct PAC_SIGNATURE_DATA *pac_srv_sig,
-				   struct PAC_SIGNATURE_DATA *pac_kdc_sig)
+				   krb5_pac *pac, DATA_BLOB *pac_blob)
 {
 	struct auth_user_info_dc *user_info_dc;
 	krb5_error_code ret;
 	NTSTATUS nt_status;
 
-	ret = kerberos_pac_to_user_info_dc(mem_ctx, pac,
-					   context, &user_info_dc, pac_srv_sig, pac_kdc_sig);
+	ret = kerberos_pac_to_user_info_dc(mem_ctx, *pac,
+					   context, &user_info_dc, NULL, NULL);
 	if (ret) {
 		return NT_STATUS_UNSUCCESSFUL;
 	}
@@ -286,96 +200,38 @@ NTSTATUS samba_kdc_update_pac_blob(TALLOC_CTX *mem_ctx,
 	return nt_status;
 }
 
-NTSTATUS samba_kdc_update_delegation_info_blob(TALLOC_CTX *mem_ctx,
-				krb5_context context,
-				const krb5_pac pac,
-				const krb5_principal server_principal,
-				const krb5_principal proxy_principal,
-				DATA_BLOB *new_blob)
+/* this function allocates 'data' using malloc.
+ * The caller is responsible for freeing it */
+void samba_kdc_build_edata_reply(NTSTATUS nt_status, DATA_BLOB *e_data)
 {
-	krb5_data old_data;
-	DATA_BLOB old_blob;
-	krb5_error_code ret;
-	NTSTATUS nt_status;
-	enum ndr_err_code ndr_err;
-	union PAC_INFO info;
-	struct PAC_CONSTRAINED_DELEGATION _d;
-	struct PAC_CONSTRAINED_DELEGATION *d = NULL;
-	char *server = NULL;
-	char *proxy = NULL;
-	uint32_t i;
-	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
+	PA_DATA pa;
+	unsigned char *buf;
+	size_t len;
+	krb5_error_code ret = 0;
 
-	if (tmp_ctx == NULL) {
-		return NT_STATUS_NO_MEMORY;
+	if (!e_data)
+		return;
+
+	pa.padata_type		= KRB5_PADATA_PW_SALT;
+	pa.padata_value.length	= 12;
+	pa.padata_value.data	= malloc(pa.padata_value.length);
+	if (!pa.padata_value.data) {
+		e_data->length = 0;
+		e_data->data = NULL;
+		return;
 	}
 
-	ret = krb5_pac_get_buffer(context, pac, PAC_TYPE_CONSTRAINED_DELEGATION, &old_data);
-	if (ret == ENOENT) {
-		ZERO_STRUCT(old_data);
-	} else if (ret) {
-		talloc_free(tmp_ctx);
-		return NT_STATUS_UNSUCCESSFUL;
-	}
+	SIVAL(pa.padata_value.data, 0, NT_STATUS_V(nt_status));
+	SIVAL(pa.padata_value.data, 4, 0);
+	SIVAL(pa.padata_value.data, 8, 1);
 
-	old_blob.length = old_data.length;
-	old_blob.data = (uint8_t *)old_data.data;
+	ASN1_MALLOC_ENCODE(PA_DATA, buf, len, &pa, &len, ret);
+	free(pa.padata_value.data);
 
-	ZERO_STRUCT(info);
-	if (old_blob.length > 0) {
-		ndr_err = ndr_pull_union_blob(&old_blob, mem_ctx,
-				&info, PAC_TYPE_CONSTRAINED_DELEGATION,
-				(ndr_pull_flags_fn_t)ndr_pull_PAC_INFO);
-		if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-			kerberos_free_data_contents(context, &old_data);
-			nt_status = ndr_map_error2ntstatus(ndr_err);
-			DEBUG(0,("can't parse the PAC LOGON_INFO: %s\n", nt_errstr(nt_status)));
-			talloc_free(tmp_ctx);
-			return nt_status;
-		}
-	} else {
-		ZERO_STRUCT(_d);
-		info.constrained_delegation.info = &_d;
-	}
-	kerberos_free_data_contents(context, &old_data);
+	e_data->data   = buf;
+	e_data->length = len;
 
-	ret = krb5_unparse_name(context, server_principal, &server);
-	if (ret) {
-		talloc_free(tmp_ctx);
-		return NT_STATUS_INTERNAL_ERROR;
-	}
-
-	ret = krb5_unparse_name_flags(context, proxy_principal,
-				      KRB5_PRINCIPAL_UNPARSE_NO_REALM, &proxy);
-	if (ret) {
-		SAFE_FREE(server);
-		talloc_free(tmp_ctx);
-		return NT_STATUS_INTERNAL_ERROR;
-	}
-
-	d = info.constrained_delegation.info;
-	i = d->num_transited_services;
-	d->proxy_target.string = server;
-	d->transited_services = talloc_realloc(mem_ctx, d->transited_services,
-					       struct lsa_String, i + 1);
-	d->transited_services[i].string = proxy;
-	d->num_transited_services = i + 1;
-
-	ndr_err = ndr_push_union_blob(new_blob, mem_ctx,
-				&info, PAC_TYPE_CONSTRAINED_DELEGATION,
-				(ndr_push_flags_fn_t)ndr_push_PAC_INFO);
-	SAFE_FREE(server);
-	SAFE_FREE(proxy);
-	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		kerberos_free_data_contents(context, &old_data);
-		nt_status = ndr_map_error2ntstatus(ndr_err);
-		DEBUG(0,("can't parse the PAC LOGON_INFO: %s\n", nt_errstr(nt_status)));
-		talloc_free(tmp_ctx);
-		return nt_status;
-	}
-
-	talloc_free(tmp_ctx);
-	return NT_STATUS_OK;
+	return;
 }
 
 /* function to map policy errors */
@@ -384,9 +240,9 @@ krb5_error_code samba_kdc_map_policy_err(NTSTATUS nt_status)
 	krb5_error_code ret;
 
 	if (NT_STATUS_EQUAL(nt_status, NT_STATUS_PASSWORD_MUST_CHANGE))
-		ret = KRB5KDC_ERR_KEY_EXP;
+		ret = KRB5KDC_ERR_KEY_EXPIRED;
 	else if (NT_STATUS_EQUAL(nt_status, NT_STATUS_PASSWORD_EXPIRED))
-		ret = KRB5KDC_ERR_KEY_EXP;
+		ret = KRB5KDC_ERR_KEY_EXPIRED;
 	else if (NT_STATUS_EQUAL(nt_status, NT_STATUS_ACCOUNT_EXPIRED))
 		ret = KRB5KDC_ERR_CLIENT_REVOKED;
 	else if (NT_STATUS_EQUAL(nt_status, NT_STATUS_ACCOUNT_DISABLED))
@@ -430,3 +286,4 @@ NTSTATUS samba_kdc_check_client_access(struct samba_kdc_entry *kdc_entry,
 	talloc_free(tmp_ctx);
 	return nt_status;
 }
+

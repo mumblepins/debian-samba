@@ -58,7 +58,7 @@ static bool cli_open_policy_hnd(void)
 		NTSTATUS ret;
 		cli_ipc = connect_one("IPC$");
 		ret = cli_rpc_pipe_open_noauth(cli_ipc,
-					       &ndr_table_lsarpc,
+					       &ndr_table_lsarpc.syntax_id,
 					       &global_pipe_hnd);
 		if (!NT_STATUS_IS_OK(ret)) {
 				return False;
@@ -187,9 +187,7 @@ static int parse_quota_set(TALLOC_CTX *ctx,
 
 	switch (todo) {
 		case PARSE_LIM:
-			if (sscanf(p,"%"SCNu64"/%"SCNu64,&pqt->softlim,
-			    &pqt->hardlim) != 2)
-			{
+			if (sscanf(p,"%"PRIu64"/%"PRIu64,&pqt->softlim,&pqt->hardlim)!=2) {
 				return -1;
 			}
 
@@ -332,11 +330,11 @@ static void dump_ntquota_list(SMB_NTQUOTA_LIST **qtl, bool _verbose,
 
 static int do_quota(struct cli_state *cli,
 		enum SMB_QUOTA_TYPE qtype,
-		uint16_t cmd,
+		uint16 cmd,
 		const char *username_str,
 		SMB_NTQUOTA_STRUCT *pqt)
 {
-	uint32_t fs_attrs = 0;
+	uint32 fs_attrs = 0;
 	uint16_t quota_fnum = 0;
 	SMB_NTQUOTA_LIST *qtl = NULL;
 	SMB_NTQUOTA_STRUCT qt;
@@ -506,8 +504,11 @@ static int do_quota(struct cli_state *cli,
 static struct cli_state *connect_one(const char *share)
 {
 	struct cli_state *c;
+	struct sockaddr_storage ss;
 	NTSTATUS nt_status;
 	uint32_t flags = 0;
+
+	zero_sockaddr(&ss);
 
 	if (get_cmdline_auth_info_use_machine_account(smbcquotas_auth_info) &&
 	    !set_cmdline_auth_info_machine_account_creds(smbcquotas_auth_info)) {
@@ -522,8 +523,8 @@ static struct cli_state *connect_one(const char *share)
 
 	set_cmdline_auth_info_getpass(smbcquotas_auth_info);
 
-	nt_status = cli_full_connection(&c, lp_netbios_name(), server,
-					    NULL, 0,
+	nt_status = cli_full_connection(&c, global_myname(), server, 
+					    &ss, 0,
 					    share, "?????",
 					    get_cmdline_auth_info_username(smbcquotas_auth_info),
 					    lp_workgroup(),
@@ -553,9 +554,8 @@ static struct cli_state *connect_one(const char *share)
 /****************************************************************************
   main program
 ****************************************************************************/
-int main(int argc, char *argv[])
+ int main(int argc, const char *argv[])
 {
-	const char **argv_const = discard_const_p(const char *, argv);
 	char *share;
 	int opt;
 	int result;
@@ -583,13 +583,13 @@ FSQLIM:<softlimit>/<hardlimit> for filesystem defaults\n\
 FSQFLAGS:QUOTA_ENABLED/DENY_DISK/LOG_SOFTLIMIT/LOG_HARD_LIMIT", "SETSTRING" },
 		{ "numeric", 'n', POPT_ARG_NONE, NULL, 'n', "Don't resolve sids or limits to names" },
 		{ "verbose", 'v', POPT_ARG_NONE, NULL, 'v', "be verbose" },
-		{ "test-args", 't', POPT_ARG_NONE, NULL, 't', "Test arguments"},
+		{ "test-args", 't', POPT_ARG_NONE, NULL, 'r', "Test arguments"},
 		POPT_COMMON_SAMBA
 		POPT_COMMON_CREDENTIALS
 		{ NULL }
 	};
 
-	smb_init_locale();
+	load_case_tables();
 
 	ZERO_STRUCT(qt);
 
@@ -599,9 +599,9 @@ FSQFLAGS:QUOTA_ENABLED/DENY_DISK/LOG_SOFTLIMIT/LOG_HARD_LIMIT", "SETSTRING" },
 
 	setlinebuf(stdout);
 
-	fault_setup();
+	fault_setup(NULL);
 
-	lp_load_global(get_dyn_CONFIGFILE());
+	lp_load(get_dyn_CONFIGFILE(),True,False,False,True);
 	load_interfaces();
 
 	smbcquotas_auth_info = user_auth_info_init(frame);
@@ -610,7 +610,7 @@ FSQFLAGS:QUOTA_ENABLED/DENY_DISK/LOG_SOFTLIMIT/LOG_HARD_LIMIT", "SETSTRING" },
 	}
 	popt_common_set_auth_info(smbcquotas_auth_info);
 
-	pc = poptGetContext("smbcquotas", argc, argv_const, long_options, 0);
+	pc = poptGetContext("smbcquotas", argc, argv, long_options, 0);
 
 	poptSetOtherOptionHelp(pc, "//server1/share1");
 
@@ -690,9 +690,6 @@ FSQFLAGS:QUOTA_ENABLED/DENY_DISK/LOG_SOFTLIMIT/LOG_HARD_LIMIT", "SETSTRING" },
 		printf("Out of memory\n");
 		exit(EXIT_PARSE_ERROR);
 	}
-
-	poptFreeContext(pc);
-	popt_burn_cmdline_password(argc, argv);
 
 	string_replace(path, '/', '\\');
 

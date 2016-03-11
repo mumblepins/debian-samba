@@ -28,20 +28,12 @@
 #include "replace.h"
 #include "system/filesys.h"
 
+#ifndef Py_RETURN_NONE
+#define Py_RETURN_NONE return Py_INCREF(Py_None), Py_None
+#endif
+
 /* Include tdb headers */
 #include <tdb.h>
-
-#if PY_MAJOR_VERSION >= 3
-#define PyStr_FromString PyUnicode_FromString
-#define PyStr_FromFormat PyUnicode_FromFormat
-#define PyInt_FromLong PyLong_FromLong
-#define PyInt_Check PyLong_Check
-#define PyInt_AsLong PyLong_AsLong
-#define Py_TPFLAGS_HAVE_ITER 0
-#else
-#define PyStr_FromString PyString_FromString
-#define PyStr_FromFormat PyString_FromFormat
-#endif
 
 typedef struct {
 	PyObject_HEAD
@@ -49,7 +41,7 @@ typedef struct {
 	bool closed;
 } PyTdbObject;
 
-static PyTypeObject PyTdb;
+staticforward PyTypeObject PyTdb;
 
 static void PyErr_SetTDBError(TDB_CONTEXT *tdb)
 {
@@ -57,21 +49,21 @@ static void PyErr_SetTDBError(TDB_CONTEXT *tdb)
 		Py_BuildValue("(i,s)", tdb_error(tdb), tdb_errorstr(tdb)));
 }
 
-static TDB_DATA PyBytes_AsTDB_DATA(PyObject *data)
+static TDB_DATA PyString_AsTDB_DATA(PyObject *data)
 {
 	TDB_DATA ret;
-	ret.dptr = (unsigned char *)PyBytes_AsString(data);
-	ret.dsize = PyBytes_Size(data);
+	ret.dptr = (unsigned char *)PyString_AsString(data);
+	ret.dsize = PyString_Size(data);
 	return ret;
 }
 
-static PyObject *PyBytes_FromTDB_DATA(TDB_DATA data)
+static PyObject *PyString_FromTDB_DATA(TDB_DATA data)
 {
 	if (data.dptr == NULL && data.dsize == 0) {
 		Py_RETURN_NONE;
 	} else {
-		PyObject *ret = PyBytes_FromStringAndSize((const char *)data.dptr,
-												  data.dsize);
+		PyObject *ret = PyString_FromStringAndSize((const char *)data.dptr, 
+												   data.dsize);
 		free(data.dptr);
 		return ret;
     }
@@ -83,30 +75,15 @@ static PyObject *PyBytes_FromTDB_DATA(TDB_DATA data)
 		return NULL; \
 	}
 
-#define PyErr_TDB_RAISE_IF_CLOSED(self) \
-	if (self->closed) {						\
-	        PyErr_SetObject(PyExc_RuntimeError,				\
-				Py_BuildValue("(i,s)", TDB_ERR_IO, "Database is already closed")); \
-		return NULL;						\
-	}
-
-#define PyErr_TDB_RAISE_RETURN_MINUS_1_IF_CLOSED(self) \
-	if (self->closed) {						\
-	        PyErr_SetObject(PyExc_RuntimeError,				\
-				Py_BuildValue("(i,s)", TDB_ERR_IO, "Database is already closed")); \
-		return -1;						\
-	}
-
 static PyObject *py_tdb_open(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
 	char *name = NULL;
 	int hash_size = 0, tdb_flags = TDB_DEFAULT, flags = O_RDWR, mode = 0600;
 	TDB_CONTEXT *ctx;
 	PyTdbObject *ret;
-	const char *_kwnames[] = { "name", "hash_size", "tdb_flags", "flags", "mode", NULL };
-	char **kwnames = discard_const_p(char *, _kwnames);
+	const char *kwnames[] = { "name", "hash_size", "tdb_flags", "flags", "mode", NULL };
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|siiii", kwnames, &name, &hash_size, &tdb_flags, &flags, &mode))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|siiii", (char **)kwnames, &name, &hash_size, &tdb_flags, &flags, &mode))
 		return NULL;
 
 	if (name == NULL) {
@@ -132,81 +109,56 @@ static PyObject *py_tdb_open(PyTypeObject *type, PyObject *args, PyObject *kwarg
 
 static PyObject *obj_transaction_cancel(PyTdbObject *self)
 {
-	int ret;
-
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
-	ret = tdb_transaction_cancel(self->ctx);
+	int ret = tdb_transaction_cancel(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_transaction_commit(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_transaction_commit(self->ctx);
+	int ret = tdb_transaction_commit(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_transaction_prepare_commit(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_transaction_prepare_commit(self->ctx);
+	int ret = tdb_transaction_prepare_commit(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_transaction_start(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_transaction_start(self->ctx);
+	int ret = tdb_transaction_start(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_reopen(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_reopen(self->ctx);
-	if (ret != 0) {
-		self->closed = true;
-		PyErr_SetObject(PyExc_RuntimeError,
-				Py_BuildValue("(i,s)",
-					      TDB_ERR_IO,
-					      "Failed to reopen database"));
-		return NULL;
-	}
+	int ret = tdb_reopen(self->ctx);
+	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_lockall(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_lockall(self->ctx);
+	int ret = tdb_lockall(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_unlockall(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_unlockall(self->ctx);
+	int ret = tdb_unlockall(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_lockall_read(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_lockall_read(self->ctx);
+	int ret = tdb_lockall_read(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
@@ -225,13 +177,7 @@ static PyObject *obj_close(PyTdbObject *self)
 		Py_RETURN_NONE;
 	ret = tdb_close(self->ctx);
 	self->closed = true;
-	if (ret != 0) {
-		PyErr_SetObject(PyExc_RuntimeError,
-				Py_BuildValue("(i,s)",
-					      TDB_ERR_IO,
-					      "Failed to close database"));
-		return NULL;
-	}
+	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
@@ -239,17 +185,12 @@ static PyObject *obj_get(PyTdbObject *self, PyObject *args)
 {
 	TDB_DATA key;
 	PyObject *py_key;
-
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	if (!PyArg_ParseTuple(args, "O", &py_key))
 		return NULL;
 
-	key = PyBytes_AsTDB_DATA(py_key);
-	if (!key.dptr)
-		return NULL;
+	key = PyString_AsTDB_DATA(py_key);
 
-	return PyBytes_FromTDB_DATA(tdb_fetch(self->ctx, key));
+	return PyString_FromTDB_DATA(tdb_fetch(self->ctx, key));
 }
 
 static PyObject *obj_append(PyTdbObject *self, PyObject *args)
@@ -257,18 +198,11 @@ static PyObject *obj_append(PyTdbObject *self, PyObject *args)
 	TDB_DATA key, data;
 	PyObject *py_key, *py_data;
 	int ret;
-
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	if (!PyArg_ParseTuple(args, "OO", &py_key, &py_data))
 		return NULL;
 
-	key = PyBytes_AsTDB_DATA(py_key);
-	if (!key.dptr)
-		return NULL;
-	data = PyBytes_AsTDB_DATA(py_data);
-	if (!data.dptr)
-		return NULL;
+	key = PyString_AsTDB_DATA(py_key);
+	data = PyString_AsTDB_DATA(py_data);
 
 	ret = tdb_append(self->ctx, key, data);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
@@ -277,25 +211,19 @@ static PyObject *obj_append(PyTdbObject *self, PyObject *args)
 
 static PyObject *obj_firstkey(PyTdbObject *self)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
-	return PyBytes_FromTDB_DATA(tdb_firstkey(self->ctx));
+	return PyString_FromTDB_DATA(tdb_firstkey(self->ctx));
 }
 
 static PyObject *obj_nextkey(PyTdbObject *self, PyObject *args)
 {
 	TDB_DATA key;
 	PyObject *py_key;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	if (!PyArg_ParseTuple(args, "O", &py_key))
 		return NULL;
 
-	key = PyBytes_AsTDB_DATA(py_key);
-	if (!key.dptr)
-		return NULL;
+	key = PyString_AsTDB_DATA(py_key);
 	
-	return PyBytes_FromTDB_DATA(tdb_nextkey(self->ctx, key));
+	return PyString_FromTDB_DATA(tdb_nextkey(self->ctx, key));
 }
 
 static PyObject *obj_delete(PyTdbObject *self, PyObject *args)
@@ -303,55 +231,31 @@ static PyObject *obj_delete(PyTdbObject *self, PyObject *args)
 	TDB_DATA key;
 	PyObject *py_key;
 	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	if (!PyArg_ParseTuple(args, "O", &py_key))
 		return NULL;
 
-	key = PyBytes_AsTDB_DATA(py_key);
-	if (!key.dptr)
-		return NULL;
+	key = PyString_AsTDB_DATA(py_key);
 	ret = tdb_delete(self->ctx, key);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
-static int obj_contains(PyTdbObject *self, PyObject *py_key)
+static PyObject *obj_has_key(PyTdbObject *self, PyObject *args)
 {
 	TDB_DATA key;
 	int ret;
-	PyErr_TDB_RAISE_RETURN_MINUS_1_IF_CLOSED(self);
-
-	key = PyBytes_AsTDB_DATA(py_key);
-	if (!key.dptr) {
-		PyErr_BadArgument();
-		return -1;
-	}
-	ret = tdb_exists(self->ctx, key);
-	if (ret)
-		return 1;
-	return 0;
-}
-
-#if PY_MAJOR_VERSION < 3
-static PyObject *obj_has_key(PyTdbObject *self, PyObject *args)
-{
-	int ret;
 	PyObject *py_key;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	if (!PyArg_ParseTuple(args, "O", &py_key))
 		return NULL;
 
-	ret = obj_contains(self, py_key);
-	if (ret == -1)
-		return NULL;
-	if (ret)
-		Py_RETURN_TRUE;
-	Py_RETURN_FALSE;
+	key = PyString_AsTDB_DATA(py_key);
+	ret = tdb_exists(self->ctx, key);
+	if (ret != TDB_ERR_NOEXIST) {
+		PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
+	}
 
+	return (ret == TDB_ERR_NOEXIST)?Py_False:Py_True;
 }
-#endif
 
 static PyObject *obj_store(PyTdbObject *self, PyObject *args)
 {
@@ -360,17 +264,11 @@ static PyObject *obj_store(PyTdbObject *self, PyObject *args)
 	int flag = TDB_REPLACE;
 	PyObject *py_key, *py_value;
 
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	if (!PyArg_ParseTuple(args, "OO|i", &py_key, &py_value, &flag))
 		return NULL;
 
-	key = PyBytes_AsTDB_DATA(py_key);
-	if (!key.dptr)
-		return NULL;
-	value = PyBytes_AsTDB_DATA(py_value);
-	if (!value.dptr)
-		return NULL;
+	key = PyString_AsTDB_DATA(py_key);
+	value = PyString_AsTDB_DATA(py_value);
 
 	ret = tdb_store(self->ctx, key, value, flag);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
@@ -380,8 +278,6 @@ static PyObject *obj_store(PyTdbObject *self, PyObject *args)
 static PyObject *obj_add_flags(PyTdbObject *self, PyObject *args)
 {
 	unsigned flags;
-
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 
 	if (!PyArg_ParseTuple(args, "I", &flags))
 		return NULL;
@@ -393,8 +289,6 @@ static PyObject *obj_add_flags(PyTdbObject *self, PyObject *args)
 static PyObject *obj_remove_flags(PyTdbObject *self, PyObject *args)
 {
 	unsigned flags;
-
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 
 	if (!PyArg_ParseTuple(args, "I", &flags))
 		return NULL;
@@ -417,7 +311,7 @@ static PyObject *tdb_iter_next(PyTdbIteratorObject *self)
 		return NULL;
 	current = self->current;
 	self->current = tdb_nextkey(self->iteratee->ctx, self->current);
-	ret = PyBytes_FromTDB_DATA(current);
+	ret = PyString_FromTDB_DATA(current);
 	return ret;
 }
 
@@ -440,8 +334,6 @@ static PyObject *tdb_object_iter(PyTdbObject *self)
 {
 	PyTdbIteratorObject *ret;	
 
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-
 	ret = PyObject_New(PyTdbIteratorObject, &PyTdbIterator);
 	if (!ret)
 		return NULL;
@@ -453,32 +345,26 @@ static PyObject *tdb_object_iter(PyTdbObject *self)
 
 static PyObject *obj_clear(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_wipe_all(self->ctx);
+	int ret = tdb_wipe_all(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_repack(PyTdbObject *self)
 {
-	int ret;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	ret = tdb_repack(self->ctx);
+	int ret = tdb_repack(self->ctx);
 	PyErr_TDB_ERROR_IS_ERR_RAISE(ret, self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_enable_seqnum(PyTdbObject *self)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	tdb_enable_seqnum(self->ctx);
 	Py_RETURN_NONE;
 }
 
 static PyObject *obj_increment_seqnum_nonblock(PyTdbObject *self)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	tdb_increment_seqnum_nonblock(self->ctx);
 	Py_RETURN_NONE;
 }
@@ -508,23 +394,17 @@ static PyMethodDef tdb_object_methods[] = {
 		"Append data to an existing key." },
 	{ "firstkey", (PyCFunction)obj_firstkey, METH_NOARGS, "S.firstkey() -> data\n"
 		"Return the first key in this database." },
-	{ "nextkey", (PyCFunction)obj_nextkey, METH_VARARGS, "S.nextkey(key) -> data\n"
+	{ "nextkey", (PyCFunction)obj_nextkey, METH_NOARGS, "S.nextkey(key) -> data\n"
 		"Return the next key in this database." },
 	{ "delete", (PyCFunction)obj_delete, METH_VARARGS, "S.delete(key) -> None\n"
 		"Delete an entry." },
-#if PY_MAJOR_VERSION < 3
 	{ "has_key", (PyCFunction)obj_has_key, METH_VARARGS, "S.has_key(key) -> None\n"
 		"Check whether key exists in this database." },
-#endif
 	{ "store", (PyCFunction)obj_store, METH_VARARGS, "S.store(key, data, flag=REPLACE) -> None"
 		"Store data." },
 	{ "add_flags", (PyCFunction)obj_add_flags, METH_VARARGS, "S.add_flags(flags) -> None" },
 	{ "remove_flags", (PyCFunction)obj_remove_flags, METH_VARARGS, "S.remove_flags(flags) -> None" },
-#if PY_MAJOR_VERSION >= 3
-	{ "keys", (PyCFunction)tdb_object_iter, METH_NOARGS, "S.iterkeys() -> iterator" },
-#else
 	{ "iterkeys", (PyCFunction)tdb_object_iter, METH_NOARGS, "S.iterkeys() -> iterator" },
-#endif
 	{ "clear", (PyCFunction)obj_clear, METH_NOARGS, "S.clear() -> None\n"
 		"Wipe the entire database." },
 	{ "repack", (PyCFunction)obj_repack, METH_NOARGS, "S.repack() -> None\n"
@@ -538,13 +418,11 @@ static PyMethodDef tdb_object_methods[] = {
 
 static PyObject *obj_get_hash_size(PyTdbObject *self, void *closure)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	return PyInt_FromLong(tdb_hash_size(self->ctx));
 }
 
 static int obj_set_max_dead(PyTdbObject *self, PyObject *max_dead, void *closure)
 {
-	PyErr_TDB_RAISE_RETURN_MINUS_1_IF_CLOSED(self);
 	if (!PyInt_Check(max_dead))
 		return -1;
 	tdb_set_max_dead(self->ctx, PyInt_AsLong(max_dead));
@@ -553,79 +431,47 @@ static int obj_set_max_dead(PyTdbObject *self, PyObject *max_dead, void *closure
 
 static PyObject *obj_get_map_size(PyTdbObject *self, void *closure)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	return PyInt_FromLong(tdb_map_size(self->ctx));
 }
 
 static PyObject *obj_get_freelist_size(PyTdbObject *self, void *closure)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	return PyInt_FromLong(tdb_freelist_size(self->ctx));
 }
 
 static PyObject *obj_get_flags(PyTdbObject *self, void *closure)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	return PyInt_FromLong(tdb_get_flags(self->ctx));
 }
 
 static PyObject *obj_get_filename(PyTdbObject *self, void *closure)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	return PyBytes_FromString(tdb_name(self->ctx));
+	return PyString_FromString(tdb_name(self->ctx));
 }
 
 static PyObject *obj_get_seqnum(PyTdbObject *self, void *closure)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	return PyInt_FromLong(tdb_get_seqnum(self->ctx));
 }
 
-static PyObject *obj_get_text(PyTdbObject *self, void *closure)
-{
-	PyObject *mod, *cls, *inst;
-	mod = PyImport_ImportModule("_tdb_text");
-	if (mod == NULL)
-		return NULL;
-	cls = PyObject_GetAttrString(mod, "TdbTextWrapper");
-	if (cls == NULL) {
-		Py_DECREF(mod);
-		return NULL;
-	}
-	inst = PyObject_CallFunction(cls, discard_const_p(char, "O"), self);
-	Py_DECREF(mod);
-	Py_DECREF(cls);
-	return inst;
-}
 
 static PyGetSetDef tdb_object_getsetters[] = {
-	{ discard_const_p(char, "hash_size"),
-	  (getter)obj_get_hash_size, NULL, NULL },
-	{ discard_const_p(char, "map_size"),
-	  (getter)obj_get_map_size, NULL, NULL },
-	{ discard_const_p(char, "freelist_size"),
-	  (getter)obj_get_freelist_size, NULL, NULL },
-	{ discard_const_p(char, "flags"),
-	  (getter)obj_get_flags, NULL, NULL },
-	{ discard_const_p(char, "max_dead"),
-	  NULL, (setter)obj_set_max_dead, NULL },
-	{ discard_const_p(char, "filename"),
-	  (getter)obj_get_filename, NULL,
-	  discard_const_p(char, "The filename of this TDB file.") },
-	{ discard_const_p(char, "seqnum"),
-	  (getter)obj_get_seqnum, NULL, NULL },
-	{ discard_const_p(char, "text"),
-	  (getter)obj_get_text, NULL, NULL },
+	{ (char *)"hash_size", (getter)obj_get_hash_size, NULL, NULL },
+	{ (char *)"map_size", (getter)obj_get_map_size, NULL, NULL },
+	{ (char *)"freelist_size", (getter)obj_get_freelist_size, NULL, NULL },
+	{ (char *)"flags", (getter)obj_get_flags, NULL, NULL },
+	{ (char *)"max_dead", NULL, (setter)obj_set_max_dead, NULL },
+	{ (char *)"filename", (getter)obj_get_filename, NULL, (char *)"The filename of this TDB file."},
+	{ (char *)"seqnum", (getter)obj_get_seqnum, NULL, NULL },
 	{ NULL }
 };
 
 static PyObject *tdb_object_repr(PyTdbObject *self)
 {
-	PyErr_TDB_RAISE_IF_CLOSED(self);
 	if (tdb_get_flags(self->ctx) & TDB_INTERNAL) {
-		return PyStr_FromString("Tdb(<internal>)");
+		return PyString_FromString("Tdb(<internal>)");
 	} else {
-		return PyStr_FromFormat("Tdb('%s')", tdb_name(self->ctx));
+		return PyString_FromFormat("Tdb('%s')", tdb_name(self->ctx));
 	}
 }
 
@@ -633,31 +479,26 @@ static void tdb_object_dealloc(PyTdbObject *self)
 {
 	if (!self->closed)
 		tdb_close(self->ctx);
-	Py_TYPE(self)->tp_free(self);
+	self->ob_type->tp_free(self);
 }
 
 static PyObject *obj_getitem(PyTdbObject *self, PyObject *key)
 {
 	TDB_DATA tkey, val;
-	PyErr_TDB_RAISE_IF_CLOSED(self);
-	if (!PyBytes_Check(key)) {
-		PyErr_SetString(PyExc_TypeError, "Expected bytestring as key");
+	if (!PyString_Check(key)) {
+		PyErr_SetString(PyExc_TypeError, "Expected string as key");
 		return NULL;
 	}
 
-	tkey.dptr = (unsigned char *)PyBytes_AsString(key);
-	tkey.dsize = PyBytes_Size(key);
+	tkey.dptr = (unsigned char *)PyString_AsString(key);
+	tkey.dsize = PyString_Size(key);
 
 	val = tdb_fetch(self->ctx, tkey);
 	if (val.dptr == NULL) {
-		/*
-		 * if the key doesn't exist raise KeyError(key) to be
-		 * consistent with python dict
-		 */
-		PyErr_SetObject(PyExc_KeyError, key);
+		PyErr_SetString(PyExc_KeyError, "No such TDB entry");
 		return NULL;
 	} else {
-		return PyBytes_FromTDB_DATA(val);
+		return PyString_FromTDB_DATA(val);
 	}
 }
 
@@ -665,23 +506,22 @@ static int obj_setitem(PyTdbObject *self, PyObject *key, PyObject *value)
 {
 	TDB_DATA tkey, tval;
 	int ret;
-	PyErr_TDB_RAISE_RETURN_MINUS_1_IF_CLOSED(self);
-	if (!PyBytes_Check(key)) {
-		PyErr_SetString(PyExc_TypeError, "Expected bytestring as key");
+	if (!PyString_Check(key)) {
+		PyErr_SetString(PyExc_TypeError, "Expected string as key");
 		return -1;
 	}
 
-	tkey = PyBytes_AsTDB_DATA(key);
+	tkey = PyString_AsTDB_DATA(key);
 
 	if (value == NULL) { 
 		ret = tdb_delete(self->ctx, tkey);
 	} else { 
-		if (!PyBytes_Check(value)) {
+		if (!PyString_Check(value)) {
 			PyErr_SetString(PyExc_TypeError, "Expected string as value");
 			return -1;
 		}
 
-		tval = PyBytes_AsTDB_DATA(value);
+		tval = PyString_AsTDB_DATA(value);
 
 		ret = tdb_store(self->ctx, tkey, tval, TDB_REPLACE);
 	}
@@ -698,11 +538,8 @@ static PyMappingMethods tdb_object_mapping = {
 	.mp_subscript = (binaryfunc)obj_getitem,
 	.mp_ass_subscript = (objobjargproc)obj_setitem,
 };
-static PySequenceMethods tdb_object_seq = {
-	.sq_contains = (objobjproc)obj_contains,
-};
 static PyTypeObject PyTdb = {
-	.tp_name = "tdb.Tdb",
+	.tp_name = "Tdb",
 	.tp_basicsize = sizeof(PyTdbObject),
 	.tp_methods = tdb_object_methods,
 	.tp_getset = tdb_object_getsetters,
@@ -711,7 +548,6 @@ static PyTypeObject PyTdb = {
 	.tp_repr = (reprfunc)tdb_object_repr,
 	.tp_dealloc = (destructor)tdb_object_dealloc,
 	.tp_as_mapping = &tdb_object_mapping,
-	.tp_as_sequence = &tdb_object_seq,
 	.tp_flags = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE|Py_TPFLAGS_HAVE_ITER,
 	.tp_iter = (getiterfunc)tdb_object_iter,
 };
@@ -722,78 +558,45 @@ static PyMethodDef tdb_methods[] = {
 	{ NULL }
 };
 
-#define MODULE_DOC "simple key-value database that supports multiple writers."
-
-#if PY_MAJOR_VERSION >= 3
-static struct PyModuleDef moduledef = {
-    PyModuleDef_HEAD_INIT,
-    .m_name = "tdb",
-    .m_doc = MODULE_DOC,
-    .m_size = -1,
-    .m_methods = tdb_methods,
-};
-#endif
-
-PyObject* module_init(void);
-PyObject* module_init(void)
+void inittdb(void);
+void inittdb(void)
 {
 	PyObject *m;
 
 	if (PyType_Ready(&PyTdb) < 0)
-		return NULL;
+		return;
 
 	if (PyType_Ready(&PyTdbIterator) < 0)
-		return NULL;
+		return;
 
-#if PY_MAJOR_VERSION >= 3
-	m = PyModule_Create(&moduledef);
-#else
-	m = Py_InitModule3("tdb", tdb_methods, MODULE_DOC);
-#endif
+	m = Py_InitModule3("tdb", tdb_methods, "TDB is a simple key-value database similar to GDBM that supports multiple writers.");
 	if (m == NULL)
-		return NULL;
+		return;
 
-	PyModule_AddIntConstant(m, "REPLACE", TDB_REPLACE);
-	PyModule_AddIntConstant(m, "INSERT", TDB_INSERT);
-	PyModule_AddIntConstant(m, "MODIFY", TDB_MODIFY);
+	PyModule_AddObject(m, "REPLACE", PyInt_FromLong(TDB_REPLACE));
+	PyModule_AddObject(m, "INSERT", PyInt_FromLong(TDB_INSERT));
+	PyModule_AddObject(m, "MODIFY", PyInt_FromLong(TDB_MODIFY));
 
-	PyModule_AddIntConstant(m, "DEFAULT", TDB_DEFAULT);
-	PyModule_AddIntConstant(m, "CLEAR_IF_FIRST", TDB_CLEAR_IF_FIRST);
-	PyModule_AddIntConstant(m, "INTERNAL", TDB_INTERNAL);
-	PyModule_AddIntConstant(m, "NOLOCK", TDB_NOLOCK);
-	PyModule_AddIntConstant(m, "NOMMAP", TDB_NOMMAP);
-	PyModule_AddIntConstant(m, "CONVERT", TDB_CONVERT);
-	PyModule_AddIntConstant(m, "BIGENDIAN", TDB_BIGENDIAN);
-	PyModule_AddIntConstant(m, "NOSYNC", TDB_NOSYNC);
-	PyModule_AddIntConstant(m, "SEQNUM", TDB_SEQNUM);
-	PyModule_AddIntConstant(m, "VOLATILE", TDB_VOLATILE);
-	PyModule_AddIntConstant(m, "ALLOW_NESTING", TDB_ALLOW_NESTING);
-	PyModule_AddIntConstant(m, "DISALLOW_NESTING", TDB_DISALLOW_NESTING);
-	PyModule_AddIntConstant(m, "INCOMPATIBLE_HASH", TDB_INCOMPATIBLE_HASH);
+	PyModule_AddObject(m, "DEFAULT", PyInt_FromLong(TDB_DEFAULT));
+	PyModule_AddObject(m, "CLEAR_IF_FIRST", PyInt_FromLong(TDB_CLEAR_IF_FIRST));
+	PyModule_AddObject(m, "INTERNAL", PyInt_FromLong(TDB_INTERNAL));
+	PyModule_AddObject(m, "NOLOCK", PyInt_FromLong(TDB_NOLOCK));
+	PyModule_AddObject(m, "NOMMAP", PyInt_FromLong(TDB_NOMMAP));
+	PyModule_AddObject(m, "CONVERT", PyInt_FromLong(TDB_CONVERT));
+	PyModule_AddObject(m, "BIGENDIAN", PyInt_FromLong(TDB_BIGENDIAN));
+	PyModule_AddObject(m, "NOSYNC", PyInt_FromLong(TDB_NOSYNC));
+	PyModule_AddObject(m, "SEQNUM", PyInt_FromLong(TDB_SEQNUM));
+	PyModule_AddObject(m, "VOLATILE", PyInt_FromLong(TDB_VOLATILE));
+	PyModule_AddObject(m, "ALLOW_NESTING", PyInt_FromLong(TDB_ALLOW_NESTING));
+	PyModule_AddObject(m, "DISALLOW_NESTING", PyInt_FromLong(TDB_DISALLOW_NESTING));
+	PyModule_AddObject(m, "INCOMPATIBLE_HASH", PyInt_FromLong(TDB_INCOMPATIBLE_HASH));
 
-	PyModule_AddStringConstant(m, "__docformat__", "restructuredText");
+	PyModule_AddObject(m, "__docformat__", PyString_FromString("restructuredText"));
 
-	PyModule_AddStringConstant(m, "__version__", PACKAGE_VERSION);
+	PyModule_AddObject(m, "__version__", PyString_FromString(PACKAGE_VERSION));
 
 	Py_INCREF(&PyTdb);
 	PyModule_AddObject(m, "Tdb", (PyObject *)&PyTdb);
 
 	Py_INCREF(&PyTdbIterator);
-
-    return m;
 }
-
-
-#if PY_MAJOR_VERSION >= 3
-PyMODINIT_FUNC PyInit_tdb(void);
-PyMODINIT_FUNC PyInit_tdb(void)
-{
-    return module_init();
-}
-#else
-void inittdb(void);
-void inittdb(void)
-{
-    module_init();
-}
-#endif

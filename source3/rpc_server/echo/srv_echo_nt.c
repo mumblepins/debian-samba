@@ -48,7 +48,7 @@ void _echo_EchoData(struct pipes_struct *p, struct echo_EchoData *r)
 		return;
 	}
 
-	r->out.out_data = talloc_array(p->mem_ctx, uint8_t, r->in.len);
+	r->out.out_data = TALLOC_ARRAY(p->mem_ctx, uint8, r->in.len);
 	memcpy( r->out.out_data, r->in.in_data, r->in.len );
 	return;
 }
@@ -67,7 +67,7 @@ void _echo_SinkData(struct pipes_struct *p, struct echo_SinkData *r)
 
 void _echo_SourceData(struct pipes_struct *p, struct echo_SourceData *r)
 {
-	uint32_t i;
+	uint32 i;
 
 	DEBUG(10, ("_echo_SourceData\n"));
 
@@ -76,7 +76,7 @@ void _echo_SourceData(struct pipes_struct *p, struct echo_SourceData *r)
 		return;
 	}
 
-	r->out.data = talloc_array(p->mem_ctx, uint8_t, r->in.len );
+	r->out.data = TALLOC_ARRAY(p->mem_ctx, uint8, r->in.len );
 
 	for (i = 0; i < r->in.len; i++ ) {
 		r->out.data[i] = i & 0xff;
@@ -87,17 +87,17 @@ void _echo_SourceData(struct pipes_struct *p, struct echo_SourceData *r)
 
 void _echo_TestCall(struct pipes_struct *p, struct echo_TestCall *r)
 {
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return;
 }
 
 NTSTATUS _echo_TestCall2(struct pipes_struct *p, struct echo_TestCall2 *r)
 {
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return NT_STATUS_OK;
 }
 
-uint32_t _echo_TestSleep(struct pipes_struct *p, struct echo_TestSleep *r)
+uint32 _echo_TestSleep(struct pipes_struct *p, struct echo_TestSleep *r)
 {
 	smb_msleep(r->in.seconds * 1000);
 	return 0;
@@ -105,18 +105,18 @@ uint32_t _echo_TestSleep(struct pipes_struct *p, struct echo_TestSleep *r)
 
 void _echo_TestEnum(struct pipes_struct *p, struct echo_TestEnum *r)
 {
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return;
 }
 
 void _echo_TestSurrounding(struct pipes_struct *p, struct echo_TestSurrounding *r)
 {
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return;
 }
 
-uint16_t _echo_TestDoublePointer(struct pipes_struct *p, struct echo_TestDoublePointer *r)
+uint16 _echo_TestDoublePointer(struct pipes_struct *p, struct echo_TestDoublePointer *r)
 {
-	p->fault_state = DCERPC_FAULT_OP_RNG_ERROR;
+	p->rng_fault_state = True;
 	return 0;
 }

@@ -133,98 +133,15 @@ static void tevent_queue_immediate_trigger(struct tevent_context *ev,
 					   struct tevent_immediate *im,
 					   void *private_data)
 {
-	struct tevent_queue *q =
-		talloc_get_type_abort(private_data,
-		struct tevent_queue);
+	struct tevent_queue *q = talloc_get_type(private_data,
+				  struct tevent_queue);
 
 	if (!q->running) {
 		return;
 	}
 
-	if (!q->list) {
-		return;
-	}
-
 	q->list->triggered = true;
 	q->list->trigger(q->list->req, q->list->private_data);
-}
-
-static struct tevent_queue_entry *tevent_queue_add_internal(
-					struct tevent_queue *queue,
-					struct tevent_context *ev,
-					struct tevent_req *req,
-					tevent_queue_trigger_fn_t trigger,
-					void *private_data,
-					bool allow_direct)
-{
-	struct tevent_queue_entry *e;
-
-	e = talloc_zero(req, struct tevent_queue_entry);
-	if (e == NULL) {
-		return NULL;
-	}
-
-	e->queue = queue;
-	e->req = req;
-	e->ev = ev;
-	e->trigger = trigger;
-	e->private_data = private_data;
-
-	/*
-	 * if there is no trigger, it is just a blocker
-	 */
-	if (trigger == NULL) {
-		e->triggered = true;
-	}
-
-	if (queue->length > 0) {
-		/*
-		 * if there are already entries in the
-		 * queue do not optimize.
-		 */
-		allow_direct = false;
-	}
-
-	if (req->async.fn != NULL) {
-		/*
-		 * If the callers wants to optimize for the
-		 * empty queue case, call the trigger only
-		 * if there is no callback defined for the
-		 * request yet.
-		 */
-		allow_direct = false;
-	}
-
-	DLIST_ADD_END(queue->list, e, struct tevent_queue_entry *);
-	queue->length++;
-	talloc_set_destructor(e, tevent_queue_entry_destructor);
-
-	if (!queue->running) {
-		return e;
-	}
-
-	if (queue->list->triggered) {
-		return e;
-	}
-
-	/*
-	 * If allowed we directly call the trigger
-	 * avoiding possible delays caused by
-	 * an immediate event.
-	 */
-	if (allow_direct) {
-		queue->list->triggered = true;
-		queue->list->trigger(queue->list->req,
-				     queue->list->private_data);
-		return e;
-	}
-
-	tevent_schedule_immediate(queue->immediate,
-				  queue->list->ev,
-				  tevent_queue_immediate_trigger,
-				  queue);
-
-	return e;
 }
 
 bool tevent_queue_add(struct tevent_queue *queue,
@@ -235,35 +152,35 @@ bool tevent_queue_add(struct tevent_queue *queue,
 {
 	struct tevent_queue_entry *e;
 
-	e = tevent_queue_add_internal(queue, ev, req,
-				      trigger, private_data, false);
+	e = talloc_zero(req, struct tevent_queue_entry);
 	if (e == NULL) {
 		return false;
 	}
 
+	e->queue = queue;
+	e->req = req;
+	e->ev = ev;
+	e->trigger = trigger;
+	e->private_data = private_data;
+
+	DLIST_ADD_END(queue->list, e, struct tevent_queue_entry *);
+	queue->length++;
+	talloc_set_destructor(e, tevent_queue_entry_destructor);
+
+	if (!queue->running) {
+		return true;
+	}
+
+	if (queue->list->triggered) {
+		return true;
+	}
+
+	tevent_schedule_immediate(queue->immediate,
+				  queue->list->ev,
+				  tevent_queue_immediate_trigger,
+				  queue);
+
 	return true;
-}
-
-struct tevent_queue_entry *tevent_queue_add_entry(
-					struct tevent_queue *queue,
-					struct tevent_context *ev,
-					struct tevent_req *req,
-					tevent_queue_trigger_fn_t trigger,
-					void *private_data)
-{
-	return tevent_queue_add_internal(queue, ev, req,
-					 trigger, private_data, false);
-}
-
-struct tevent_queue_entry *tevent_queue_add_optimize_empty(
-					struct tevent_queue *queue,
-					struct tevent_context *ev,
-					struct tevent_req *req,
-					tevent_queue_trigger_fn_t trigger,
-					void *private_data)
-{
-	return tevent_queue_add_internal(queue, ev, req,
-					 trigger, private_data, true);
 }
 
 void tevent_queue_start(struct tevent_queue *queue)
@@ -297,61 +214,4 @@ void tevent_queue_stop(struct tevent_queue *queue)
 size_t tevent_queue_length(struct tevent_queue *queue)
 {
 	return queue->length;
-}
-
-bool tevent_queue_running(struct tevent_queue *queue)
-{
-	return queue->running;
-}
-
-struct tevent_queue_wait_state {
-	uint8_t dummy;
-};
-
-static void tevent_queue_wait_trigger(struct tevent_req *req,
-				      void *private_data);
-
-struct tevent_req *tevent_queue_wait_send(TALLOC_CTX *mem_ctx,
-					  struct tevent_context *ev,
-					  struct tevent_queue *queue)
-{
-	struct tevent_req *req;
-	struct tevent_queue_wait_state *state;
-	bool ok;
-
-	req = tevent_req_create(mem_ctx, &state,
-				struct tevent_queue_wait_state);
-	if (req == NULL) {
-		return NULL;
-	}
-
-	ok = tevent_queue_add(queue, ev, req,
-			      tevent_queue_wait_trigger,
-			      NULL);
-	if (!ok) {
-		tevent_req_oom(req);
-		return tevent_req_post(req, ev);
-	}
-
-	return req;
-}
-
-static void tevent_queue_wait_trigger(struct tevent_req *req,
-					 void *private_data)
-{
-	tevent_req_done(req);
-}
-
-bool tevent_queue_wait_recv(struct tevent_req *req)
-{
-	enum tevent_req_state state;
-	uint64_t err;
-
-	if (tevent_req_is_error(req, &state, &err)) {
-		tevent_req_received(req);
-		return false;
-	}
-
-	tevent_req_received(req);
-	return true;
 }

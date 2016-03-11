@@ -93,7 +93,7 @@ static int
 cbuf_print_hive(cbuf* ost, const char* hive, int len, const struct fmt_key* fmt)
 {
 	if (fmt->hive_fmt != FMT_HIVE_PRESERVE) {
-		const struct hive_info* hinfo = hive_info(hive);
+		const struct hive_info* hinfo = hive_info(hive, len);
 		if (hinfo == NULL) {
 			DEBUG(0, ("Unknown hive %*s", len, hive));
 		} else {
@@ -567,9 +567,7 @@ done:
 int reg_format_registry_key(struct reg_format* f, struct registry_key* key,
 			    bool del)
 {
-	const char *knames[1];
-	knames[0] = key->key->name;
-	return reg_format_key(f, knames, 1, del);
+	return reg_format_key(f, (const char**)&key->key->name, 1, del);
 }
 
 int reg_format_registry_value(struct reg_format* f, const char* name,

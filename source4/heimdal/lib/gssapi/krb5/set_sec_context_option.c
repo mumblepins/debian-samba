@@ -154,10 +154,11 @@ _gsskrb5_set_sec_context_option
 	if (maj_stat != GSS_S_COMPLETE)
 	    return maj_stat;
 
-	maj_stat = _gsskrb5_register_acceptor_identity(minor_status, str);
+	_gsskrb5_register_acceptor_identity(str);
 	free(str);
 
-	return maj_stat;
+	*minor_status = 0;
+	return GSS_S_COMPLETE;
 
     } else if (gss_oid_equal(desired_object, GSS_KRB5_SET_DEFAULT_REALM_X)) {
 	char *str;
@@ -221,7 +222,7 @@ _gsskrb5_set_sec_context_option
 	    return maj_stat;
 
 	t = time(NULL) + offset;
-
+	
 	krb5_set_real_time(context, t, 0);
 
 	*minor_status = 0;

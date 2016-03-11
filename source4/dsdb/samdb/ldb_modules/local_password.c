@@ -43,7 +43,7 @@
    server.
 
    This allows the password database to be synchronised in a multi-master
-   fashion, separate to the more difficult concerns of the main
+   fashion, seperate to the more difficult concerns of the main
    database. (With passwords, the last writer always wins)
 
    Each incoming add/modify is split into a remote, and a local request, done
@@ -181,7 +181,7 @@ static int local_password_add(struct ldb_module *module, struct ldb_request *req
 		return ldb_operr(ldb);
 	}
 
-	remote_message = ldb_msg_copy_shallow(ac, req->op.add.message);
+	remote_message = ldb_msg_copy_shallow(remote_req, req->op.add.message);
 	if (remote_message == NULL) {
 		return ldb_operr(ldb);
 	}

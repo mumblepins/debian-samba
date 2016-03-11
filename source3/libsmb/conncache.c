@@ -99,7 +99,7 @@ static NTSTATUS negative_conn_cache_valuedecode(const char *value)
 {
 	unsigned int v = NT_STATUS_V(NT_STATUS_INTERNAL_ERROR);
 
-	if (value == NULL) {
+	if (value != NULL) {
 		return NT_STATUS_INTERNAL_ERROR;
 	}
 	if (sscanf(value, "%x", &v) != 1) {
@@ -143,13 +143,13 @@ NTSTATUS check_negative_conn_cache( const char *domain, const char *server)
 	if (key == NULL)
 		goto done;
 
-	if (gencache_get(key, talloc_tos(), &value, NULL))
+	if (gencache_get(key, &value, NULL))
 		result = negative_conn_cache_valuedecode(value);
  done:
 	DEBUG(9,("check_negative_conn_cache returning result %d for domain %s "
 		  "server %s\n", NT_STATUS_V(result), domain, server));
 	TALLOC_FREE(key);
-	TALLOC_FREE(value);
+	SAFE_FREE(value);
 	return result;
 }
 

@@ -27,7 +27,6 @@
 
 #include "system/filesys.h"
 #include "system/time.h"
-#include "system/network.h"
 #include "system/passwd.h"
 #include "system/syslog.h"
 #include "system/locale.h"
@@ -64,22 +63,14 @@ int rep_ftruncate(int f, off_t l)
 
 
 #ifndef HAVE_STRLCPY
-/*
- * Like strncpy but does not 0 fill the buffer and always null
- * terminates. bufsize is the size of the destination buffer.
- * Returns the length of s.
- */
+/* like strncpy but does not 0 fill the buffer and always null 
+   terminates. bufsize is the size of the destination buffer */
 size_t rep_strlcpy(char *d, const char *s, size_t bufsize)
 {
 	size_t len = strlen(s);
 	size_t ret = len;
-
-	if (bufsize <= 0) {
-		return 0;
-	}
-	if (len >= bufsize) {
-		len = bufsize - 1;
-	}
+	if (bufsize <= 0) return 0;
+	if (len >= bufsize) len = bufsize-1;
 	memcpy(d, s, len);
 	d[len] = 0;
 	return ret;
@@ -92,7 +83,7 @@ size_t rep_strlcpy(char *d, const char *s, size_t bufsize)
    be one more than the maximum resulting string length */
 size_t rep_strlcat(char *d, const char *s, size_t bufsize)
 {
-	size_t len1 = strnlen(d, bufsize);
+	size_t len1 = strlen(d);
 	size_t len2 = strlen(s);
 	size_t ret = len1 + len2;
 
@@ -220,6 +211,16 @@ int rep_initgroups(char *name, gid_t id)
 #endif /* HAVE_SETGROUPS */
 }
 #endif /* HAVE_INITGROUPS */
+
+
+#if (defined(SecureWare) && defined(SCO))
+/* This is needed due to needing the nap() function but we don't want
+   to include the Xenix libraries since that will break other things...
+   BTW: system call # 0x0c28 is the same as calling nap() */
+long nap(long milliseconds) {
+	 return syscall(0x0c28, milliseconds);
+ }
+#endif
 
 
 #ifndef HAVE_MEMMOVE
@@ -410,10 +411,10 @@ int rep_mkstemp(char *template)
 {
 	/* have a reasonable go at emulating it. Hope that
 	   the system mktemp() isn't completely hopeless */
-	mktemp(template);
-	if (template[0] == 0)
+	char *p = mktemp(template);
+	if (!p)
 		return -1;
-	return open(template, O_CREAT|O_EXCL|O_RDWR, 0600);
+	return open(p, O_CREAT|O_EXCL|O_RDWR, 0600);
 }
 #endif
 
@@ -475,26 +476,6 @@ char *rep_strcasestr(const char *haystack, const char *needle)
 }
 #endif
 
-#ifndef HAVE_STRSEP
-char *rep_strsep(char **pps, const char *delim)
-{
-	char *ret = *pps;
-	char *p = *pps;
-
-	if (p == NULL) {
-		return NULL;
-	}
-	p += strcspn(p, delim);
-	if (*p == '\0') {
-		*pps = NULL;
-	} else {
-		*p = '\0';
-		*pps = p + 1;
-	}
-	return ret;
-}
-#endif
-
 #ifndef HAVE_STRTOK_R
 /* based on GLIBC version, copyright Free Software Foundation */
 char *rep_strtok_r(char *s, const char *delim, char **save_ptr)
@@ -538,11 +519,11 @@ long long int rep_strtoll(const char *str, char **endptr, int base)
 }
 #else
 #ifdef HAVE_BSD_STRTOLL
-#undef strtoll
+#ifdef HAVE_STRTOQ
 long long int rep_strtoll(const char *str, char **endptr, int base)
 {
-	long long int nb = strtoll(str, endptr, base);
-	/* With glibc EINVAL is only returned if base is not ok */
+	long long int nb = strtoq(str, endptr, base);
+	/* In linux EINVAL is only returned if base is not ok */
 	if (errno == EINVAL) {
 		if (base == 0 || (base >1 && base <37)) {
 			/* Base was ok so it's because we were not
@@ -554,6 +535,9 @@ long long int rep_strtoll(const char *str, char **endptr, int base)
 	}
 	return nb;
 }
+#else
+#error "You need the strtoq function"
+#endif /* HAVE_STRTOQ */
 #endif /* HAVE_BSD_STRTOLL */
 #endif /* HAVE_STRTOLL */
 
@@ -766,7 +750,7 @@ void *rep_memmem(const void *haystack, size_t haystacklen,
 }
 #endif
 
-#if !defined(HAVE_VDPRINTF) || !defined(HAVE_C99_VSNPRINTF)
+#ifndef HAVE_VDPRINTF
 int rep_vdprintf(int fd, const char *format, va_list ap)
 {
 	char *s = NULL;
@@ -783,7 +767,7 @@ int rep_vdprintf(int fd, const char *format, va_list ap)
 }
 #endif
 
-#if !defined(HAVE_DPRINTF) || !defined(HAVE_C99_VSNPRINTF)
+#ifndef HAVE_DPRINTF
 int rep_dprintf(int fd, const char *format, ...)
 {
 	int ret;
@@ -810,7 +794,7 @@ char *rep_get_current_dir_name(void)
 }
 #endif
 
-#ifndef HAVE_STRERROR_R
+#if !defined(HAVE_STRERROR_R) || !defined(STRERROR_R_PROTO_COMPATIBLE)
 int rep_strerror_r(int errnum, char *buf, size_t buflen)
 {
 	char *s = strerror(errnum);
@@ -842,86 +826,5 @@ int rep_clock_gettime(clockid_t clk_id, struct timespec *tp)
 			return -1;
 	}
 	return 0;
-}
-#endif
-
-#ifndef HAVE_MEMALIGN
-void *rep_memalign( size_t align, size_t size )
-{
-#if defined(HAVE_POSIX_MEMALIGN)
-	void *p = NULL;
-	int ret = posix_memalign( &p, align, size );
-	if ( ret == 0 )
-		return p;
-
-	return NULL;
-#else
-	/* On *BSD systems memaligns doesn't exist, but memory will
-	 * be aligned on allocations of > pagesize. */
-#if defined(SYSCONF_SC_PAGESIZE)
-	size_t pagesize = (size_t)sysconf(_SC_PAGESIZE);
-#elif defined(HAVE_GETPAGESIZE)
-	size_t pagesize = (size_t)getpagesize();
-#else
-	size_t pagesize = (size_t)-1;
-#endif
-	if (pagesize == (size_t)-1) {
-		errno = ENOSYS;
-		return NULL;
-	}
-	if (size < pagesize) {
-		size = pagesize;
-	}
-	return malloc(size);
-#endif
-}
-#endif
-
-#ifndef HAVE_GETPEEREID
-int rep_getpeereid(int s, uid_t *uid, gid_t *gid)
-{
-#if defined(HAVE_PEERCRED)
-	struct ucred cred;
-	socklen_t cred_len = sizeof(struct ucred);
-	int ret;
-
-#undef getsockopt
-	ret = getsockopt(s, SOL_SOCKET, SO_PEERCRED, (void *)&cred, &cred_len);
-	if (ret != 0) {
-		return -1;
-	}
-
-	if (cred_len != sizeof(struct ucred)) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	*uid = cred.uid;
-	*gid = cred.gid;
-	return 0;
-#else
-	errno = ENOSYS;
-	return -1;
-#endif
-}
-#endif
-
-#ifndef HAVE_USLEEP
-int rep_usleep(useconds_t sec)
-{
-	struct timeval tval;
-	/*
-	 * Fake it with select...
-	 */
-	tval.tv_sec = 0;
-	tval.tv_usec = usecs/1000;
-	select(0,NULL,NULL,NULL,&tval);
-	return 0;
-}
-#endif /* HAVE_USLEEP */
-
-#ifndef HAVE_SETPROCTITLE
-void rep_setproctitle(const char *fmt, ...)
-{
 }
 #endif

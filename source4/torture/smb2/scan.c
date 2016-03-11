@@ -29,10 +29,14 @@
 
 #include "torture/smb2/proto.h"
 
+#define FNAME "scan-getinfo.dat"
+#define DNAME "scan-getinfo.dir"
+
+
 /* 
    scan for valid SMB2 getinfo levels
 */
-static bool torture_smb2_getinfo_scan(struct torture_context *torture)
+bool torture_smb2_getinfo_scan(struct torture_context *torture)
 {
 	struct smb2_tree *tree;
 	NTSTATUS status;
@@ -40,31 +44,23 @@ static bool torture_smb2_getinfo_scan(struct torture_context *torture)
 	struct smb2_handle fhandle, dhandle;
 	int c, i;
 
-	static const char *FNAME  = "scan-getinfo.dat";
-	static const char *FNAME2 = "scan-getinfo.dat:2ndstream";
-	static const char *DNAME  = "scan-getinfo.dir";
-	static const char *DNAME2 = "scan-getinfo.dir:2ndstream";
-
 	if (!torture_smb2_connection(torture, &tree)) {
 		return false;
 	}
 
 	status = torture_setup_complex_file(tree, FNAME);
 	if (!NT_STATUS_IS_OK(status)) {
-		printf("Failed to setup complex file '%s': %s\n",
-		       FNAME, nt_errstr(status));
+		printf("Failed to setup complex file '%s'\n", FNAME);
 		return false;
 	}
-	torture_setup_complex_file(tree, FNAME2);
+	torture_setup_complex_file(tree, FNAME ":2ndstream");
 
 	status = torture_setup_complex_dir(tree, DNAME);
 	if (!NT_STATUS_IS_OK(status)) {
-		printf("Failed to setup complex dir '%s': %s\n",
-		       DNAME, nt_errstr(status));
-		smb2_util_unlink(tree, FNAME);
+		printf("Failed to setup complex dir  '%s'\n", DNAME);
 		return false;
 	}
-	torture_setup_complex_file(tree, DNAME2);
+	torture_setup_complex_file(tree, DNAME ":2ndstream");
 
 	torture_smb2_testfile(tree, FNAME, &fhandle);
 	torture_smb2_testdir(tree, DNAME, &dhandle);
@@ -100,19 +96,14 @@ static bool torture_smb2_getinfo_scan(struct torture_context *torture)
 		}
 	}
 
-	smb2_util_unlink(tree, FNAME);
-	smb2_util_rmdir(tree, DNAME);
 	return true;
 }
 
 /* 
    scan for valid SMB2 setinfo levels
 */
-static bool torture_smb2_setinfo_scan(struct torture_context *torture)
+bool torture_smb2_setinfo_scan(struct torture_context *torture)
 {
-	static const char *FNAME  = "scan-setinfo.dat";
-	static const char *FNAME2 = "scan-setinfo.dat:2ndstream";
-
 	struct smb2_tree *tree;
 	NTSTATUS status;
 	struct smb2_setinfo io;
@@ -125,11 +116,10 @@ static bool torture_smb2_setinfo_scan(struct torture_context *torture)
 
 	status = torture_setup_complex_file(tree, FNAME);
 	if (!NT_STATUS_IS_OK(status)) {
-		printf("Failed to setup complex file '%s': %s\n",
-		       FNAME, nt_errstr(status));
+		printf("Failed to setup complex file '%s'\n", FNAME);
 		return false;
 	}
-	torture_setup_complex_file(tree, FNAME2);
+	torture_setup_complex_file(tree, FNAME ":2ndstream");
 
 	torture_smb2_testfile(tree, FNAME, &handle);
 
@@ -148,7 +138,6 @@ static bool torture_smb2_setinfo_scan(struct torture_context *torture)
 		}
 	}
 
-	smb2_util_unlink(tree, FNAME);
 	return true;
 }
 
@@ -156,7 +145,7 @@ static bool torture_smb2_setinfo_scan(struct torture_context *torture)
 /* 
    scan for valid SMB2 scan levels
 */
-static bool torture_smb2_find_scan(struct torture_context *torture)
+bool torture_smb2_find_scan(struct torture_context *torture)
 {
 	struct smb2_tree *tree;
 	NTSTATUS status;
@@ -200,7 +189,7 @@ static bool torture_smb2_find_scan(struct torture_context *torture)
 /* 
    scan for valid SMB2 opcodes
 */
-static bool torture_smb2_scan(struct torture_context *torture)
+bool torture_smb2_scan(struct torture_context *torture)
 {
 	TALLOC_CTX *mem_ctx = talloc_new(NULL);
 	struct smb2_tree *tree;
@@ -255,18 +244,4 @@ static bool torture_smb2_scan(struct torture_context *torture)
 	talloc_free(mem_ctx);
 
 	return true;
-}
-
-struct torture_suite *torture_smb2_scan_init(void)
-{
-	struct torture_suite *suite = torture_suite_create(talloc_autofree_context(), "scan");
-
-	torture_suite_add_simple_test(suite, "scan", torture_smb2_scan);
-	torture_suite_add_simple_test(suite, "getinfo", torture_smb2_getinfo_scan);
-	torture_suite_add_simple_test(suite, "setinfo", torture_smb2_setinfo_scan);
-	torture_suite_add_simple_test(suite, "find", torture_smb2_find_scan);
-
-	suite->description = talloc_strdup(suite, "scan target (not a test)");
-
-	return suite;
 }

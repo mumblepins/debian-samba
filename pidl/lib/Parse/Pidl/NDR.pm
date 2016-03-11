@@ -949,21 +949,8 @@ sub ContainsString($)
 {
 	my ($e) = @_;
 
-	if (property_matches($e, "flag", ".*STR_NULLTERM.*")) {
-		return 1;
-	}
-	if (exists($e->{LEVELS}) and $e->{LEVELS}->[0]->{TYPE} eq "ARRAY" and
-		($e->{LEVELS}->[0]->{IS_FIXED} or $e->{LEVELS}->[0]->{IS_INLINE}) and
-		has_property($e, "charset"))
-	{
-		return 1;
-	}
-
 	foreach my $l (@{$e->{LEVELS}}) {
 		return 1 if ($l->{TYPE} eq "ARRAY" and $l->{IS_ZERO_TERMINATED});
-	}
-	if (property_matches($e, "charset", ".*DOS.*")) {
-		return 1;
 	}
 
 	return 0;
@@ -1083,7 +1070,6 @@ my %property_list = (
 	"noprint"		=> ["FUNCTION", "TYPEDEF", "STRUCT", "UNION", "ENUM", "BITMAP", "ELEMENT", "PIPE"],
 	"nopython"		=> ["FUNCTION", "TYPEDEF", "STRUCT", "UNION", "ENUM", "BITMAP"],
 	"todo"			=> ["FUNCTION"],
-	"skip"			=> ["ELEMENT"],
 
 	# union
 	"switch_is"		=> ["ELEMENT"],

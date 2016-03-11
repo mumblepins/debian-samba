@@ -24,7 +24,7 @@
 #include "../libcli/security/security.h"
 
 struct rid_name_map {
-	uint32_t rid;
+	uint32 rid;
 	const char *name;
 };
 
@@ -39,17 +39,9 @@ static const struct rid_name_map everyone_users[] = {
 	{ 0, "Everyone" },
 	{ 0, NULL}};
 
-static const struct rid_name_map local_authority_users[] = {
-	{ 0, "Local" },
-	{ 1, "Console Logon" },
-	{ 0, NULL}};
-
 static const struct rid_name_map creator_owner_users[] = {
 	{ 0, "Creator Owner" },
 	{ 1, "Creator Group" },
-	{ 2, "Creator Owner Server" },
-	{ 3, "Creator Group Server" },
-	{ 4, "Owner Rights" },
 	{ 0, NULL}};
 
 static const struct rid_name_map nt_authority_users[] = {
@@ -58,16 +50,16 @@ static const struct rid_name_map nt_authority_users[] = {
 	{  3, "Batch"},
 	{  4, "Interactive"},
 	{  6, "Service"},
+	{  7, "AnonymousLogon"},
 	{  7, "Anonymous Logon"},
 	{  8, "Proxy"},
-	{  9, "Enterprise Domain Controllers"},
+	{  9, "ServerLogon"},
 	{ 10, "Self"},
 	{ 11, "Authenticated Users"},
 	{ 12, "Restricted"},
 	{ 13, "Terminal Server User"},
 	{ 14, "Remote Interactive Logon"},
 	{ 15, "This Organization"},
-	{ 17, "IUSR"},
 	{ 18, "SYSTEM"},
 	{ 19, "Local Service"},
 	{ 20, "Network Service"},
@@ -75,7 +67,6 @@ static const struct rid_name_map nt_authority_users[] = {
 
 static struct sid_name_map_info special_domains[] = {
 	{ &global_sid_World_Domain, "", everyone_users },
-	{ &global_sid_Local_Authority, "", local_authority_users },
 	{ &global_sid_Creator_Owner_Domain, "", creator_owner_users },
 	{ &global_sid_NT_Authority, "NT Authority", nt_authority_users },
 	{ NULL, NULL, NULL }};
@@ -114,7 +105,7 @@ bool lookup_wellknown_sid(TALLOC_CTX *mem_ctx, const struct dom_sid *sid,
 {
 	int i;
 	struct dom_sid dom_sid;
-	uint32_t rid;
+	uint32 rid;
 	const struct rid_name_map *users = NULL;
 
 	sid_copy(&dom_sid, sid);
@@ -154,22 +145,15 @@ bool lookup_wellknown_sid(TALLOC_CTX *mem_ctx, const struct dom_sid *sid,
 ***************************************************************************/
 
 bool lookup_wellknown_name(TALLOC_CTX *mem_ctx, const char *name,
-			   struct dom_sid *sid, const char **pdomain)
+			   struct dom_sid *sid, const char **domain)
 {
 	int i, j;
-	const char *domain = *pdomain;
 
-	DEBUG(10,("map_name_to_wellknown_sid: looking up %s\\%s\n", domain, name));
+	DEBUG(10,("map_name_to_wellknown_sid: looking up %s\n", name));
 
 	for (i=0; special_domains[i].sid != NULL; i++) {
 		const struct rid_name_map *users =
 			special_domains[i].known_users;
-
-		if (domain[0] != '\0') {
-			if (!strequal(domain, special_domains[i].name)) {
-				continue;
-			}
-		}
 
 		if (users == NULL)
 			continue;
@@ -178,7 +162,7 @@ bool lookup_wellknown_name(TALLOC_CTX *mem_ctx, const char *name,
 			if ( strequal(users[j].name, name) ) {
 				sid_compose(sid, special_domains[i].sid,
 					    users[j].rid);
-				*pdomain = talloc_strdup(
+				*domain = talloc_strdup(
 					mem_ctx, special_domains[i].name);
 				return True;
 			}

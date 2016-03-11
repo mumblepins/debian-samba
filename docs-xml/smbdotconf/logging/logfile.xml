@@ -1,7 +1,7 @@
 <samba:parameter name="log file"
                  context="G"
 				 type="string"
-                 function="logfile"
+                 developer="1" advanced="1"
                  xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <description>
     <para>

@@ -110,7 +110,10 @@ void torture_shell(struct torture_context *tctx)
 	 * stops the credentials system prompting when we use the "auth"
 	 * command to display the current auth parameters.
 	 */
-	cli_credentials_set_password(cmdline_credentials, "", CRED_GUESS_ENV);
+	if (cmdline_credentials->password_obtained != CRED_SPECIFIED) {
+	    cli_credentials_set_password(cmdline_credentials, "",
+		    CRED_SPECIFIED);
+	}
 
 	while (1) {
 		cline = smb_readline("torture> ", NULL, NULL);

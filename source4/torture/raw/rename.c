@@ -20,7 +20,6 @@
 #include "includes.h"
 #include "libcli/libcli.h"
 #include "torture/util.h"
-#include "torture/raw/proto.h"
 
 #define CHECK_STATUS(status, correct) do { \
 	if (!NT_STATUS_EQUAL(status, correct)) { \
@@ -59,7 +58,9 @@ static bool test_mv(struct torture_context *tctx,
 
 	torture_comment(tctx, "Testing SMBmv\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Trying simple rename\n");
 
@@ -201,7 +202,9 @@ static bool test_osxrename(struct torture_context *tctx,
 	union smb_open op;
 
 	torture_comment(tctx, "\nTesting OSX Rename\n");
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 	op.generic.level = RAW_OPEN_NTCREATEX;
 	op.ntcreatex.in.root_fid.fnum = 0;
 	op.ntcreatex.in.flags = 0;
@@ -284,7 +287,9 @@ static bool test_ntrename(struct torture_context *tctx,
 
 	torture_comment(tctx, "Testing SMBntrename\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Trying simple rename\n");
 
@@ -551,7 +556,9 @@ static bool test_dir_rename(struct torture_context *tctx, struct smbcli_state *c
 
 	torture_comment(tctx, "Checking rename on a directory containing an open file.\n");
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
         /* create a directory */
         smbcli_rmdir(cli->tree, dname1);

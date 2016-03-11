@@ -14,14 +14,14 @@ shift 1
 
 
 rm -rf $PREFIX/simple-dc
-testit "simple-dc" $PYTHON $BINDIR/samba-tool domain provision --server-role="dc" --domain=FOO --realm=foo.example.com --domain-sid=S-1-5-21-4177067393-1453636373-93818738 --targetdir=$PREFIX/simple-dc --use-ntvfs
+testit "simple-dc" $PYTHON $SRCDIR/source4/setup/provision --server-role="dc" --domain=FOO --realm=foo.example.com --domain-sid=S-1-5-21-4177067393-1453636373-93818738 --targetdir=$PREFIX/simple-dc
 samba_tool="./bin/samba-tool"
 
 CONFIG="--configfile=$PREFIX/simple-dc/etc/smb.conf"
 
 #creation of two test subjects
-testit "user add" $samba_tool user create $CONFIG --given-name="User" --surname="Tester" --initial="UT" testuser testp@ssw0Rd
-testit "user add" $samba_tool user create $CONFIG --given-name="User1" --surname="Tester" --initial="UT" testuser1 testp@ssw0Rd
+testit "newuser" $samba_tool newuser $CONFIG --given-name="User" --surname="Tester" --initial="UT" testuser testp@ssw0Rd
+testit "newuser" $samba_tool newuser $CONFIG --given-name="User1" --surname="Tester" --initial="UT" testuser1 testp@ssw0Rd
 
 #test creation of six different groups
 testit "group add" $samba_tool group add $CONFIG --group-scope='Domain' --group-type='Security' --description='DomainSecurityGroup' --mail-address='dsg@samba.org' --notes='Notes' dsg
@@ -32,20 +32,20 @@ testit "group add" $samba_tool group add $CONFIG --group-scope='Global' --group-
 testit "group add" $samba_tool group add $CONFIG --group-scope='Universal' --group-type='Distribution' --description='UniversalDistributionGroup' --mail-address='udg@samba.org' --notes='Notes' udg
 
 #test adding test users to all groups by their username
-testit "group addmembers" $samba_tool group addmembers $CONFIG dsg testuser,testuser1
-testit "group addmembers" $samba_tool group addmembers $CONFIG gsg testuser,testuser1
-testit "group addmembers" $samba_tool group addmembers $CONFIG usg testuser,testuser1
-testit "group addmembers" $samba_tool group addmembers $CONFIG ddg testuser,testuser1
-testit "group addmembers" $samba_tool group addmembers $CONFIG gdg testuser,testuser1
-testit "group addmembers" $samba_tool group addmembers $CONFIG udg testuser,testuser1
+testit "group addmembers" $samba_tool group addmembers $CONFIG dsg newuser,newuser1
+testit "group addmembers" $samba_tool group addmembers $CONFIG gsg newuser,newuser1
+testit "group addmembers" $samba_tool group addmembers $CONFIG usg newuser,newuser1
+testit "group addmembers" $samba_tool group addmembers $CONFIG ddg newuser,newuser1
+testit "group addmembers" $samba_tool group addmembers $CONFIG gdg newuser,newuser1
+testit "group addmembers" $samba_tool group addmembers $CONFIG udg newuser,newuser1
 
 #test removing test users from all groups by their username
-testit "group removemembers" $samba_tool group removemembers $CONFIG dsg testuser,testuser1
-testit "group removemembers" $samba_tool group removemembers $CONFIG gsg testuser,testuser1
-testit "group removemembers" $samba_tool group removemembers $CONFIG usg testuser,testuser1
-testit "group removemembers" $samba_tool group removemembers $CONFIG ddg testuser,testuser1
-testit "group removemembers" $samba_tool group removemembers $CONFIG gdg testuser,testuser1
-testit "group removemembers" $samba_tool group removemembers $CONFIG udg testuser,testuser1
+testit "group removemembers" $samba_tool group removemembers $CONFIG dsg newuser,newuser1
+testit "group removemembers" $samba_tool group removemembers $CONFIG gsg newuser,newuser1
+testit "group removemembers" $samba_tool group removemembers $CONFIG usg newuser,newuser1
+testit "group removemembers" $samba_tool group removemembers $CONFIG ddg newuser,newuser1
+testit "group removemembers" $samba_tool group removemembers $CONFIG gdg newuser,newuser1
+testit "group removemembers" $samba_tool group removemembers $CONFIG udg newuser,newuser1
 
 #test adding test users to all groups by their cn
 #testit "group addmembers" $samba_tool group addmembers $CONFIG dsg "User UT. Tester,User1 UT. Tester"
@@ -70,11 +70,5 @@ testit "group delete" $samba_tool group delete $CONFIG usg
 testit "group delete" $samba_tool group delete $CONFIG ddg
 testit "group delete" $samba_tool group delete $CONFIG gdg
 testit "group delete" $samba_tool group delete $CONFIG udg
-
-#test listing of all groups
-testit "group list" $samba_tool group list $CONFIG
-
-#test listing of members of a particular group
-testit "group listmembers" $samba_tool group listmembers $CONFIG Users
 
 exit $failed

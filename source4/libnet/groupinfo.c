@@ -31,7 +31,7 @@
 
 
 struct groupinfo_state {
-	struct dcerpc_binding_handle *binding_handle;
+	struct dcerpc_pipe         *pipe;
 	struct policy_handle       domain_handle;
 	struct policy_handle       group_handle;
 	uint16_t                   level;
@@ -88,15 +88,11 @@ static void continue_groupinfo_lookup(struct tevent_req *subreq)
 		s->monitor_fn(&msg);
 	}
 	
+
 	/* have we actually got name resolved
 	   - we're looking for only one at the moment */
-	if (s->lookup.out.rids->count != s->lookup.in.num_names) {
-		composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
-	}
-	if (s->lookup.out.types->count != s->lookup.in.num_names) {
-		composite_error(c, NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
+	if (s->lookup.out.rids->count == 0) {
+		composite_error(c, NT_STATUS_NO_SUCH_USER);
 	}
 
 	/* TODO: find proper status code for more than one rid found */
@@ -109,7 +105,7 @@ static void continue_groupinfo_lookup(struct tevent_req *subreq)
 
 	/* send request */
 	subreq = dcerpc_samr_OpenGroup_r_send(s, c->event_ctx,
-					      s->binding_handle,
+					      s->pipe->binding_handle,
 					      &s->opengroup);
 	if (composite_nomem(subreq, c)) return;
 
@@ -135,8 +131,8 @@ static void continue_groupinfo_opengroup(struct tevent_req *subreq)
 	TALLOC_FREE(subreq);
 	if (!composite_is_ok(c)) return;
 
-	if (!NT_STATUS_IS_OK(s->opengroup.out.result)) {
-		composite_error(c, s->opengroup.out.result);
+	if (!NT_STATUS_IS_OK(s->querygroupinfo.out.result)) {
+		composite_error(c, s->querygroupinfo.out.result);
 		return;
 	}
 
@@ -161,7 +157,7 @@ static void continue_groupinfo_opengroup(struct tevent_req *subreq)
 	/* queue rpc call, set event handling and new state */
 	subreq = dcerpc_samr_QueryGroupInfo_r_send(s,
 						   c->event_ctx,
-						   s->binding_handle,
+						   s->pipe->binding_handle,
 						   &s->querygroupinfo);
 	if (composite_nomem(subreq, c)) return;
 	
@@ -212,7 +208,7 @@ static void continue_groupinfo_getgroup(struct tevent_req *subreq)
 	
 	/* queue rpc call, set event handling and new state */
 	subreq = dcerpc_samr_Close_r_send(s, c->event_ctx,
-					  s->binding_handle,
+					  s->pipe->binding_handle,
 					  &s->samrclose);
 	if (composite_nomem(subreq, c)) return;
 	
@@ -264,9 +260,7 @@ static void continue_groupinfo_closegroup(struct tevent_req *subreq)
  * @param p dce/rpc call pipe 
  * @param io arguments and results of the call
  */
-struct composite_context *libnet_rpc_groupinfo_send(TALLOC_CTX *mem_ctx,
-						    struct tevent_context *ev,
-						    struct dcerpc_binding_handle *b,
+struct composite_context *libnet_rpc_groupinfo_send(struct dcerpc_pipe *p,
 						    struct libnet_rpc_groupinfo *io,
 						    void (*monitor)(struct monitor_msg*))
 {
@@ -275,9 +269,9 @@ struct composite_context *libnet_rpc_groupinfo_send(TALLOC_CTX *mem_ctx,
 	struct dom_sid *sid;
 	struct tevent_req *subreq;
 
-	if (!b || !io) return NULL;
+	if (!p || !io) return NULL;
 	
-	c = composite_create(mem_ctx, ev);
+	c = composite_create(p, dcerpc_event_context(p));
 	if (c == NULL) return c;
 	
 	s = talloc_zero(c, struct groupinfo_state);
@@ -286,7 +280,7 @@ struct composite_context *libnet_rpc_groupinfo_send(TALLOC_CTX *mem_ctx,
 	c->private_data = s;
 
 	s->level         = io->in.level;
-	s->binding_handle= b;
+	s->pipe          = p;
 	s->domain_handle = io->in.domain_handle;
 	s->monitor_fn    = monitor;
 
@@ -301,7 +295,7 @@ struct composite_context *libnet_rpc_groupinfo_send(TALLOC_CTX *mem_ctx,
 		
 		/* send request */
 		subreq = dcerpc_samr_OpenGroup_r_send(s, c->event_ctx,
-						      s->binding_handle,
+						      p->binding_handle,
 						      &s->opengroup);
 		if (composite_nomem(subreq, c)) return c;
 
@@ -323,7 +317,7 @@ struct composite_context *libnet_rpc_groupinfo_send(TALLOC_CTX *mem_ctx,
 
 		/* send request */
 		subreq = dcerpc_samr_LookupNames_r_send(s, c->event_ctx,
-							s->binding_handle,
+							p->binding_handle,
 							&s->lookup);
 		if (composite_nomem(subreq, c)) return c;
 		
@@ -373,12 +367,10 @@ NTSTATUS libnet_rpc_groupinfo_recv(struct composite_context *c, TALLOC_CTX *mem_
  * @return nt status code of execution
  */
 
-NTSTATUS libnet_rpc_groupinfo(struct tevent_context *ev,
-			      struct dcerpc_binding_handle *b,
+NTSTATUS libnet_rpc_groupinfo(struct dcerpc_pipe *p,
 			      TALLOC_CTX *mem_ctx,
 			      struct libnet_rpc_groupinfo *io)
 {
-	struct composite_context *c = libnet_rpc_groupinfo_send(mem_ctx, ev, b,
-								io, NULL);
+	struct composite_context *c = libnet_rpc_groupinfo_send(p, io, NULL);
 	return libnet_rpc_groupinfo_recv(c, mem_ctx, io);
 }

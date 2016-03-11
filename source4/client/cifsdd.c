@@ -152,7 +152,7 @@ int set_arg_argv(const char * argv)
 			}
 			break;
 		case ARG_SIZE:
-			if (!conv_str_size_error(val, &arg->arg_val.nval)) {
+			if (!conv_str_size(val, &arg->arg_val.nval)) {
 				goto fail;
 			}
 			break;
@@ -448,7 +448,6 @@ static int copy_files(struct tevent_context *ev, struct loadparm_context *lp_ctx
 				lpcfg_socket_options(lp_ctx),
 				&session_options, 
 				lpcfg_gensec_settings(lp_ctx, lp_ctx)))) {
-		SAFE_FREE(iobuf);
 		return(FILESYS_EXIT_CODE);
 	}
 
@@ -457,7 +456,6 @@ static int copy_files(struct tevent_context *ev, struct loadparm_context *lp_ctx
 				lpcfg_socket_options(lp_ctx),
 				&session_options,
 				lpcfg_gensec_settings(lp_ctx, lp_ctx)))) {
-		SAFE_FREE(iobuf);
 		return(FILESYS_EXIT_CODE);
 	}
 
@@ -489,7 +487,6 @@ static int copy_files(struct tevent_context *ev, struct loadparm_context *lp_ctx
 			while (data_size > 0) {
 				if (!dd_flush_block(ofile, iobuf,
 							&data_size, obs)) {
-					SAFE_FREE(iobuf);
 					return(IOERROR_EXIT_CODE);
 				}
 			}
@@ -500,7 +497,6 @@ static int copy_files(struct tevent_context *ev, struct loadparm_context *lp_ctx
 		 * out one of obs bytes.
 		 */
 		if (!dd_fill_block(ifile, iobuf, &data_size, obs, ibs)) {
-			SAFE_FREE(iobuf);
 			return(IOERROR_EXIT_CODE);
 		}
 
@@ -524,13 +520,11 @@ static int copy_files(struct tevent_context *ev, struct loadparm_context *lp_ctx
 		 */
 		if (data_size && 
 		    !dd_flush_block(ofile, iobuf, &data_size, obs)) {
-			SAFE_FREE(iobuf);
 			return(IOERROR_EXIT_CODE);
 		}
 	}
 
 done:
-	SAFE_FREE(iobuf);
 	print_transfer_stats();
 	return(0);
 }
@@ -603,7 +597,7 @@ int main(int argc, const char ** argv)
 
 	ev = s4_event_context_init(talloc_autofree_context());
 
-	gensec_init();
+	gensec_init(cmdline_lp_ctx);
 	dump_args();
 
 	if (check_arg_numeric("ibs") == 0 || check_arg_numeric("ibs") == 0) {

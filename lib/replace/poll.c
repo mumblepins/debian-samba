@@ -30,12 +30,6 @@
 
 #include "replace.h"
 #include "system/select.h"
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
-#ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
-#endif
 
 
 int rep_poll(struct pollfd *fds, nfds_t nfds, int timeout)
@@ -46,7 +40,7 @@ int rep_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 	int rc;
 	nfds_t i;
 
-	if ((fds == NULL) && (nfds != 0)) {
+	if (fds == NULL) {
 		errno = EFAULT;
 		return -1;
 	}

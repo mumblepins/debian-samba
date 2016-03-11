@@ -106,7 +106,7 @@ HMAC_MD5_any_checksum(krb5_context context,
     ret = _krb5_HMAC_MD5_checksum(context, &local_key, data, len, usage, result);
     if (ret)
 	krb5_data_free(&result->checksum);
-
+    
     krb5_free_keyblock(context, local_key.key);
     return ret;
 }
@@ -464,7 +464,7 @@ verify_checksum(krb5_context context,
 	goto out;
     }
     ret = krb5_storage_read(sp, cksum.checksum.data, cksum.checksum.length);
-    if (ret != (int)cksum.checksum.length) {
+    if (ret != cksum.checksum.length) {
 	ret = EINVAL;
 	krb5_set_error_message(context, ret, "PAC checksum missing checksum");
 	goto out;
@@ -546,7 +546,7 @@ create_checksum(krb5_context context,
      * http://blogs.msdn.com/b/openspecification/archive/2010/01/01/verifying-the-server-signature-in-kerberos-privilege-account-certificate.aspx
      * for Microsoft's explaination */
 
-    if (cksumtype == (uint32_t)CKSUMTYPE_HMAC_MD5) {
+    if (cksumtype == CKSUMTYPE_HMAC_MD5) {
 	ret = HMAC_MD5_any_checksum(context, key, data, datalen,
 				    KRB5_KU_OTHER_CKSUM, &cksum);
     } else {
@@ -595,12 +595,11 @@ verify_logonname(krb5_context context,
 		 krb5_const_principal principal)
 {
     krb5_error_code ret;
+    krb5_principal p2;
     uint32_t time1, time2;
     krb5_storage *sp;
     uint16_t len;
-    char *s = NULL;
-    char *principal_string = NULL;
-    char *logon_string = NULL;
+    char *s;
 
     sp = krb5_storage_from_readonly_mem((const char *)data->data + logon_name->offset_lo,
 					logon_name->buffersize);
@@ -665,36 +664,29 @@ verify_logonname(krb5_context context,
 	    return ret;
 	}
 	u8len += 1; /* Add space for NUL */
-	logon_string = malloc(u8len);
-	if (logon_string == NULL) {
+	s = malloc(u8len);
+	if (s == NULL) {
 	    free(ucs2);
 	    return krb5_enomem(context);
 	}
-	ret = wind_ucs2utf8(ucs2, ucs2len, logon_string, &u8len);
+	ret = wind_ucs2utf8(ucs2, ucs2len, s, &u8len);
 	free(ucs2);
 	if (ret) {
-	    free(logon_string);
+	    free(s);
 	    krb5_set_error_message(context, ret, "Failed to convert to UTF-8");
 	    return ret;
 	}
     }
-    ret = krb5_unparse_name_flags(context, principal,
-				  KRB5_PRINCIPAL_UNPARSE_NO_REALM |
-				  KRB5_PRINCIPAL_UNPARSE_DISPLAY,
-				  &principal_string);
-    if (ret) {
-	free(logon_string);
+    ret = krb5_parse_name_flags(context, s, KRB5_PRINCIPAL_PARSE_NO_REALM, &p2);
+    free(s);
+    if (ret)
 	return ret;
-    }
 
-    ret = strcmp(logon_string, principal_string);
-    if (ret != 0) {
+    if (krb5_principal_compare_any_realm(context, principal, p2) != TRUE) {
 	ret = EINVAL;
-	krb5_set_error_message(context, ret, "PAC logon name [%s] mismatch principal name [%s]",
-			       logon_string, principal_string);
+	krb5_set_error_message(context, ret, "PAC logon name mismatch");
     }
-    free(logon_string);
-    free(principal_string);
+    krb5_free_principal(context, p2);
     return ret;
 out:
     return ret;
@@ -714,7 +706,7 @@ build_logon_name(krb5_context context,
     krb5_storage *sp;
     uint64_t t;
     char *s, *s2;
-    size_t s2_len;
+    size_t i, len;
 
     t = unix2nttime(authtime);
 
@@ -730,66 +722,33 @@ build_logon_name(krb5_context context,
     CHECK(ret, krb5_store_uint32(sp, t >> 32), out);
 
     ret = krb5_unparse_name_flags(context, principal,
-				  KRB5_PRINCIPAL_UNPARSE_NO_REALM |
-				  KRB5_PRINCIPAL_UNPARSE_DISPLAY,
-				  &s);
+				  KRB5_PRINCIPAL_UNPARSE_NO_REALM, &s);
     if (ret)
 	goto out;
 
-    {
-	size_t ucs2_len;
-	uint16_t *ucs2;
-	unsigned int flags;
+    len = strlen(s);
 
-	ret = wind_utf8ucs2_length(s, &ucs2_len);
-	if (ret) {
-	    free(s);
-	    krb5_set_error_message(context, ret, "Failed to count length of UTF-8 string");
-	    return ret;
-	}
+    CHECK(ret, krb5_store_uint16(sp, len * 2), out);
 
-	ucs2 = malloc(sizeof(ucs2[0]) * ucs2_len);
-	if (ucs2 == NULL) {
-	    free(s);
-	    return krb5_enomem(context);
-	}
-
-	ret = wind_utf8ucs2(s, ucs2, &ucs2_len);
+#if 1 /* cheat for now */
+    s2 = malloc(len * 2);
+    if (s2 == NULL) {
+	ret = krb5_enomem(context);
 	free(s);
-	if (ret) {
-	    free(ucs2);
-	    krb5_set_error_message(context, ret, "Failed to convert string to UCS-2");
-	    return ret;
-	}
-
-	s2_len = (ucs2_len + 1) * 2;
-	s2 = malloc(s2_len);
-	if (ucs2 == NULL) {
-	    free(ucs2);
-	    return krb5_enomem(context);
-	}
-
-	flags = WIND_RW_LE;
-	ret = wind_ucs2write(ucs2, ucs2_len,
-			     &flags, s2, &s2_len);
-	free(ucs2);
-	if (ret) {
-	    free(s2);
-	    krb5_set_error_message(context, ret, "Failed to write to UCS-2 buffer");
-	    return ret;
-	}
-
-	/*
-	 * we do not want zero termination
-	 */
-	s2_len = ucs2_len * 2;
+	goto out;
     }
+    for (i = 0; i < len; i++) {
+	s2[i * 2] = s[i];
+	s2[i * 2 + 1] = 0;
+    }
+    free(s);
+#else
+    /* write libwind code here */
+#endif
 
-    CHECK(ret, krb5_store_uint16(sp, s2_len), out);
-
-    ret = krb5_storage_write(sp, s2, s2_len);
+    ret = krb5_storage_write(sp, s2, len * 2);
     free(s2);
-    if (ret != (int)s2_len) {
+    if (ret != len * 2) {
 	ret = krb5_enomem(context);
 	goto out;
     }
@@ -973,8 +932,7 @@ _krb5_pac_sign(krb5_context context,
     size_t server_size, priv_size;
     uint32_t server_offset = 0, priv_offset = 0;
     uint32_t server_cksumtype = 0, priv_cksumtype = 0;
-    int num = 0;
-    size_t i;
+    int i, num = 0;
     krb5_data logon, d;
 
     krb5_data_zero(&logon);
@@ -1091,7 +1049,7 @@ _krb5_pac_sign(krb5_context context,
 
 	    end += len;
 	    e = ((end + PAC_ALIGNMENT - 1) / PAC_ALIGNMENT) * PAC_ALIGNMENT;
-	    if ((int32_t)end != e) {
+	    if (end != e) {
 		CHECK(ret, fill_zeros(context, spdata, e - end), out);
 	    }
 	    end = e;
@@ -1108,7 +1066,7 @@ _krb5_pac_sign(krb5_context context,
 	goto out;
     }
     ret = krb5_storage_write(sp, d.data, d.length);
-    if (ret != (int)d.length) {
+    if (ret != d.length) {
 	krb5_data_free(&d);
 	ret = krb5_enomem(context);
 	goto out;

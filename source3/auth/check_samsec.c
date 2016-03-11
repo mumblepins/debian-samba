@@ -119,11 +119,11 @@ static NTSTATUS sam_password_ok(TALLOC_CTX *mem_ctx,
 static bool logon_hours_ok(struct samu *sampass)
 {
 	/* In logon hours first bit is Sunday from 12AM to 1AM */
-	const uint8_t *hours;
+	const uint8 *hours;
 	struct tm *utctime;
 	time_t lasttime;
 	const char *asct;
-	uint8_t bitmask, bitpos;
+	uint8 bitmask, bitpos;
 
 	hours = pdb_get_hours(sampass);
 	if (!hours) {
@@ -176,7 +176,7 @@ static NTSTATUS sam_account_ok(TALLOC_CTX *mem_ctx,
 			       struct samu *sampass,
 			       const struct auth_usersupplied_info *user_info)
 {
-	uint32_t acct_ctrl = pdb_get_acct_ctrl(sampass);
+	uint32	acct_ctrl = pdb_get_acct_ctrl(sampass);
 	char *workstation_list;
 	time_t kickoff_time;
 
@@ -379,7 +379,6 @@ NTSTATUS check_sam_security(const DATA_BLOB *challenge,
 	const char *username;
 	const uint8_t *nt_pw;
 	const uint8_t *lm_pw;
-	uint32_t acct_ctrl;
 
 	/* the returned struct gets kept on the server_info, by means
 	   of a steal further down */
@@ -402,20 +401,18 @@ NTSTATUS check_sam_security(const DATA_BLOB *challenge,
 		return NT_STATUS_NO_SUCH_USER;
 	}
 
-	acct_ctrl = pdb_get_acct_ctrl(sampass);
 	username = pdb_get_username(sampass);
 	nt_pw = pdb_get_nt_passwd(sampass);
 	lm_pw = pdb_get_lanman_passwd(sampass);
 
 	/* Quit if the account was locked out. */
-	if (acct_ctrl & ACB_AUTOLOCK) {
+	if (pdb_get_acct_ctrl(sampass) & ACB_AUTOLOCK) {
 		DEBUG(3,("check_sam_security: Account for user %s was locked out.\n", username));
-		TALLOC_FREE(sampass);
 		return NT_STATUS_ACCOUNT_LOCKED_OUT;
 	}
 
 	nt_status = sam_password_ok(mem_ctx,
-				    username, acct_ctrl,
+				    username, pdb_get_acct_ctrl(sampass),
 				    challenge, lm_pw, nt_pw,
 				    user_info, &user_sess_key, &lm_sess_key);
 
@@ -428,7 +425,7 @@ NTSTATUS check_sam_security(const DATA_BLOB *challenge,
 		bool increment_bad_pw_count = false;
 
 		if (NT_STATUS_EQUAL(nt_status,NT_STATUS_WRONG_PASSWORD) &&
-		    (acct_ctrl & ACB_NORMAL) &&
+		    pdb_get_acct_ctrl(sampass) & ACB_NORMAL &&
 		    NT_STATUS_IS_OK(update_login_attempts_status))
 		{
 			increment_bad_pw_count =
@@ -458,21 +455,15 @@ NTSTATUS check_sam_security(const DATA_BLOB *challenge,
 		goto done;
 	}
 
-	/*
-	 * We must only reset the bad password count if the login was
-	 * successful, including checking account policies
-	 */
-	nt_status = sam_account_ok(mem_ctx, sampass, user_info);
-	if (!NT_STATUS_IS_OK(nt_status)) {
-		goto done;
-	}
-
-	if ((acct_ctrl & ACB_NORMAL) &&
+	if ((pdb_get_acct_ctrl(sampass) & ACB_NORMAL) &&
 	    (pdb_get_bad_password_count(sampass) > 0)){
-		NTSTATUS status;
-
 		pdb_set_bad_password_count(sampass, 0, PDB_CHANGED);
 		pdb_set_bad_password_time(sampass, 0, PDB_CHANGED);
+		updated_badpw = True;
+	}
+
+	if (updated_badpw){
+		NTSTATUS status;
 
 		become_root();
 		status = pdb_update_sam_account(sampass);
@@ -484,8 +475,14 @@ NTSTATUS check_sam_security(const DATA_BLOB *challenge,
 		}
 	}
 
+	nt_status = sam_account_ok(mem_ctx, sampass, user_info);
+
+	if (!NT_STATUS_IS_OK(nt_status)) {
+		goto done;
+	}
+
 	become_root();
-	nt_status = make_server_info_sam(mem_ctx, sampass, server_info);
+	nt_status = make_server_info_sam(server_info, sampass);
 	unbecome_root();
 
 	TALLOC_FREE(sampass);
@@ -495,7 +492,7 @@ NTSTATUS check_sam_security(const DATA_BLOB *challenge,
 		goto done;
 	}
 
-	(*server_info)->session_key =
+	(*server_info)->user_session_key =
 		data_blob_talloc(*server_info, user_sess_key.data,
 				 user_sess_key.length);
 	data_blob_free(&user_sess_key);
@@ -534,13 +531,13 @@ NTSTATUS check_sam_security_info3(const DATA_BLOB *challenge,
 		goto done;
 	}
 
-	info3 = talloc_zero(mem_ctx, struct netr_SamInfo3);
+	info3 = TALLOC_ZERO_P(mem_ctx, struct netr_SamInfo3);
 	if (info3 == NULL) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
 
-	status = serverinfo_to_SamInfo3(server_info, info3);
+	status = serverinfo_to_SamInfo3(server_info, NULL, 0, info3);
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(10, ("serverinfo_to_SamInfo3 failed: %s\n",
 			   nt_errstr(status)));

@@ -25,7 +25,6 @@
 #include "torture/util.h"
 #include "torture/rpc/torture_rpc.h"
 #include "param/param.h"
-#include "torture/raw/proto.h"
 
 static struct {
 	const char *name;
@@ -779,7 +778,7 @@ static bool torture_raw_qfileinfo_internals(struct torture_context *torture,
 	s1 = fnum_find("BASIC_INFO");
 	if (s1 && is_ipc) {
 		if (s1->basic_info.out.attrib != FILE_ATTRIBUTE_NORMAL) {
-			printf("(%d) attrib basic_info/nlink incorrect - %d should be %d\n", __LINE__, s1->basic_info.out.attrib, (int)FILE_ATTRIBUTE_NORMAL);
+			printf("(%d) attrib basic_info/nlink incorrect - %d should be %d\n", __LINE__, s1->basic_info.out.attrib, FILE_ATTRIBUTE_NORMAL);
 			ret = false;
 		}
 	}
@@ -885,39 +884,22 @@ bool torture_raw_qfileinfo_pipe(struct torture_context *torture,
 	bool ret = true;
 	int fnum;
 	const char *fname = "\\lsass";
-	union smb_open op;
+	struct dcerpc_pipe *p;
+	struct smbcli_tree *ipc_tree;
 	NTSTATUS status;
 
-	op.ntcreatex.level = RAW_OPEN_NTCREATEX;
-	op.ntcreatex.in.flags = 0;
-	op.ntcreatex.in.root_fid.fnum = 0;
-	op.ntcreatex.in.access_mask =
-		SEC_STD_READ_CONTROL |
-		SEC_FILE_WRITE_ATTRIBUTE |
-		SEC_FILE_WRITE_EA |
-		SEC_FILE_READ_DATA |
-		SEC_FILE_WRITE_DATA;
-	op.ntcreatex.in.file_attr = 0;
-	op.ntcreatex.in.alloc_size = 0;
-	op.ntcreatex.in.share_access =
-		NTCREATEX_SHARE_ACCESS_READ |
-		NTCREATEX_SHARE_ACCESS_WRITE;
-	op.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN;
-	op.ntcreatex.in.create_options = 0;
-	op.ntcreatex.in.impersonation =
-		NTCREATEX_IMPERSONATION_IMPERSONATION;
-	op.ntcreatex.in.security_flags = 0;
-	op.ntcreatex.in.fname = fname;
+	if (!(p = dcerpc_pipe_init(torture, cli->tree->session->transport->socket->event.ctx))) {
+		return false;
+	}
 
-	status = smb_raw_open(cli->tree, torture, &op);
-	torture_assert_ntstatus_ok(torture, status, "smb_raw_open failed");
+	status = dcerpc_pipe_open_smb(p, cli->tree, fname);
+	torture_assert_ntstatus_ok(torture, status, "dcerpc_pipe_open_smb failed");
 
-	fnum = op.ntcreatex.out.file.fnum;
+	ipc_tree = dcerpc_smb_tree(p->conn);
+	fnum = dcerpc_smb_fnum(p->conn);
 
-	ret = torture_raw_qfileinfo_internals(torture, torture, cli->tree,
-					      fnum, fname,
-					      true /* is_ipc */);
-
-	smbcli_close(cli->tree, fnum);
+	ret = torture_raw_qfileinfo_internals(torture, torture, ipc_tree, fnum, fname, true /* is_ipc */);
+	
+	talloc_free(p);
 	return ret;
 }

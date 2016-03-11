@@ -26,7 +26,6 @@
 #include "param/param.h"
 #include "lib/cmdline/popt_common.h"
 #include "libcli/resolve/resolve.h"
-#include "torture/raw/proto.h"
 
 #define CHECK_VAL(v, correct) do { \
 	if ((v) != (correct)) { \
@@ -226,7 +225,7 @@ static void torture_wait_for_oplock_break(struct torture_context *tctx)
 	/* Wait .1 seconds for an oplock break */
 	ne = tevent_timeval_current_ofs(0, 100000);
 
-	if ((te = tevent_add_timer(tctx->ev, tmp_ctx, ne, timeout_cb, &timesup))
+	if ((te = event_add_timed(tctx->ev, tmp_ctx, ne, timeout_cb, &timesup))
 	    == NULL)
 	{
 		torture_comment(tctx, "Failed to wait for an oplock break. "
@@ -235,7 +234,7 @@ static void torture_wait_for_oplock_break(struct torture_context *tctx)
 	}
 
 	while (!timesup && break_info.count < old_count + 1) {
-		if (tevent_loop_once(tctx->ev) != 0) {
+		if (event_loop_once(tctx->ev) != 0) {
 			torture_comment(tctx, "Failed to wait for an oplock "
 					      "break. test results may not be "
 					      "accurate.");
@@ -257,17 +256,6 @@ static uint8_t get_break_level1_to_none_count(struct torture_context *tctx)
 {
 	return torture_setting_bool(tctx, "2_step_break_to_none", false) ?
 	    2 : 1;
-}
-
-static uint8_t get_setinfo_break_count(struct torture_context *tctx)
-{
-	if (TARGET_IS_W2K12(tctx)) {
-		return 2;
-	}
-	if (TARGET_IS_SAMBA3(tctx)) {
-		return 2;
-	}
-	return 1;
 }
 
 static bool test_raw_oplock_exclusive1(struct torture_context *tctx, struct smbcli_state *cli1, struct smbcli_state *cli2)
@@ -488,7 +476,7 @@ static bool test_raw_oplock_exclusive3(struct torture_context *tctx, struct smbc
 
 	CHECK_STATUS(tctx, status, NT_STATUS_OK);
 	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, get_setinfo_break_count(tctx));
+	CHECK_VAL(break_info.count, get_break_level1_to_none_count(tctx));
 	CHECK_VAL(break_info.failures, 0);
 	CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_NONE);
 
@@ -552,18 +540,6 @@ static bool test_raw_oplock_exclusive4(struct torture_context *tctx, struct smbc
 	CHECK_STATUS(tctx, status, NT_STATUS_OK);
 	fnum2 = io.ntcreatex.out.file.fnum;
 	CHECK_VAL(io.ntcreatex.out.oplock_level, NO_OPLOCK_RETURN);
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 0);
-	CHECK_VAL(break_info.failures, 0);
-
-	/*
-	 * Open another non-stat open. This reproduces bug 10216. Make sure it
-	 * won't happen again...
-	 */
-	io.ntcreatex.in.flags = 0;
-	io.ntcreatex.in.access_mask = SEC_FILE_READ_DATA;
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_SHARING_VIOLATION);
 	torture_wait_for_oplock_break(tctx);
 	CHECK_VAL(break_info.count, 0);
 	CHECK_VAL(break_info.failures, 0);
@@ -638,7 +614,6 @@ static bool test_raw_oplock_exclusive5(struct torture_context *tctx, struct smbc
 	CHECK_VAL(io.ntcreatex.out.oplock_level, LEVEL_II_OPLOCK_RETURN);
 	torture_wait_for_oplock_break(tctx);
 	CHECK_VAL(break_info.count, get_break_level1_to_none_count(tctx));
-	CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_NONE);
 	CHECK_VAL(break_info.failures, 0);
 
 	smbcli_close(cli1->tree, fnum);
@@ -791,7 +766,7 @@ static bool test_raw_oplock_exclusive7(struct torture_context *tctx,
 	torture_wait_for_oplock_break(tctx);
 	CHECK_VAL(break_info.failures, 0);
 
-	if (TARGET_IS_WINXP(tctx) || TARGET_IS_W2K12(tctx)) {
+	if (TARGET_IS_WINXP(tctx)) {
 		/* XP incorrectly breaks to level2. */
 		CHECK_VAL(break_info.count, 1);
 		CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_LEVEL_II);
@@ -824,10 +799,6 @@ static bool test_raw_oplock_exclusive7(struct torture_context *tctx,
 		/* XP already broke to level2. */
 		CHECK_VAL(break_info.failures, 0);
 		CHECK_VAL(break_info.count, 0);
-	} else if (TARGET_IS_W2K12(tctx)) {
-		/* no break */
-		CHECK_VAL(break_info.count, 0);
-		CHECK_VAL(break_info.level, 0);
 	} else {
 		/* Break to level 2 expected. */
 		CHECK_VAL(break_info.count, 1);
@@ -889,293 +860,6 @@ done:
 	smbcli_close(cli1->tree, fnum);
 	smbcli_close(cli2->tree, fnum2);
 
-	smb_raw_exit(cli1->session);
-	smb_raw_exit(cli2->session);
-	smbcli_deltree(cli1->tree, BASEDIR);
-	return ret;
-}
-
-static bool test_raw_oplock_exclusive8(struct torture_context *tctx,
-				       struct smbcli_state *cli1,
-				       struct smbcli_state *cli2)
-{
-	const char *fname = BASEDIR "\\test_exclusive8.dat";
-	NTSTATUS status;
-	bool ret = true;
-	union smb_open io;
-	uint16_t fnum1 = 0;
-	uint16_t fnum2 = 0;
-	uint16_t fnum3 = 0;
-
-	if (!torture_setup_dir(cli1, BASEDIR)) {
-		return false;
-	}
-
-	/* cleanup */
-	smbcli_unlink(cli1->tree, fname);
-
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given,
-			      cli1->tree);
-
-	/*
-	  base ntcreatex parms
-	*/
-	io.generic.level = RAW_OPEN_NTCREATEX;
-	io.ntcreatex.in.root_fid.fnum = 0;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.alloc_size = 0;
-	io.ntcreatex.in.file_attr = FILE_ATTRIBUTE_NORMAL;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_READ |
-		NTCREATEX_SHARE_ACCESS_WRITE | NTCREATEX_SHARE_ACCESS_DELETE;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	io.ntcreatex.in.create_options = 0;
-	io.ntcreatex.in.impersonation = NTCREATEX_IMPERSONATION_ANONYMOUS;
-	io.ntcreatex.in.security_flags = 0;
-	io.ntcreatex.in.fname = fname;
-
-	torture_comment(tctx, "open a file with an exclusive oplock (share "
-			"mode: all)\n");
-	ZERO_STRUCT(break_info);
-	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-		NTCREATEX_FLAGS_REQUEST_OPLOCK;
-	status = smb_raw_open(cli1->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum1 = io.ntcreatex.out.file.fnum;
-	CHECK_VAL(io.ntcreatex.out.oplock_level, EXCLUSIVE_OPLOCK_RETURN);
-
-	torture_comment(tctx, "second open with delete should trigger a "
-			"break\n");
-
-	io.ntcreatex.in.access_mask = SEC_STD_DELETE;
-	io.ntcreatex.in.flags = 0;
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum2 = io.ntcreatex.out.file.fnum;
-	CHECK_VAL(break_info.count, get_break_level1_to_none_count(tctx));
-	CHECK_VAL(break_info.failures, 0);
-	CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_LEVEL_II);
-
-	/* Trigger a little panic in "old" samba code.. */
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum3 = io.ntcreatex.out.file.fnum;
-
-	smbcli_close(cli2->tree, fnum3);
-	smbcli_close(cli2->tree, fnum2);
-	smbcli_close(cli1->tree, fnum1);
-
-done:
-	smbcli_deltree(cli1->tree, BASEDIR);
-	smb_raw_exit(cli1->session);
-	smb_raw_exit(cli2->session);
-	return ret;
-}
-
-static bool test_raw_oplock_exclusive9(struct torture_context *tctx,
-				       struct smbcli_state *cli1,
-				       struct smbcli_state *cli2)
-{
-	const char *fname = BASEDIR "\\test_exclusive9.dat";
-	NTSTATUS status;
-	bool ret = true;
-	union smb_open io;
-	uint16_t fnum=0, fnum2=0;
-	int i;
-
-	struct {
-		uint32_t create_disposition;
-		uint32_t break_level;
-	} levels[] = {
-		{ NTCREATEX_DISP_SUPERSEDE, OPLOCK_BREAK_TO_NONE },
-		{ NTCREATEX_DISP_OPEN, OPLOCK_BREAK_TO_LEVEL_II },
-		{ NTCREATEX_DISP_OVERWRITE_IF, OPLOCK_BREAK_TO_NONE },
-		{ NTCREATEX_DISP_OPEN_IF, OPLOCK_BREAK_TO_LEVEL_II },
-	};
-
-	if (!torture_setup_dir(cli1, BASEDIR)) {
-		return false;
-	}
-
-	/* cleanup */
-	smbcli_unlink(cli1->tree, fname);
-
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given,
-			      cli1->tree);
-	smbcli_oplock_handler(cli2->transport, oplock_handler_ack_to_given,
-			      cli1->tree);
-
-	/*
-	  base ntcreatex parms
-	*/
-	io.generic.level = RAW_OPEN_NTCREATEX;
-	io.ntcreatex.in.root_fid.fnum = 0;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.alloc_size = 0;
-	io.ntcreatex.in.file_attr = FILE_ATTRIBUTE_NORMAL;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_NONE;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	io.ntcreatex.in.create_options = 0;
-	io.ntcreatex.in.impersonation = NTCREATEX_IMPERSONATION_ANONYMOUS;
-	io.ntcreatex.in.security_flags = 0;
-	io.ntcreatex.in.fname = fname;
-
-	ZERO_STRUCT(break_info);
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given,
-			      cli1->tree);
-
-	for (i=0; i<ARRAY_SIZE(levels); i++) {
-
-		io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-			NTCREATEX_FLAGS_REQUEST_OPLOCK;
-		io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_READ|
-			NTCREATEX_SHARE_ACCESS_WRITE|
-			NTCREATEX_SHARE_ACCESS_DELETE;
-		io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-		status = smb_raw_open(cli1->tree, tctx, &io);
-		CHECK_STATUS(tctx, status, NT_STATUS_OK);
-		fnum = io.ntcreatex.out.file.fnum;
-		CHECK_VAL(io.ntcreatex.out.oplock_level,
-			  EXCLUSIVE_OPLOCK_RETURN);
-
-		ZERO_STRUCT(break_info);
-
-		io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-			NTCREATEX_FLAGS_REQUEST_OPLOCK;
-		io.ntcreatex.in.access_mask = SEC_FILE_READ_DATA;
-		io.ntcreatex.in.open_disposition =
-			levels[i].create_disposition;
-		status = smb_raw_open(cli2->tree, tctx, &io);
-		CHECK_STATUS(tctx, status, NT_STATUS_OK);
-		fnum2 = io.ntcreatex.out.file.fnum;
-		CHECK_VAL(io.ntcreatex.out.oplock_level,
-			  LEVEL_II_OPLOCK_RETURN);
-		torture_wait_for_oplock_break(tctx);
-		CHECK_VAL(break_info.count, 1);
-		CHECK_VAL(break_info.level, levels[i].break_level);
-		CHECK_VAL(break_info.failures, 0);
-
-		smbcli_close(cli1->tree, fnum);
-		smbcli_close(cli2->tree, fnum2);
-	}
-
-done:
-	smb_raw_exit(cli1->session);
-	smb_raw_exit(cli2->session);
-	smbcli_deltree(cli1->tree, BASEDIR);
-	return ret;
-}
-
-static bool test_raw_oplock_level_ii_1(struct torture_context *tctx,
-				       struct smbcli_state *cli1,
-				       struct smbcli_state *cli2)
-{
-	const char *fname = BASEDIR "\\test_level_ii_1.dat";
-	NTSTATUS status;
-	bool ret = true;
-	union smb_open io;
-	uint16_t fnum=0, fnum2=0;
-	char c = 0;
-	ssize_t written;
-
-	if (!torture_setup_dir(cli1, BASEDIR)) {
-		return false;
-	}
-
-	/* cleanup */
-	smbcli_unlink(cli1->tree, fname);
-
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given,
-			      cli1->tree);
-	smbcli_oplock_handler(cli2->transport, oplock_handler_ack_to_given,
-			      cli1->tree);
-
-	/*
-	  base ntcreatex parms
-	*/
-	io.generic.level = RAW_OPEN_NTCREATEX;
-	io.ntcreatex.in.root_fid.fnum = 0;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.alloc_size = 0;
-	io.ntcreatex.in.file_attr = FILE_ATTRIBUTE_NORMAL;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_NONE;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	io.ntcreatex.in.create_options = 0;
-	io.ntcreatex.in.impersonation = NTCREATEX_IMPERSONATION_ANONYMOUS;
-	io.ntcreatex.in.security_flags = 0;
-	io.ntcreatex.in.fname = fname;
-
-	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-		NTCREATEX_FLAGS_REQUEST_OPLOCK;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_READ|
-		NTCREATEX_SHARE_ACCESS_WRITE|
-		NTCREATEX_SHARE_ACCESS_DELETE;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	status = smb_raw_open(cli1->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum = io.ntcreatex.out.file.fnum;
-	CHECK_VAL(io.ntcreatex.out.oplock_level, EXCLUSIVE_OPLOCK_RETURN);
-
-	ZERO_STRUCT(break_info);
-
-	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-		NTCREATEX_FLAGS_REQUEST_OPLOCK;
-	io.ntcreatex.in.access_mask = SEC_FILE_READ_DATA|SEC_FILE_WRITE_DATA;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum2 = io.ntcreatex.out.file.fnum;
-	CHECK_VAL(io.ntcreatex.out.oplock_level, LEVEL_II_OPLOCK_RETURN);
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 1);
-	CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_LEVEL_II);
-	CHECK_VAL(break_info.failures, 0);
-
-	status = smbcli_close(cli2->tree, fnum2);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-
-	/*
-	 * fnum1 has a level2 oplock now
-	 */
-
-	ZERO_STRUCT(break_info);
-
-	/*
-	 * Don't answer the break to none that will come in
-	 */
-
-	smbcli_oplock_handler(cli1->transport, oplock_handler_timeout,
-			      cli1->tree);
-
-	io.ntcreatex.in.flags = 0;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OVERWRITE_IF;
-
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum2 = io.ntcreatex.out.file.fnum;
-	CHECK_VAL(io.ntcreatex.out.oplock_level, NO_OPLOCK_RETURN);
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 1);
-	CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_NONE);
-	CHECK_VAL(break_info.failures, 0);
-
-	/*
-	 * Check that a write does not cause another break. This used to be a
-	 * bug in smbd.
-	 */
-
-	ZERO_STRUCT(break_info);
-	written = smbcli_write(cli2->tree, fnum2, 0, &c, 0, 1);
-	CHECK_VAL(written, 1);
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 0);
-	CHECK_VAL(break_info.failures, 0);
-
-	status = smbcli_close(cli2->tree, fnum2);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	status = smbcli_close(cli1->tree, fnum);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-
-done:
 	smb_raw_exit(cli1->session);
 	smb_raw_exit(cli2->session);
 	smbcli_deltree(cli1->tree, BASEDIR);
@@ -1873,126 +1557,6 @@ done:
 	return ret;
 }
 
-static bool test_raw_oplock_batch9a(struct torture_context *tctx, struct smbcli_state *cli1, struct smbcli_state *cli2)
-{
-	const char *fname = BASEDIR "\\test_batch9a.dat";
-	NTSTATUS status;
-	bool ret = true;
-	union smb_open io;
-	uint16_t fnum=0, fnum2=0;
-	char c = 0;
-
-	if (!torture_setup_dir(cli1, BASEDIR)) {
-		return false;
-	}
-
-	/* cleanup */
-	smbcli_unlink(cli1->tree, fname);
-
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given, cli1->tree);
-
-	/*
-	  base ntcreatex parms
-	*/
-	io.generic.level = RAW_OPEN_NTCREATEX;
-	io.ntcreatex.in.root_fid.fnum = 0;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.alloc_size = 0;
-	io.ntcreatex.in.file_attr = FILE_ATTRIBUTE_NORMAL;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_NONE;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	io.ntcreatex.in.create_options = 0;
-	io.ntcreatex.in.impersonation = NTCREATEX_IMPERSONATION_ANONYMOUS;
-	io.ntcreatex.in.security_flags = 0;
-	io.ntcreatex.in.fname = fname;
-
-	torture_comment(tctx, "BATCH9: open with attributes only can create file\n");
-
-	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-		NTCREATEX_FLAGS_REQUEST_OPLOCK |
-		NTCREATEX_FLAGS_REQUEST_BATCH_OPLOCK;
-	io.ntcreatex.in.access_mask = SEC_FILE_READ_ATTRIBUTE|SEC_FILE_WRITE_ATTRIBUTE|SEC_STD_SYNCHRONIZE;
-	status = smb_raw_open(cli1->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum = io.ntcreatex.out.file.fnum;
-	CHECK_VAL(io.ntcreatex.out.create_action, FILE_WAS_CREATED);
-	CHECK_VAL(io.ntcreatex.out.oplock_level, BATCH_OPLOCK_RETURN);
-
-	torture_comment(tctx, "Subsequent attributes open should not break\n");
-
-	ZERO_STRUCT(break_info);
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given, cli1->tree);
-
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum2 = io.ntcreatex.out.file.fnum;
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 0);
-	CHECK_VAL(io.ntcreatex.out.create_action, FILE_WAS_OPENED);
-	CHECK_VAL(io.ntcreatex.out.oplock_level, NO_OPLOCK_RETURN);
-	smbcli_close(cli2->tree, fnum2);
-
-	torture_comment(tctx, "Subsequent normal open should break oplock on attribute only open to level II\n");
-
-	ZERO_STRUCT(break_info);
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given, cli1->tree);
-
-	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-		NTCREATEX_FLAGS_REQUEST_OPLOCK |
-		NTCREATEX_FLAGS_REQUEST_BATCH_OPLOCK;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN;
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum2 = io.ntcreatex.out.file.fnum;
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 1);
-	CHECK_VAL(break_info.fnum, fnum);
-	CHECK_VAL(break_info.failures, 0);
-	CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_LEVEL_II);
-	CHECK_VAL(io.ntcreatex.out.oplock_level, LEVEL_II_OPLOCK_RETURN);
-	smbcli_close(cli2->tree, fnum2);
-
-	torture_comment(tctx, "third oplocked open should grant level2 without break\n");
-	ZERO_STRUCT(break_info);
-	smbcli_oplock_handler(cli1->transport, oplock_handler_ack_to_given, cli1->tree);
-	smbcli_oplock_handler(cli2->transport, oplock_handler_ack_to_given, cli2->tree);
-	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
-		NTCREATEX_FLAGS_REQUEST_OPLOCK |
-		NTCREATEX_FLAGS_REQUEST_BATCH_OPLOCK;
-	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN;
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	fnum2 = io.ntcreatex.out.file.fnum;
-	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, 0);
-	CHECK_VAL(break_info.failures, 0);
-	CHECK_VAL(io.ntcreatex.out.oplock_level, LEVEL_II_OPLOCK_RETURN);
-
-	ZERO_STRUCT(break_info);
-
-	torture_comment(tctx, "write should trigger a break to none on both\n");
-	smbcli_write(cli2->tree, fnum2, 0, &c, 0, 1);
-
-	/* We expect two breaks */
-	torture_wait_for_oplock_break(tctx);
-	torture_wait_for_oplock_break(tctx);
-
-	CHECK_VAL(break_info.count, 2);
-	CHECK_VAL(break_info.level, 0);
-	CHECK_VAL(break_info.failures, 0);
-
-	smbcli_close(cli1->tree, fnum);
-	smbcli_close(cli2->tree, fnum2);
-
-done:
-	smb_raw_exit(cli1->session);
-	smb_raw_exit(cli2->session);
-	smbcli_deltree(cli1->tree, BASEDIR);
-	return ret;
-}
-
 static bool test_raw_oplock_batch10(struct torture_context *tctx, struct smbcli_state *cli1, struct smbcli_state *cli2)
 {
 	const char *fname = BASEDIR "\\test_batch10.dat";
@@ -2039,18 +1603,6 @@ static bool test_raw_oplock_batch10(struct torture_context *tctx, struct smbcli_
 	CHECK_VAL(break_info.count, 0);
 	CHECK_VAL(break_info.failures, 0);
 	CHECK_VAL(io.ntcreatex.out.oplock_level, 0);
-
-	{
-		union smb_write wr;
-		wr.write.level = RAW_WRITE_WRITE;
-		wr.write.in.file.fnum = fnum;
-		wr.write.in.count = 1;
-		wr.write.in.offset = 0;
-		wr.write.in.remaining = 0;
-		wr.write.in.data = (const uint8_t *)"x";
-		status = smb_raw_write(cli1->tree, &wr);
-		CHECK_STATUS(tctx, status, NT_STATUS_OK);
-	}
 
 	smbcli_oplock_handler(cli2->transport, oplock_handler_ack_to_given, cli2->tree);
 
@@ -2163,7 +1715,7 @@ static bool test_raw_oplock_batch11(struct torture_context *tctx, struct smbcli_
 	CHECK_STATUS(tctx, status, NT_STATUS_OK);
 
 	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, get_setinfo_break_count(tctx));
+	CHECK_VAL(break_info.count, get_break_level1_to_none_count(tctx));
 	CHECK_VAL(break_info.failures, 0);
 	CHECK_VAL(break_info.level, 0);
 
@@ -2240,7 +1792,7 @@ static bool test_raw_oplock_batch12(struct torture_context *tctx, struct smbcli_
 	CHECK_STATUS(tctx, status, NT_STATUS_OK);
 
 	torture_wait_for_oplock_break(tctx);
-	CHECK_VAL(break_info.count, get_setinfo_break_count(tctx));
+	CHECK_VAL(break_info.count, get_break_level1_to_none_count(tctx));
 	CHECK_VAL(break_info.failures, 0);
 	CHECK_VAL(break_info.level, 0);
 
@@ -2768,7 +2320,7 @@ static bool test_raw_oplock_batch19(struct torture_context *tctx, struct smbcli_
 
 	CHECK_VAL(break_info.failures, 0);
 
-	if (TARGET_IS_WINXP(tctx) || TARGET_IS_W2K12(tctx)) {
+	if (TARGET_IS_WINXP(tctx)) {
 		/* Win XP breaks to level2. */
 		CHECK_VAL(break_info.count, 1);
 		CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_LEVEL_II);
@@ -3130,7 +2682,7 @@ static bool test_raw_oplock_batch20(struct torture_context *tctx, struct smbcli_
 	torture_wait_for_oplock_break(tctx);
 	CHECK_VAL(break_info.failures, 0);
 
-	if (TARGET_IS_WINXP(tctx) || TARGET_IS_W2K12(tctx)) {
+	if (TARGET_IS_WINXP(tctx)) {
 		/* Win XP breaks to level2. */
 		CHECK_VAL(break_info.count, 1);
 		CHECK_VAL(break_info.level, OPLOCK_BREAK_TO_LEVEL_II);
@@ -3932,8 +3484,7 @@ static bool test_raw_oplock_stream1(struct torture_context *tctx,
 }
 
 static bool test_raw_oplock_doc(struct torture_context *tctx,
-				struct smbcli_state *cli,
-				struct smbcli_state *cli2)
+				struct smbcli_state *cli)
 {
 	const char *fname = BASEDIR "\\test_oplock_doc.dat";
 	NTSTATUS status;
@@ -3941,7 +3492,9 @@ static bool test_raw_oplock_doc(struct torture_context *tctx,
 	union smb_open io;
 	uint16_t fnum=0;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	/* cleanup */
 	smbcli_unlink(cli->tree, fname);
@@ -3957,15 +3510,16 @@ static bool test_raw_oplock_doc(struct torture_context *tctx,
 	io.ntcreatex.in.access_mask = SEC_RIGHTS_FILE_ALL;
 	io.ntcreatex.in.alloc_size = 0;
 	io.ntcreatex.in.file_attr = FILE_ATTRIBUTE_NORMAL;
-	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_READ|
-		NTCREATEX_SHARE_ACCESS_WRITE|NTCREATEX_SHARE_ACCESS_DELETE;
+	io.ntcreatex.in.share_access = NTCREATEX_SHARE_ACCESS_NONE;
 	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN_IF;
-	io.ntcreatex.in.create_options = 0;
+	io.ntcreatex.in.create_options = NTCREATEX_OPTIONS_DELETE_ON_CLOSE;
 	io.ntcreatex.in.impersonation = NTCREATEX_IMPERSONATION_ANONYMOUS;
 	io.ntcreatex.in.security_flags = 0;
 	io.ntcreatex.in.fname = fname;
 
-	torture_comment(tctx, "open a file with a batch oplock\n");
+	torture_comment(tctx, "open a delete-on-close file with a batch "
+			"oplock\n");
+	ZERO_STRUCT(break_info);
 	io.ntcreatex.in.flags = NTCREATEX_FLAGS_EXTENDED |
 	    NTCREATEX_FLAGS_REQUEST_OPLOCK |
 	    NTCREATEX_FLAGS_REQUEST_BATCH_OPLOCK;
@@ -3974,20 +3528,6 @@ static bool test_raw_oplock_doc(struct torture_context *tctx,
 	CHECK_STATUS(tctx, status, NT_STATUS_OK);
 	fnum = io.ntcreatex.out.file.fnum;
 	CHECK_VAL(io.ntcreatex.out.oplock_level, BATCH_OPLOCK_RETURN);
-
-	torture_comment(tctx, "Set delete-on-close\n");
-	status = smbcli_nt_delete_on_close(cli->tree, fnum, true);
-	CHECK_STATUS(tctx, status, NT_STATUS_OK);
-
-	torture_comment(tctx, "2nd open should not break and get "
-			"DELETE_PENDING\n");
-	ZERO_STRUCT(break_info);
-	io.ntcreatex.in.open_disposition = NTCREATEX_DISP_OPEN;
-	io.ntcreatex.in.create_options = 0;
-	io.ntcreatex.in.access_mask = SEC_FILE_READ_DATA;
-	status = smb_raw_open(cli2->tree, tctx, &io);
-	CHECK_STATUS(tctx, status, NT_STATUS_DELETE_PENDING);
-	CHECK_VAL(break_info.count, 0);
 
 	smbcli_close(cli->tree, fnum);
 
@@ -4009,6 +3549,7 @@ static bool test_raw_oplock_brl1(struct torture_context *tctx,
 	/*int fname, f;*/
 	bool ret = true;
 	uint8_t buf[1000];
+	bool correct = true;
 	union smb_open io;
 	NTSTATUS status;
 	uint16_t fnum=0;
@@ -4060,6 +3601,7 @@ static bool test_raw_oplock_brl1(struct torture_context *tctx,
 			 sizeof(buf))
 	{
 		torture_comment(tctx, "Failed to create file\n");
+		correct = false;
 		goto done;
 	}
 
@@ -4119,6 +3661,7 @@ static bool test_raw_oplock_brl2(struct torture_context *tctx, struct smbcli_sta
 	/*int fname, f;*/
 	bool ret = true;
 	uint8_t buf[1000];
+	bool correct = true;
 	union smb_open io;
 	NTSTATUS status;
 	uint16_t fnum=0;
@@ -4171,6 +3714,7 @@ static bool test_raw_oplock_brl2(struct torture_context *tctx, struct smbcli_sta
 			 sizeof(buf))
 	{
 		torture_comment(tctx, "Failed to create file\n");
+		correct = false;
 		goto done;
 	}
 
@@ -4209,6 +3753,7 @@ static bool test_raw_oplock_brl3(struct torture_context *tctx,
 	const char *fname = BASEDIR "\\test_batch_brl.dat";
 	bool ret = true;
 	uint8_t buf[1000];
+	bool correct = true;
 	union smb_open io;
 	NTSTATUS status;
 	uint16_t fnum=0;
@@ -4261,7 +3806,7 @@ static bool test_raw_oplock_brl3(struct torture_context *tctx,
 			 sizeof(buf))
 	{
 		torture_comment(tctx, "Failed to create file\n");
-		ret = false;
+		correct = false;
 		goto done;
 	}
 
@@ -4322,6 +3867,7 @@ static bool test_raw_oplock_brl4(struct torture_context *tctx,
 	const char *fname = BASEDIR "\\test_batch_brl.dat";
 	bool ret = true;
 	uint8_t buf[1000];
+	bool correct = true;
 	union smb_open io;
 	NTSTATUS status;
 	uint16_t fnum = 0;
@@ -4371,6 +3917,7 @@ static bool test_raw_oplock_brl4(struct torture_context *tctx,
 			 sizeof(buf))
 	{
 		torture_comment(tctx, "Failed to create file\n");
+		correct = false;
 		goto done;
 	}
 
@@ -4416,12 +3963,6 @@ struct torture_suite *torture_raw_oplock(TALLOC_CTX *mem_ctx)
 	torture_suite_add_2smb_test(suite, "exclusive5", test_raw_oplock_exclusive5);
 	torture_suite_add_2smb_test(suite, "exclusive6", test_raw_oplock_exclusive6);
 	torture_suite_add_2smb_test(suite, "exclusive7", test_raw_oplock_exclusive7);
-	torture_suite_add_2smb_test(suite, "exclusive8",
-				    test_raw_oplock_exclusive8);
-	torture_suite_add_2smb_test(suite, "exclusive9",
-				    test_raw_oplock_exclusive9);
-	torture_suite_add_2smb_test(suite, "level_ii_1",
-				    test_raw_oplock_level_ii_1);
 	torture_suite_add_2smb_test(suite, "batch1", test_raw_oplock_batch1);
 	torture_suite_add_2smb_test(suite, "batch2", test_raw_oplock_batch2);
 	torture_suite_add_2smb_test(suite, "batch3", test_raw_oplock_batch3);
@@ -4431,7 +3972,6 @@ struct torture_suite *torture_raw_oplock(TALLOC_CTX *mem_ctx)
 	torture_suite_add_2smb_test(suite, "batch7", test_raw_oplock_batch7);
 	torture_suite_add_2smb_test(suite, "batch8", test_raw_oplock_batch8);
 	torture_suite_add_2smb_test(suite, "batch9", test_raw_oplock_batch9);
-	torture_suite_add_2smb_test(suite, "batch9a", test_raw_oplock_batch9a);
 	torture_suite_add_2smb_test(suite, "batch10", test_raw_oplock_batch10);
 	torture_suite_add_2smb_test(suite, "batch11", test_raw_oplock_batch11);
 	torture_suite_add_2smb_test(suite, "batch12", test_raw_oplock_batch12);
@@ -4450,7 +3990,7 @@ struct torture_suite *torture_raw_oplock(TALLOC_CTX *mem_ctx)
 	torture_suite_add_2smb_test(suite, "batch25", test_raw_oplock_batch25);
 	torture_suite_add_2smb_test(suite, "batch26", test_raw_oplock_batch26);
 	torture_suite_add_2smb_test(suite, "stream1", test_raw_oplock_stream1);
-	torture_suite_add_2smb_test(suite, "doc1", test_raw_oplock_doc);
+	torture_suite_add_1smb_test(suite, "doc1", test_raw_oplock_doc);
 	torture_suite_add_2smb_test(suite, "brl1", test_raw_oplock_brl1);
 	torture_suite_add_1smb_test(suite, "brl2", test_raw_oplock_brl2);
 	torture_suite_add_1smb_test(suite, "brl3", test_raw_oplock_brl3);
@@ -4598,12 +4138,15 @@ static bool oplock_handler_hold(struct smbcli_transport *transport,
 bool torture_hold_oplock(struct torture_context *torture, 
 			 struct smbcli_state *cli)
 {
-	struct tevent_context *ev = torture->ev;
+	struct tevent_context *ev = 
+		(struct tevent_context *)cli->transport->socket->event.ctx;
 	int i;
 
 	printf("Setting up open files with oplocks in %s\n", BASEDIR);
 
-	torture_assert(torture, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	smbcli_oplock_handler(cli->transport, oplock_handler_hold, cli->tree);
 
@@ -4652,7 +4195,7 @@ bool torture_hold_oplock(struct torture_context *torture,
 	}
 
 	printf("Waiting for oplock events\n");
-	tevent_loop_wait(ev);
+	event_loop_wait(ev);
 
 	return true;
 }

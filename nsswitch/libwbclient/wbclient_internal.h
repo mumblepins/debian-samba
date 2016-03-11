@@ -22,21 +22,13 @@
 #ifndef _WBCLIENT_INTERNAL_H
 #define _WBCLIENT_INTERNAL_H
 
-struct wbcContext {
-	struct winbindd_context *winbindd_ctx;
-	uint32_t pw_cache_size; /* Number of cached passwd structs */
-	uint32_t pw_cache_idx;  /* Position of the pwent context */
-	uint32_t gr_cache_size; /* Number of cached group structs */
-	uint32_t gr_cache_idx;  /* Position of the grent context */
-};
-
 /* Private functions */
 
-wbcErr wbcRequestResponse(struct wbcContext *ctx, int cmd,
+wbcErr wbcRequestResponse(int cmd,
 			  struct winbindd_request *request,
 			  struct winbindd_response *response);
 
-wbcErr wbcRequestResponsePriv(struct wbcContext *ctx, int cmd,
+wbcErr wbcRequestResponsePriv(int cmd,
 			      struct winbindd_request *request,
 			      struct winbindd_response *response);
 
@@ -45,6 +37,5 @@ void *wbcAllocateMemory(size_t nelem, size_t elsize,
 
 char *wbcStrDup(const char *str);
 const char **wbcAllocateStringArray(int num_strings);
-struct wbcContext *wbcGetGlobalCtx(void);
 
 #endif      /* _WBCLIENT_INTERNAL_H */

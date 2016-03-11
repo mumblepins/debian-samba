@@ -1,4 +1,4 @@
-/*
+/* 
    Unix SMB/CIFS implementation.
 
    transport layer security handling code
@@ -6,32 +6,31 @@
    Copyright (C) Andrew Tridgell 2004-2005
    Copyright (C) Stefan Metzmacher 2004
    Copyright (C) Andrew Bartlett 2006
-
+ 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "includes.h"
-#include "system/filesys.h"
 #include "lib/events/events.h"
 #include "lib/socket/socket.h"
 #include "lib/tls/tls.h"
 #include "param/param.h"
 
 #if ENABLE_GNUTLS
-#include <gnutls/gnutls.h>
+#include "gnutls/gnutls.h"
 
-#define DH_BITS 2048
+#define DH_BITS 1024
 
 #if defined(HAVE_GNUTLS_DATUM) && !defined(HAVE_GNUTLS_DATUM_T)
 typedef gnutls_datum gnutls_datum_t;
@@ -115,7 +114,7 @@ static ssize_t tls_pull(gnutls_transport_ptr ptr, void *buf, size_t size)
 	struct tls_context *tls = talloc_get_type(ptr, struct tls_context);
 	NTSTATUS status;
 	size_t nread;
-
+	
 	if (tls->have_first_byte) {
 		*(uint8_t *)buf = tls->first_byte;
 		tls->have_first_byte = false;
@@ -127,21 +126,21 @@ static ssize_t tls_pull(gnutls_transport_ptr ptr, void *buf, size_t size)
 		return 0;
 	}
 	if (NT_STATUS_IS_ERR(status)) {
-		TEVENT_FD_NOT_READABLE(tls->fde);
-		TEVENT_FD_NOT_WRITEABLE(tls->fde);
+		EVENT_FD_NOT_READABLE(tls->fde);
+		EVENT_FD_NOT_WRITEABLE(tls->fde);
 		errno = EBADF;
 		return -1;
 	}
 	if (!NT_STATUS_IS_OK(status)) {
-		TEVENT_FD_READABLE(tls->fde);
+		EVENT_FD_READABLE(tls->fde);
 		errno = EAGAIN;
 		return -1;
 	}
 	if (tls->output_pending) {
-		TEVENT_FD_WRITEABLE(tls->fde);
+		EVENT_FD_WRITEABLE(tls->fde);
 	}
 	if (size != nread) {
-		TEVENT_FD_READABLE(tls->fde);
+		EVENT_FD_READABLE(tls->fde);
 	}
 	return nread;
 }
@@ -153,7 +152,7 @@ static ssize_t tls_push(gnutls_transport_ptr ptr, const void *buf, size_t size)
 {
 	struct tls_context *tls = talloc_get_type(ptr, struct tls_context);
 	NTSTATUS status;
-	size_t nwritten, total_nwritten = 0;
+	size_t nwritten;
 	DATA_BLOB b;
 
 	if (!tls->tls_enabled) {
@@ -163,32 +162,19 @@ static ssize_t tls_push(gnutls_transport_ptr ptr, const void *buf, size_t size)
 	b.data = discard_const(buf);
 	b.length = size;
 
-	/* Cope with socket_wrapper 1500 byte chunking for PCAP */
-	do {
-		status = socket_send(tls->socket, &b, &nwritten);
-
-		if (NT_STATUS_EQUAL(status, STATUS_MORE_ENTRIES)) {
-			errno = EAGAIN;
-			return -1;
-		}
-		if (!NT_STATUS_IS_OK(status)) {
-			TEVENT_FD_WRITEABLE(tls->fde);
-			return -1;
-		}
-
-		total_nwritten += nwritten;
-
-		if (size == nwritten) {
-			break;
-		}
-
-		b.data += nwritten;
-		b.length -= nwritten;
-
-		TEVENT_FD_WRITEABLE(tls->fde);
-	} while (b.length);
-
-	return total_nwritten;
+	status = socket_send(tls->socket, &b, &nwritten);
+	if (NT_STATUS_EQUAL(status, STATUS_MORE_ENTRIES)) {
+		errno = EAGAIN;
+		return -1;
+	}
+	if (!NT_STATUS_IS_OK(status)) {
+		EVENT_FD_WRITEABLE(tls->fde);
+		return -1;
+	}
+	if (size != nwritten) {
+		EVENT_FD_WRITEABLE(tls->fde);
+	}
+	return nwritten;
 }
 
 /*
@@ -215,11 +201,11 @@ static NTSTATUS tls_handshake(struct tls_context *tls)
 	if (tls->done_handshake) {
 		return NT_STATUS_OK;
 	}
-
+	
 	ret = gnutls_handshake(tls->session);
 	if (ret == GNUTLS_E_INTERRUPTED || ret == GNUTLS_E_AGAIN) {
 		if (gnutls_record_get_direction(tls->session) == 1) {
-			TEVENT_FD_WRITEABLE(tls->fde);
+			EVENT_FD_WRITEABLE(tls->fde);
 		}
 		return STATUS_MORE_ENTRIES;
 	}
@@ -277,7 +263,7 @@ static NTSTATUS tls_socket_pending(struct socket_context *sock, size_t *npending
 /*
   receive data either by tls or normal socket_recv
 */
-static NTSTATUS tls_socket_recv(struct socket_context *sock, void *buf,
+static NTSTATUS tls_socket_recv(struct socket_context *sock, void *buf, 
 				size_t wantlen, size_t *nread)
 {
 	int ret;
@@ -312,7 +298,7 @@ static NTSTATUS tls_socket_recv(struct socket_context *sock, void *buf,
 	ret = gnutls_record_recv(tls->session, buf, wantlen);
 	if (ret == GNUTLS_E_INTERRUPTED || ret == GNUTLS_E_AGAIN) {
 		if (gnutls_record_get_direction(tls->session) == 1) {
-			TEVENT_FD_WRITEABLE(tls->fde);
+			EVENT_FD_WRITEABLE(tls->fde);
 		}
 		tls->interrupted = true;
 		return STATUS_MORE_ENTRIES;
@@ -328,7 +314,7 @@ static NTSTATUS tls_socket_recv(struct socket_context *sock, void *buf,
 /*
   send data either by tls or normal socket_recv
 */
-static NTSTATUS tls_socket_send(struct socket_context *sock,
+static NTSTATUS tls_socket_send(struct socket_context *sock, 
 				const DATA_BLOB *blob, size_t *sendlen)
 {
 	NTSTATUS status;
@@ -348,7 +334,7 @@ static NTSTATUS tls_socket_send(struct socket_context *sock,
 	ret = gnutls_record_send(tls->session, blob->data, blob->length);
 	if (ret == GNUTLS_E_INTERRUPTED || ret == GNUTLS_E_AGAIN) {
 		if (gnutls_record_get_direction(tls->session) == 1) {
-			TEVENT_FD_WRITEABLE(tls->fde);
+			EVENT_FD_WRITEABLE(tls->fde);
 		}
 		tls->interrupted = true;
 		return STATUS_MORE_ENTRIES;
@@ -370,7 +356,6 @@ struct tls_params *tls_initialise(TALLOC_CTX *mem_ctx, struct loadparm_context *
 {
 	struct tls_params *params;
 	int ret;
-	struct stat st;
 	TALLOC_CTX *tmp_ctx = talloc_new(mem_ctx);
 	const char *keyfile = lpcfg_tls_keyfile(tmp_ctx, lp_ctx);
 	const char *certfile = lpcfg_tls_certfile(tmp_ctx, lp_ctx);
@@ -395,26 +380,10 @@ struct tls_params *tls_initialise(TALLOC_CTX *mem_ctx, struct loadparm_context *
 						 lpcfg_netbios_name(lp_ctx),
 						 lpcfg_dnsdomain(lp_ctx));
 		if (hostname == NULL) {
-			ret = GNUTLS_E_MEMORY_ERROR;
 			goto init_failed;
 		}
 		tls_cert_generate(params, hostname, keyfile, certfile, cafile);
 		talloc_free(hostname);
-	}
-
-	if (file_exist(keyfile) &&
-	    !file_check_permissions(keyfile, geteuid(), 0600, &st))
-	{
-		DEBUG(0, ("Invalid permissions on TLS private key file '%s':\n"
-			  "owner uid %u should be %u, mode 0%o should be 0%o\n"
-			  "This is known as CVE-2013-4476.\n"
-			  "Removing all tls .pem files will cause an "
-			  "auto-regeneration with the correct permissions.\n",
-			  keyfile,
-			  (unsigned int)st.st_uid, geteuid(),
-			  (unsigned int)(st.st_mode & 0777), 0600));
-		talloc_free(tmp_ctx);
-		return NULL;
 	}
 
 	ret = gnutls_global_init();
@@ -424,8 +393,8 @@ struct tls_params *tls_initialise(TALLOC_CTX *mem_ctx, struct loadparm_context *
 	if (ret < 0) goto init_failed;
 
 	if (cafile && *cafile) {
-		ret = gnutls_certificate_set_x509_trust_file(params->x509_cred, cafile,
-							     GNUTLS_X509_FMT_PEM);
+		ret = gnutls_certificate_set_x509_trust_file(params->x509_cred, cafile, 
+							     GNUTLS_X509_FMT_PEM);	
 		if (ret < 0) {
 			DEBUG(0,("TLS failed to initialise cafile %s\n", cafile));
 			goto init_failed;
@@ -433,24 +402,25 @@ struct tls_params *tls_initialise(TALLOC_CTX *mem_ctx, struct loadparm_context *
 	}
 
 	if (crlfile && *crlfile) {
-		ret = gnutls_certificate_set_x509_crl_file(params->x509_cred,
-							   crlfile,
+		ret = gnutls_certificate_set_x509_crl_file(params->x509_cred, 
+							   crlfile, 
 							   GNUTLS_X509_FMT_PEM);
 		if (ret < 0) {
 			DEBUG(0,("TLS failed to initialise crlfile %s\n", crlfile));
 			goto init_failed;
 		}
 	}
-
-	ret = gnutls_certificate_set_x509_key_file(params->x509_cred,
+	
+	ret = gnutls_certificate_set_x509_key_file(params->x509_cred, 
 						   certfile, keyfile,
 						   GNUTLS_X509_FMT_PEM);
 	if (ret < 0) {
-		DEBUG(0,("TLS failed to initialise certfile %s and keyfile %s\n",
+		DEBUG(0,("TLS failed to initialise certfile %s and keyfile %s\n", 
 			 certfile, keyfile));
 		goto init_failed;
 	}
-
+	
+	
 	ret = gnutls_dh_params_init(&params->dh_params);
 	if (ret < 0) goto init_failed;
 
@@ -464,14 +434,14 @@ struct tls_params *tls_initialise(TALLOC_CTX *mem_ctx, struct loadparm_context *
 			goto init_failed;
 		}
 		dhparms.size = size;
-
+			
 		ret = gnutls_dh_params_import_pkcs3(params->dh_params, &dhparms, GNUTLS_X509_FMT_PEM);
 		if (ret < 0) goto init_failed;
 	} else {
 		ret = gnutls_dh_params_generate2(params->dh_params, DH_BITS);
 		if (ret < 0) goto init_failed;
 	}
-
+		
 	gnutls_certificate_set_dh_params(params->x509_cred, params->dh_params);
 
 	params->tls_enabled = true;
@@ -490,18 +460,18 @@ init_failed:
 /*
   setup for a new connection
 */
-struct socket_context *tls_init_server(struct tls_params *params,
+struct socket_context *tls_init_server(struct tls_params *params, 
 				       struct socket_context *socket_ctx,
-				       struct tevent_fd *fde,
+				       struct tevent_fd *fde, 
 				       const char *plain_chars)
 {
 	struct tls_context *tls;
 	int ret;
 	struct socket_context *new_sock;
 	NTSTATUS nt_status;
-
-	nt_status = socket_create_with_ops(socket_ctx, &tls_socket_ops, &new_sock,
-					   SOCKET_TYPE_STREAM,
+	
+	nt_status = socket_create_with_ops(socket_ctx, &tls_socket_ops, &new_sock, 
+					   SOCKET_TYPE_STREAM, 
 					   socket_ctx->flags | SOCKET_FLAG_ENCRYPT);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		return NULL;
@@ -528,16 +498,14 @@ struct socket_context *tls_init_server(struct tls_params *params,
 	talloc_set_destructor(tls, tls_destructor);
 
 	TLSCHECK(gnutls_set_default_priority(tls->session));
-	TLSCHECK(gnutls_credentials_set(tls->session, GNUTLS_CRD_CERTIFICATE,
+	TLSCHECK(gnutls_credentials_set(tls->session, GNUTLS_CRD_CERTIFICATE, 
 					params->x509_cred));
 	gnutls_certificate_server_set_request(tls->session, GNUTLS_CERT_REQUEST);
 	gnutls_dh_set_prime_bits(tls->session, DH_BITS);
 	gnutls_transport_set_ptr(tls->session, (gnutls_transport_ptr)tls);
 	gnutls_transport_set_pull_function(tls->session, (gnutls_pull_func)tls_pull);
 	gnutls_transport_set_push_function(tls->session, (gnutls_push_func)tls_push);
-#if GNUTLS_VERSION_MAJOR < 3
 	gnutls_transport_set_lowat(tls->session, 0);
-#endif
 
 	tls->plain_chars = plain_chars;
 	if (plain_chars) {
@@ -551,7 +519,7 @@ struct socket_context *tls_init_server(struct tls_params *params,
 	tls->have_first_byte = false;
 	tls->tls_enabled     = true;
 	tls->interrupted     = false;
-
+	
 	new_sock->state = SOCKET_STATE_SERVER_CONNECTED;
 
 	return new_sock;
@@ -572,11 +540,12 @@ struct socket_context *tls_init_client(struct socket_context *socket_ctx,
 {
 	struct tls_context *tls;
 	int ret = 0;
+	const int cert_type_priority[] = { GNUTLS_CRT_X509, GNUTLS_CRT_OPENPGP, 0 };
 	struct socket_context *new_sock;
 	NTSTATUS nt_status;
-
-	nt_status = socket_create_with_ops(socket_ctx, &tls_socket_ops, &new_sock,
-					   SOCKET_TYPE_STREAM,
+	
+	nt_status = socket_create_with_ops(socket_ctx, &tls_socket_ops, &new_sock, 
+					   SOCKET_TYPE_STREAM, 
 					   socket_ctx->flags | SOCKET_FLAG_ENCRYPT);
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		return NULL;
@@ -597,7 +566,7 @@ struct socket_context *tls_init_client(struct socket_context *socket_ctx,
 	gnutls_certificate_set_x509_trust_file(tls->xcred, ca_path, GNUTLS_X509_FMT_PEM);
 	TLSCHECK(gnutls_init(&tls->session, GNUTLS_CLIENT));
 	TLSCHECK(gnutls_set_default_priority(tls->session));
-	gnutls_priority_set_direct(tls->session, "NORMAL:+CTYPE-OPENPGP", NULL);
+	gnutls_certificate_type_set_priority(tls->session, cert_type_priority);
 	TLSCHECK(gnutls_credentials_set(tls->session, GNUTLS_CRD_CERTIFICATE, tls->xcred));
 
 	talloc_set_destructor(tls, tls_destructor);
@@ -605,9 +574,7 @@ struct socket_context *tls_init_client(struct socket_context *socket_ctx,
 	gnutls_transport_set_ptr(tls->session, (gnutls_transport_ptr)tls);
 	gnutls_transport_set_pull_function(tls->session, (gnutls_pull_func)tls_pull);
 	gnutls_transport_set_push_function(tls->session, (gnutls_push_func)tls_push);
-#if GNUTLS_VERSION_MAJOR < 3
 	gnutls_transport_set_lowat(tls->session, 0);
-#endif
 	tls->tls_detect = false;
 
 	tls->output_pending  = false;
@@ -615,7 +582,7 @@ struct socket_context *tls_init_client(struct socket_context *socket_ctx,
 	tls->have_first_byte = false;
 	tls->tls_enabled     = true;
 	tls->interrupted     = false;
-
+	
 	new_sock->state = SOCKET_STATE_CLIENT_CONNECTED;
 
 	return new_sock;
@@ -671,6 +638,11 @@ static const struct socket_ops tls_socket_ops = {
 	.fn_get_fd		= tls_socket_get_fd
 };
 
+bool tls_support(struct tls_params *params)
+{
+	return params->tls_enabled;
+}
+
 #else
 
 /* for systems without tls we just fail the operations, and the caller
@@ -684,9 +656,9 @@ struct tls_params *tls_initialise(TALLOC_CTX *mem_ctx, struct loadparm_context *
 /*
   setup for a new connection
 */
-struct socket_context *tls_init_server(struct tls_params *params,
+struct socket_context *tls_init_server(struct tls_params *params, 
 				    struct socket_context *socket,
-				    struct tevent_fd *fde,
+				    struct tevent_fd *fde, 
 				    const char *plain_chars)
 {
 	return NULL;
@@ -701,6 +673,11 @@ struct socket_context *tls_init_client(struct socket_context *socket,
 				       const char *ca_path)
 {
 	return NULL;
+}
+
+bool tls_support(struct tls_params *params)
+{
+	return false;
 }
 
 #endif

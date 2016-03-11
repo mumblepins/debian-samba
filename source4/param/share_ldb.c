@@ -27,8 +27,6 @@
 #include "param/share.h"
 #include "param/param.h"
 
-NTSTATUS share_ldb_init(void);
-
 static NTSTATUS sldb_init(TALLOC_CTX *mem_ctx, const struct share_ops *ops, 
 			  struct tevent_context *ev_ctx,
 			  struct loadparm_context *lp_ctx,
@@ -43,7 +41,7 @@ static NTSTATUS sldb_init(TALLOC_CTX *mem_ctx, const struct share_ops *ops,
 	}
 	
 	sdb = ldb_wrap_connect(*ctx, ev_ctx, lp_ctx,
-			       lpcfg_private_path(*ctx, lp_ctx, "share.ldb"),
+			       private_path(*ctx, lp_ctx, "share.ldb"),
 			       system_session(lp_ctx),
 			       NULL, 0);
 
@@ -58,51 +56,47 @@ static NTSTATUS sldb_init(TALLOC_CTX *mem_ctx, const struct share_ops *ops,
 	return NT_STATUS_OK;
 }
 
-static char *sldb_string_option(TALLOC_CTX *mem_ctx, struct share_config *scfg, const char *opt_name, const char *defval)
+static const char *sldb_string_option(struct share_config *scfg, const char *opt_name, const char *defval)
 {
 	struct ldb_message *msg;
 	struct ldb_message_element *el;
-	const char *colon;
 
-	if (scfg == NULL) return talloc_strdup(mem_ctx, defval);
+	if (scfg == NULL) return defval;
 
 	msg = talloc_get_type(scfg->opaque, struct ldb_message);
 
-	colon = strchr(opt_name, ':');
-	if (colon != NULL) {
-		char *name;
+	if (strchr(opt_name, ':')) {
+		char *name, *p;
 
 		name = talloc_strdup(scfg, opt_name);
 		if (!name) {
 			return NULL;
 		}
-		name[colon-opt_name] = '-';
+		p = strchr(name, ':');
+		*p = '-';
 
 		el = ldb_msg_find_element(msg, name);
-		TALLOC_FREE(name);
 	} else {
 		el = ldb_msg_find_element(msg, opt_name);
 	}
 
 	if (el == NULL) {
-		return talloc_strdup(mem_ctx, defval);
+		return defval;
 	}
 
-	return (char *)(el->values[0].data);
+	return (const char *)(el->values[0].data);
 }
 
 static int sldb_int_option(struct share_config *scfg, const char *opt_name, int defval)
 {
-	char *val;
+	const char *val;
 	int ret;
 
-	val = sldb_string_option(scfg, scfg, opt_name, NULL);
+       	val = sldb_string_option(scfg, opt_name, NULL);
 	if (val == NULL) return defval;
 
 	errno = 0;
 	ret = (int)strtol(val, NULL, 10);
-	TALLOC_FREE(val);
-
 	if (errno) return -1;
 
 	return ret;
@@ -110,17 +104,13 @@ static int sldb_int_option(struct share_config *scfg, const char *opt_name, int 
 
 static bool sldb_bool_option(struct share_config *scfg, const char *opt_name, bool defval)
 {
-	char *val;
+	const char *val;
 
-	val = sldb_string_option(scfg, scfg, opt_name, NULL);
+       	val = sldb_string_option(scfg, opt_name, NULL);
 	if (val == NULL) return defval;
 
-	if (strcasecmp(val, "true") == 0) {
-		TALLOC_FREE(val);
-		return true;
-	}
+	if (strcasecmp(val, "true") == 0) return true;
 
-	TALLOC_FREE(val);
 	return false;
 }
 
@@ -129,25 +119,23 @@ static const char **sldb_string_list_option(TALLOC_CTX *mem_ctx, struct share_co
 	struct ldb_message *msg;
 	struct ldb_message_element *el;
 	const char **list;
-	const char *colon;
 	int i;
 
 	if (scfg == NULL) return NULL;
 
 	msg = talloc_get_type(scfg->opaque, struct ldb_message);
 
-	colon = strchr(opt_name, ':');
-	if (colon != NULL) {
-		char *name;
+	if (strchr(opt_name, ':')) {
+		char *name, *p;
 
 		name = talloc_strdup(scfg, opt_name);
 		if (!name) {
 			return NULL;
 		}
-		name[colon-opt_name] = '-';
+		p = strchr(name, ':');
+		*p = '-';
 
 		el = ldb_msg_find_element(msg, name);
-		TALLOC_FREE(name);
 	} else {
 		el = ldb_msg_find_element(msg, opt_name);
 	}

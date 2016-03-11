@@ -24,17 +24,15 @@
 #include "system/filesys.h"
 #include "passdb.h"
 #include "groupdb/mapping.h"
-#include "dbwrap/dbwrap.h"
-#include "dbwrap/dbwrap_open.h"
+#include "dbwrap.h"
 #include "util_tdb.h"
 #include "../libcli/security/security.h"
-#include "groupdb/mapping_tdb.h"
 
 static struct db_context *db; /* used for driver files */
 
 static bool enum_group_mapping(const struct dom_sid *domsid,
 			       enum lsa_SidType sid_name_use,
-			       GROUP_MAP ***pp_rmap,
+			       GROUP_MAP **pp_rmap,
 			       size_t *p_num_entries,
 			       bool unix_only);
 static bool group_map_remove(const struct dom_sid *sid);
@@ -46,36 +44,23 @@ static bool mapping_switch(const char *ldb_path);
 ****************************************************************************/
 static bool init_group_mapping(void)
 {
-	char *tdb_path;
-	char *ldb_path;
+	const char *ldb_path;
 
 	if (db != NULL) {
 		return true;
 	}
 
-	tdb_path = state_path("group_mapping.tdb");
-	if (tdb_path == NULL) {
-		return false;
-	}
-	db = db_open(NULL, tdb_path, 0,
-		     TDB_DEFAULT, O_RDWR|O_CREAT, 0600,
-		     DBWRAP_LOCK_ORDER_1, DBWRAP_FLAG_NONE);
+	db = db_open(NULL, state_path("group_mapping.tdb"), 0,
+			   TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 	if (db == NULL) {
 		DEBUG(0, ("Failed to open group mapping database: %s\n",
 			  strerror(errno)));
-		talloc_free(tdb_path);
 		return false;
 	}
 
 	ldb_path = state_path("group_mapping.ldb");
-	if (ldb_path == NULL) {
-		talloc_free(tdb_path);
-		return false;
-	}
 	if (file_exist(ldb_path) && !mapping_switch(ldb_path)) {
-		unlink(tdb_path);
-		talloc_free(tdb_path);
-		talloc_free(ldb_path);
+		unlink(state_path("group_mapping.tdb"));
 		return false;
 
 	} else {
@@ -101,7 +86,7 @@ static bool init_group_mapping(void)
 			vers_id = DATABASE_VERSION_V2;
 		}
 
-		/* if its an unknown version we remove everything in the db */
+		/* if its an unknown version we remove everthing in the db */
 
 		if (vers_id != DATABASE_VERSION_V2) {
 			tdb_wipe_all(tdb);
@@ -126,22 +111,22 @@ static bool init_group_mapping(void)
 		}
 #endif
 	}
-	talloc_free(tdb_path);
-	talloc_free(ldb_path);
 	return true;
 }
 
 static char *group_mapping_key(TALLOC_CTX *mem_ctx, const struct dom_sid *sid)
 {
-	char sidstr[DOM_SID_STR_BUFLEN];
-	int len;
+	char *sidstr, *result;
 
-	len = dom_sid_string_buf(sid, sidstr, sizeof(sidstr));
-	if (len >= sizeof(sidstr)) {
+	sidstr = sid_string_talloc(talloc_tos(), sid);
+	if (sidstr == NULL) {
 		return NULL;
 	}
 
-	return talloc_asprintf(mem_ctx, "%s%s", GROUP_PREFIX, sidstr);
+	result = talloc_asprintf(mem_ctx, "%s%s", GROUP_PREFIX, sidstr);
+
+	TALLOC_FREE(sidstr);
+	return result;
 }
 
 /****************************************************************************
@@ -160,12 +145,12 @@ static bool add_mapping_entry(GROUP_MAP *map, int flag)
 	len = tdb_pack(NULL, 0, "ddff",
 		map->gid, map->sid_name_use, map->nt_name, map->comment);
 
-	buf = talloc_array(key, char, len);
+	buf = TALLOC_ARRAY(key, char, len);
 	if (!buf) {
 		TALLOC_FREE(key);
 		return false;
 	}
-	len = tdb_pack((uint8_t *)buf, len, "ddff", map->gid,
+	len = tdb_pack((uint8 *)buf, len, "ddff", map->gid,
 		       map->sid_name_use, map->nt_name, map->comment);
 
 	status = dbwrap_trans_store(
@@ -187,9 +172,6 @@ static bool get_group_map_from_sid(struct dom_sid sid, GROUP_MAP *map)
 	TDB_DATA dbuf;
 	char *key;
 	int ret = 0;
-	NTSTATUS status;
-	fstring nt_name;
-	fstring comment;
 
 	/* the key is the SID, retrieving is direct */
 
@@ -198,15 +180,15 @@ static bool get_group_map_from_sid(struct dom_sid sid, GROUP_MAP *map)
 		return false;
 	}
 
-	status = dbwrap_fetch_bystring(db, key, key, &dbuf);
-	if (!NT_STATUS_IS_OK(status)) {
+	dbuf = dbwrap_fetch_bystring(db, key, key);
+	if (dbuf.dptr == NULL) {
 		TALLOC_FREE(key);
 		return false;
 	}
 
 	ret = tdb_unpack(dbuf.dptr, dbuf.dsize, "ddff",
 			&map->gid, &map->sid_name_use,
-			&nt_name, &comment);
+			&map->nt_name, &map->comment);
 
 	TALLOC_FREE(key);
 
@@ -217,56 +199,25 @@ static bool get_group_map_from_sid(struct dom_sid sid, GROUP_MAP *map)
 
 	sid_copy(&map->sid, &sid);
 
-	map->nt_name = talloc_strdup(map, nt_name);
-	if (!map->nt_name) {
-		return false;
-	}
-	map->comment = talloc_strdup(map, comment);
-	if (!map->comment) {
-		return false;
-	}
-
 	return true;
 }
 
 static bool dbrec2map(const struct db_record *rec, GROUP_MAP *map)
 {
-	TDB_DATA key = dbwrap_record_get_key(rec);
-	TDB_DATA value = dbwrap_record_get_value(rec);
-	int ret = 0;
-	fstring nt_name;
-	fstring comment;
-
-	if ((key.dsize < strlen(GROUP_PREFIX))
-	    || (strncmp((char *)key.dptr, GROUP_PREFIX,
+	if ((rec->key.dsize < strlen(GROUP_PREFIX))
+	    || (strncmp((char *)rec->key.dptr, GROUP_PREFIX,
 			GROUP_PREFIX_LEN) != 0)) {
 		return False;
 	}
 
-	if (!string_to_sid(&map->sid, (const char *)key.dptr
+	if (!string_to_sid(&map->sid, (const char *)rec->key.dptr
 			   + GROUP_PREFIX_LEN)) {
 		return False;
 	}
 
-	ret = tdb_unpack(value.dptr, value.dsize, "ddff",
-			  &map->gid, &map->sid_name_use,
-			  &nt_name, &comment);
-
-	if (ret == -1) {
-		DEBUG(3, ("dbrec2map: tdb_unpack failure\n"));
-		return false;
-	}
-
-	map->nt_name = talloc_strdup(map, nt_name);
-	if (!map->nt_name) {
-		return false;
-	}
-	map->comment = talloc_strdup(map, comment);
-	if (!map->comment) {
-		return false;
-	}
-
-	return true;
+	return tdb_unpack(rec->value.dptr, rec->value.dsize, "ddff",
+			  &map->gid, &map->sid_name_use, &map->nt_name,
+			  &map->comment) != -1;
 }
 
 struct find_map_state {
@@ -314,7 +265,7 @@ static bool get_group_map_from_gid(gid_t gid, GROUP_MAP *map)
 	state.gid = gid;
 	state.map = map;
 
-	dbwrap_traverse_read(db, find_map, (void *)&state, NULL);
+	db->traverse_read(db, find_map, (void *)&state);
 
 	return state.found;
 }
@@ -331,7 +282,7 @@ static bool get_group_map_from_ntname(const char *name, GROUP_MAP *map)
 	state.name = name;
 	state.map = map;
 
-	dbwrap_traverse_read(db, find_map, (void *)&state, NULL);
+	db->traverse_read(db, find_map, (void *)&state);
 
 	return state.found;
 }
@@ -366,71 +317,58 @@ struct enum_map_state {
 	bool unix_only;
 
 	size_t num_maps;
-	GROUP_MAP **maps;
+	GROUP_MAP *maps;
 };
 
 static int collect_map(struct db_record *rec, void *private_data)
 {
 	struct enum_map_state *state = (struct enum_map_state *)private_data;
-	GROUP_MAP *map;
-	GROUP_MAP **tmp;
+	GROUP_MAP map;
+	GROUP_MAP *tmp;
 
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
-		DEBUG(0, ("Unable to allocate group map!\n"));
-		return 1;
-	}
-
-	if (!dbrec2map(rec, map)) {
-		TALLOC_FREE(map);
+	if (!dbrec2map(rec, &map)) {
 		return 0;
 	}
 	/* list only the type or everything if UNKNOWN */
 	if (state->sid_name_use != SID_NAME_UNKNOWN
-	    && state->sid_name_use != map->sid_name_use) {
+	    && state->sid_name_use != map.sid_name_use) {
 		DEBUG(11,("enum_group_mapping: group %s is not of the "
-			  "requested type\n", map->nt_name));
-		TALLOC_FREE(map);
+			  "requested type\n", map.nt_name));
 		return 0;
 	}
 
-	if ((state->unix_only == ENUM_ONLY_MAPPED) && (map->gid == -1)) {
+	if ((state->unix_only == ENUM_ONLY_MAPPED) && (map.gid == -1)) {
 		DEBUG(11,("enum_group_mapping: group %s is non mapped\n",
-			  map->nt_name));
-		TALLOC_FREE(map);
+			  map.nt_name));
 		return 0;
 	}
 
 	if ((state->domsid != NULL) &&
-	    (dom_sid_compare_domain(state->domsid, &map->sid) != 0)) {
+	    (dom_sid_compare_domain(state->domsid, &map.sid) != 0)) {
 		DEBUG(11,("enum_group_mapping: group %s is not in domain\n",
-			  sid_string_dbg(&map->sid)));
-		TALLOC_FREE(map);
+			  sid_string_dbg(&map.sid)));
 		return 0;
 	}
 
-	tmp = talloc_realloc(NULL, state->maps, GROUP_MAP *,
-					state->num_maps + 1);
-	if (!tmp) {
+	if (!(tmp = SMB_REALLOC_ARRAY(state->maps, GROUP_MAP,
+				      state->num_maps+1))) {
 		DEBUG(0,("enum_group_mapping: Unable to enlarge group "
 			 "map!\n"));
-		TALLOC_FREE(map);
 		return 1;
 	}
 
 	state->maps = tmp;
-	state->maps[state->num_maps] = talloc_move(state->maps, &map);
+	state->maps[state->num_maps] = map;
 	state->num_maps++;
 	return 0;
 }
 
 static bool enum_group_mapping(const struct dom_sid *domsid,
 			       enum lsa_SidType sid_name_use,
-			       GROUP_MAP ***pp_rmap,
+			       GROUP_MAP **pp_rmap,
 			       size_t *p_num_entries, bool unix_only)
 {
 	struct enum_map_state state;
-	NTSTATUS status;
 
 	state.domsid = domsid;
 	state.sid_name_use = sid_name_use;
@@ -438,9 +376,7 @@ static bool enum_group_mapping(const struct dom_sid *domsid,
 	state.num_maps = 0;
 	state.maps = NULL;
 
-	status = dbwrap_traverse_read(db, collect_map, (void *)&state, NULL);
-	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(state.maps);
+	if (db->traverse_read(db, collect_map, (void *)&state) < 0) {
 		return false;
 	}
 
@@ -467,8 +403,8 @@ static NTSTATUS one_alias_membership(const struct dom_sid *member,
 	slprintf(key, sizeof(key), "%s%s", MEMBEROF_PREFIX,
 		 sid_to_fstring(tmp, member));
 
-	status = dbwrap_fetch_bystring(db, frame, key, &dbuf);
-	if (!NT_STATUS_IS_OK(status)) {
+	dbuf = dbwrap_fetch_bystring(db, frame, key);
+	if (dbuf.dptr == NULL) {
 		TALLOC_FREE(frame);
 		return NT_STATUS_OK;
 	}
@@ -535,31 +471,19 @@ static bool is_aliasmem(const struct dom_sid *alias, const struct dom_sid *membe
 
 static NTSTATUS add_aliasmem(const struct dom_sid *alias, const struct dom_sid *member)
 {
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	char *key;
 	fstring string_sid;
 	char *new_memberstring;
 	struct db_record *rec;
 	NTSTATUS status;
-	TDB_DATA value;
 
-	map = talloc_zero(talloc_tos(), GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (!get_group_map_from_sid(*alias, map)) {
-		TALLOC_FREE(map);
+	if (!get_group_map_from_sid(*alias, &map))
 		return NT_STATUS_NO_SUCH_ALIAS;
-	}
 
-	if ((map->sid_name_use != SID_NAME_ALIAS) &&
-	    (map->sid_name_use != SID_NAME_WKN_GRP)) {
-		TALLOC_FREE(map);
+	if ( (map.sid_name_use != SID_NAME_ALIAS) &&
+	     (map.sid_name_use != SID_NAME_WKN_GRP) )
 		return NT_STATUS_NO_SUCH_ALIAS;
-	}
-
-	TALLOC_FREE(map);
 
 	if (is_aliasmem(alias, member))
 		return NT_STATUS_MEMBER_IN_ALIAS;
@@ -572,12 +496,12 @@ static NTSTATUS add_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	if (dbwrap_transaction_start(db) != 0) {
+	if (db->transaction_start(db) != 0) {
 		DEBUG(0, ("transaction_start failed\n"));
 		return NT_STATUS_INTERNAL_DB_CORRUPTION;
 	}
 
-	rec = dbwrap_fetch_locked(db, key, string_term_tdb_data(key));
+	rec = db->fetch_locked(db, key, string_term_tdb_data(key));
 
 	if (rec == NULL) {
 		DEBUG(10, ("fetch_lock failed\n"));
@@ -586,13 +510,11 @@ static NTSTATUS add_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 		goto cancel;
 	}
 
-	value = dbwrap_record_get_value(rec);
-
 	sid_to_fstring(string_sid, alias);
 
-	if (value.dptr != NULL) {
+	if (rec->value.dptr != NULL) {
 		new_memberstring = talloc_asprintf(
-			key, "%s %s", (char *)(value.dptr), string_sid);
+			key, "%s %s", (char *)(rec->value.dptr), string_sid);
 	} else {
 		new_memberstring = talloc_strdup(key, string_sid);
 	}
@@ -603,7 +525,7 @@ static NTSTATUS add_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 		goto cancel;
 	}
 
-	status = dbwrap_record_store(rec, string_term_tdb_data(new_memberstring), 0);
+	status = rec->store(rec, string_term_tdb_data(new_memberstring), 0);
 
 	TALLOC_FREE(key);
 
@@ -612,7 +534,7 @@ static NTSTATUS add_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 		goto cancel;
 	}
 
-	if (dbwrap_transaction_commit(db) != 0) {
+	if (db->transaction_commit(db) != 0) {
 		DEBUG(0, ("transaction_commit failed\n"));
 		status = NT_STATUS_INTERNAL_DB_CORRUPTION;
 		return status;
@@ -621,7 +543,7 @@ static NTSTATUS add_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 	return NT_STATUS_OK;
 
  cancel:
-	if (dbwrap_transaction_cancel(db) != 0) {
+	if (db->transaction_cancel(db) != 0) {
 		smb_panic("transaction_cancel failed");
 	}
 
@@ -641,14 +563,12 @@ static int collect_aliasmem(struct db_record *rec, void *priv)
 	const char *p;
 	char *alias_string;
 	TALLOC_CTX *frame;
-	TDB_DATA key = dbwrap_record_get_key(rec);
-	TDB_DATA value = dbwrap_record_get_value(rec);
 
-	if (strncmp((const char *)key.dptr, MEMBEROF_PREFIX,
+	if (strncmp((const char *)rec->key.dptr, MEMBEROF_PREFIX,
 		    MEMBEROF_PREFIX_LEN) != 0)
 		return 0;
 
-	p = (const char *)value.dptr;
+	p = (const char *)rec->value.dptr;
 
 	frame = talloc_stackframe();
 
@@ -667,7 +587,7 @@ static int collect_aliasmem(struct db_record *rec, void *priv)
 		 * list currently scanned. The key represents the alias
 		 * member. Add that. */
 
-		member_string = strchr((const char *)key.dptr, '/');
+		member_string = strchr((const char *)rec->key.dptr, '/');
 
 		/* Above we tested for MEMBEROF_PREFIX which includes the
 		 * slash. */
@@ -696,26 +616,15 @@ static int collect_aliasmem(struct db_record *rec, void *priv)
 static NTSTATUS enum_aliasmem(const struct dom_sid *alias, TALLOC_CTX *mem_ctx,
 			      struct dom_sid **sids, size_t *num)
 {
-	GROUP_MAP *map;
+	GROUP_MAP map;
 	struct aliasmem_state state;
 
-	map = talloc_zero(talloc_tos(), GROUP_MAP);
-	if (!map) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	if (!get_group_map_from_sid(*alias, map)) {
-		TALLOC_FREE(map);
+	if (!get_group_map_from_sid(*alias, &map))
 		return NT_STATUS_NO_SUCH_ALIAS;
-	}
 
-	if ((map->sid_name_use != SID_NAME_ALIAS) &&
-	    (map->sid_name_use != SID_NAME_WKN_GRP)) {
-		TALLOC_FREE(map);
+	if ( (map.sid_name_use != SID_NAME_ALIAS) &&
+	     (map.sid_name_use != SID_NAME_WKN_GRP) )
 		return NT_STATUS_NO_SUCH_ALIAS;
-	}
-
-	TALLOC_FREE(map);
 
 	*sids = NULL;
 	*num = 0;
@@ -725,7 +634,7 @@ static NTSTATUS enum_aliasmem(const struct dom_sid *alias, TALLOC_CTX *mem_ctx,
 	state.num = num;
 	state.mem_ctx = mem_ctx;
 
-	dbwrap_traverse_read(db, collect_aliasmem, &state, NULL);
+	db->traverse_read(db, collect_aliasmem, &state);
 	return NT_STATUS_OK;
 }
 
@@ -739,7 +648,7 @@ static NTSTATUS del_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 	char *key;
 	fstring sid_string;
 
-	if (dbwrap_transaction_start(db) != 0) {
+	if (db->transaction_start(db) != 0) {
 		DEBUG(0, ("transaction_start failed\n"));
 		return NT_STATUS_INTERNAL_DB_CORRUPTION;
 	}
@@ -814,7 +723,7 @@ static NTSTATUS del_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 		goto cancel;
 	}
 
-	if (dbwrap_transaction_commit(db) != 0) {
+	if (db->transaction_commit(db) != 0) {
 		DEBUG(0, ("transaction_commit failed\n"));
 		status = NT_STATUS_INTERNAL_DB_CORRUPTION;
 		return status;
@@ -823,7 +732,7 @@ static NTSTATUS del_aliasmem(const struct dom_sid *alias, const struct dom_sid *
 	return NT_STATUS_OK;
 
  cancel:
-	if (dbwrap_transaction_cancel(db) != 0) {
+	if (db->transaction_cancel(db) != 0) {
 		smb_panic("transaction_cancel failed");
 	}
 	return status;
@@ -852,7 +761,7 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 			      TDB_DATA data, void *ptr)
 {
 	TALLOC_CTX *tmp_ctx = talloc_tos();
-	GROUP_MAP *map = NULL;
+	GROUP_MAP map;
 	uint8_t *p;
 	uint32_t format;
 	uint32_t num_el;
@@ -917,11 +826,7 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 		goto failed;
 	}
 
-	map = talloc_zero(NULL, GROUP_MAP);
-	if (!map) {
-		errno = ENOMEM;
-		goto failed;
-	}
+	ZERO_STRUCT(map);
 
 	for (i = 0; i < num_el; i++) {
 		uint32_t num_vals;
@@ -944,7 +849,7 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 		p += len + 1;
 
 		num_vals = pull_uint32(p, 0);
-		if (strcasecmp_m(name, "member") == 0) {
+		if (StrCaseCmp(name, "member") == 0) {
 			num_mem = num_vals;
 			members = talloc_array(tmp_ctx, struct dom_sid, num_mem);
 			if (members == NULL) {
@@ -977,36 +882,30 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 
 			/* we ignore unknown or uninteresting attributes
 			 * (objectclass, etc.) */
-			if (strcasecmp_m(name, "gidNumber") == 0) {
-				map->gid = strtoul(val, &q, 10);
+			if (StrCaseCmp(name, "gidNumber") == 0) {
+				map.gid = strtoul(val, &q, 10);
 				if (*q) {
 					errno = EIO;
 					goto failed;
 				}
-			} else if (strcasecmp_m(name, "sid") == 0) {
-				if (!string_to_sid(&map->sid, val)) {
+			} else if (StrCaseCmp(name, "sid") == 0) {
+				if (!string_to_sid(&map.sid, val)) {
 					errno = EIO;
 					goto failed;
 				}
-			} else if (strcasecmp_m(name, "sidNameUse") == 0) {
-				map->sid_name_use = strtoul(val, &q, 10);
+			} else if (StrCaseCmp(name, "sidNameUse") == 0) {
+				map.sid_name_use = strtoul(val, &q, 10);
 				if (*q) {
 					errno = EIO;
 					goto failed;
 				}
-			} else if (strcasecmp_m(name, "ntname") == 0) {
-				map->nt_name = talloc_strdup(map, val);
-				if (!map->nt_name) {
-					errno = ENOMEM;
-					goto failed;
-				}
-			} else if (strcasecmp_m(name, "comment") == 0) {
-				map->comment = talloc_strdup(map, val);
-				if (!map->comment) {
-					errno = ENOMEM;
-					goto failed;
-				}
-			} else if (strcasecmp_m(name, "member") == 0) {
+			} else if (StrCaseCmp(name, "ntname") == 0) {
+				strlcpy(map.nt_name, val,
+					sizeof(map.nt_name));
+			} else if (StrCaseCmp(name, "comment") == 0) {
+				strlcpy(map.comment, val,
+					sizeof(map.comment));
+			} else if (StrCaseCmp(name, "member") == 0) {
 				if (!string_to_sid(&members[j], val)) {
 					errno = EIO;
 					goto failed;
@@ -1019,20 +918,7 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 		TALLOC_FREE(name);
 	}
 
-	if (map->nt_name == NULL) {
-		errno = EIO;
-		goto failed;
-	}
-
-	if (map->comment == NULL) {
-		map->comment = talloc_strdup(map, "");
-	}
-	if (map->comment == NULL) {
-		errno = ENOMEM;
-		goto failed;
-	}
-
-	if (!add_mapping_entry(map, 0)) {
+	if (!add_mapping_entry(&map, 0)) {
 		errno = EIO;
 		goto failed;
 	}
@@ -1040,7 +926,7 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 	if (num_mem) {
 		for (j = 0; j < num_mem; j++) {
 			NTSTATUS status;
-			status = add_aliasmem(&map->sid, &members[j]);
+			status = add_aliasmem(&map.sid, &members[j]);
 			if (!NT_STATUS_IS_OK(status)) {
 				errno = EIO;
 				goto failed;
@@ -1053,11 +939,9 @@ static int convert_ldb_record(TDB_CONTEXT *ltdb, TDB_DATA key,
 			  remaining));
 	}
 
-	TALLOC_FREE(map);
 	return 0;
 
 failed:
-	TALLOC_FREE(map);
 	return -1;
 }
 
@@ -1076,7 +960,7 @@ static bool mapping_switch(const char *ldb_path)
 	/* ldb is just a very fancy tdb, read out raw data and perform
 	 * conversion */
 	ret = tdb_traverse(ltdb, convert_ldb_record, NULL);
-	if (ret < 0) goto failed;
+	if (ret == -1) goto failed;
 
 	if (ltdb) {
 		tdb_close(ltdb);

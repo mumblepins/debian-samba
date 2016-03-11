@@ -28,7 +28,6 @@
 /* Some well-known SIDs */
 extern const struct dom_sid global_sid_World_Domain;
 extern const struct dom_sid global_sid_World;
-extern const struct dom_sid global_sid_Local_Authority;
 extern const struct dom_sid global_sid_Creator_Owner_Domain;
 extern const struct dom_sid global_sid_NT_Authority;
 extern const struct dom_sid global_sid_Enterprise_DCs;
@@ -38,7 +37,6 @@ extern const struct dom_sid global_sid_Authenticated_Users;
 extern const struct dom_sid global_sid_Network;
 extern const struct dom_sid global_sid_Creator_Owner;
 extern const struct dom_sid global_sid_Creator_Group;
-extern const struct dom_sid global_sid_Owner_Rights;
 extern const struct dom_sid global_sid_Anonymous;
 extern const struct dom_sid global_sid_Builtin;
 extern const struct dom_sid global_sid_Builtin_Administrators;
@@ -53,11 +51,6 @@ extern const struct dom_sid global_sid_Builtin_Replicator;
 extern const struct dom_sid global_sid_Builtin_PreWin2kAccess;
 extern const struct dom_sid global_sid_Unix_Users;
 extern const struct dom_sid global_sid_Unix_Groups;
-extern const struct dom_sid global_sid_Unix_NFS;
-extern const struct dom_sid global_sid_Unix_NFS_Users;
-extern const struct dom_sid global_sid_Unix_NFS_Groups;
-extern const struct dom_sid global_sid_Unix_NFS_Mode;
-extern const struct dom_sid global_sid_Unix_NFS_Other;
 
 int dom_sid_compare_auth(const struct dom_sid *sid1,
 			 const struct dom_sid *sid2);
@@ -96,6 +89,7 @@ void sid_copy(struct dom_sid *dst, const struct dom_sid *src);
 bool sid_blob_parse(DATA_BLOB in, struct dom_sid *sid);
 bool sid_parse(const char *inbuf, size_t len, struct dom_sid *sid);
 int sid_compare_domain(const struct dom_sid *sid1, const struct dom_sid *sid2);
+bool sid_equal(const struct dom_sid *sid1, const struct dom_sid *sid2);
 NTSTATUS add_sid_to_array(TALLOC_CTX *mem_ctx, const struct dom_sid *sid,
 			  struct dom_sid **sids, uint32_t *num);
 NTSTATUS add_sid_to_array_unique(TALLOC_CTX *mem_ctx, const struct dom_sid *sid,

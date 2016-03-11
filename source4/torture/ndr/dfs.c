@@ -21,7 +21,6 @@
 #include "includes.h"
 #include "torture/ndr/ndr.h"
 #include "librpc/gen_ndr/ndr_dfs.h"
-#include "torture/ndr/proto.h"
 
 static const uint8_t getmanagerversion_out_data[] = {
   0x04, 0x00, 0x00, 0x00

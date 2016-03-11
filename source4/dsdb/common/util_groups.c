@@ -126,31 +126,6 @@ NTSTATUS dsdb_expand_nested_groups(struct ldb_context *sam_ctx,
 				  filter);
 	}
 
-	/*
-	 * We have the problem with the caller creating a <SID=S-....>
-	 * DN for ForeignSecurityPrincipals as they also have
-	 * duplicate objects with the SAME SID under CN=Configuration.
-	 * This causes a SID= DN to fail with NO_SUCH_OBJECT on Samba
-	 * and on Windows.  So, we allow this to fail, and
-	 * double-check if we can find it with a search in the main
-	 * domain partition.
-	 */
-	if (ret == LDB_ERR_NO_SUCH_OBJECT && only_childs) {
-		char *sid_string = dom_sid_string(tmp_ctx,
-						  &sid);
-		if (!sid_string) {
-			talloc_free(tmp_ctx);
-			return NT_STATUS_OK;
-		}
-
-		ret = dsdb_search(sam_ctx, tmp_ctx, &res,
-				  ldb_get_default_basedn(sam_ctx),
-				  LDB_SCOPE_SUBTREE,
-				  attrs, DSDB_SEARCH_SHOW_EXTENDED_DN,
-				  "(&(objectClass=foreignSecurityPrincipal)(objectSID=%s))",
-				  sid_string);
-	}
-
 	if (ret == LDB_ERR_NO_SUCH_OBJECT) {
 		talloc_free(tmp_ctx);
 		return NT_STATUS_OK;
@@ -174,10 +149,7 @@ NTSTATUS dsdb_expand_nested_groups(struct ldb_context *sam_ctx,
 	if (!only_childs) {
 		*res_sids = talloc_realloc(res_sids_ctx, *res_sids,
 			struct dom_sid, *num_res_sids + 1);
-		if (*res_sids == NULL) {
-			TALLOC_FREE(tmp_ctx);
-			return NT_STATUS_NO_MEMORY;
-		}
+		NT_STATUS_HAVE_NO_MEMORY_AND_FREE(*res_sids, tmp_ctx);
 		(*res_sids)[*num_res_sids] = sid;
 		++(*num_res_sids);
 	}

@@ -23,40 +23,13 @@
 #include "smbd/smbd.h"
 #include "smbd/globals.h"
 #include "../librpc/gen_ndr/ndr_notify.h"
-#include "librpc/gen_ndr/ndr_file_id.h"
-
-struct notify_change_event {
-	struct timespec when;
-	uint32_t action;
-	const char *name;
-};
-
-struct notify_change_buf {
-	/*
-	 * If no requests are pending, changes are queued here. Simple array,
-	 * we only append.
-	 */
-
-	/*
-	 * num_changes == -1 means that we have got a catch-all change, when
-	 * asked we just return NT_STATUS_OK without specific changes.
-	 */
-	int num_changes;
-	struct notify_change_event *changes;
-
-	/*
-	 * If no changes are around requests are queued here. Using a linked
-	 * list, because we have to append at the end and delete from the top.
-	 */
-	struct notify_change_request *requests;
-};
 
 struct notify_change_request {
 	struct notify_change_request *prev, *next;
 	struct files_struct *fsp;	/* backpointer for cancel by mid */
 	struct smb_request *req;
-	uint32_t filter;
-	uint32_t max_param;
+	uint32 filter;
+	uint32 max_param;
 	void (*reply_fn)(struct smb_request *req,
 			 NTSTATUS error_code,
 			 uint8_t *buf, size_t len);
@@ -64,25 +37,7 @@ struct notify_change_request {
 	void *backend_data;
 };
 
-static void notify_fsp(files_struct *fsp, struct timespec when,
-		       uint32_t action, const char *name);
-
-bool change_notify_fsp_has_changes(struct files_struct *fsp)
-{
-	if (fsp == NULL) {
-		return false;
-	}
-
-	if (fsp->notify == NULL) {
-		return false;
-	}
-
-	if (fsp->notify->num_changes == 0) {
-		return false;
-	}
-
-	return true;
-}
+static void notify_fsp(files_struct *fsp, uint32 action, const char *name);
 
 /*
  * For NTCancel, we need to find the notify_change_request indexed by
@@ -95,8 +50,8 @@ struct notify_mid_map {
 	uint64_t mid;
 };
 
-static bool notify_change_record_identical(struct notify_change_event *c1,
-					   struct notify_change_event *c2)
+static bool notify_change_record_identical(struct notify_change *c1,
+					struct notify_change *c2)
 {
 	/* Note this is deliberately case sensitive. */
 	if (c1->action == c2->action &&
@@ -106,17 +61,9 @@ static bool notify_change_record_identical(struct notify_change_event *c1,
 	return False;
 }
 
-static int compare_notify_change_events(const void *p1, const void *p2)
-{
-	const struct notify_change_event *e1 = p1;
-	const struct notify_change_event *e2 = p2;
-
-	return timespec_compare(&e1->when, &e2->when);
-}
-
 static bool notify_marshall_changes(int num_changes,
-				uint32_t max_offset,
-				struct notify_change_event *changes,
+				uint32 max_offset,
+				struct notify_change *changes,
 				DATA_BLOB *final_blob)
 {
 	int i;
@@ -125,20 +72,11 @@ static bool notify_marshall_changes(int num_changes,
 		return false;
 	}
 
-	/*
-	 * Sort the notifies by timestamp when the event happened to avoid
-	 * coalescing and thus dropping events.
-	 */
-
-	qsort(changes, num_changes,
-	      sizeof(*changes), compare_notify_change_events);
-
 	for (i=0; i<num_changes; i++) {
 		enum ndr_err_code ndr_err;
-		struct notify_change_event *c;
+		struct notify_change *c;
 		struct FILE_NOTIFY_INFORMATION m;
 		DATA_BLOB blob;
-		uint16_t pad = 0;
 
 		/* Coalesce any identical records. */
 		while (i+1 < num_changes &&
@@ -152,22 +90,11 @@ static bool notify_marshall_changes(int num_changes,
 		m.FileName1 = c->name;
 		m.FileNameLength = strlen_m(c->name)*2;
 		m.Action = c->action;
-
-		m._pad = data_blob_null;
+		m.NextEntryOffset = (i == num_changes-1) ? 0 : ndr_size_FILE_NOTIFY_INFORMATION(&m, 0);
 
 		/*
 		 * Offset to next entry, only if there is one
 		 */
-
-		if (i == (num_changes-1)) {
-			m.NextEntryOffset = 0;
-		} else {
-			if ((m.FileNameLength % 4) == 2) {
-				m._pad = data_blob_const(&pad, 2);
-			}
-			m.NextEntryOffset =
-				ndr_size_FILE_NOTIFY_INFORMATION(&m, 0);
-		}
 
 		ndr_err = ndr_push_struct_blob(&blob, talloc_tos(), &m,
 			(ndr_push_flags_fn_t)ndr_push_FILE_NOTIFY_INFORMATION);
@@ -240,65 +167,54 @@ void change_notify_reply(struct smb_request *req,
 	notify_buf->num_changes = 0;
 }
 
-static void notify_callback(void *private_data, struct timespec when,
-			    const struct notify_event *e)
+static void notify_callback(void *private_data, const struct notify_event *e)
 {
 	files_struct *fsp = (files_struct *)private_data;
 	DEBUG(10, ("notify_callback called for %s\n", fsp_str_dbg(fsp)));
-	notify_fsp(fsp, when, e->action, e->path);
+	notify_fsp(fsp, e->action, e->path);
 }
 
-NTSTATUS change_notify_create(struct files_struct *fsp, uint32_t filter,
+NTSTATUS change_notify_create(struct files_struct *fsp, uint32 filter,
 			      bool recursive)
 {
 	char *fullpath;
-	size_t len;
-	uint32_t subdir_filter;
-	NTSTATUS status = NT_STATUS_NOT_IMPLEMENTED;
+	struct notify_entry e;
+	NTSTATUS status;
 
-	if (fsp->notify != NULL) {
-		DEBUG(1, ("change_notify_create: fsp->notify != NULL, "
-			  "fname = %s\n", fsp->fsp_name->base_name));
-		return NT_STATUS_INVALID_PARAMETER;
-	}
+	SMB_ASSERT(fsp->notify == NULL);
 
-	if (!(fsp->notify = talloc_zero(NULL, struct notify_change_buf))) {
+	if (!(fsp->notify = TALLOC_ZERO_P(NULL, struct notify_change_buf))) {
 		DEBUG(0, ("talloc failed\n"));
 		return NT_STATUS_NO_MEMORY;
 	}
 
 	/* Do notify operations on the base_name. */
-	fullpath = talloc_asprintf(
-		talloc_tos(), "%s/%s", fsp->conn->connectpath,
-		fsp->fsp_name->base_name);
-	if (fullpath == NULL) {
-		DEBUG(0, ("talloc_asprintf failed\n"));
+	if (asprintf(&fullpath, "%s/%s", fsp->conn->connectpath,
+		     fsp->fsp_name->base_name) == -1) {
+		DEBUG(0, ("asprintf failed\n"));
 		TALLOC_FREE(fsp->notify);
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	/*
-	 * Avoid /. at the end of the path name. notify can't deal with it.
-	 */
-	len = strlen(fullpath);
-	if (len > 1 && fullpath[len-1] == '.' && fullpath[len-2] == '/') {
-		fullpath[len-2] = '\0';
+	ZERO_STRUCT(e);
+	e.path = fullpath;
+	e.dir_fd = fsp->fh->fd;
+	e.dir_id = fsp->file_id;
+	e.filter = filter;
+	e.subdir_filter = 0;
+	if (recursive) {
+		e.subdir_filter = filter;
 	}
 
-	subdir_filter = recursive ? filter : 0;
+	status = notify_add(fsp->conn->notify_ctx, &e, notify_callback, fsp);
+	SAFE_FREE(fullpath);
 
-	if ((filter != 0) || (subdir_filter != 0)) {
-		status = notify_add(fsp->conn->sconn->notify_ctx,
-				    fullpath, filter, subdir_filter,
-				    notify_callback, fsp);
-	}
-	TALLOC_FREE(fullpath);
 	return status;
 }
 
 NTSTATUS change_notify_add_request(struct smb_request *req,
-				uint32_t max_param,
-				uint32_t filter, bool recursive,
+				uint32 max_param,
+				uint32 filter, bool recursive,
 				struct files_struct *fsp,
 				void (*reply_fn)(struct smb_request *req,
 					NTSTATUS error_code,
@@ -365,31 +281,6 @@ static void change_notify_remove_request(struct smbd_server_connection *sconn,
 	TALLOC_FREE(req);
 }
 
-static void smbd_notify_cancel_by_map(struct notify_mid_map *map)
-{
-	struct smb_request *smbreq = map->req->req;
-	struct smbd_server_connection *sconn = smbreq->sconn;
-	struct smbd_smb2_request *smb2req = smbreq->smb2req;
-	NTSTATUS notify_status = NT_STATUS_CANCELLED;
-
-	if (smb2req != NULL) {
-		if (smb2req->session == NULL) {
-			notify_status = STATUS_NOTIFY_CLEANUP;
-		} else if (!NT_STATUS_IS_OK(smb2req->session->status)) {
-			notify_status = STATUS_NOTIFY_CLEANUP;
-		}
-		if (smb2req->tcon == NULL) {
-			notify_status = STATUS_NOTIFY_CLEANUP;
-		} else if (!NT_STATUS_IS_OK(smb2req->tcon->status)) {
-			notify_status = STATUS_NOTIFY_CLEANUP;
-		}
-	}
-
-	change_notify_reply(smbreq, notify_status,
-			    0, NULL, map->req->reply_fn);
-	change_notify_remove_request(sconn, map->req);
-}
-
 /****************************************************************************
  Delete entries by mid from the change notify pending queue. Always send reply.
 *****************************************************************************/
@@ -409,7 +300,9 @@ void remove_pending_change_notify_requests_by_mid(
 		return;
 	}
 
-	smbd_notify_cancel_by_map(map);
+	change_notify_reply(map->req->req,
+			    NT_STATUS_CANCELLED, 0, NULL, map->req->reply_fn);
+	change_notify_remove_request(sconn, map->req);
 }
 
 void smbd_notify_cancel_by_smbreq(const struct smb_request *smbreq)
@@ -427,49 +320,9 @@ void smbd_notify_cancel_by_smbreq(const struct smb_request *smbreq)
 		return;
 	}
 
-	smbd_notify_cancel_by_map(map);
-}
-
-static struct files_struct *smbd_notify_cancel_deleted_fn(
-	struct files_struct *fsp, void *private_data)
-{
-	struct file_id *fid = talloc_get_type_abort(
-		private_data, struct file_id);
-
-	if (file_id_equal(&fsp->file_id, fid)) {
-		remove_pending_change_notify_requests_by_fid(
-			fsp, NT_STATUS_DELETE_PENDING);
-	}
-	return NULL;
-}
-
-void smbd_notify_cancel_deleted(struct messaging_context *msg,
-				void *private_data, uint32_t msg_type,
-				struct server_id server_id, DATA_BLOB *data)
-{
-	struct smbd_server_connection *sconn = talloc_get_type_abort(
-		private_data, struct smbd_server_connection);
-	struct file_id *fid;
-	enum ndr_err_code ndr_err;
-
-	fid = talloc(talloc_tos(), struct file_id);
-	if (fid == NULL) {
-		DEBUG(1, ("talloc failed\n"));
-		return;
-	}
-
-	ndr_err = ndr_pull_struct_blob_all(
-		data, fid, fid, (ndr_pull_flags_fn_t)ndr_pull_file_id);
-	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		DEBUG(10, ("%s: ndr_pull_file_id failed: %s\n", __func__,
-			   ndr_errstr(ndr_err)));
-		goto done;
-	}
-
-	files_forall(sconn, smbd_notify_cancel_deleted_fn, fid);
-
-done:
-	TALLOC_FREE(fid);
+	change_notify_reply(map->req->req,
+			    NT_STATUS_CANCELLED, 0, NULL, map->req->reply_fn);
+	change_notify_remove_request(sconn, map->req);
 }
 
 /****************************************************************************
@@ -492,22 +345,66 @@ void remove_pending_change_notify_requests_by_fid(files_struct *fsp,
 	}
 }
 
-void notify_fname(connection_struct *conn, uint32_t action, uint32_t filter,
+static void notify_parent_dir(connection_struct *conn,
+			      uint32 action, uint32 filter,
+			      const char *path)
+{
+	struct smb_filename smb_fname_parent;
+	char *parent;
+	const char *name;
+	char *oldwd;
+
+	if (!parent_dirname(talloc_tos(), path, &parent, &name)) {
+		return;
+	}
+
+	ZERO_STRUCT(smb_fname_parent);
+	smb_fname_parent.base_name = parent;
+
+	oldwd = vfs_GetWd(parent, conn);
+	if (oldwd == NULL) {
+		goto done;
+	}
+	if (vfs_ChDir(conn, conn->connectpath) == -1) {
+		goto done;
+	}
+
+	if (SMB_VFS_STAT(conn, &smb_fname_parent) == -1) {
+		goto chdir_done;
+	}
+
+	notify_onelevel(conn->notify_ctx, action, filter,
+			SMB_VFS_FILE_ID_CREATE(conn, &smb_fname_parent.st),
+			name);
+chdir_done:
+	vfs_ChDir(conn, oldwd);
+done:
+	TALLOC_FREE(parent);
+}
+
+void notify_fname(connection_struct *conn, uint32 action, uint32 filter,
 		  const char *path)
 {
-	struct notify_context *notify_ctx = conn->sconn->notify_ctx;
+	char *fullpath;
 
 	if (path[0] == '.' && path[1] == '/') {
 		path += 2;
 	}
+	notify_parent_dir(conn, action, filter, path);
 
-	notify_trigger(notify_ctx, action, filter, conn->connectpath, path);
+	fullpath = talloc_asprintf(talloc_tos(), "%s/%s", conn->connectpath,
+				   path);
+	if (fullpath == NULL) {
+		DEBUG(0, ("asprintf failed\n"));
+		return;
+	}
+	notify_trigger(conn->notify_ctx, action, filter, fullpath);
+	TALLOC_FREE(fullpath);
 }
 
-static void notify_fsp(files_struct *fsp, struct timespec when,
-		       uint32_t action, const char *name)
+static void notify_fsp(files_struct *fsp, uint32 action, const char *name)
 {
-	struct notify_change_event *change, *changes;
+	struct notify_change *change, *changes;
 	char *tmp;
 
 	if (fsp->notify == NULL) {
@@ -551,10 +448,9 @@ static void notify_fsp(files_struct *fsp, struct timespec when,
 		return;
 	}
 
-	if (!(changes = talloc_realloc(
+	if (!(changes = TALLOC_REALLOC_ARRAY(
 		      fsp->notify, fsp->notify->changes,
-		      struct notify_change_event,
-		      fsp->notify->num_changes+1))) {
+		      struct notify_change, fsp->notify->num_changes+1))) {
 		DEBUG(0, ("talloc_realloc failed\n"));
 		return;
 	}
@@ -571,7 +467,6 @@ static void notify_fsp(files_struct *fsp, struct timespec when,
 	string_replace(tmp, '/', '\\');
 	change->name = tmp;	
 
-	change->when = when;
 	change->action = action;
 	fsp->notify->num_changes += 1;
 
@@ -605,7 +500,7 @@ static void notify_fsp(files_struct *fsp, struct timespec when,
 	change_notify_remove_request(fsp->conn->sconn, fsp->notify->requests);
 }
 
-char *notify_filter_string(TALLOC_CTX *mem_ctx, uint32_t filter)
+char *notify_filter_string(TALLOC_CTX *mem_ctx, uint32 filter)
 {
 	char *result = NULL;
 
@@ -643,17 +538,31 @@ char *notify_filter_string(TALLOC_CTX *mem_ctx, uint32_t filter)
 	return result;
 }
 
-struct sys_notify_context *sys_notify_context_create(TALLOC_CTX *mem_ctx,
-						     struct tevent_context *ev)
+struct sys_notify_context *sys_notify_context_create(connection_struct *conn,
+						     TALLOC_CTX *mem_ctx, 
+						     struct event_context *ev)
 {
 	struct sys_notify_context *ctx;
 
-	if (!(ctx = talloc(mem_ctx, struct sys_notify_context))) {
+	if (!(ctx = TALLOC_P(mem_ctx, struct sys_notify_context))) {
 		DEBUG(0, ("talloc failed\n"));
 		return NULL;
 	}
 
 	ctx->ev = ev;
+	ctx->conn = conn;
 	ctx->private_data = NULL;
 	return ctx;
 }
+
+NTSTATUS sys_notify_watch(struct sys_notify_context *ctx,
+			  struct notify_entry *e,
+			  void (*callback)(struct sys_notify_context *ctx, 
+					   void *private_data,
+					   struct notify_event *ev),
+			  void *private_data, void *handle)
+{
+	return SMB_VFS_NOTIFY_WATCH(ctx->conn, ctx, e, callback, private_data,
+				    handle);
+}
+

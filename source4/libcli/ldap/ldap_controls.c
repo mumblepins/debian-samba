@@ -426,101 +426,6 @@ static bool decode_asq_control(void *mem_ctx, DATA_BLOB in, void *_out)
 	return true;
 }
 
-static bool decode_verify_name_request(void *mem_ctx, DATA_BLOB in, void *_out)
-{
-	void **out = (void **)_out;
-	DATA_BLOB name;
-	struct asn1_data *data = asn1_init(mem_ctx);
-	struct ldb_verify_name_control *lvnc;
-	int len;
-
-	if (!data) return false;
-
-	if (!asn1_load(data, in)) {
-		return false;
-	}
-
-	lvnc = talloc(mem_ctx, struct ldb_verify_name_control);
-	if (!lvnc) {
-		return false;
-	}
-
-	if (!asn1_start_tag(data, ASN1_SEQUENCE(0))) {
-		return false;
-	}
-
-	if (!asn1_read_Integer(data, &(lvnc->flags))) {
-		return false;
-	}
-
-	if (!asn1_read_OctetString(data, mem_ctx, &name)) {
-		return false;
-	}
-
-	if (name.length) {
-		len = utf16_len_n(name.data, name.length);
-		convert_string_talloc(mem_ctx, CH_UTF16, CH_UNIX,
-					name.data, len,
-					(void **)&lvnc->gc, &lvnc->gc_len);
-
-		if (!(lvnc->gc)) {
-			return false;
-		}
-	} else {
-		lvnc->gc_len = 0;
-		lvnc->gc = NULL;
-	}
-
-	if (!asn1_end_tag(data)) {
-		return false;
-	}
-
-	*out = lvnc;
-	return true;
-}
-
-static bool encode_verify_name_request(void *mem_ctx, void *in, DATA_BLOB *out)
-{
-	struct ldb_verify_name_control *lvnc = talloc_get_type(in, struct ldb_verify_name_control);
-	struct asn1_data *data = asn1_init(mem_ctx);
-	DATA_BLOB gc_utf16;
-
-	if (!data) return false;
-
-	if (!asn1_push_tag(data, ASN1_SEQUENCE(0))) {
-		return false;
-	}
-
-	if (!asn1_write_Integer(data, lvnc->flags)) {
-		return false;
-	}
-
-	if (lvnc->gc_len) {
-		convert_string_talloc(mem_ctx, CH_UNIX, CH_UTF16,
-						lvnc->gc, lvnc->gc_len,
-						(void **)&gc_utf16.data, &gc_utf16.length);
-		if (!asn1_write_OctetString(data, gc_utf16.data, gc_utf16.length)) {
-			return false;
-		}
-	} else {
-		if (!asn1_write_OctetString(data, NULL, 0)) {
-			return false;
-		}
-	}
-
-	if (!asn1_pop_tag(data)) {
-		return false;
-	}
-
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
-		return false;
-	}
-
-	talloc_free(data);
-
-	return true;
-}
-
 static bool decode_vlv_request(void *mem_ctx, DATA_BLOB in, void *_out)
 {
 	void **out = (void **)_out;
@@ -716,10 +621,10 @@ static bool encode_server_sort_response(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -774,10 +679,10 @@ static bool encode_server_sort_request(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -809,10 +714,10 @@ static bool encode_extended_dn_request(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -837,10 +742,10 @@ static bool encode_sd_flags_request(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -865,10 +770,10 @@ static bool encode_search_options_request(void *mem_ctx, void *in, DATA_BLOB *ou
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -897,10 +802,10 @@ static bool encode_paged_results_request(void *mem_ctx, void *in, DATA_BLOB *out
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -935,10 +840,10 @@ static bool encode_asq_control(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -971,10 +876,10 @@ static bool encode_dirsync_request(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -1047,10 +952,10 @@ static bool encode_vlv_request(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -1089,10 +994,10 @@ static bool encode_vlv_response(void *mem_ctx, void *in, DATA_BLOB *out)
 		return false;
 	}
 
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
 	talloc_free(data);
 
 	return true;
@@ -1129,21 +1034,15 @@ static bool encode_openldap_dereference(void *mem_ctx, void *in, DATA_BLOB *out)
 			}
 		}
 		
-		if (!asn1_pop_tag(data)) {
-			return false;
-		}
-		if (!asn1_pop_tag(data)) {
-			return false;
-		}
+		asn1_pop_tag(data);
+		asn1_pop_tag(data);
 	}
-	if (!asn1_pop_tag(data)) {
+	asn1_pop_tag(data);
+
+	*out = data_blob_talloc(mem_ctx, data->data, data->length);
+	if (out->data == NULL) {
 		return false;
 	}
-
-	if (!asn1_extract_blob(data, mem_ctx, out)) {
-		return false;
-	}
-
 	talloc_free(data);
 	return true;
 }
@@ -1187,20 +1086,16 @@ static bool decode_openldap_dereference(void *mem_ctx, DATA_BLOB in, void *_out)
 			return false;
 		}
 		
-		if (!asn1_read_OctetString_talloc(r[i], data, &r[i]->source_attribute)) {
-			return false;
-		}
-		if (!asn1_read_OctetString_talloc(r[i], data, &r[i]->dereferenced_dn)) {
-			return false;
-		}
+		asn1_read_OctetString_talloc(r[i], data, &r[i]->source_attribute);
+		asn1_read_OctetString_talloc(r[i], data, &r[i]->dereferenced_dn);
 		if (asn1_peek_tag(data, ASN1_CONTEXT(0))) {
 			if (!asn1_start_tag(data, ASN1_CONTEXT(0))) {
 				return false;
 			}
-			if (!ldap_decode_attribs_bare(r, data, &r[i]->attributes,
-						 &r[i]->num_attributes)) {
-				return false;
-			}
+			
+			ldap_decode_attribs_bare(r, data, &r[i]->attributes,
+						 &r[i]->num_attributes);
+			
 			if (!asn1_end_tag(data)) {
 				return false;
 			}
@@ -1263,32 +1158,41 @@ static const struct ldap_control_handler ldap_known_controls[] = {
 	{ LDB_CONTROL_RODC_DCPROMO_OID, decode_flag_request, encode_flag_request },
 	{ LDB_CONTROL_RELAX_OID, decode_flag_request, encode_flag_request },
 	{ DSDB_OPENLDAP_DEREFERENCE_CONTROL, decode_openldap_dereference, encode_openldap_dereference },
-	{ LDB_CONTROL_VERIFY_NAME_OID, decode_verify_name_request, encode_verify_name_request },
 
-	/* the following are internal only, with a network
-	   representation */
-	{ DSDB_CONTROL_BYPASS_PASSWORD_HASH_OID, decode_flag_request, encode_flag_request },
-
-	/* all the ones below are internal only, and have no network
-	 * representation */
+/* DSDB_CONTROL_CURRENT_PARTITION_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_CURRENT_PARTITION_OID, NULL, NULL },
+/* DSDB_CONTROL_REPLICATED_UPDATE_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_REPLICATED_UPDATE_OID, NULL, NULL },
+/* DSDB_CONTROL_DN_STORAGE_FORMAT_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_DN_STORAGE_FORMAT_OID, NULL, NULL },
+/* LDB_CONTROL_RECALCULATE_SD_OID is internal only, and has no network representation */
 	{ LDB_CONTROL_RECALCULATE_SD_OID, NULL, NULL },
+/* LDB_CONTROL_REVEAL_INTERNALS is internal only, and has no network representation */
 	{ LDB_CONTROL_REVEAL_INTERNALS, NULL, NULL },
+/* LDB_CONTROL_AS_SYSTEM_OID is internal only, and has no network representation */
 	{ LDB_CONTROL_AS_SYSTEM_OID, NULL, NULL },
+/* DSDB_CONTROL_PASSWORD_CHANGE_STATUS_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_PASSWORD_CHANGE_STATUS_OID, NULL, NULL },
+/* DSDB_CONTROL_PASSWORD_HASH_VALUES_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_PASSWORD_HASH_VALUES_OID, NULL, NULL },
+/* DSDB_CONTROL_PASSWORD_CHANGE_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_PASSWORD_CHANGE_OID, NULL, NULL },
+/* DSDB_CONTROL_APPLY_LINKS is internal only, and has no network representation */
 	{ DSDB_CONTROL_APPLY_LINKS, NULL, NULL },
+/* DSDB_CONTROL_BYPASS_PASSWORD_HASH_OID is internal only, and has an empty network representation */
+	{ DSDB_CONTROL_BYPASS_PASSWORD_HASH_OID, decode_flag_request, encode_flag_request },
+/* LDB_CONTROL_BYPASS_OPERATIONAL_OID is internal only, and has no network representation */
 	{ LDB_CONTROL_BYPASS_OPERATIONAL_OID, NULL, NULL },
+/* DSDB_CONTROL_CHANGEREPLMETADATA_OID is internal only, and has no network representation */
 	{ DSDB_CONTROL_CHANGEREPLMETADATA_OID, NULL, NULL },
+/* LDB_CONTROL_PROVISION_OID is internal only, and has no network representation */
 	{ LDB_CONTROL_PROVISION_OID, NULL, NULL },
+/* DSDB_EXTENDED_REPLICATED_OBJECTS_OID is internal only, and has no network representation */
 	{ DSDB_EXTENDED_REPLICATED_OBJECTS_OID, NULL, NULL },
+/* DSDB_EXTENDED_SCHEMA_UPDATE_NOW_OID is internal only, and has no network representation */
 	{ DSDB_EXTENDED_SCHEMA_UPDATE_NOW_OID, NULL, NULL },
+/* DSDB_EXTENDED_ALLOCATE_RID_POOL is internal only, and has no network representation */
 	{ DSDB_EXTENDED_ALLOCATE_RID_POOL, NULL, NULL },
-	{ DSDB_CONTROL_NO_GLOBAL_CATALOG, NULL, NULL },
-	{ DSDB_EXTENDED_SCHEMA_UPGRADE_IN_PROGRESS_OID, NULL, NULL },
 	{ NULL, NULL, NULL }
 };
 

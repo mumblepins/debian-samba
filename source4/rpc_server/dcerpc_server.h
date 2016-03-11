@@ -23,7 +23,7 @@
 #ifndef SAMBA_DCERPC_SERVER_H
 #define SAMBA_DCERPC_SERVER_H
 
-#include "librpc/gen_ndr/server_id.h"
+#include "librpc/gen_ndr/server_id4.h"
 #include "librpc/rpc/dcerpc.h"
 #include "librpc/ndr/libndr.h"
 
@@ -101,8 +101,7 @@ struct dcesrv_call_state {
 	 */
 #define DCESRV_CALL_STATE_FLAG_ASYNC (1<<0)
 #define DCESRV_CALL_STATE_FLAG_MAY_ASYNC (1<<1)
-#define DCESRV_CALL_STATE_FLAG_MULTIPLEXED (1<<3)
-#define DCESRV_CALL_STATE_FLAG_PROCESS_PENDING_CALL (1<<4)
+#define DCESRV_CALL_STATE_FLAG_HEADER_SIGNING (1<<2)
 	uint32_t state_flags;
 
 	/* the time the request arrived in the server */
@@ -112,7 +111,7 @@ struct dcesrv_call_state {
 	struct tevent_context *event_ctx;
 
 	/* the message_context that will be used for async replies */
-	struct imessaging_context *msg_ctx;
+	struct messaging_context *msg_ctx;
 
 	/* this is the pointer to the allocated function struct */
 	void *r;
@@ -130,14 +129,6 @@ struct dcesrv_call_state {
 
 	/* this is used by the boilerplate code to generate DCERPC faults */
 	uint32_t fault_code;
-
-	/* the reason why we terminate the connection after sending a response */
-	const char *terminate_reason;
-
-	/* temporary auth_info fields */
-	struct dcerpc_auth in_auth_info;
-	struct dcerpc_auth _out_auth_info;
-	struct dcerpc_auth *out_auth_info;
 };
 
 #define DCESRV_HANDLE_ANY 255
@@ -154,23 +145,16 @@ struct dcesrv_handle {
 
 /* hold the authentication state information */
 struct dcesrv_auth {
-	enum dcerpc_AuthType auth_type;
-	enum dcerpc_AuthLevel auth_level;
-	uint32_t auth_context_id;
+	struct dcerpc_auth *auth_info;
 	struct gensec_security *gensec_security;
 	struct auth_session_info *session_info;
 	NTSTATUS (*session_key)(struct dcesrv_connection *, DATA_BLOB *session_key);
-	bool client_hdr_signing;
-	bool hdr_signing;
-	bool auth_finished;
-	bool auth_invalid;
 };
 
 struct dcesrv_connection_context {
 	struct dcesrv_connection_context *next, *prev;
 	uint32_t context_id;
 
-	/* TODO: remove this legacy (for openchange) in master */
 	struct dcesrv_assoc_group *assoc_group;
 
 	/* the connection this is on */
@@ -181,20 +165,11 @@ struct dcesrv_connection_context {
 
 	/* private data for the interface implementation */
 	void *private_data;
-
-	/*
-	 * the minimum required auth level for this interface
-	 */
-	enum dcerpc_AuthLevel min_auth_level;
-	bool allow_connect;
 };
 
 
 /* the state associated with a dcerpc server connection */
 struct dcesrv_connection {
-	/* for the broken_connections DLIST */
-	struct dcesrv_connection *prev, *next;
-
 	/* the top level context for this server */
 	struct dcesrv_context *dce_ctx;
 
@@ -214,26 +189,18 @@ struct dcesrv_connection {
 	struct dcesrv_call_state *call_list;
 
 	/* the maximum size the client wants to receive */
-	uint16_t max_recv_frag;
-	uint16_t max_xmit_frag;
+	uint32_t cli_max_recv_frag;
 
 	DATA_BLOB partial_input;
 
-	/* This can be removed in master... */
-	struct  {
-		struct dcerpc_auth *auth_info;
-		struct gensec_security *gensec_security;
-		struct auth_session_info *session_info;
-		NTSTATUS (*session_key)(struct dcesrv_connection *, DATA_BLOB *session_key);
-		bool client_hdr_signing;
-		bool hdr_signing;
-	} _unused_auth_state;
+	/* the current authentication state */
+	struct dcesrv_auth auth_state;
 
 	/* the event_context that will be used for this connection */
 	struct tevent_context *event_ctx;
 
 	/* the message_context that will be used for this connection */
-	struct imessaging_context *msg_ctx;
+	struct messaging_context *msg_ctx;
 
 	/* the server_id that will be used for this connection */
 	struct server_id server_id;
@@ -241,8 +208,7 @@ struct dcesrv_connection {
 	/* the transport level session key */
 	DATA_BLOB transport_session_key;
 
-	/* is this connection pending termination?  If so, why? */
-	const char *terminate;
+	bool processing;
 
 	const char *packet_log_dir;
 
@@ -259,20 +225,6 @@ struct dcesrv_connection {
 
 	const struct tsocket_address *local_address;
 	const struct tsocket_address *remote_address;
-
-	/* the current authentication state */
-	struct dcesrv_auth auth_state;
-
-	/*
-	 * remember which pdu types are allowed
-	 */
-	bool allow_bind;
-	bool allow_auth3;
-	bool allow_alter;
-	bool allow_request;
-
-	/* the association group the connection belongs to */
-	struct dcesrv_assoc_group *assoc_group;
 };
 
 
@@ -316,13 +268,6 @@ struct dcesrv_assoc_group {
 
 /* server-wide context information for the dcerpc server */
 struct dcesrv_context {
-	/*
-	 * The euid at startup time.
-	 *
-	 * This is required for DCERPC_AUTH_TYPE_NCALRPC_AS_SYSTEM
-	 */
-	uid_t initial_euid;
-
 	/* the list of endpoints that have registered 
 	 * by the configured endpoint servers 
 	 */
@@ -343,8 +288,6 @@ struct dcesrv_context {
 	struct loadparm_context *lp_ctx;
 
 	struct idr_context *assoc_groups_idr;
-
-	struct dcesrv_connection *broken_connections;
 };
 
 /* this structure is used by modules to determine the size of some critical types */
@@ -376,7 +319,7 @@ NTSTATUS dcesrv_endpoint_connect(struct dcesrv_context *dce_ctx,
 				 const struct dcesrv_endpoint *ep,
 				 struct auth_session_info *session_info,
 				 struct tevent_context *event_ctx,
-				 struct imessaging_context *msg_ctx,
+				 struct messaging_context *msg_ctx,
 				 struct server_id server_id,
 				 uint32_t state_flags,
 				 struct dcesrv_connection **_p);
@@ -455,13 +398,5 @@ _PUBLIC_ bool dcesrv_call_authenticated(struct dcesrv_call_state *dce_call);
  */
 _PUBLIC_ const char *dcesrv_call_account_name(struct dcesrv_call_state *dce_call);
 
-_PUBLIC_ NTSTATUS dcesrv_interface_bind_require_integrity(struct dcesrv_call_state *dce_call,
-							  const struct dcesrv_interface *iface);
-_PUBLIC_ NTSTATUS dcesrv_interface_bind_require_privacy(struct dcesrv_call_state *dce_call,
-						        const struct dcesrv_interface *iface);
-_PUBLIC_ NTSTATUS dcesrv_interface_bind_reject_connect(struct dcesrv_call_state *dce_call,
-						       const struct dcesrv_interface *iface);
-_PUBLIC_ NTSTATUS dcesrv_interface_bind_allow_connect(struct dcesrv_call_state *dce_call,
-						      const struct dcesrv_interface *iface);
 
 #endif /* SAMBA_DCERPC_SERVER_H */

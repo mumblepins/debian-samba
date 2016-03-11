@@ -129,7 +129,7 @@ krb5_rc_initialize(krb5_context context,
 		   krb5_deltat auth_lifespan)
 {
     FILE *f = fopen(id->name, "w");
-    struct rc_entry tmp = { .stamp = auth_lifespan };
+    struct rc_entry tmp;
     int ret;
 
     if(f == NULL) {
@@ -139,6 +139,7 @@ krb5_rc_initialize(krb5_context context,
 	krb5_set_error_message(context, ret, "open(%s): %s", id->name, buf);
 	return ret;
     }
+    tmp.stamp = auth_lifespan;
     fwrite(&tmp, 1, sizeof(tmp), f);
     fclose(f);
     return 0;
@@ -281,14 +282,14 @@ krb5_rc_get_name(krb5_context context,
 {
     return id->name;
 }
-
+		
 KRB5_LIB_FUNCTION const char* KRB5_LIB_CALL
 krb5_rc_get_type(krb5_context context,
 		 krb5_rcache id)
 {
     return "FILE";
 }
-
+		
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
 krb5_get_server_rcache(krb5_context context,
 		       const krb5_data *piece,

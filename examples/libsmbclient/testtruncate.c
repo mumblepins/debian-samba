@@ -14,6 +14,8 @@ int main(int argc, char * argv[])
     int             debug = 0;
     int             savedErrno;
     char            buffer[128];
+    char *          pSmbPath = NULL;
+    char *          pLocalPath = NULL;
     struct stat     st; 
     
     if (argc != 2)

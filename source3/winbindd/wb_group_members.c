@@ -19,7 +19,7 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "librpc/gen_ndr/ndr_winbind_c.h"
+#include "librpc/gen_ndr/ndr_wbint_c.h"
 #include "../librpc/gen_ndr/ndr_security.h"
 #include "../libcli/security/security.h"
 
@@ -139,7 +139,7 @@ static struct tevent_req *wb_groups_members_send(TALLOC_CTX *mem_ctx,
 						 int num_groups,
 						 struct wbint_Principal *groups)
 {
-	struct tevent_req *req, *subreq = NULL;
+	struct tevent_req *req, *subreq;
 	struct wb_groups_members_state *state;
 	NTSTATUS status;
 
@@ -290,7 +290,7 @@ struct tevent_req *wb_group_members_send(TALLOC_CTX *mem_ctx,
 					 enum lsa_SidType type,
 					 int max_depth)
 {
-	struct tevent_req *req, *subreq = NULL;
+	struct tevent_req *req, *subreq;
 	struct wb_group_members_state *state;
 	NTSTATUS status;
 
@@ -349,49 +349,13 @@ static NTSTATUS wb_group_members_next_subreq(
 	return NT_STATUS_OK;
 }
 
-
-/**
- * compose a wbint_Principal and add it to  talloc_dict
- *
- * NOTE: this has a side effect: *name needs to be talloc'd
- * and it is talloc_move'd to mem_ctx.
- */
-NTSTATUS add_wbint_Principal_to_dict(TALLOC_CTX *mem_ctx,
-				     struct dom_sid *sid,
-				     const char **name,
-				     enum lsa_SidType type,
-				     struct talloc_dict *dict)
-{
-	struct wbint_Principal *m;
-	DATA_BLOB key;
-	bool ok;
-
-	m = talloc(mem_ctx, struct wbint_Principal);
-	if (m == NULL) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	sid_copy(&m->sid, sid);
-	m->name = talloc_move(m, name);
-	m->type = type;
-
-	key = data_blob_const(&m->sid, sizeof(m->sid));
-
-	ok = talloc_dict_set(dict, key, &m);
-	if (!ok) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-	return NT_STATUS_OK;
-}
-
 static void wb_group_members_done(struct tevent_req *subreq)
 {
 	struct tevent_req *req = tevent_req_callback_data(
 		subreq, struct tevent_req);
 	struct wb_group_members_state *state = tevent_req_data(
 		req, struct wb_group_members_state);
-	int i, num_groups, new_groups;
+	int i, num_groups, new_users, new_groups;
 	int num_members = 0;
 	struct wbint_Principal *members = NULL;
 	NTSTATUS status;
@@ -402,7 +366,7 @@ static void wb_group_members_done(struct tevent_req *subreq)
 		return;
 	}
 
-	new_groups = 0;
+	new_users = new_groups = 0;
 	for (i=0; i<num_members; i++) {
 		switch (members[i].type) {
 		case SID_NAME_DOM_GRP:
@@ -433,15 +397,26 @@ static void wb_group_members_done(struct tevent_req *subreq)
 			/*
 			 * Add a copy of members[i] to state->users
 			 */
-			status = add_wbint_Principal_to_dict(talloc_tos(),
-							     &members[i].sid,
-							     &members[i].name,
-							     members[i].type,
-							     state->users);
-			if (tevent_req_nterror(req, status)) {
+			struct wbint_Principal *m;
+			struct dom_sid *sid;
+			DATA_BLOB key;
+
+			m = talloc(talloc_tos(), struct wbint_Principal);
+			if (tevent_req_nomem(m, req)) {
 				return;
 			}
+			sid_copy(&m->sid, &members[i].sid);
+			m->name = talloc_move(m, &members[i].name);
+			m->type = members[i].type;
 
+			sid = &members[i].sid;
+			key = data_blob_const(
+				sid, ndr_size_dom_sid(sid, 0));
+
+			if (!talloc_dict_set(state->users, key, &m)) {
+				tevent_req_nterror(req, NT_STATUS_NO_MEMORY);
+				return;
+			}
 			break;
 		}
 		case SID_NAME_DOM_GRP:

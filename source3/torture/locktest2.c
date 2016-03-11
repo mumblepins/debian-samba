@@ -73,7 +73,7 @@ static int try_open(struct cli_state *c, char *nfs, int fstype, const char *fnam
 	case FSTYPE_SMB:
 		{
 			uint16_t fd;
-			if (!NT_STATUS_IS_OK(cli_openx(c, fname, flags, DENY_NONE, &fd))) {
+			if (!NT_STATUS_IS_OK(cli_open(c, fname, flags, DENY_NONE, &fd))) {
 				return -1;
 			}
 			return fd;
@@ -114,8 +114,7 @@ static bool try_lock(struct cli_state *c, int fstype,
 
 	switch (fstype) {
 	case FSTYPE_SMB:
-		return NT_STATUS_IS_OK(cli_lock32(c, fd, start, len,
-				       LOCK_TIMEOUT, op));
+		return cli_lock(c, fd, start, len, LOCK_TIMEOUT, op);
 
 	case FSTYPE_NFS:
 		lock.l_type = (op==READ_LOCK) ? F_RDLCK:F_WRLCK;
@@ -184,12 +183,9 @@ static struct cli_state *connect_one(char *share)
 	server_n = server;
 	
 	if (!got_pass) {
-		char pwd[256] = {0};
-		int rc;
-
-		rc = samba_getpass("Password: ", pwd, sizeof(pwd), false, false);
-		if (rc == 0) {
-			fstrcpy(password, pwd);
+		char *pass = getpass("Password: ");
+		if (pass) {
+			fstrcpy(password, pass);
 		}
 	}
 
@@ -197,7 +193,7 @@ static struct cli_state *connect_one(char *share)
 
 	nt_status = cli_full_connection(&c, myname, server_n, NULL, 0, share, "?????", 
 					username, lp_workgroup(), password, 0,
-					SMB_SIGNING_DEFAULT);
+					Undefined);
 
 	if (!NT_STATUS_IS_OK(nt_status)) {
 		DEBUG(0, ("cli_full_connection failed with error %s\n", nt_errstr(nt_status)));
@@ -516,7 +512,7 @@ static void usage(void)
 	argc -= 4;
 	argv += 4;
 
-	lp_load_global(get_dyn_CONFIGFILE());
+	lp_load(get_dyn_CONFIGFILE(),True,False,False,True);
 	load_interfaces();
 
 	if (getenv("USER")) {

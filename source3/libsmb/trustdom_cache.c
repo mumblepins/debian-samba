@@ -21,10 +21,6 @@
 
 #include "includes.h"
 #include "../libcli/security/security.h"
-#include "../librpc/gen_ndr/ndr_lsa_c.h"
-#include "libsmb/libsmb.h"
-#include "rpc_client/cli_pipe.h"
-#include "rpc_client/cli_lsarpc.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_ALL	/* there's no proper class yet */
@@ -100,8 +96,8 @@ static char* trustdom_cache_key(const char* name)
  *         false if store attempt failed
  **/
  
-bool trustdom_cache_store(const char *name, const char *alt_name,
-			  const struct dom_sid *sid, time_t timeout)
+bool trustdom_cache_store(char* name, char* alt_name, const struct dom_sid *sid,
+                          time_t timeout)
 {
 	char *key, *alt_key;
 	fstring sid_string;
@@ -160,7 +156,7 @@ bool trustdom_cache_fetch(const char* name, struct dom_sid* sid)
 	if (!key)
 		return False;
 
-	if (!gencache_get(key, talloc_tos(), &value, &timeout)) {
+	if (!gencache_get(key, &value, &timeout)) {
 		DEBUG(5, ("no entry for trusted domain %s found.\n", name));
 		SAFE_FREE(key);
 		return False;
@@ -172,11 +168,11 @@ bool trustdom_cache_fetch(const char* name, struct dom_sid* sid)
 	/* convert sid string representation into struct dom_sid structure */
 	if(! string_to_sid(sid, value)) {
 		sid = NULL;
-		TALLOC_FREE(value);
+		SAFE_FREE(value);
 		return False;
 	}
 
-	TALLOC_FREE(value);
+	SAFE_FREE(value);
 	return True;
 }
 
@@ -185,13 +181,13 @@ bool trustdom_cache_fetch(const char* name, struct dom_sid* sid)
  fetch the timestamp from the last update 
 *******************************************************************/
 
-uint32_t trustdom_cache_fetch_timestamp( void )
+uint32 trustdom_cache_fetch_timestamp( void )
 {
 	char *value = NULL;
 	time_t timeout;
-	uint32_t timestamp;
+	uint32 timestamp;
 
-	if (!gencache_get(TDOMTSKEY, talloc_tos(), &value, &timeout)) {
+	if (!gencache_get(TDOMTSKEY, &value, &timeout)) {
 		DEBUG(5, ("no timestamp for trusted domain cache located.\n"));
 		SAFE_FREE(value);
 		return 0;
@@ -199,7 +195,7 @@ uint32_t trustdom_cache_fetch_timestamp( void )
 
 	timestamp = atoi(value);
 
-	TALLOC_FREE(value);
+	SAFE_FREE(value);
 	return timestamp;
 }
 
@@ -207,7 +203,7 @@ uint32_t trustdom_cache_fetch_timestamp( void )
  store the timestamp from the last update 
 *******************************************************************/
 
-bool trustdom_cache_store_timestamp( uint32_t t, time_t timeout )
+bool trustdom_cache_store_timestamp( uint32 t, time_t timeout )
 {
 	fstring value;
 
@@ -249,105 +245,6 @@ void trustdom_cache_flush(void)
 	DEBUG(5, ("Trusted domains cache flushed\n"));
 }
 
-/*********************************************************************
- Enumerate the list of trusted domains from a DC
-*********************************************************************/
-
-static bool enumerate_domain_trusts( TALLOC_CTX *mem_ctx, const char *domain,
-                                     char ***domain_names, uint32_t *num_domains,
-				     struct dom_sid **sids )
-{
-	struct policy_handle 	pol;
-	NTSTATUS status, result;
-	fstring 	dc_name;
-	struct sockaddr_storage	dc_ss;
-	uint32_t 		enum_ctx = 0;
-	struct cli_state *cli = NULL;
-	struct rpc_pipe_client *lsa_pipe = NULL;
-	struct lsa_DomainList dom_list;
-	int i;
-	struct dcerpc_binding_handle *b = NULL;
-
-	*domain_names = NULL;
-	*num_domains = 0;
-	*sids = NULL;
-
-	/* lookup a DC first */
-
-	if ( !get_dc_name(domain, NULL, dc_name, &dc_ss) ) {
-		DEBUG(3,("enumerate_domain_trusts: can't locate a DC for domain %s\n",
-			domain));
-		return False;
-	}
-
-	/* setup the anonymous connection */
-
-	status = cli_full_connection( &cli, lp_netbios_name(), dc_name, &dc_ss, 0, "IPC$", "IPC",
-		"", "", "", 0, Undefined);
-	if ( !NT_STATUS_IS_OK(status) )
-		goto done;
-
-	/* open the LSARPC_PIPE	*/
-
-	status = cli_rpc_pipe_open_noauth(cli, &ndr_table_lsarpc,
-					  &lsa_pipe);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
-
-	b = lsa_pipe->binding_handle;
-
-	/* get a handle */
-
-	status = rpccli_lsa_open_policy(lsa_pipe, mem_ctx, True,
-		LSA_POLICY_VIEW_LOCAL_INFORMATION, &pol);
-	if ( !NT_STATUS_IS_OK(status) )
-		goto done;
-
-	/* Lookup list of trusted domains */
-
-	status = dcerpc_lsa_EnumTrustDom(b, mem_ctx,
-					 &pol,
-					 &enum_ctx,
-					 &dom_list,
-					 (uint32_t)-1,
-					 &result);
-	if ( !NT_STATUS_IS_OK(status) )
-		goto done;
-	if (!NT_STATUS_IS_OK(result)) {
-		status = result;
-		goto done;
-	}
-
-	*num_domains = dom_list.count;
-
-	*domain_names = talloc_zero_array(mem_ctx, char *, *num_domains);
-	if (!*domain_names) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	*sids = talloc_zero_array(mem_ctx, struct dom_sid, *num_domains);
-	if (!*sids) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
-	for (i=0; i< *num_domains; i++) {
-		(*domain_names)[i] = discard_const_p(char, dom_list.domains[i].name.string);
-		(*sids)[i] = *dom_list.domains[i].sid;
-	}
-
-done:
-	/* cleanup */
-	if (cli) {
-		DEBUG(10,("enumerate_domain_trusts: shutting down connection...\n"));
-		cli_shutdown( cli );
-	}
-
-	return NT_STATUS_IS_OK(status);
-}
-
 /********************************************************************
  update the trustdom_cache if needed 
 ********************************************************************/
@@ -357,8 +254,8 @@ void update_trustdom_cache( void )
 {
 	char **domain_names;
 	struct dom_sid *dom_sids;
-	uint32_t num_domains;
-	uint32_t last_check;
+	uint32 num_domains;
+	uint32 last_check;
 	int time_diff;
 	TALLOC_CTX *mem_ctx = NULL;
 	time_t now = time(NULL);

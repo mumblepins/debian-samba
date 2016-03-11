@@ -34,22 +34,21 @@
 #include "krb5_locl.h"
 
 KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
-krb5_mk_error_ext(krb5_context context,
-		  krb5_error_code error_code,
-		  const char *e_text,
-		  const krb5_data *e_data,
-		  const krb5_principal server,
-		  const PrincipalName *client_name,
-		  const Realm *client_realm,
-		  time_t *client_time,
-		  int *client_usec,
-		  krb5_data *reply)
+krb5_mk_error(krb5_context context,
+	      krb5_error_code error_code,
+	      const char *e_text,
+	      const krb5_data *e_data,
+	      const krb5_principal client,
+	      const krb5_principal server,
+	      time_t *client_time,
+	      int *client_usec,
+	      krb5_data *reply)
 {
     const char *e_text2 = NULL;
     KRB_ERROR msg;
     krb5_timestamp sec;
     int32_t usec;
-    size_t len = 0;
+    size_t len;
     krb5_error_code ret = 0;
 
     krb5_us_timeofday (context, &sec, &usec);
@@ -76,11 +75,12 @@ krb5_mk_error_ext(krb5_context context,
 	msg.realm = server->realm;
 	msg.sname = server->name;
     }else{
-	static char unspec[] = "<unspecified realm>";
-	msg.realm = unspec;
+	msg.realm = "<unspecified realm>";
     }
-    msg.crealm = rk_UNCONST(client_realm);
-    msg.cname = rk_UNCONST(client_name);
+    if(client){
+	msg.crealm = &client->realm;
+	msg.cname = &client->name;
+    }
 
     ASN1_MALLOC_ENCODE(KRB_ERROR, reply->data, reply->length, &msg, &len, ret);
     if (e_text2)
@@ -90,28 +90,4 @@ krb5_mk_error_ext(krb5_context context,
     if(reply->length != len)
 	krb5_abortx(context, "internal error in ASN.1 encoder");
     return 0;
-}
-
-KRB5_LIB_FUNCTION krb5_error_code KRB5_LIB_CALL
-krb5_mk_error(krb5_context context,
-	      krb5_error_code error_code,
-	      const char *e_text,
-	      const krb5_data *e_data,
-	      const krb5_principal client,
-	      const krb5_principal server,
-	      time_t *client_time,
-	      int *client_usec,
-	      krb5_data *reply)
-{
-    const PrincipalName *client_name = NULL;
-    const Realm *client_realm = NULL;
-
-    if (client) {
-	client_realm = &client->realm;
-	client_name = &client->name;
-    }
-
-    return krb5_mk_error_ext(context, error_code, e_text, e_data,
-			     server, client_name, client_realm,
-			     client_time, client_usec, reply);
 }

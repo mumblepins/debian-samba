@@ -24,14 +24,6 @@
 #include "librpc/gen_ndr/ndr_epmapper.h"
 #include "rpc_server/dcerpc_server.h"
 
-#define DCESRV_INTERFACE_EPMAPPER_BIND(call, iface) \
-       dcesrv_interface_epmapper_bind(call, iface)
-static NTSTATUS dcesrv_interface_epmapper_bind(struct dcesrv_call_state *dce_call,
-					     const struct dcesrv_interface *iface)
-{
-	return dcesrv_interface_bind_allow_connect(dce_call, iface);
-}
-
 typedef uint32_t error_status_t;
 
 /* handle types for this module */
@@ -58,10 +50,9 @@ static uint32_t build_ep_list(TALLOC_CTX *mem_ctx,
 
 	for (d=endpoint_list; d; d=d->next) {
 		struct dcesrv_if_list *iface;
+		struct dcerpc_binding *description;
 
 		for (iface=d->interface_list;iface;iface=iface->next) {
-			struct dcerpc_binding *description;
-
 			(*eps) = talloc_realloc(mem_ctx, 
 						  *eps, 
 						  struct dcesrv_ep_iface,
@@ -71,22 +62,12 @@ static uint32_t build_ep_list(TALLOC_CTX *mem_ctx,
 			}
 			(*eps)[total].name = iface->iface.name;
 
-			description = dcerpc_binding_dup(*eps, d->ep_description);
-			if (description == NULL) {
-				return 0;
-			}
-
-			status = dcerpc_binding_set_abstract_syntax(description,
-							&iface->iface.syntax_id);
-			if (!NT_STATUS_IS_OK(status)) {
-				return 0;
-			}
+			description = d->ep_description;
+			description->object = iface->iface.syntax_id;
 
 			status = dcerpc_binding_build_tower(*eps, description, &(*eps)[total].ep);
-			TALLOC_FREE(description);
-			if (!NT_STATUS_IS_OK(status)) {
-				DEBUG(1, ("Unable to build tower for %s - %s\n",
-					  iface->iface.name, nt_errstr(status)));
+			if (NT_STATUS_IS_ERR(status)) {
+				DEBUG(1, ("Unable to build tower for %s\n", iface->iface.name));
 				continue;
 			}
 			total++;
@@ -220,8 +201,8 @@ static error_status_t dcesrv_epm_Map(struct dcesrv_call_state *dce_call, TALLOC_
 	dcerpc_floor_get_lhs_data(&r->in.map_tower->tower.floors[1], &ndr_syntax);
 
 	if (floors[1].lhs.protocol != EPM_PROTOCOL_UUID ||
-		!GUID_equal(&ndr_syntax.uuid, &ndr_transfer_syntax_ndr.uuid) ||
-	    ndr_syntax.if_version != ndr_transfer_syntax_ndr.if_version) {
+		!GUID_equal(&ndr_syntax.uuid, &ndr_transfer_syntax.uuid) ||
+	    ndr_syntax.if_version != ndr_transfer_syntax.if_version) {
 		goto failed;
 	}
 

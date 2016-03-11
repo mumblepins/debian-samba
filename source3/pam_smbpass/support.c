@@ -122,7 +122,7 @@ int converse( pam_handle_t * pamh, int ctrl, int nargs
 	      , struct pam_response **response )
 {
 	int retval;
-	struct pam_conv *conv = NULL;
+	struct pam_conv *conv;
 
 	retval = _pam_get_item(pamh, PAM_CONV, &conv);
 	if (retval == PAM_SUCCESS) {
@@ -150,7 +150,7 @@ int make_remark( pam_handle_t * pamh, unsigned int ctrl
 		struct pam_response *resp;
 
 		pmsg[0] = &msg[0];
-		msg[0].msg = discard_const_p(char, text);
+		msg[0].msg = CONST_DISCARD(char *, text);
 		msg[0].msg_style = type;
 		resp = NULL;
 
@@ -162,15 +162,11 @@ int make_remark( pam_handle_t * pamh, unsigned int ctrl
 
 /* set the control flags for the SMB module. */
 
-unsigned int set_ctrl(pam_handle_t *pamh,
-		      int flags,
-		      int argc,
-		      const char **argv)
+int set_ctrl( pam_handle_t *pamh, int flags, int argc, const char **argv )
 {
     int i = 0;
     const char *service_file = NULL;
     unsigned int ctrl;
-    bool ok;
 
     ctrl = SMB_DEFAULTS;	/* the default selection of options */
 
@@ -207,14 +203,11 @@ unsigned int set_ctrl(pam_handle_t *pamh,
 
     /* Read some options from the Samba config. Can be overridden by
        the PAM config. */
-    if(lp_load_client(service_file) == false) {
+    if(lp_load(service_file,True,False,False,True) == False) {
 	_log_err(pamh, LOG_ERR, "Error loading service file %s", service_file);
     }
 
-	ok = secrets_init();
-	if (!ok) {
-		_log_err(pamh, LOG_ERR, "Error loading secrets database");
-	}
+    secrets_init();
 
     if (lp_null_passwords()) {
         set( SMB__NULLOK, ctrl );
@@ -377,7 +370,7 @@ int _smb_verify_password( pam_handle_t * pamh, struct samu *sampass,
         { /* this means we've succeeded */
             return PAM_SUCCESS;
         } else {
-            const char *service = NULL;
+            const char *service;
 
             _pam_get_item( pamh, PAM_SERVICE, &service );
             _log_err(pamh, LOG_NOTICE, "failed auth request by %s for service %s as %s",
@@ -409,9 +402,7 @@ int _smb_verify_password( pam_handle_t * pamh, struct samu *sampass,
         }
     } else {
 
-        const char *service = NULL;
-
-        retval = PAM_AUTH_ERR;
+        const char *service;
 
         _pam_get_item( pamh, PAM_SERVICE, &service );
 
@@ -462,6 +453,7 @@ int _smb_verify_password( pam_handle_t * pamh, struct samu *sampass,
                   "failed auth request by %s for service %s as %s(%d)",
                   uidtoname(getuid()),
                   service ? service : "**unknown**", name);
+        retval = PAM_AUTH_ERR;
     }
 
     _pam_delete( data_name );
@@ -558,7 +550,7 @@ int _smb_read_password( pam_handle_t * pamh, unsigned int ctrl,
     if (comment != NULL && off(SMB__QUIET, ctrl)) {
         pmsg[0] = &msg[0];
         msg[0].msg_style = PAM_TEXT_INFO;
-        msg[0].msg = discard_const_p(char, comment);
+        msg[0].msg = CONST_DISCARD(char *, comment);
         i = 1;
     } else {
         i = 0;
@@ -566,12 +558,12 @@ int _smb_read_password( pam_handle_t * pamh, unsigned int ctrl,
 
     pmsg[i] = &msg[i];
     msg[i].msg_style = PAM_PROMPT_ECHO_OFF;
-    msg[i++].msg = discard_const_p(char, prompt1);
+    msg[i++].msg = CONST_DISCARD(char *, prompt1);
 
     if (prompt2 != NULL) {
         pmsg[i] = &msg[i];
         msg[i].msg_style = PAM_PROMPT_ECHO_OFF;
-        msg[i++].msg = discard_const_p(char, prompt2);
+        msg[i++].msg = CONST_DISCARD(char *, prompt2);
         expect = 2;
     } else
         expect = 1;

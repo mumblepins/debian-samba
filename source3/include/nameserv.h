@@ -199,7 +199,7 @@ enum logon_state {
 struct subnet_record;
 
 struct nmb_data {
-	uint16_t nb_flags;       /* Netbios flags. */
+	uint16 nb_flags;         /* Netbios flags. */
 	int num_ips;             /* Number of ip entries. */
 	struct in_addr *ip;      /* The ip list for this name. */
 
@@ -230,15 +230,6 @@ struct browse_cache_record {
 	struct in_addr ip;
 	time_t         sync_time;
 	time_t         death_time; /* The time the record must be removed. */
-};
-
-/* used for server information: client, nameserv and ipc */
-struct server_info_struct {
-	fstring name;
-	uint32_t type;
-	fstring comment;
-	fstring domain; /* used ONLY in ipc.c NOT namework.c */
-	bool server_added; /* used ONLY in ipc.c NOT namework.c */
 };
 
 /* This is used to hold the list of servers in my domain, and is
@@ -289,7 +280,7 @@ struct work_record {
 	bool    RunningElection;
 	bool    needelection;
 	int     ElectionCount;
-	uint32_t  ElectionCriterion;
+	uint32  ElectionCriterion;
 
 	/* Domain master browser info. Used for efficient syncs. */
 	struct nmb_name dmb_name;
@@ -337,7 +328,7 @@ typedef void (*fail_function)(struct subnet_record *, struct response_record *, 
 typedef void (*register_name_success_function)( struct subnet_record *,
                                                 struct userdata_struct *,
                                                 struct nmb_name *,
-                                                uint16_t,
+                                                uint16,
                                                 int,
                                                 struct in_addr);
 typedef void (*register_name_fail_function)( struct subnet_record *,
@@ -355,7 +346,7 @@ typedef void (*release_name_fail_function)( struct subnet_record *,
 typedef void (*refresh_name_success_function)( struct subnet_record *,
                                                struct userdata_struct *, 
                                                struct nmb_name *,
-                                               uint16_t,
+                                               uint16,
                                                int,
                                                struct in_addr);
 typedef void (*refresh_name_fail_function)( struct subnet_record *,
@@ -386,7 +377,7 @@ struct response_record {
 	struct response_record *next;
 	struct response_record *prev;
 
-	uint16_t response_id;
+	uint16 response_id;
 
 	/* Callbacks for packets received or not. */ 
 	response_function resp_fn;

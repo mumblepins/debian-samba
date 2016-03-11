@@ -44,18 +44,6 @@
 #endif
 #include <rpc/xdr.h>
 
-#ifndef RQ_PATHLEN
-#define RQ_PATHLEN 1024
-#endif
-
-#ifdef HAVE_GETQUOTA_RSLT_GETQUOTA_RSLT_U
-#define GQR_RQUOTA getquota_rslt_u.gqr_rquota
-#define GQR_STATUS status
-#else
-#define GQR_RQUOTA gqr_rquota
-#define GQR_STATUS gqr_status
-#endif
-
 static int my_xdr_getquota_args(XDR *xdrsp, struct getquota_args *args)
 {
 	if (!xdr_string(xdrsp, &args->gqa_pathp, RQ_PATHLEN ))
@@ -73,25 +61,25 @@ static int my_xdr_getquota_rslt(XDR *xdrsp, struct getquota_rslt *gqr)
 		DEBUG(6,("nfs_quotas: Status bad or zero\n"));
 		return 0;
 	}
-	gqr->GQR_STATUS = quotastat;
+	gqr->status = quotastat;
 
-	if (!xdr_int(xdrsp, &gqr->GQR_RQUOTA.rq_bsize)) {
+	if (!xdr_int(xdrsp, &gqr->getquota_rslt_u.gqr_rquota.rq_bsize)) {
 		DEBUG(6,("nfs_quotas: Block size bad or zero\n"));
 		return 0;
 	}
-	if (!xdr_bool(xdrsp, &gqr->GQR_RQUOTA.rq_active)) {
+	if (!xdr_bool(xdrsp, &gqr->getquota_rslt_u.gqr_rquota.rq_active)) {
 		DEBUG(6,("nfs_quotas: Active bad or zero\n"));
 		return 0;
 	}
-	if (!xdr_int(xdrsp, (int *)&gqr->GQR_RQUOTA.rq_bhardlimit)) {
+	if (!xdr_int(xdrsp, (int *)&gqr->getquota_rslt_u.gqr_rquota.rq_bhardlimit)) {
 		DEBUG(6,("nfs_quotas: Hardlimit bad or zero\n"));
 		return 0;
 	}
-	if (!xdr_int(xdrsp, (int *)&gqr->GQR_RQUOTA.rq_bsoftlimit)) {
+	if (!xdr_int(xdrsp, (int *)&gqr->getquota_rslt_u.gqr_rquota.rq_bsoftlimit)) {
 		DEBUG(6,("nfs_quotas: Softlimit bad or zero\n"));
 		return 0;
 	}
-	if (!xdr_int(xdrsp, (int *)&gqr->GQR_RQUOTA.rq_curblocks)) {
+	if (!xdr_int(xdrsp, (int *)&gqr->getquota_rslt_u.gqr_rquota.rq_curblocks)) {
 		DEBUG(6,("nfs_quotas: Currentblocks bad or zero\n"));
 		return 0;
 	}
@@ -107,13 +95,13 @@ int sys_get_nfs_quota(const char *path, const char *bdev,
 	struct getquota_rslt gq_rslt;
 	struct getquota_args gq_args;
 	const char *mnttype;
-	char *cutstr, *host, *testpath;
+	char *cutstr, *pathname, *host, *testpath;
 	int len;
 	static struct timeval timeout = {2,0};
 	enum clnt_stat clnt_stat;
 
 	int ret = -1;
-	uint32_t qflags = 0;
+	uint32 qflags = 0;
 
 	if (!path || !bdev || !dp) {
 		smb_panic("sys_get_nfs_quota: called with NULL pointer");
@@ -136,6 +124,7 @@ int sys_get_nfs_quota(const char *path, const char *bdev,
 
 	mnttype = bdev;
 	len = strcspn(mnttype, ":");
+	pathname = strstr(mnttype, ":");
 	cutstr = (char *) SMB_MALLOC(len+1);
 	if (cutstr == NULL) {
 		errno = ENOMEM;
@@ -155,7 +144,7 @@ int sys_get_nfs_quota(const char *path, const char *bdev,
 
 	DEBUG(10, ("sys_get_nfs_quotas: Asking for quota of path '%s' on "
 		   "host '%s', rpcprog '%i', rpcvers '%i', network '%s'\n",
-		   host, testpath+1, (int)RQUOTAPROG, (int)RQUOTAVERS, "udp"));
+		    host, testpath+1, RQUOTAPROG, RQUOTAVERS, "udp"));
 
 	clnt = clnt_create(host, RQUOTAPROG, RQUOTAVERS, "udp");
 	if (clnt == NULL) {
@@ -197,17 +186,17 @@ int sys_get_nfs_quota(const char *path, const char *bdev,
 		   "curfiles     : '%u'\n"
 		   "btimeleft    : '%u'\n"
 		   "ftimeleft    : '%u'\n",
-		   gq_rslt.GQR_STATUS,
-		   gq_rslt.GQR_RQUOTA.rq_bsize,
-		   gq_rslt.GQR_RQUOTA.rq_active?"yes":"no",
-		   gq_rslt.GQR_RQUOTA.rq_bhardlimit,
-		   gq_rslt.GQR_RQUOTA.rq_bsoftlimit,
-		   gq_rslt.GQR_RQUOTA.rq_curblocks,
-		   gq_rslt.GQR_RQUOTA.rq_fhardlimit,
-		   gq_rslt.GQR_RQUOTA.rq_fsoftlimit,
-		   gq_rslt.GQR_RQUOTA.rq_curfiles,
-		   gq_rslt.GQR_RQUOTA.rq_btimeleft,
-		   gq_rslt.GQR_RQUOTA.rq_ftimeleft));
+		   gq_rslt.status,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_bsize,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_active?"yes":"no",
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_bhardlimit,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_bsoftlimit,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_curblocks,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_fhardlimit,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_fsoftlimit,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_curfiles,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_btimeleft,
+		   gq_rslt.getquota_rslt_u.gqr_rquota.rq_ftimeleft));
 
 	/*
 	 * gqr.status returns
@@ -217,19 +206,19 @@ int sys_get_nfs_quota(const char *path, const char *bdev,
 	 *   3 if no permission to get the quota.
 	 */
 
-	switch (gq_rslt.GQR_STATUS) {
+	switch (gq_rslt.status) {
 	case 0:
 		DEBUG(3, ("sys_get_nfs_quotas: Remote Quotas Failed! "
-			  "Error '%i'\n", gq_rslt.GQR_STATUS));
+			  "Error '%i'\n", gq_rslt.status));
 		ret = -1;
 		goto out;
 
 	case 1:
 		DEBUG(10, ("sys_get_nfs_quotas: Good quota data\n"));
-		dp->bsize = (uint64_t)gq_rslt.GQR_RQUOTA.rq_bsize;
-		dp->softlimit = gq_rslt.GQR_RQUOTA.rq_bsoftlimit;
-		dp->hardlimit = gq_rslt.GQR_RQUOTA.rq_bhardlimit;
-		dp->curblocks = gq_rslt.GQR_RQUOTA.rq_curblocks;
+		dp->bsize = (uint64_t)gq_rslt.getquota_rslt_u.gqr_rquota.rq_bsize;
+		dp->softlimit = gq_rslt.getquota_rslt_u.gqr_rquota.rq_bsoftlimit;
+		dp->hardlimit = gq_rslt.getquota_rslt_u.gqr_rquota.rq_bhardlimit;
+		dp->curblocks = gq_rslt.getquota_rslt_u.gqr_rquota.rq_curblocks;
 		break;
 
 	case 2:
@@ -245,7 +234,7 @@ int sys_get_nfs_quota(const char *path, const char *bdev,
 
 	default:
 		DEBUG(5, ("sys_get_nfs_quotas: Unknown remote quota status "
-			  "code '%i'\n", gq_rslt.GQR_STATUS));
+			  "code '%i'\n", gq_rslt.status));
 		ret = -1;
 		goto out;
 		break;

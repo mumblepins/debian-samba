@@ -25,7 +25,7 @@
 #include "secrets.h"
 #include "param/param.h"
 #include "system/filesys.h"
-#include "lib/tdb_wrap/tdb_wrap.h"
+#include "lib/util/tdb_wrap.h"
 #include "lib/ldb-samba/ldb_wrap.h"
 #include <ldb.h>
 #include "../lib/util/util_tdb.h"
@@ -49,25 +49,22 @@ static void get_rand_seed(struct tdb_wrap *secretsdb, int *new_seed)
 }
 
 /**
- * open up the randseed database and set the random number generator callback
+ * open up the secrets database
  */
-bool randseed_init(TALLOC_CTX *mem_ctx, struct loadparm_context *lp_ctx)
+struct tdb_wrap *secrets_init(TALLOC_CTX *mem_ctx, struct loadparm_context *lp_ctx)
 {
 	char *fname;
 	uint8_t dummy;
 	struct tdb_wrap *tdb;
 
-	fname = lpcfg_private_path(mem_ctx, lp_ctx, "randseed.tdb");
+	fname = private_path(mem_ctx, lp_ctx, "secrets.tdb");
 
-	tdb = tdb_wrap_open(mem_ctx, fname,
-			    lpcfg_tdb_hash_size(lp_ctx, fname),
-			    lpcfg_tdb_flags(lp_ctx, TDB_DEFAULT),
-			    O_RDWR|O_CREAT, 0600);
+	tdb = tdb_wrap_open(mem_ctx, fname, 0, TDB_DEFAULT, O_RDWR|O_CREAT, 0600);
 
 	if (!tdb) {
 		DEBUG(0,("Failed to open %s\n", fname));
 		talloc_free(fname);
-		return false;
+		return NULL;
 	}
 	talloc_free(fname);
 
@@ -82,7 +79,7 @@ bool randseed_init(TALLOC_CTX *mem_ctx, struct loadparm_context *lp_ctx)
 	/* Ensure that the reseed is done now, while we are root, etc */
 	generate_random_buffer(&dummy, sizeof(dummy));
 
-	return true;
+	return tdb;
 }
 
 /**
@@ -91,7 +88,7 @@ bool randseed_init(TALLOC_CTX *mem_ctx, struct loadparm_context *lp_ctx)
 struct ldb_context *secrets_db_connect(TALLOC_CTX *mem_ctx,
 					struct loadparm_context *lp_ctx)
 {
-	return ldb_wrap_connect(mem_ctx, NULL, lp_ctx, "secrets.ldb",
+	return ldb_wrap_connect(mem_ctx, NULL, lp_ctx, lpcfg_secrets_url(lp_ctx),
 			       NULL, NULL, 0);
 }
 

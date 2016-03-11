@@ -157,6 +157,45 @@ _PUBLIC_ NTSTATUS GUID_from_string(const char *s, struct GUID *guid)
 }
 
 /**
+  build a GUID from a string
+*/
+_PUBLIC_ NTSTATUS NS_GUID_from_string(const char *s, struct GUID *guid)
+{
+	NTSTATUS status = NT_STATUS_INVALID_PARAMETER;
+	uint32_t time_low;
+	uint32_t time_mid, time_hi_and_version;
+	uint32_t clock_seq[2];
+	uint32_t node[6];
+	int i;
+
+	if (s == NULL) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	if (11 == sscanf(s, "%08x-%04x%04x-%02x%02x%02x%02x-%02x%02x%02x%02x",
+			 &time_low, &time_mid, &time_hi_and_version, 
+			 &clock_seq[0], &clock_seq[1],
+			 &node[0], &node[1], &node[2], &node[3], &node[4], &node[5])) {
+	        status = NT_STATUS_OK;
+	}
+
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
+	}
+
+	guid->time_low = time_low;
+	guid->time_mid = time_mid;
+	guid->time_hi_and_version = time_hi_and_version;
+	guid->clock_seq[0] = clock_seq[0];
+	guid->clock_seq[1] = clock_seq[1];
+	for (i=0;i<6;i++) {
+		guid->node[i] = node[i];
+	}
+
+	return NT_STATUS_OK;
+}
+
+/**
  * generate a random GUID
  */
 _PUBLIC_ struct GUID GUID_random(void)
@@ -197,7 +236,15 @@ _PUBLIC_ bool GUID_all_zero(const struct GUID *u)
 
 _PUBLIC_ bool GUID_equal(const struct GUID *u1, const struct GUID *u2)
 {
-	return (GUID_compare(u1, u2) == 0);
+	if (u1->time_low != u2->time_low ||
+	    u1->time_mid != u2->time_mid ||
+	    u1->time_hi_and_version != u2->time_hi_and_version ||
+	    u1->clock_seq[0] != u2->clock_seq[0] ||
+	    u1->clock_seq[1] != u2->clock_seq[1] ||
+	    memcmp(u1->node, u2->node, 6) != 0) {
+		return false;
+	}
+	return true;
 }
 
 _PUBLIC_ int GUID_compare(const struct GUID *u1, const struct GUID *u2)
@@ -230,30 +277,15 @@ _PUBLIC_ int GUID_compare(const struct GUID *u1, const struct GUID *u2)
 */
 _PUBLIC_ char *GUID_string(TALLOC_CTX *mem_ctx, const struct GUID *guid)
 {
-	struct GUID_txt_buf buf;
-	return talloc_strdup(mem_ctx, GUID_buf_string(guid, &buf));
-}
-
-/**
- * Does the same without allocating memory, using the structure buffer.
- * Useful for debug messages, so that you do not have to talloc_free the result
- */
-_PUBLIC_ char* GUID_buf_string(const struct GUID *guid,
-			       struct GUID_txt_buf *dst)
-{
-	if (!guid) {
-		return NULL;
-	}
-	snprintf(dst->buf, sizeof(dst->buf),
-		 "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		 guid->time_low, guid->time_mid,
-		 guid->time_hi_and_version,
-		 guid->clock_seq[0],
-		 guid->clock_seq[1],
-		 guid->node[0], guid->node[1],
-		 guid->node[2], guid->node[3],
-		 guid->node[4], guid->node[5]);
-	return dst->buf;
+	return talloc_asprintf(mem_ctx, 
+			       "%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+			       guid->time_low, guid->time_mid,
+			       guid->time_hi_and_version,
+			       guid->clock_seq[0],
+			       guid->clock_seq[1],
+			       guid->node[0], guid->node[1],
+			       guid->node[2], guid->node[3],
+			       guid->node[4], guid->node[5]);
 }
 
 _PUBLIC_ char *GUID_string2(TALLOC_CTX *mem_ctx, const struct GUID *guid)
@@ -286,12 +318,30 @@ _PUBLIC_ char *GUID_hexstring(TALLOC_CTX *mem_ctx, const struct GUID *guid)
 	return ret;
 }
 
-_PUBLIC_ bool ndr_policy_handle_empty(const struct policy_handle *h)
+_PUBLIC_ char *NS_GUID_string(TALLOC_CTX *mem_ctx, const struct GUID *guid)
+{
+	return talloc_asprintf(mem_ctx, 
+			       "%08x-%04x%04x-%02x%02x%02x%02x-%02x%02x%02x%02x",
+			       guid->time_low, guid->time_mid,
+			       guid->time_hi_and_version,
+			       guid->clock_seq[0],
+			       guid->clock_seq[1],
+			       guid->node[0], guid->node[1],
+			       guid->node[2], guid->node[3],
+			       guid->node[4], guid->node[5]);
+}
+
+_PUBLIC_ bool policy_handle_empty(const struct policy_handle *h)
 {
 	return (h->handle_type == 0 && GUID_all_zero(&h->uuid));
 }
 
-_PUBLIC_ bool ndr_policy_handle_equal(const struct policy_handle *hnd1,
+_PUBLIC_ bool is_valid_policy_hnd(const struct policy_handle *hnd)
+{
+	return !policy_handle_empty(hnd);
+}
+
+_PUBLIC_ bool policy_handle_equal(const struct policy_handle *hnd1,
 				  const struct policy_handle *hnd2)
 {
 	if (!hnd1 || !hnd2) {

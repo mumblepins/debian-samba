@@ -33,6 +33,7 @@
 
 #include "includes.h"
 #include "ldb.h"
+#include "tools/cmdline.h"
 #include "dsdb/samdb/samdb.h"
 #include "../lib/crypto/sha256.h"
 #include "../librpc/gen_ndr/ndr_misc.h"
@@ -81,12 +82,7 @@ static int check_braces(const char *string)
 		c = strpbrk(c, "()");
 		if (c == NULL) return 1;
 		if (*c == '(') b++;
-		if (*c == ')') {
-			b--;
-			if (*(c - 1) != ' ' && c && (*(c + 1) == '\0')) {
-				return 2;
-			}
-		}
+		if (*c == ')') b--;
 		c++;
 	}
 	return 0;
@@ -352,13 +348,7 @@ static struct ldb_message *process_entry(TALLOC_CTX *mem_ctx, const char *entry)
 	bool single_valued = false;
 
 	ctx = talloc_new(mem_ctx);
-	if (ctx == NULL) {
-		return NULL;
-	}
 	msg = ldb_msg_new(ctx);
-	if (msg == NULL) {
-		goto failed;
-	}
 
 	ldb_msg_add_string(msg, "objectClass", "top");
 
@@ -402,9 +392,9 @@ static struct ldb_message *process_entry(TALLOC_CTX *mem_ctx, const char *entry)
 		MSG_ADD_STRING("governsID", s);
 	}
 
-	samba_SHA256_Init(&sha256_context);
-	samba_SHA256_Update(&sha256_context, (uint8_t*)s, strlen(s));
-	samba_SHA256_Final(digest, &sha256_context);
+	SHA256_Init(&sha256_context);
+	SHA256_Update(&sha256_context, (uint8_t*)s, strlen(s));
+	SHA256_Final(digest, &sha256_context);
 
 	memcpy(&guid, digest, sizeof(struct GUID));
 
@@ -548,10 +538,8 @@ static struct schema_conv process_file(FILE *in, FILE *out)
 
 		do { 
 			if (c == '\n') {
-				int ret2 = 0;
-				entry[t] = '\0';
-				ret2 = check_braces(entry);
-				if (ret2 == 0) {
+				entry[t] = '\0';	
+				if (check_braces(entry) == 0) {
 					ret.count++;
 					ldif.msg = process_entry(ctx, entry);
 					if (ldif.msg == NULL) {
@@ -560,11 +548,6 @@ static struct schema_conv process_file(FILE *in, FILE *out)
 						break;
 					}
 					ldb_ldif_write_file(ldb_ctx, out, &ldif);
-					break;
-				}
-				if (ret2 == 2) {
-					fprintf(stderr, "Invalid entry %s, closing braces need to be preceded by a space\n", entry);
-					ret.failures++;
 					break;
 				}
 				line++;

@@ -38,7 +38,7 @@ static TDB_CONTEXT *netsamlogon_tdb = NULL;
 bool netsamlogon_cache_init(void)
 {
 	bool first_try = true;
-	char *path = NULL;
+	const char *path = NULL;
 	int ret;
 	struct tdb_context *tdb;
 
@@ -47,9 +47,6 @@ bool netsamlogon_cache_init(void)
 	}
 
 	path = cache_path(NETSAMLOGON_TDB);
-	if (path == NULL) {
-		return false;
-	}
 again:
 	tdb = tdb_open_log(path, 0, TDB_DEFAULT|TDB_INCOMPATIBLE_HASH,
 			   O_RDWR | O_CREAT, 0600);
@@ -66,19 +63,24 @@ again:
 	}
 
 	netsamlogon_tdb = tdb;
-	talloc_free(path);
 	return true;
 
 clear:
 	if (!first_try) {
-		talloc_free(path);
 		return false;
 	}
 	first_try = false;
 
-	DEBUG(0,("retry after truncate for '%s'\n", path));
-	truncate(path, 0);
-	goto again;
+	DEBUG(0,("retry after CLEAR_IF_FIRST for '%s'\n", path));
+	tdb = tdb_open_log(path, 0, TDB_CLEAR_IF_FIRST|TDB_INCOMPATIBLE_HASH,
+			   O_RDWR | O_CREAT, 0600);
+	if (tdb) {
+		tdb_close(tdb);
+		goto again;
+	}
+	DEBUG(0,("tdb_open_log(%s) with CLEAR_IF_FIRST - failed\n", path));
+
+	return false;
 }
 
 
@@ -130,7 +132,7 @@ bool netsamlogon_cache_store(const char *username, struct netr_SamInfo3 *info3)
 	bool result = false;
 	struct dom_sid	user_sid;
 	time_t t = time(NULL);
-	TALLOC_CTX *tmp_ctx = talloc_stackframe();
+	TALLOC_CTX *mem_ctx;
 	DATA_BLOB blob;
 	enum ndr_err_code ndr_err;
 	struct netsamlogoncache_entry r;
@@ -154,18 +156,9 @@ bool netsamlogon_cache_store(const char *username, struct netr_SamInfo3 *info3)
 
 	/* Prepare data */
 
-	if (info3->base.full_name.string == NULL) {
-		struct netr_SamInfo3 *cached_info3;
-		const char *full_name = NULL;
-
-		cached_info3 = netsamlogon_cache_get(tmp_ctx, &user_sid);
-		if (cached_info3 != NULL) {
-			full_name = cached_info3->base.full_name.string;
-		}
-
-		if (full_name != NULL) {
-			info3->base.full_name.string = talloc_strdup(info3, full_name);
-		}
+	if (!(mem_ctx = TALLOC_P( NULL, int))) {
+		DEBUG(0,("netsamlogon_cache_store: talloc() failed!\n"));
+		return false;
 	}
 
 	/* only Samba fills in the username, not sure why NT doesn't */
@@ -182,22 +175,22 @@ bool netsamlogon_cache_store(const char *username, struct netr_SamInfo3 *info3)
 		NDR_PRINT_DEBUG(netsamlogoncache_entry, &r);
 	}
 
-	ndr_err = ndr_push_struct_blob(&blob, tmp_ctx, &r,
+	ndr_err = ndr_push_struct_blob(&blob, mem_ctx, &r,
 				       (ndr_push_flags_fn_t)ndr_push_netsamlogoncache_entry);
 	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
 		DEBUG(0,("netsamlogon_cache_store: failed to push entry to cache\n"));
-		TALLOC_FREE(tmp_ctx);
+		TALLOC_FREE(mem_ctx);
 		return false;
 	}
 
 	data.dsize = blob.length;
 	data.dptr = blob.data;
 
-	if (tdb_store_bystring(netsamlogon_tdb, keystr, data, TDB_REPLACE) == 0) {
+	if (tdb_store_bystring(netsamlogon_tdb, keystr, data, TDB_REPLACE) != -1) {
 		result = true;
 	}
 
-	TALLOC_FREE(tmp_ctx);
+	TALLOC_FREE(mem_ctx);
 
 	return result;
 }
@@ -211,7 +204,7 @@ struct netr_SamInfo3 *netsamlogon_cache_get(TALLOC_CTX *mem_ctx, const struct do
 {
 	struct netr_SamInfo3 *info3 = NULL;
 	TDB_DATA data;
-	fstring keystr;
+	fstring keystr, tmp;
 	enum ndr_err_code ndr_err;
 	DATA_BLOB blob;
 	struct netsamlogoncache_entry r;
@@ -219,11 +212,11 @@ struct netr_SamInfo3 *netsamlogon_cache_get(TALLOC_CTX *mem_ctx, const struct do
 	if (!netsamlogon_cache_init()) {
 		DEBUG(0,("netsamlogon_cache_get: cannot open %s for write!\n",
 			NETSAMLOGON_TDB));
-		return NULL;
+		return false;
 	}
 
 	/* Prepare key as DOMAIN-SID/USER-RID string */
-	sid_to_fstring(keystr, user_sid);
+	slprintf(keystr, sizeof(keystr), "%s", sid_to_fstring(tmp, user_sid));
 	DEBUG(10,("netsamlogon_cache_get: SID [%s]\n", keystr));
 	data = tdb_fetch_bystring( netsamlogon_tdb, keystr );
 
@@ -231,7 +224,7 @@ struct netr_SamInfo3 *netsamlogon_cache_get(TALLOC_CTX *mem_ctx, const struct do
 		return NULL;
 	}
 
-	info3 = talloc_zero(mem_ctx, struct netr_SamInfo3);
+	info3 = TALLOC_ZERO_P(mem_ctx, struct netr_SamInfo3);
 	if (!info3) {
 		goto done;
 	}
@@ -241,15 +234,15 @@ struct netr_SamInfo3 *netsamlogon_cache_get(TALLOC_CTX *mem_ctx, const struct do
 	ndr_err = ndr_pull_struct_blob(&blob, mem_ctx, &r,
 				      (ndr_pull_flags_fn_t)ndr_pull_netsamlogoncache_entry);
 
-	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
-		DEBUG(0,("netsamlogon_cache_get: failed to pull entry from cache\n"));
-		tdb_delete_bystring(netsamlogon_tdb, keystr);
-		TALLOC_FREE(info3);
-		goto done;
-	}
-
 	if (DEBUGLEVEL >= 10) {
 		NDR_PRINT_DEBUG(netsamlogoncache_entry, &r);
+	}
+
+	if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+		DEBUG(0,("netsamlogon_cache_get: failed to pull entry from cache\n"));
+		tdb_delete(netsamlogon_tdb, data);
+		TALLOC_FREE(info3);
+		goto done;
 	}
 
 	info3 = (struct netr_SamInfo3 *)talloc_memdup(mem_ctx, &r.info3,
@@ -266,7 +259,7 @@ struct netr_SamInfo3 *netsamlogon_cache_get(TALLOC_CTX *mem_ctx, const struct do
 	   --jerry */
 	{
 		time_t		now = time(NULL);
-		uint32_t	time_diff;
+		uint32		time_diff;
 
 		/* is the entry expired? */
 		time_diff = now - t;

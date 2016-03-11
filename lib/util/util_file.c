@@ -4,27 +4,28 @@
  * Copyright (C) Andrew Tridgell 1992-1998 Modified by Jeremy Allison 1995.
  *
  * Added afdgets() Jelmer Vernooij 2005
- *
+ * 
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU General Public License as published by the Free
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.
- *
+ * 
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
- *
+ * 
  * You should have received a copy of the GNU General Public License along with
  * this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "replace.h"
+#include "includes.h"
 #include "system/shmem.h"
 #include "system/filesys.h"
-#include <talloc.h>
-#include "lib/util/samba_util.h"
-#include "lib/util/debug.h"
+#if _SAMBA_BUILD_ == 3
+#undef malloc
+#undef realloc
+#endif
 
 /**
  * @file
@@ -32,7 +33,7 @@
  */
 
 /**
-read a line from a file with possible \ continuation chars.
+read a line from a file with possible \ continuation chars. 
 Blanks at the start or end of a line are stripped.
 The string will be allocated if s2 is NULL
 **/
@@ -78,7 +79,7 @@ _PUBLIC_ char *fgets_slash(char *s2,int maxlen,XFILE *f)
 	    }
 	  return(s);
 	case EOF:
-	  if (len <= 0 && !s2)
+	  if (len <= 0 && !s2) 
 	    SAFE_FREE(s);
 	  return(len>0?s:NULL);
 	case ' ':
@@ -93,7 +94,7 @@ _PUBLIC_ char *fgets_slash(char *s2,int maxlen,XFILE *f)
       if (!s2 && len > maxlen-3)
 	{
 	  char *t;
-
+	  
 	  maxlen *= 2;
 	  t = realloc_p(s, char, maxlen);
 	  if (!t) {
@@ -107,7 +108,7 @@ _PUBLIC_ char *fgets_slash(char *s2,int maxlen,XFILE *f)
 }
 
 /**
- * Read one line (data until next newline or eof) and allocate it
+ * Read one line (data until next newline or eof) and allocate it 
  */
 _PUBLIC_ char *afdgets(int fd, TALLOC_CTX *mem_ctx, size_t hint)
 {
@@ -200,7 +201,7 @@ _PUBLIC_ char *file_load(const char *fname, size_t *size, size_t maxsize, TALLOC
 	char *p;
 
 	if (!fname || !*fname) return NULL;
-
+	
 	fd = open(fname,O_RDONLY);
 	if (fd == -1) return NULL;
 
@@ -209,6 +210,62 @@ _PUBLIC_ char *file_load(const char *fname, size_t *size, size_t maxsize, TALLOC
 	close(fd);
 
 	return p;
+}
+
+
+/**
+mmap (if possible) or read a file
+**/
+_PUBLIC_ void *map_file(const char *fname, size_t size)
+{
+	size_t s2 = 0;
+	void *p = NULL;
+#ifdef HAVE_MMAP
+	int fd;
+	fd = open(fname, O_RDONLY, 0);
+	if (fd == -1) {
+		DEBUG(2,("Failed to load %s - %s\n", fname, strerror(errno)));
+		return NULL;
+	}
+	p = mmap(NULL, size, PROT_READ, MAP_SHARED|MAP_FILE, fd, 0);
+	close(fd);
+	if (p == MAP_FAILED) {
+		DEBUG(1,("Failed to mmap %s - %s\n", fname, strerror(errno)));
+		return NULL;
+	}
+#endif
+	if (!p) {
+		p = file_load(fname, &s2, 0, NULL);
+		if (!p) return NULL;
+		if (s2 != size) {
+			DEBUG(1,("incorrect size for %s - got %d expected %d\n",
+				 fname, (int)s2, (int)size));
+			talloc_free(p);
+			return NULL;
+		}
+	}
+
+	return p;
+}
+
+/**
+ unmap or free memory
+**/
+
+bool unmap_file(void *start, size_t size)
+{
+#ifdef HAVE_MMAP
+	if (munmap( start, size ) != 0) {
+		DEBUG( 1, ("map_file: Failed to unmap address %p "
+			"of size %u - %s\n", 
+			start, (unsigned int)size, strerror(errno) ));
+		return false;
+	}
+	return true;
+#else
+	talloc_free(start);
+	return true;
+#endif
 }
 
 /**
@@ -226,13 +283,15 @@ char **file_lines_parse(char *p, size_t size, int *numlines, TALLOC_CTX *mem_ctx
 		if (s[0] == '\n') i++;
 	}
 
-	ret = talloc_zero_array(mem_ctx, char *, i+2);
+	ret = talloc_array(mem_ctx, char *, i+2);
 	if (!ret) {
 		talloc_free(p);
 		return NULL;
-	}
-
+	}	
+	
 	talloc_steal(ret, p);
+	
+	memset(ret, 0, sizeof(ret[0])*(i+2));
 
 	ret[0] = p;
 	for (s = p, i=0; s < p+size; s++) {
@@ -257,7 +316,7 @@ char **file_lines_parse(char *p, size_t size, int *numlines, TALLOC_CTX *mem_ctx
 
 /**
 load a file into memory and return an array of pointers to lines in the file
-must be freed with talloc_free().
+must be freed with talloc_free(). 
 **/
 _PUBLIC_ char **file_lines_load(const char *fname, int *numlines, size_t maxsize, TALLOC_CTX *mem_ctx)
 {
@@ -286,11 +345,37 @@ _PUBLIC_ char **fd_lines_load(int fd, int *numlines, size_t maxsize, TALLOC_CTX 
 	return file_lines_parse(p, size, numlines, mem_ctx);
 }
 
-_PUBLIC_ bool file_save_mode(const char *fname, const void *packet,
-			     size_t length, mode_t mode)
+
+/**
+take a list of lines and modify them to produce a list where \ continues
+a line
+**/
+_PUBLIC_ void file_lines_slashcont(char **lines)
+{
+	int i, j;
+
+	for (i=0; lines[i];) {
+		int len = strlen(lines[i]);
+		if (lines[i][len-1] == '\\') {
+			lines[i][len-1] = ' ';
+			if (lines[i+1]) {
+				char *p = &lines[i][len];
+				while (p < lines[i+1]) *p++ = ' ';
+				for (j = i+1; lines[j]; j++) lines[j] = lines[j+1];
+			}
+		} else {
+			i++;
+		}
+	}
+}
+
+/**
+  save a lump of data into a file. Mostly used for debugging 
+*/
+_PUBLIC_ bool file_save(const char *fname, const void *packet, size_t length)
 {
 	int fd;
-	fd = open(fname, O_WRONLY|O_CREAT|O_TRUNC, mode);
+	fd = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (fd == -1) {
 		return false;
 	}
@@ -300,14 +385,6 @@ _PUBLIC_ bool file_save_mode(const char *fname, const void *packet,
 	}
 	close(fd);
 	return true;
-}
-
-/**
-  save a lump of data into a file. Mostly used for debugging
-*/
-_PUBLIC_ bool file_save(const char *fname, const void *packet, size_t length)
-{
-	return file_save_mode(fname, packet, length, 0644);
 }
 
 _PUBLIC_ int vfdprintf(int fd, const char *format, va_list ap)
@@ -334,6 +411,27 @@ _PUBLIC_ int fdprintf(int fd, const char *format, ...)
 	ret = vfdprintf(fd, format, ap);
 	va_end(ap);
 	return ret;
+}
+
+
+/*
+  try to determine if the filesystem supports large files
+*/
+_PUBLIC_ bool large_file_support(const char *path)
+{
+	int fd;
+	ssize_t ret;
+	char c;
+
+	fd = open(path, O_RDWR|O_CREAT, 0600);
+	unlink(path);
+	if (fd == -1) {
+		/* have to assume large files are OK */
+		return true;
+	}
+	ret = pread(fd, &c, 1, ((uint64_t)1)<<32);
+	close(fd);
+	return ret == 0;
 }
 
 

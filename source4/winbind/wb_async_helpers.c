@@ -29,8 +29,6 @@
 #include "librpc/gen_ndr/ndr_lsa_c.h"
 #include "librpc/gen_ndr/ndr_samr_c.h"
 
-#include "winbind/wb_helper.h"
-
 
 struct lsa_lookupsids_state {
 	struct composite_context *ctx;
@@ -46,8 +44,7 @@ struct lsa_lookupsids_state {
 static void lsa_lookupsids_recv_names(struct tevent_req *subreq);
 
 struct composite_context *wb_lsa_lookupsids_send(TALLOC_CTX *mem_ctx,
-						 struct tevent_context *ev,
-						 struct dcerpc_binding_handle *lsa_binding,
+						 struct dcerpc_pipe *lsa_pipe,
 						 struct policy_handle *handle,
 						 uint32_t num_sids,
 						 const struct dom_sid **sids)
@@ -57,7 +54,7 @@ struct composite_context *wb_lsa_lookupsids_send(TALLOC_CTX *mem_ctx,
 	uint32_t i;
 	struct tevent_req *subreq;
 
-	result = composite_create(mem_ctx, ev);
+	result = composite_create(mem_ctx, lsa_pipe->conn->event_ctx);
 	if (result == NULL) goto failed;
 
 	state = talloc(result, struct lsa_lookupsids_state);
@@ -92,8 +89,9 @@ struct composite_context *wb_lsa_lookupsids_send(TALLOC_CTX *mem_ctx,
 	state->r.out.count = &state->count;
 	state->r.out.domains = &state->domains;
 
-	subreq = dcerpc_lsa_LookupSids_r_send(state, ev,
-					      lsa_binding,
+	subreq = dcerpc_lsa_LookupSids_r_send(state,
+					      result->event_ctx,
+					      lsa_pipe->binding_handle,
 					      &state->r);
 	if (subreq == NULL) goto failed;
 	tevent_req_set_callback(subreq, lsa_lookupsids_recv_names, state);
@@ -122,12 +120,6 @@ static void lsa_lookupsids_recv_names(struct tevent_req *subreq)
 		return;
 	}
 
-	if (state->names.count != state->num_sids) {
-		composite_error(state->ctx,
-				NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
-	}
-
 	state->result = talloc_array(state, struct wb_sid_object *,
 				     state->num_sids);
 	if (composite_nomem(state->result, state->ctx)) return;
@@ -148,14 +140,9 @@ static void lsa_lookupsids_recv_names(struct tevent_req *subreq)
 			continue;
 		}
 
-		if (domains == NULL) {
-			composite_error(state->ctx,
-					NT_STATUS_INVALID_NETWORK_RESPONSE);
-			return;
-		}
 		if (name->sid_index >= domains->count) {
 			composite_error(state->ctx,
-					NT_STATUS_INVALID_NETWORK_RESPONSE);
+					NT_STATUS_INVALID_PARAMETER);
 			return;
 		}
 
@@ -209,8 +196,7 @@ struct lsa_lookupnames_state {
 static void lsa_lookupnames_recv_sids(struct tevent_req *subreq);
 
 struct composite_context *wb_lsa_lookupnames_send(TALLOC_CTX *mem_ctx,
-						  struct tevent_context *ev,
-						  struct dcerpc_binding_handle *lsa_binding,
+						  struct dcerpc_pipe *lsa_pipe,
 						  struct policy_handle *handle,
 						  uint32_t num_names,
 						  const char **names)
@@ -222,7 +208,7 @@ struct composite_context *wb_lsa_lookupnames_send(TALLOC_CTX *mem_ctx,
 	struct lsa_String *lsa_names;
 	uint32_t i;
 
-	result = composite_create(mem_ctx, ev);
+	result = composite_create(mem_ctx, lsa_pipe->conn->event_ctx);
 	if (result == NULL) goto failed;
 
 	state = talloc(result, struct lsa_lookupnames_state);
@@ -255,8 +241,9 @@ struct composite_context *wb_lsa_lookupnames_send(TALLOC_CTX *mem_ctx,
 	state->r.out.sids = &state->sids;
 	state->r.out.domains = &state->domains;
 
-	subreq = dcerpc_lsa_LookupNames_r_send(state, ev,
-					       lsa_binding,
+	subreq = dcerpc_lsa_LookupNames_r_send(state,
+					       result->event_ctx,
+					       lsa_pipe->binding_handle,
 					       &state->r);
 	if (subreq == NULL) goto failed;
 	tevent_req_set_callback(subreq, lsa_lookupnames_recv_sids, state);
@@ -285,12 +272,6 @@ static void lsa_lookupnames_recv_sids(struct tevent_req *subreq)
 		return;
 	}
 
-	if (state->sids.count != state->num_names) {
-		composite_error(state->ctx,
-				NT_STATUS_INVALID_NETWORK_RESPONSE);
-		return;
-	}
-
 	state->result = talloc_array(state, struct wb_sid_object *,
 				     state->num_names);
 	if (composite_nomem(state->result, state->ctx)) return;
@@ -309,14 +290,9 @@ static void lsa_lookupnames_recv_sids(struct tevent_req *subreq)
 			continue;
 		}
 
-		if (domains == NULL) {
-			composite_error(state->ctx,
-					NT_STATUS_INVALID_NETWORK_RESPONSE);
-			return;
-		}
 		if (sid->sid_index >= domains->count) {
 			composite_error(state->ctx,
-					NT_STATUS_INVALID_NETWORK_RESPONSE);
+					NT_STATUS_INVALID_PARAMETER);
 			return;
 		}
 
@@ -345,7 +321,7 @@ NTSTATUS wb_lsa_lookupnames_recv(struct composite_context *c,
 }
 struct samr_getuserdomgroups_state {
 	struct composite_context *ctx;
-	struct dcerpc_binding_handle *samr_binding;
+	struct dcerpc_pipe *samr_pipe;
 
 	uint32_t num_rids;
 	uint32_t *rids;
@@ -363,8 +339,7 @@ static void samr_usergroups_recv_groups(struct tevent_req *subreq);
 static void samr_usergroups_recv_close(struct tevent_req *subreq);
 
 struct composite_context *wb_samr_userdomgroups_send(TALLOC_CTX *mem_ctx,
-						     struct tevent_context *ev,
-						     struct dcerpc_binding_handle *samr_binding,
+						     struct dcerpc_pipe *samr_pipe,
 						     struct policy_handle *domain_handle,
 						     uint32_t rid)
 {
@@ -372,7 +347,7 @@ struct composite_context *wb_samr_userdomgroups_send(TALLOC_CTX *mem_ctx,
 	struct samr_getuserdomgroups_state *state;
 	struct tevent_req *subreq;
 
-	result = composite_create(mem_ctx, ev);
+	result = composite_create(mem_ctx, samr_pipe->conn->event_ctx);
 	if (result == NULL) goto failed;
 
 	state = talloc(result, struct samr_getuserdomgroups_state);
@@ -380,7 +355,7 @@ struct composite_context *wb_samr_userdomgroups_send(TALLOC_CTX *mem_ctx,
 	result->private_data = state;
 	state->ctx = result;
 
-	state->samr_binding = samr_binding;
+	state->samr_pipe = samr_pipe;
 
 	state->user_handle = talloc(state, struct policy_handle);
 	if (state->user_handle == NULL) goto failed;
@@ -391,8 +366,8 @@ struct composite_context *wb_samr_userdomgroups_send(TALLOC_CTX *mem_ctx,
 	state->o.out.user_handle = state->user_handle;
 
 	subreq = dcerpc_samr_OpenUser_r_send(state,
-					     state->ctx->event_ctx,
-					     state->samr_binding,
+					     result->event_ctx,
+					     state->samr_pipe->binding_handle,
 					     &state->o);
 	if (subreq == NULL) goto failed;
 	tevent_req_set_callback(subreq, samr_usergroups_recv_open, state);
@@ -421,7 +396,7 @@ static void samr_usergroups_recv_open(struct tevent_req *subreq)
 
 	subreq = dcerpc_samr_GetGroupsForUser_r_send(state,
 						     state->ctx->event_ctx,
-						     state->samr_binding,
+						     state->samr_pipe->binding_handle,
 						     &state->g);
 	if (composite_nomem(subreq, state->ctx)) return;
 	tevent_req_set_callback(subreq, samr_usergroups_recv_groups, state);
@@ -444,7 +419,7 @@ static void samr_usergroups_recv_groups(struct tevent_req *subreq)
 
 	subreq = dcerpc_samr_Close_r_send(state,
 					  state->ctx->event_ctx,
-					  state->samr_binding,
+					  state->samr_pipe->binding_handle,
 					  &state->c);
 	if (composite_nomem(subreq, state->ctx)) return;
 	tevent_req_set_callback(subreq, samr_usergroups_recv_close, state);

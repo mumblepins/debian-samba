@@ -51,50 +51,50 @@ static void parse_samsync_partial_replication_objects(TALLOC_CTX *mem_ctx,
 
 		ZERO_STRUCT(o);
 
-		if (!strncasecmp_m(argv[i], "user_rid=", strlen("user_rid="))) {
+		if (!StrnCaseCmp(argv[i], "user_rid=", strlen("user_rid="))) {
 			o.object_identifier.rid		= get_int_param(argv[i]);
 			o.object_type			= NETR_DELTA_USER;
 			o.database_id			= SAM_DATABASE_DOMAIN;
 		}
-		if (!strncasecmp_m(argv[i], "group_rid=", strlen("group_rid="))) {
+		if (!StrnCaseCmp(argv[i], "group_rid=", strlen("group_rid="))) {
 			o.object_identifier.rid		= get_int_param(argv[i]);
 			o.object_type			= NETR_DELTA_GROUP;
 			o.database_id			= SAM_DATABASE_DOMAIN;
 		}
-		if (!strncasecmp_m(argv[i], "group_member_rid=", strlen("group_member_rid="))) {
+		if (!StrnCaseCmp(argv[i], "group_member_rid=", strlen("group_member_rid="))) {
 			o.object_identifier.rid		= get_int_param(argv[i]);
 			o.object_type			= NETR_DELTA_GROUP_MEMBER;
 			o.database_id			= SAM_DATABASE_DOMAIN;
 		}
-		if (!strncasecmp_m(argv[i], "alias_rid=", strlen("alias_rid="))) {
+		if (!StrnCaseCmp(argv[i], "alias_rid=", strlen("alias_rid="))) {
 			o.object_identifier.rid		= get_int_param(argv[i]);
 			o.object_type			= NETR_DELTA_ALIAS;
 			o.database_id			= SAM_DATABASE_BUILTIN;
 		}
-		if (!strncasecmp_m(argv[i], "alias_member_rid=", strlen("alias_member_rid="))) {
+		if (!StrnCaseCmp(argv[i], "alias_member_rid=", strlen("alias_member_rid="))) {
 			o.object_identifier.rid		= get_int_param(argv[i]);
 			o.object_type			= NETR_DELTA_ALIAS_MEMBER;
 			o.database_id			= SAM_DATABASE_BUILTIN;
 		}
-		if (!strncasecmp_m(argv[i], "account_sid=", strlen("account_sid="))) {
+		if (!StrnCaseCmp(argv[i], "account_sid=", strlen("account_sid="))) {
 			const char *sid_str = get_string_param(argv[i]);
 			string_to_sid(&o.object_identifier.sid, sid_str);
 			o.object_type			= NETR_DELTA_ACCOUNT;
 			o.database_id			= SAM_DATABASE_PRIVS;
 		}
-		if (!strncasecmp_m(argv[i], "policy_sid=", strlen("policy_sid="))) {
+		if (!StrnCaseCmp(argv[i], "policy_sid=", strlen("policy_sid="))) {
 			const char *sid_str = get_string_param(argv[i]);
 			string_to_sid(&o.object_identifier.sid, sid_str);
 			o.object_type			= NETR_DELTA_POLICY;
 			o.database_id			= SAM_DATABASE_PRIVS;
 		}
-		if (!strncasecmp_m(argv[i], "trustdom_sid=", strlen("trustdom_sid="))) {
+		if (!StrnCaseCmp(argv[i], "trustdom_sid=", strlen("trustdom_sid="))) {
 			const char *sid_str = get_string_param(argv[i]);
 			string_to_sid(&o.object_identifier.sid, sid_str);
 			o.object_type			= NETR_DELTA_TRUSTED_DOMAIN;
 			o.database_id			= SAM_DATABASE_PRIVS;
 		}
-		if (!strncasecmp_m(argv[i], "secret_name=", strlen("secret_name="))) {
+		if (!StrnCaseCmp(argv[i], "secret_name=", strlen("secret_name="))) {
 			o.object_identifier.name	= get_string_param(argv[i]);
 			o.object_type			= NETR_DELTA_SECRET;
 			o.database_id			= SAM_DATABASE_PRIVS;
@@ -129,7 +129,6 @@ NTSTATUS rpc_samdump_internals(struct net_context *c,
 
 	ctx->mode		= NET_SAMSYNC_MODE_DUMP;
 	ctx->cli		= pipe_hnd;
-	ctx->netlogon_creds	= c->netlogon_creds;
 	ctx->ops		= &libnet_samsync_display_ops;
 	ctx->domain_name	= domain_name;
 
@@ -336,7 +335,7 @@ int rpc_vampire_passdb(struct net_context *c, int argc, const char **argv)
 
 	if (!dc_info.is_ad) {
 		printf(_("DC is not running Active Directory\n"));
-		ret = run_rpc_command(c, cli, &ndr_table_netlogon,
+		ret = run_rpc_command(c, cli, &ndr_table_netlogon.syntax_id,
 				      0,
 				      rpc_vampire_internals, argc, argv);
 		return ret;
@@ -351,13 +350,13 @@ int rpc_vampire_passdb(struct net_context *c, int argc, const char **argv)
 		return -1;
 	}
 
-	ret = run_rpc_command(c, cli, &ndr_table_drsuapi,
+	ret = run_rpc_command(c, cli, &ndr_table_drsuapi.syntax_id,
 			      NET_FLAGS_SEAL | NET_FLAGS_TCP,
 			      rpc_vampire_ds_internals, argc, argv);
 	if (ret != 0 && dc_info.is_mixed_mode) {
 		printf(_("Fallback to NT4 vampire on Mixed-Mode AD "
 			 "Domain\n"));
-		ret = run_rpc_command(c, cli, &ndr_table_netlogon,
+		ret = run_rpc_command(c, cli, &ndr_table_netlogon.syntax_id,
 				      0,
 				      rpc_vampire_internals, argc, argv);
 	}
@@ -445,7 +444,7 @@ int rpc_vampire_ldif(struct net_context *c, int argc, const char **argv)
 		return 0;
 	}
 
-	return run_rpc_command(c, NULL, &ndr_table_netlogon, 0,
+	return run_rpc_command(c, NULL, &ndr_table_netlogon.syntax_id, 0,
 			       rpc_vampire_ldif_internals, argc, argv);
 }
 
@@ -602,24 +601,19 @@ int rpc_vampire_keytab(struct net_context *c, int argc, const char **argv)
 
 	if (!dc_info.is_ad) {
 		printf(_("DC is not running Active Directory\n"));
-		ret = run_rpc_command(c, cli, &ndr_table_netlogon,
+		ret = run_rpc_command(c, cli, &ndr_table_netlogon.syntax_id,
 				      0,
 				      rpc_vampire_keytab_internals, argc, argv);
 	} else {
-		ret = run_rpc_command(c, cli, &ndr_table_drsuapi,
+		ret = run_rpc_command(c, cli, &ndr_table_drsuapi.syntax_id,
 				      NET_FLAGS_SEAL | NET_FLAGS_TCP,
 				      rpc_vampire_keytab_ds_internals, argc, argv);
 		if (ret != 0 && dc_info.is_mixed_mode) {
 			printf(_("Fallback to NT4 vampire on Mixed-Mode AD "
 				 "Domain\n"));
-			ret = run_rpc_command(c, cli, &ndr_table_netlogon,
+			ret = run_rpc_command(c, cli, &ndr_table_netlogon.syntax_id,
 					      0,
 					      rpc_vampire_keytab_internals, argc, argv);
-		} else {
-#ifndef HAVE_ADS
-			printf(_("Vampire requested against AD DC but ADS"
-				" support not built in: HAVE_ADS is not defined\n"));
-#endif
 		}
 	}
 

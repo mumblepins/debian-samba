@@ -28,7 +28,6 @@
  */
 
 #include "includes.h"
-#include "system/passwd.h" /* uid_wrapper */
 #include "rpc_server/srv_access_check.h"
 #include "../libcli/security/security.h"
 #include "passdb/machine_sid.h"
@@ -47,28 +46,13 @@
 
 NTSTATUS access_check_object( struct security_descriptor *psd, struct security_token *token,
 			      enum sec_privilege needed_priv_1, enum sec_privilege needed_priv_2,
-			      uint32_t rights_mask,
-			      uint32_t des_access, uint32_t *acc_granted,
+			      uint32 rights_mask,
+			      uint32 des_access, uint32 *acc_granted,
 			      const char *debug )
 {
 	NTSTATUS status = NT_STATUS_ACCESS_DENIED;
-	uint32_t saved_mask = 0;
+	uint32 saved_mask = 0;
 	bool priv_granted = false;
-	bool is_system = false;
-	bool is_root = false;
-
-	/* Check if we are are the system token */
-	if (security_token_is_system(token) &&
-	    security_token_system_privilege(token)) {
-		is_system = true;
-	}
-
-	/* Check if we are root */
-	if (root_mode()) {
-		is_root = true;
-	}
-
-	/* Check if we are root */
 
 	/* check privileges; certain SAM access bits should be overridden
 	   by privileges (mostly having to do with creating/modifying/deleting
@@ -86,15 +70,18 @@ NTSTATUS access_check_object( struct security_descriptor *psd, struct security_t
 
 
 	/* check the security descriptor first */
+
 	status = se_access_check(psd, token, des_access, acc_granted);
 	if (NT_STATUS_IS_OK(status)) {
 		goto done;
 	}
 
-	if (is_system || is_root) {
+	/* give root a free pass */
+
+	if ( geteuid() == sec_initial_uid() ) {
+
 		DEBUG(4,("%s: ACCESS should be DENIED  (requested: %#010x)\n", debug, des_access));
-		DEBUGADD(4,("but overritten by %s\n",
-			    is_root ? "euid == initial uid" : "system token"));
+		DEBUGADD(4,("but overritten by euid == sec_initial_uid()\n"));
 
 		priv_granted = true;
 		*acc_granted = des_access;
@@ -134,7 +121,7 @@ void map_max_allowed_access(const struct security_token *nt_token,
 	*pacc_requested &= ~MAXIMUM_ALLOWED_ACCESS;
 
 	/* At least try for generic read|execute - Everyone gets that. */
-	*pacc_requested |= GENERIC_READ_ACCESS|GENERIC_EXECUTE_ACCESS;
+	*pacc_requested = GENERIC_READ_ACCESS|GENERIC_EXECUTE_ACCESS;
 
 	/* root gets anything. */
 	if (unix_token->uid == sec_initial_uid()) {

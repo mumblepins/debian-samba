@@ -55,7 +55,7 @@ make_pa_tgs_req(krb5_context context,
 {
     u_char *buf;
     size_t buf_size;
-    size_t len = 0;
+    size_t len;
     krb5_data in_data;
     krb5_error_code ret;
 
@@ -90,7 +90,7 @@ set_auth_data (krb5_context context,
 	       krb5_keyblock *subkey)
 {
     if(authdata->len) {
-	size_t len = 0, buf_size;
+	size_t len, buf_size;
 	unsigned char *buf;
 	krb5_crypto crypto;
 	krb5_error_code ret;
@@ -166,11 +166,10 @@ init_tgs_req (krb5_context context,
 	}
 	t->req_body.etype.val[0] = in_creds->session.keytype;
     } else {
-	ret = _krb5_init_etype(context,
-			       KRB5_PDU_TGS_REQUEST,
-			       &t->req_body.etype.len,
-			       &t->req_body.etype.val,
-			       NULL);
+	ret = krb5_init_etype(context,
+			      &t->req_body.etype.len,
+			      &t->req_body.etype.val,
+			      NULL);
     }
     if (ret)
 	goto fail;
@@ -236,7 +235,7 @@ init_tgs_req (krb5_context context,
 	goto fail;
     }
     {
-	size_t i;
+	int i;
 	for (i = 0; i < padata->len; i++) {
 	    ret = copy_PA_DATA(&padata->val[i], &t->padata->val[i + 1]);
 	    if (ret) {
@@ -250,16 +249,16 @@ init_tgs_req (krb5_context context,
     ret = krb5_auth_con_init(context, &ac);
     if(ret)
 	goto fail;
-
+    
     ret = krb5_auth_con_generatelocalsubkey(context, ac, &krbtgt->session);
     if (ret)
 	goto fail;
-
+    
     ret = set_auth_data (context, &t->req_body, &in_creds->authdata,
 			 ac->local_subkey);
     if (ret)
 	goto fail;
-
+    
     ret = make_pa_tgs_req(context,
 			  ac,
 			  &t->req_body,
@@ -335,8 +334,6 @@ decrypt_tkt_with_subkey (krb5_context context,
 
     assert(usage == 0);
 
-    krb5_data_zero(&data);
-
     /*
      * start out with trying with subkey if we have one
      */
@@ -386,7 +383,7 @@ decrypt_tkt_with_subkey (krb5_context context,
 				   &dec_rep->enc_part,
 				   &size);
     if (ret)
-      krb5_set_error_message(context, ret,
+      krb5_set_error_message(context, ret, 
 			     N_("Failed to decode encpart in ticket", ""));
     krb5_data_free (&data);
     return ret;
@@ -411,7 +408,7 @@ get_cred_kdc(krb5_context context,
     krb5_error_code ret;
     unsigned nonce;
     krb5_keyblock *subkey = NULL;
-    size_t len = 0;
+    size_t len;
     Ticket second_ticket_data;
     METHOD_DATA padata;
 
@@ -438,12 +435,12 @@ get_cred_kdc(krb5_context context,
 	PA_S4U2Self self;
 	krb5_data data;
 	void *buf;
-	size_t size = 0;
+	size_t size;
 
 	self.name = impersonate_principal->name;
 	self.realm = impersonate_principal->realm;
 	self.auth = estrdup("Kerberos");
-
+	
 	ret = _krb5_s4u2self_to_checksumdata(context, &self, &data);
 	if (ret) {
 	    free(self.auth);
@@ -478,7 +475,7 @@ get_cred_kdc(krb5_context context,
 	    goto out;
 	if (len != size)
 	    krb5_abortx(context, "internal asn1 error");
-
+	
 	ret = krb5_padata_add(context, &padata, KRB5_PADATA_FOR_USER, buf, len);
 	if (ret)
 	    goto out;
@@ -542,11 +539,6 @@ get_cred_kdc(krb5_context context,
 	    goto out2;
 	/* this should go someplace else */
 	out_creds->times.endtime = in_creds->times.endtime;
-
-	/*
-	 * Windows KDCs always canonicalize the server name
-	 */
-	eflags |= EXTRACT_TICKET_ALLOW_SERVER_MISMATCH;
 
 	/* XXX should do better testing */
 	if (flags.b.constrained_delegation || impersonate_principal)
@@ -617,7 +609,7 @@ get_cred_kdc_address(krb5_context context,
 
 	krb5_appdefault_boolean(context, NULL, krbtgt->server->realm,
 				"no-addresses", FALSE, &noaddr);
-
+	
 	if (!noaddr) {
 	    krb5_get_all_client_addrs(context, &addresses);
 	    /* XXX this sucks. */
@@ -742,7 +734,7 @@ get_cred_kdc_capath_worker(krb5_context context,
                            krb5_creds *in_creds,
                            krb5_const_realm try_realm,
                            krb5_principal impersonate_principal,
-                           Ticket *second_ticket,
+                           Ticket *second_ticket,			
                            krb5_creds **out_creds,
                            krb5_creds ***ret_tgts)
 {
@@ -817,7 +809,7 @@ get_cred_kdc_capath_worker(krb5_context context,
 	    krb5_free_principal(context, tmp_creds.client);
 	    return ret;
 	}
-	/*
+	/* 
 	 * if either of the chain or the ok_as_delegate was stripped
 	 * by the kdc, make sure we strip it too.
 	 */
@@ -839,6 +831,7 @@ get_cred_kdc_capath_worker(krb5_context context,
 	ret = krb5_make_principal(context, &tmp_creds.server,
 				  tgt_inst, KRB5_TGS_NAME, server_realm, NULL);
 	if(ret) {
+	    krb5_free_principal(context, tmp_creds.server);
 	    krb5_free_principal(context, tmp_creds.client);
 	    return ret;
 	}
@@ -849,7 +842,7 @@ get_cred_kdc_capath_worker(krb5_context context,
 	    return ret;
 	}
     }
-
+	
     krb5_free_principal(context, tmp_creds.server);
     krb5_free_principal(context, tmp_creds.client);
     *out_creds = calloc(1, sizeof(**out_creds));
@@ -867,7 +860,7 @@ get_cred_kdc_capath_worker(krb5_context context,
     }
     krb5_free_creds(context, tgt);
     return ret;
-}
+}                           
 
 /*
 get_cred(server)
@@ -890,7 +883,7 @@ get_cred_kdc_capath(krb5_context context,
 		    krb5_ccache ccache,
 		    krb5_creds *in_creds,
 		    krb5_principal impersonate_principal,
-		    Ticket *second_ticket,
+		    Ticket *second_ticket,			
 		    krb5_creds **out_creds,
 		    krb5_creds ***ret_tgts)
 {
@@ -925,7 +918,7 @@ get_cred_kdc_referral(krb5_context context,
 		      krb5_ccache ccache,
 		      krb5_creds *in_creds,
 		      krb5_principal impersonate_principal,
-		      Ticket *second_ticket,
+		      Ticket *second_ticket,			
 		      krb5_creds **out_creds,
 		      krb5_creds ***ret_tgts)
 {
@@ -953,7 +946,7 @@ get_cred_kdc_referral(krb5_context context,
     /* find tgt for the clients base realm */
     {
 	krb5_principal tgtname;
-
+	
 	ret = krb5_make_principal(context, &tgtname,
 				  client_realm,
 				  KRB5_TGS_NAME,
@@ -961,7 +954,7 @@ get_cred_kdc_referral(krb5_context context,
 				  NULL);
 	if(ret)
 	    return ret;
-
+	
 	ret = find_cred(context, ccache, tgtname, *ret_tgts, &tgt);
 	krb5_free_principal(context, tgtname);
 	if (ret)
@@ -1039,9 +1032,9 @@ get_cred_kdc_referral(krb5_context context,
                 goto out;
 	    }
 	    tickets++;
-	}
+	}	
 
-	/*
+	/* 
 	 * if either of the chain or the ok_as_delegate was stripped
 	 * by the kdc, make sure we strip it too.
 	 */
@@ -1087,7 +1080,7 @@ _krb5_get_cred_kdc_any(krb5_context context,
 		       krb5_ccache ccache,
 		       krb5_creds *in_creds,
 		       krb5_principal impersonate_principal,
-		       Ticket *second_ticket,
+		       Ticket *second_ticket,			
 		       krb5_creds **out_creds,
 		       krb5_creds ***ret_tgts)
 {
@@ -1172,7 +1165,7 @@ krb5_get_credentials_with_flags(krb5_context context,
             *out_creds = res_creds;
             return 0;
         }
-
+	
 	krb5_timeofday(context, &timeret);
 	if(res_creds->times.endtime > timeret) {
 	    *out_creds = res_creds;
@@ -1389,7 +1382,7 @@ krb5_get_creds(krb5_context context,
 	    krb5_free_principal(context, in_creds.client);
             goto out;
         }
-
+	
 	krb5_timeofday(context, &timeret);
 	if(res_creds->times.endtime > timeret) {
 	    *out_creds = res_creds;
@@ -1474,7 +1467,7 @@ krb5_get_renewed_creds(krb5_context context,
 	}
     } else {
 	const char *realm = krb5_principal_get_realm(context, client);
-
+	
 	ret = krb5_make_principal(context, &in.server, realm, KRB5_TGS_NAME,
 				  realm, NULL);
 	if (ret) {

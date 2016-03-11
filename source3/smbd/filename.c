@@ -28,10 +28,10 @@
 #include "system/filesys.h"
 #include "fake_file.h"
 #include "smbd/smbd.h"
-#include "smbd/globals.h"
 
 static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,
 				  connection_struct *conn,
+				  const char *orig_path,
 				  struct smb_filename *smb_fname);
 
 /****************************************************************************
@@ -160,14 +160,14 @@ static NTSTATUS check_parent_exists(TALLOC_CTX *ctx,
 	}
 
 	/* Parent exists - set "start" to be the
-	 * last component to shorten the tree walk. */
+	 * last compnent to shorten the tree walk. */
 
 	/*
-	 * Safe to use discard_const_p
+	 * Safe to use CONST_DISCARD
 	 * here as last_component points
 	 * into our smb_fname->base_name.
 	 */
-	*pp_start = discard_const_p(char, last_component);
+	*pp_start = CONST_DISCARD(char *,last_component);
 
 	/* Update dirpath. */
 	TALLOC_FREE(*pp_dirpath);
@@ -322,11 +322,7 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 
 	if (conn->case_sensitive && !conn->case_preserve &&
 			!conn->short_case_preserve) {
-		if (!strnorm(smb_fname->base_name, lp_default_case(SNUM(conn)))) {
-			DEBUG(0, ("strnorm %s failed\n", smb_fname->base_name));
-			status = NT_STATUS_INVALID_PARAMETER;
-			goto err;
-		}
+		strnorm(smb_fname->base_name, lp_defaultcase(SNUM(conn)));
 	}
 
 	/*
@@ -370,35 +366,6 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 			 */
 			*stream = '\0';
 			stream = tmp;
-
-			if (smb_fname->base_name[0] == '\0') {
-				/*
-				 * orig_name was just a stream name.
-				 * This is a stream on the root of
-				 * the share. Replace base_name with
-				 * a "."
-				 */
-				smb_fname->base_name =
-					talloc_strdup(smb_fname, ".");
-				if (smb_fname->base_name == NULL) {
-					status = NT_STATUS_NO_MEMORY;
-					goto err;
-				}
-				if (SMB_VFS_STAT(conn, smb_fname) != 0) {
-					status = map_nt_error_from_unix(errno);
-					goto err;
-				}
-				/* dirpath must exist. */
-				dirpath = talloc_strdup(ctx,"");
-				if (dirpath == NULL) {
-					status = NT_STATUS_NO_MEMORY;
-					goto err;
-				}
-				DEBUG(5, ("conversion finished %s -> %s\n",
-					orig_path,
-					smb_fname->base_name));
-				goto done;
-			}
 		}
 	}
 
@@ -478,17 +445,13 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 
 		if (errno == ENOENT) {
 			/* Optimization when creating a new file - only
-			   the last component doesn't exist.
-			   NOTE : check_parent_exists() doesn't preserve errno.
-			*/
-			int saved_errno = errno;
+			   the last component doesn't exist. */
 			status = check_parent_exists(ctx,
 						conn,
 						posix_pathnames,
 						smb_fname,
 						&dirpath,
 						&start);
-			errno = saved_errno;
 			if (!NT_STATUS_IS_OK(status)) {
 				goto fail;
 			}
@@ -561,16 +524,13 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 		 * Optimization for common case where the wildcard
 		 * is in the last component and the client already
 		 * sent the correct case.
-		 * NOTE : check_parent_exists() doesn't preserve errno.
 		 */
-		int saved_errno = errno;
 		status = check_parent_exists(ctx,
 					conn,
 					posix_pathnames,
 					smb_fname,
 					&dirpath,
 					&start);
-		errno = saved_errno;
 		if (!NT_STATUS_IS_OK(status)) {
 			goto fail;
 		}
@@ -746,30 +706,12 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 
 				/*
 				 * ENOENT/EACCESS are the only valid errors
-				 * here.
+				 * here. EACCESS needs handling here for
+				 * "dropboxes", i.e. directories where users
+				 * can only put stuff with permission -wx.
 				 */
-
-				if (errno == EACCES) {
-					if ((ucf_flags & UCF_PREP_CREATEFILE) == 0) {
-						status = NT_STATUS_ACCESS_DENIED;
-						goto fail;
-					} else {
-						/*
-						 * This is the dropbox
-						 * behaviour. A dropbox is a
-						 * directory with only -wx
-						 * permissions, so
-						 * get_real_filename fails
-						 * with EACCESS, it needs to
-						 * list the directory. We
-						 * nevertheless want to allow
-						 * users creating a file.
-						 */
-						errno = 0;
-					}
-				}
-
-				if ((errno != 0) && (errno != ENOENT)) {
+				if ((errno != 0) && (errno != ENOENT)
+				    && (errno != EACCES)) {
 					/*
 					 * ENOTDIR and ELOOP both map to
 					 * NT_STATUS_OBJECT_PATH_NOT_FOUND
@@ -797,13 +739,8 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 				    (mangle_is_8_3(start, False,
 						   conn->params) &&
 						 !conn->short_case_preserve)) {
-					if (!strnorm(start,
-							lp_default_case(SNUM(conn)))) {
-						DEBUG(0, ("strnorm %s failed\n",
-							start));
-						status = NT_STATUS_INVALID_PARAMETER;
-						goto err;
-					}
+					strnorm(start,
+						lp_defaultcase(SNUM(conn)));
 				}
 
 				/*
@@ -1009,7 +946,7 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 		smb_fname->stream_name = stream;
 
 		/* Check path now that the base_name has been converted. */
-		status = build_stream_path(ctx, conn, smb_fname);
+		status = build_stream_path(ctx, conn, orig_path, smb_fname);
 		if (!NT_STATUS_IS_OK(status)) {
 			goto fail;
 		}
@@ -1019,7 +956,7 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 	return NT_STATUS_OK;
  fail:
 	DEBUG(10, ("dirpath = [%s] start = [%s]\n", dirpath, start));
-	if (dirpath && *dirpath != '\0') {
+	if (*dirpath != '\0') {
 		smb_fname->base_name = talloc_asprintf(smb_fname, "%s/%s",
 						       dirpath, start);
 	} else {
@@ -1040,10 +977,10 @@ NTSTATUS unix_convert(TALLOC_CTX *ctx,
 }
 
 /****************************************************************************
- Ensure a path is not vetoed.
+ Ensure a path is not vetod.
 ****************************************************************************/
 
-static NTSTATUS check_veto_path(connection_struct *conn, const char *name)
+NTSTATUS check_veto_path(connection_struct *conn, const char *name)
 {
 	if (IS_VETO_PATH(conn, name))  {
 		/* Is it not dot or dot dot. */
@@ -1071,7 +1008,7 @@ NTSTATUS check_name(connection_struct *conn, const char *name)
 		return status;
 	}
 
-	if (!lp_widelinks(SNUM(conn)) || !lp_follow_symlinks(SNUM(conn))) {
+	if (!lp_widelinks(SNUM(conn)) || !lp_symlinks(SNUM(conn))) {
 		status = check_reduced_name(conn,name);
 		if (!NT_STATUS_IS_OK(status)) {
 			DEBUG(5,("check_name: name %s failed with %s\n",name,
@@ -1081,25 +1018,6 @@ NTSTATUS check_name(connection_struct *conn, const char *name)
 	}
 
 	return NT_STATUS_OK;
-}
-
-/****************************************************************************
- Must be called as root. Creates the struct privilege_paths
- attached to the struct smb_request if this call is successful.
-****************************************************************************/
-
-static NTSTATUS check_name_with_privilege(connection_struct *conn,
-		struct smb_request *smbreq,
-		const char *name)
-{
-	NTSTATUS status = check_veto_path(conn, name);
-
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
-	}
-	return check_reduced_name_with_privilege(conn,
-			name,
-			smbreq);
 }
 
 /****************************************************************************
@@ -1261,6 +1179,7 @@ int get_real_filename(connection_struct *conn, const char *path,
 
 static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,
 				  connection_struct *conn,
+				  const char *orig_path,
 				  struct smb_filename *smb_fname)
 {
 	NTSTATUS status;
@@ -1338,7 +1257,6 @@ static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,
  * @param ctx		talloc_ctx to allocate memory with.
  * @param conn		connection struct for vfs calls.
  * @param dfs_path	Whether this path requires dfs resolution.
- * @param smbreq	SMB request if we're using privileges.
  * @param name_in	The unconverted name.
  * @param ucf_flags	flags to pass through to unix_convert().
  *			UCF_ALWAYS_ALLOW_WCARD_LCOMP will be OR'd in if
@@ -1352,10 +1270,9 @@ static NTSTATUS build_stream_path(TALLOC_CTX *mem_ctx,
  * @return NT_STATUS_OK if all operations completed succesfully, appropriate
  * 	   error otherwise.
  */
-static NTSTATUS filename_convert_internal(TALLOC_CTX *ctx,
+NTSTATUS filename_convert(TALLOC_CTX *ctx,
 				connection_struct *conn,
 				bool dfs_path,
-				struct smb_request *smbreq,
 				const char *name_in,
 				uint32_t ucf_flags,
 				bool *ppath_contains_wcard,
@@ -1371,11 +1288,10 @@ static NTSTATUS filename_convert_internal(TALLOC_CTX *ctx,
 				dfs_path,
 				name_in,
 				allow_wcards,
-				!conn->sconn->using_smb2,
 				&fname,
 				ppath_contains_wcard);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(10,("filename_convert_internal: resolve_dfspath failed "
+		DEBUG(10,("filename_convert: resolve_dfspath failed "
 			"for name %s with %s\n",
 			name_in,
 			nt_errstr(status) ));
@@ -1386,13 +1302,11 @@ static NTSTATUS filename_convert_internal(TALLOC_CTX *ctx,
 		SMB_STRUCT_STAT st;
 		ZERO_STRUCT(st);
 		st.st_ex_nlink = 1;
-		*pp_smb_fname = synthetic_smb_fname_split(ctx,
+		status = create_synthetic_smb_fname_split(ctx,
 							  name_in,
-							  &st);
-		if (*pp_smb_fname == NULL) {
-			return NT_STATUS_NO_MEMORY;
-		}
-		return NT_STATUS_OK;
+							  &st,
+							  pp_smb_fname);
+		return status;
 	}
 
 	/*
@@ -1406,7 +1320,7 @@ static NTSTATUS filename_convert_internal(TALLOC_CTX *ctx,
 
 	status = unix_convert(ctx, conn, fname, pp_smb_fname, ucf_flags);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(10,("filename_convert_internal: unix_convert failed "
+		DEBUG(10,("filename_convert: unix_convert failed "
 			"for name %s with %s\n",
 			fname,
 			nt_errstr(status) ));
@@ -1419,13 +1333,9 @@ static NTSTATUS filename_convert_internal(TALLOC_CTX *ctx,
 		return check_veto_path(conn, (*pp_smb_fname)->base_name);
 	}
 
-	if (!smbreq) {
-		status = check_name(conn, (*pp_smb_fname)->base_name);
-	} else {
-		status = check_name_with_privilege(conn, smbreq, (*pp_smb_fname)->base_name);
-	}
+	status = check_name(conn, (*pp_smb_fname)->base_name);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(3,("filename_convert_internal: check_name failed "
+		DEBUG(3,("filename_convert: check_name failed "
 			"for name %s with %s\n",
 			smb_fname_str_dbg(*pp_smb_fname),
 			nt_errstr(status) ));
@@ -1434,50 +1344,4 @@ static NTSTATUS filename_convert_internal(TALLOC_CTX *ctx,
 	}
 
 	return status;
-}
-
-/*
- * Go through all the steps to validate a filename.
- * Non-root version.
- */
-
-NTSTATUS filename_convert(TALLOC_CTX *ctx,
-				connection_struct *conn,
-				bool dfs_path,
-				const char *name_in,
-				uint32_t ucf_flags,
-				bool *ppath_contains_wcard,
-				struct smb_filename **pp_smb_fname)
-{
-	return filename_convert_internal(ctx,
-					conn,
-					dfs_path,
-					NULL,
-					name_in,
-					ucf_flags,
-					ppath_contains_wcard,
-					pp_smb_fname);
-}
-
-/*
- * Go through all the steps to validate a filename.
- * root (privileged) version.
- */
-
-NTSTATUS filename_convert_with_privilege(TALLOC_CTX *ctx,
-                                connection_struct *conn,
-				struct smb_request *smbreq,
-                                const char *name_in,
-                                uint32_t ucf_flags,
-                                bool *ppath_contains_wcard,
-                                struct smb_filename **pp_smb_fname)
-{
-	return filename_convert_internal(ctx,
-					conn,
-					smbreq->flags2 & FLAGS2_DFS_PATHNAMES,
-					smbreq,
-					name_in,
-					ucf_flags,
-					ppath_contains_wcard,
-					pp_smb_fname);
 }

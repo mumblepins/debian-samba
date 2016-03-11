@@ -22,7 +22,7 @@
 #include "smbprofile.h"
 
 #define MODULE "crossrename"
-static off_t module_sizelimit;
+static SMB_OFF_T module_sizelimit;
 
 static int crossrename_connect(
                 struct vfs_handle_struct *  handle,
@@ -35,7 +35,7 @@ static int crossrename_connect(
 		return ret;
 	}
 
-	module_sizelimit = (off_t) lp_parm_int(SNUM(handle->conn),
+	module_sizelimit = (SMB_OFF_T) lp_parm_int(SNUM(handle->conn),
 					MODULE, "sizelimit", 20);
 	/* convert from MiB to byte: */
 	module_sizelimit *= 1048576;
@@ -70,18 +70,16 @@ static int copy_reg(const char *source, const char *dest)
 		return -1;
 	}
 
-	if((ifd = open (source, O_RDONLY, 0)) < 0)
+	if((ifd = sys_open (source, O_RDONLY, 0)) < 0)
 		return -1;
 
-	if (unlink (dest) && errno != ENOENT) {
-		close(ifd);
+	if (unlink (dest) && errno != ENOENT)
 		return -1;
-	}
 
 #ifdef O_NOFOLLOW
-	if((ofd = open (dest, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600)) < 0 )
+	if((ofd = sys_open (dest, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600)) < 0 )
 #else
-	if((ofd = open (dest, O_WRONLY | O_CREAT | O_TRUNC , 0600)) < 0 )
+	if((ofd = sys_open (dest, O_WRONLY | O_CREAT | O_TRUNC , 0600)) < 0 )
 #endif
 		goto err;
 
@@ -106,11 +104,9 @@ static int copy_reg(const char *source, const char *dest)
 	 */
 
 #if defined(HAVE_FCHMOD)
-	if ((fchmod (ofd, source_stats.st_ex_mode & 07777) == -1) &&
-			(errno != EPERM))
+	if (fchmod (ofd, source_stats.st_ex_mode & 07777))
 #else
-	if ((chmod (dest, source_stats.st_ex_mode & 07777) == -1) &&
-			(errno != EPERM))
+	if (chmod (dest, source_stats.st_ex_mode & 07777))
 #endif
 		goto err;
 
@@ -195,7 +191,7 @@ static int crossrename_rename(vfs_handle_struct *handle,
 
 static struct vfs_fn_pointers vfs_crossrename_fns = {
 	.connect_fn = crossrename_connect,
-	.rename_fn = crossrename_rename
+	.rename = crossrename_rename
 };
 
 NTSTATUS vfs_crossrename_init(void);

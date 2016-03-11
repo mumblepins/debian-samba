@@ -24,7 +24,6 @@
 #include "libcli/raw/raw_proto.h"
 #include "libcli/libcli.h"
 #include "torture/util.h"
-#include "torture/raw/proto.h"
 
 /**
  * basic testing of all RAW_CLOSE_* calls 

@@ -69,7 +69,7 @@ static NTSTATUS cmd_eventlog_readlog(struct rpc_pipe_client *cli,
 			 EVENTLOG_SEQUENTIAL_READ;
 	uint32_t offset = 0;
 	uint32_t number_of_bytes = 0;
-	uint8_t *data;
+	uint8_t *data = NULL;
 	uint32_t sent_size = 0;
 	uint32_t real_size = 0;
 
@@ -84,16 +84,15 @@ static NTSTATUS cmd_eventlog_readlog(struct rpc_pipe_client *cli,
 
 	if (argc >= 4) {
 		number_of_bytes = atoi(argv[3]);
+		data = talloc_array(mem_ctx, uint8_t, number_of_bytes);
+		if (!data) {
+			goto done;
+		}
 	}
 
 	status = get_eventlog_handle(cli, mem_ctx, argv[1], &handle);
 	if (!NT_STATUS_IS_OK(status)) {
 		return status;
-	}
-
-	data = talloc_array(mem_ctx, uint8_t, number_of_bytes);
-	if (data == NULL) {
-		goto done;
 	}
 
 	do {
@@ -119,8 +118,8 @@ static NTSTATUS cmd_eventlog_readlog(struct rpc_pipe_client *cli,
 		if (NT_STATUS_EQUAL(result, NT_STATUS_BUFFER_TOO_SMALL) &&
 		    real_size > 0 ) {
 			number_of_bytes = real_size;
-			data = talloc_realloc(mem_ctx, data, uint8_t, real_size);
-			if (data == NULL) {
+			data = talloc_array(mem_ctx, uint8_t, real_size);
+			if (!data) {
 				goto done;
 			}
 			status = dcerpc_eventlog_ReadEventLogW(b, mem_ctx,
@@ -510,12 +509,6 @@ static NTSTATUS cmd_eventlog_loginfo(struct rpc_pipe_client *cli,
 		return status;
 	}
 
-	buffer = talloc_array(mem_ctx, uint8_t, bytes_needed);
-	if (buffer == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-
 	status = dcerpc_eventlog_GetLogInformation(b, mem_ctx,
 						   &handle,
 						   0, /* level */
@@ -532,8 +525,8 @@ static NTSTATUS cmd_eventlog_loginfo(struct rpc_pipe_client *cli,
 	}
 
 	buf_size = bytes_needed;
-	buffer = talloc_realloc(mem_ctx, buffer, uint8_t, bytes_needed);
-	if (buffer == NULL) {
+	buffer = talloc_array(mem_ctx, uint8_t, bytes_needed);
+	if (!buffer) {
 		status = NT_STATUS_NO_MEMORY;
 		goto done;
 	}
@@ -562,13 +555,13 @@ static NTSTATUS cmd_eventlog_loginfo(struct rpc_pipe_client *cli,
 
 struct cmd_set eventlog_commands[] = {
 	{ "EVENTLOG" },
-	{ "eventlog_readlog",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_readlog,		NULL,	&ndr_table_eventlog,	NULL,	"Read Eventlog", "" },
-	{ "eventlog_numrecord",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_numrecords,	NULL,	&ndr_table_eventlog,	NULL,	"Get number of records", "" },
-	{ "eventlog_oldestrecord",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_oldestrecord,	NULL,	&ndr_table_eventlog,	NULL,	"Get oldest record", "" },
-	{ "eventlog_reportevent",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_reportevent,	NULL,	&ndr_table_eventlog,	NULL,	"Report event", "" },
-	{ "eventlog_reporteventsource",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_reporteventsource,	NULL,	&ndr_table_eventlog,	NULL,	"Report event and source", "" },
-	{ "eventlog_registerevsource",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_registerevsource,	NULL,	&ndr_table_eventlog,	NULL,	"Register event source", "" },
-	{ "eventlog_backuplog",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_backuplog,		NULL,	&ndr_table_eventlog,	NULL,	"Backup Eventlog File", "" },
-	{ "eventlog_loginfo",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_loginfo,		NULL,	&ndr_table_eventlog,	NULL,	"Get Eventlog Information", "" },
+	{ "eventlog_readlog",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_readlog,		NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Read Eventlog", "" },
+	{ "eventlog_numrecord",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_numrecords,	NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Get number of records", "" },
+	{ "eventlog_oldestrecord",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_oldestrecord,	NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Get oldest record", "" },
+	{ "eventlog_reportevent",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_reportevent,	NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Report event", "" },
+	{ "eventlog_reporteventsource",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_reporteventsource,	NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Report event and source", "" },
+	{ "eventlog_registerevsource",	RPC_RTYPE_NTSTATUS,	cmd_eventlog_registerevsource,	NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Register event source", "" },
+	{ "eventlog_backuplog",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_backuplog,		NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Backup Eventlog File", "" },
+	{ "eventlog_loginfo",		RPC_RTYPE_NTSTATUS,	cmd_eventlog_loginfo,		NULL,	&ndr_table_eventlog.syntax_id,	NULL,	"Get Eventlog Information", "" },
 	{ NULL }
 };

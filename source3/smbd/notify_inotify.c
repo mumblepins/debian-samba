@@ -24,11 +24,48 @@
 #include "includes.h"
 #include "../librpc/gen_ndr/notify.h"
 #include "smbd/smbd.h"
-#include "lib/sys_rw_data.h"
+
+#ifdef HAVE_INOTIFY
+
+#if HAVE_SYS_INOTIFY_H
+#include <sys/inotify.h>
+#else
+
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#endif
+
+#ifndef HAVE_INOTIFY_INIT
+
+#include <linux/inotify.h>
+#include <asm/unistd.h>
+
+
+/*
+  glibc doesn't define these functions yet (as of March 2006)
+*/
+static int inotify_init(void)
+{
+	return syscall(__NR_inotify_init);
+}
+
+static int inotify_add_watch(int fd, const char *path, __u32 mask)
+{
+	return syscall(__NR_inotify_add_watch, fd, path, mask);
+}
+
+static int inotify_rm_watch(int fd, int wd)
+{
+	return syscall(__NR_inotify_rm_watch, fd, wd);
+}
+#else
 
 #include <sys/inotify.h>
 
-/* glibc < 2.5 headers don't have these defines */
+#endif
+#endif
+
+/* older glibc headers don't have these defines either */
 #ifndef IN_ONLYDIR
 #define IN_ONLYDIR 0x01000000
 #endif
@@ -73,8 +110,6 @@ static int inotify_destructor(struct inotify_private *in)
 static bool filter_match(struct inotify_watch_context *w,
 			 struct inotify_event *e)
 {
-	bool ok;
-
 	DEBUG(10, ("filter_match: e->mask=%x, w->mask=%x, w->filter=%x\n",
 		   e->mask, w->mask, w->filter));
 
@@ -86,25 +121,28 @@ static bool filter_match(struct inotify_watch_context *w,
 
 	/* SMB separates the filters for files and directories */
 	if (e->mask & IN_ISDIR) {
-		ok = ((w->filter & FILE_NOTIFY_CHANGE_DIR_NAME) != 0);
-		return ok;
+		if ((w->filter & FILE_NOTIFY_CHANGE_DIR_NAME) == 0) {
+			return False;
+		}
+	} else {
+		if ((e->mask & IN_ATTRIB) &&
+		    (w->filter & (FILE_NOTIFY_CHANGE_ATTRIBUTES|
+				  FILE_NOTIFY_CHANGE_LAST_WRITE|
+				  FILE_NOTIFY_CHANGE_LAST_ACCESS|
+				  FILE_NOTIFY_CHANGE_EA|
+				  FILE_NOTIFY_CHANGE_SECURITY))) {
+			return True;
+		}
+		if ((e->mask & IN_MODIFY) && 
+		    (w->filter & FILE_NOTIFY_CHANGE_ATTRIBUTES)) {
+			return True;
+		}
+		if ((w->filter & FILE_NOTIFY_CHANGE_FILE_NAME) == 0) {
+			return False;
+		}
 	}
 
-	if ((e->mask & IN_ATTRIB) &&
-	    (w->filter & (FILE_NOTIFY_CHANGE_ATTRIBUTES|
-			  FILE_NOTIFY_CHANGE_LAST_WRITE|
-			  FILE_NOTIFY_CHANGE_LAST_ACCESS|
-			  FILE_NOTIFY_CHANGE_EA|
-			  FILE_NOTIFY_CHANGE_SECURITY))) {
-		return True;
-	}
-	if ((e->mask & IN_MODIFY) &&
-	    (w->filter & FILE_NOTIFY_CHANGE_ATTRIBUTES)) {
-		return True;
-	}
-
-	ok = ((w->filter & FILE_NOTIFY_CHANGE_FILE_NAME) != 0);
-	return ok;
+	return True;
 }
 
 
@@ -116,7 +154,6 @@ static bool filter_match(struct inotify_watch_context *w,
 */
 static void inotify_dispatch(struct inotify_private *in, 
 			     struct inotify_event *e, 
-			     int prev_wd,
 			     uint32_t prev_cookie,
 			     struct inotify_event *e2)
 {
@@ -139,14 +176,13 @@ static void inotify_dispatch(struct inotify_private *in,
 	} else if (e->mask & IN_DELETE) {
 		ne.action = NOTIFY_ACTION_REMOVED;
 	} else if (e->mask & IN_MOVED_FROM) {
-		if (e2 != NULL && e2->cookie == e->cookie &&
-		    e2->wd == e->wd) {
+		if (e2 != NULL && e2->cookie == e->cookie) {
 			ne.action = NOTIFY_ACTION_OLD_NAME;
 		} else {
 			ne.action = NOTIFY_ACTION_REMOVED;
 		}
 	} else if (e->mask & IN_MOVED_TO) {
-		if ((e->cookie == prev_cookie) && (e->wd == prev_wd)) {
+		if (e->cookie == prev_cookie) {
 			ne.action = NOTIFY_ACTION_NEW_NAME;
 		} else {
 			ne.action = NOTIFY_ACTION_ADDED;
@@ -163,30 +199,26 @@ static void inotify_dispatch(struct inotify_private *in,
 	for (w=in->watches;w;w=next) {
 		next = w->next;
 		if (w->wd == e->wd && filter_match(w, e)) {
-			ne.dir = w->path;
 			w->callback(in->ctx, w->private_data, &ne);
 		}
 	}
 
-	if ((ne.action == NOTIFY_ACTION_NEW_NAME) &&
-	    ((e->mask & IN_ISDIR) == 0)) {
+	/* SMB expects a file rename to generate three events, two for
+	   the rename and the other for a modify of the
+	   destination. Strange! */
+	if (ne.action != NOTIFY_ACTION_NEW_NAME ||
+	    (e->mask & IN_ISDIR) != 0) {
+		return;
+	}
 
-		/*
-		 * SMB expects a file rename to generate three events, two for
-		 * the rename and the other for a modify of the
-		 * destination. Strange!
-		 */
+	ne.action = NOTIFY_ACTION_MODIFIED;
+	e->mask = IN_ATTRIB;
 
-		ne.action = NOTIFY_ACTION_MODIFIED;
-		e->mask = IN_ATTRIB;
-
-		for (w=in->watches;w;w=next) {
-			next = w->next;
-			if (w->wd == e->wd && filter_match(w, e) &&
-			    !(w->filter & FILE_NOTIFY_CHANGE_CREATION)) {
-				ne.dir = w->path;
-				w->callback(in->ctx, w->private_data, &ne);
-			}
+	for (w=in->watches;w;w=next) {
+		next = w->next;
+		if (w->wd == e->wd && filter_match(w, e) &&
+		    !(w->filter & FILE_NOTIFY_CHANGE_CREATION)) {
+			w->callback(in->ctx, w->private_data, &ne);
 		}
 	}
 }
@@ -194,7 +226,7 @@ static void inotify_dispatch(struct inotify_private *in,
 /*
   called when the kernel has some events for us
 */
-static void inotify_handler(struct tevent_context *ev, struct tevent_fd *fde,
+static void inotify_handler(struct event_context *ev, struct fd_event *fde,
 			    uint16_t flags, void *private_data)
 {
 	struct inotify_private *in = talloc_get_type(private_data,
@@ -202,8 +234,7 @@ static void inotify_handler(struct tevent_context *ev, struct tevent_fd *fde,
 	int bufsize = 0;
 	struct inotify_event *e0, *e;
 	uint32_t prev_cookie=0;
-	int prev_wd = -1;
-	ssize_t ret;
+	NTSTATUS status;
 
 	/*
 	  we must use FIONREAD as we cannot predict the length of the
@@ -221,10 +252,10 @@ static void inotify_handler(struct tevent_context *ev, struct tevent_fd *fde,
 	if (e == NULL) return;
 	((uint8_t *)e)[bufsize] = '\0';
 
-	ret = read_data(in->fd, e0, bufsize);
-	if (ret != bufsize) {
-		DEBUG(0, ("Failed to read all inotify data - %s\n",
-			  strerror(errno)));
+	status = read_data(in->fd, (char *)e0, bufsize);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0,("Failed to read all inotify data - %s\n",
+			nt_errstr(status)));
 		talloc_free(e0);
 		/* the inotify fd will now be out of sync,
 		 * can't keep reading data off it */
@@ -239,8 +270,7 @@ static void inotify_handler(struct tevent_context *ev, struct tevent_fd *fde,
 		if (bufsize >= sizeof(*e)) {
 			e2 = (struct inotify_event *)(e->len + sizeof(*e) + (char *)e);
 		}
-		inotify_dispatch(in, e, prev_wd, prev_cookie, e2);
-		prev_wd = e->wd;
+		inotify_dispatch(in, e, prev_cookie, e2);
 		prev_cookie = e->cookie;
 		e = e2;
 	}
@@ -252,22 +282,21 @@ static void inotify_handler(struct tevent_context *ev, struct tevent_fd *fde,
   setup the inotify handle - called the first time a watch is added on
   this context
 */
-static int inotify_setup(struct sys_notify_context *ctx)
+static NTSTATUS inotify_setup(struct sys_notify_context *ctx)
 {
 	struct inotify_private *in;
-	struct tevent_fd *fde;
 
-	in = talloc(ctx, struct inotify_private);
-	if (in == NULL) {
-		return ENOMEM;
+	if (!lp_parm_bool(-1, "notify", "inotify", True)) {
+		return NT_STATUS_INVALID_SYSTEM_SERVICE;
 	}
 
+	in = talloc(ctx, struct inotify_private);
+	NT_STATUS_HAVE_NO_MEMORY(in);
 	in->fd = inotify_init();
 	if (in->fd == -1) {
-		int ret = errno;
-		DEBUG(0, ("Failed to init inotify - %s\n", strerror(ret)));
+		DEBUG(0,("Failed to init inotify - %s\n", strerror(errno)));
 		talloc_free(in);
-		return ret;
+		return map_nt_error_from_unix(errno);
 	}
 	in->ctx = ctx;
 	in->watches = NULL;
@@ -276,14 +305,9 @@ static int inotify_setup(struct sys_notify_context *ctx)
 	talloc_set_destructor(in, inotify_destructor);
 
 	/* add a event waiting for the inotify fd to be readable */
-	fde = tevent_add_fd(ctx->ev, in, in->fd, TEVENT_FD_READ,
-			    inotify_handler, in);
-	if (fde == NULL) {
-		ctx->private_data = NULL;
-		TALLOC_FREE(in);
-		return ENOMEM;
-	}
-	return 0;
+	event_add_fd(ctx->ev, in, in->fd, EVENT_FD_READ, inotify_handler, in);
+
+	return NT_STATUS_OK;
 }
 
 
@@ -304,14 +328,14 @@ static const struct {
 	{FILE_NOTIFY_CHANGE_SECURITY,    IN_ATTRIB}
 };
 
-static uint32_t inotify_map(uint32_t *filter)
+static uint32_t inotify_map(struct notify_entry *e)
 {
 	int i;
 	uint32_t out=0;
 	for (i=0;i<ARRAY_SIZE(inotify_mapping);i++) {
-		if (inotify_mapping[i].notify_mask & *filter) {
+		if (inotify_mapping[i].notify_mask & e->filter) {
 			out |= inotify_mapping[i].inotify_mask;
-			*filter &= ~inotify_mapping[i].notify_mask;
+			e->filter &= ~inotify_mapping[i].notify_mask;
 		}
 	}
 	return out;
@@ -326,19 +350,17 @@ static int watch_destructor(struct inotify_watch_context *w)
 	int wd = w->wd;
 	DLIST_REMOVE(w->in->watches, w);
 
+	/* only rm the watch if its the last one with this wd */
 	for (w=in->watches;w;w=w->next) {
-		if (w->wd == wd) {
-			/*
-			 * Another inotify_watch_context listens on this path,
-			 * leave the kernel level watch in place
-			 */
-			return 0;
-		}
+		if (w->wd == wd) break;
 	}
+	if (w == NULL) {
+		DEBUG(10, ("Deleting inotify watch %d\n", wd));
+		if (inotify_rm_watch(in->fd, wd) == -1) {
+			DEBUG(1, ("inotify_rm_watch returned %s\n",
+				  strerror(errno)));
+		}
 
-	DEBUG(10, ("Deleting inotify watch %d\n", wd));
-	if (inotify_rm_watch(in->fd, wd) == -1) {
-		DEBUG(1, ("inotify_rm_watch returned %s\n", strerror(errno)));
 	}
 	return 0;
 }
@@ -348,74 +370,70 @@ static int watch_destructor(struct inotify_watch_context *w)
   add a watch. The watch is removed when the caller calls
   talloc_free() on *handle
 */
-int inotify_watch(TALLOC_CTX *mem_ctx,
-		  struct sys_notify_context *ctx,
-		  const char *path,
-		  uint32_t *filter,
-		  uint32_t *subdir_filter,
-		  void (*callback)(struct sys_notify_context *ctx,
-				   void *private_data,
-				   struct notify_event *ev),
-		  void *private_data,
-		  void *handle_p)
+NTSTATUS inotify_watch(struct sys_notify_context *ctx,
+		       struct notify_entry *e,
+		       void (*callback)(struct sys_notify_context *ctx, 
+					void *private_data,
+					struct notify_event *ev),
+		       void *private_data, 
+		       void *handle_p)
 {
 	struct inotify_private *in;
+	int wd;
 	uint32_t mask;
 	struct inotify_watch_context *w;
-	uint32_t orig_filter = *filter;
+	uint32_t filter = e->filter;
 	void **handle = (void **)handle_p;
 
 	/* maybe setup the inotify fd */
 	if (ctx->private_data == NULL) {
-		int ret;
-		ret = inotify_setup(ctx);
-		if (ret != 0) {
-			return ret;
-		}
+		NTSTATUS status;
+		status = inotify_setup(ctx);
+		NT_STATUS_NOT_OK_RETURN(status);
 	}
 
 	in = talloc_get_type(ctx->private_data, struct inotify_private);
 
-	mask = inotify_map(filter);
+	mask = inotify_map(e);
 	if (mask == 0) {
 		/* this filter can't be handled by inotify */
-		return EINVAL;
+		return NT_STATUS_INVALID_PARAMETER;
 	}
 
 	/* using IN_MASK_ADD allows us to cope with inotify() returning the same
-	   watch descriptor for multiple watches on the same path */
+	   watch descriptor for muliple watches on the same path */
 	mask |= (IN_MASK_ADD | IN_ONLYDIR);
 
-	w = talloc(mem_ctx, struct inotify_watch_context);
-	if (w == NULL) {
-		*filter = orig_filter;
-		return ENOMEM;
-	}
-
-	w->in = in;
-	w->callback = callback;
-	w->private_data = private_data;
-	w->mask = mask;
-	w->filter = orig_filter;
-	w->path = talloc_strdup(w, path);
-	if (w->path == NULL) {
-		*filter = orig_filter;
-		TALLOC_FREE(w);
-		return ENOMEM;
-	}
-
 	/* get a new watch descriptor for this path */
-	w->wd = inotify_add_watch(in->fd, path, mask);
-	if (w->wd == -1) {
-		int err = errno;
-		*filter = orig_filter;
-		TALLOC_FREE(w);
-		DEBUG(1, ("inotify_add_watch returned %s\n", strerror(err)));
-		return err;
+	wd = inotify_add_watch(in->fd, e->path, mask);
+	if (wd == -1) {
+		e->filter = filter;
+		DEBUG(1, ("inotify_add_watch returned %s\n", strerror(errno)));
+		return map_nt_error_from_unix(errno);
 	}
 
 	DEBUG(10, ("inotify_add_watch for %s mask %x returned wd %d\n",
-		   path, mask, w->wd));
+		   e->path, mask, wd));
+
+	w = talloc(in, struct inotify_watch_context);
+	if (w == NULL) {
+		inotify_rm_watch(in->fd, wd);
+		e->filter = filter;
+		return NT_STATUS_NO_MEMORY;
+	}
+
+	w->in = in;
+	w->wd = wd;
+	w->callback = callback;
+	w->private_data = private_data;
+	w->mask = mask;
+	w->filter = filter;
+	w->path = talloc_strdup(w, e->path);
+	if (w->path == NULL) {
+		inotify_rm_watch(in->fd, wd);
+		e->filter = filter;
+		return NT_STATUS_NO_MEMORY;
+	}
 
 	(*handle) = w;
 
@@ -424,5 +442,7 @@ int inotify_watch(TALLOC_CTX *mem_ctx,
 	/* the caller frees the handle to stop watching */
 	talloc_set_destructor(w, watch_destructor);
 
-	return 0;
+	return NT_STATUS_OK;
 }
+
+#endif

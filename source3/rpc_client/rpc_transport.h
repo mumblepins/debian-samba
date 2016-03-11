@@ -36,7 +36,7 @@ struct rpc_cli_transport {
 	 * Trigger an async read from the server. May return a short read.
 	 */
 	struct tevent_req *(*read_send)(TALLOC_CTX *mem_ctx,
-					struct tevent_context *ev,
+					struct event_context *ev,
 					uint8_t *data, size_t size,
 					void *priv);
 	/**
@@ -48,7 +48,7 @@ struct rpc_cli_transport {
 	 * Trigger an async write to the server. May return a short write.
 	 */
 	struct tevent_req *(*write_send)(TALLOC_CTX *mem_ctx,
-					 struct tevent_context *ev,
+					 struct event_context *ev,
 					 const uint8_t *data, size_t size,
 					 void *priv);
 	/**
@@ -63,8 +63,8 @@ struct rpc_cli_transport {
 	 * cli_pipe.c will fall back to the explicit write/read routines.
 	 */
 	struct tevent_req *(*trans_send)(TALLOC_CTX *mem_ctx,
-					 struct tevent_context *ev,
-					 const uint8_t *data, size_t data_len,
+					 struct event_context *ev,
+					 uint8_t *data, size_t data_len,
 					 uint32_t max_rdata_len,
 					 void *priv);
 	/**
@@ -82,14 +82,14 @@ struct rpc_cli_transport {
 /* The following definitions come from rpc_client/rpc_transport_np.c  */
 struct cli_state;
 struct tevent_req *rpc_transport_np_init_send(TALLOC_CTX *mem_ctx,
-					      struct tevent_context *ev,
+					      struct event_context *ev,
 					      struct cli_state *cli,
-					      const struct ndr_interface_table *table);
+					      const struct ndr_syntax_id *abstract_syntax);
 NTSTATUS rpc_transport_np_init_recv(struct tevent_req *req,
 				    TALLOC_CTX *mem_ctx,
 				    struct rpc_cli_transport **presult);
 NTSTATUS rpc_transport_np_init(TALLOC_CTX *mem_ctx, struct cli_state *cli,
-			       const struct ndr_interface_table *table,
+			       const struct ndr_syntax_id *abstract_syntax,
 			       struct rpc_cli_transport **presult);
 
 /* The following definitions come from rpc_client/rpc_transport_sock.c  */
@@ -102,5 +102,6 @@ NTSTATUS rpc_transport_sock_init(TALLOC_CTX *mem_ctx, int fd,
 NTSTATUS rpc_transport_tstream_init(TALLOC_CTX *mem_ctx,
 				struct tstream_context **stream,
 				struct rpc_cli_transport **presult);
+struct cli_state *rpc_pipe_np_smb_conn(struct rpc_pipe_client *p);
 
 #endif /* _RPC_CLIENT_RPC_TRANSPORT_H_ */

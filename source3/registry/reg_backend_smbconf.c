@@ -42,9 +42,9 @@ static WERROR smbconf_create_subkey(const char *key, const char *subkey)
 	return regdb_ops.create_subkey(key, subkey);
 }
 
-static WERROR smbconf_delete_subkey(const char *key, const char *subkey, bool lazy)
+static WERROR smbconf_delete_subkey(const char *key, const char *subkey)
 {
-	return regdb_ops.delete_subkey(key, subkey, lazy);
+	return regdb_ops.delete_subkey(key, subkey);
 }
 
 static int smbconf_fetch_values(const char *key, struct regval_ctr *val)
@@ -57,8 +57,8 @@ static bool smbconf_store_values(const char *key, struct regval_ctr *val)
 	return regdb_ops.store_values(key, val);
 }
 
-static bool smbconf_reg_access_check(const char *keyname, uint32_t requested,
-				     uint32_t *granted,
+static bool smbconf_reg_access_check(const char *keyname, uint32 requested,
+				     uint32 *granted,
 				     const struct security_token *token)
 {
 	if (!security_token_has_privilege(token, SEC_PRIV_DISK_OPERATOR)) {

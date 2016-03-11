@@ -27,12 +27,9 @@
 #include "libcli/ldap/ldap_client.h"
 #include "lib/tls/tls.h"
 #include "auth/gensec/gensec.h"
-#include "auth/gensec/gensec_internal.h" /* TODO: remove this */
-#include "source4/auth/gensec/gensec_tstream.h"
 #include "auth/credentials/credentials.h"
 #include "lib/stream/packet.h"
 #include "param/param.h"
-#include "param/loadparm.h"
 
 struct ldap_simple_creds {
 	const char *dn;
@@ -216,45 +213,67 @@ _PUBLIC_ NTSTATUS ldap_bind_sasl(struct ldap_connection *conn,
 	struct ldap_message **sasl_mechs_msgs;
 	struct ldap_SearchResEntry *search;
 	int count, i;
-	bool first = true;
-	int wrap_flags = 0;
+
 	const char **sasl_names;
 	uint32_t old_gensec_features;
 	static const char *supported_sasl_mech_attrs[] = {
 		"supportedSASLMechanisms", 
 		NULL 
 	};
-	unsigned int logon_retries = 0;
-	size_t queue_length;
 
-	if (conn->sockets.active == NULL) {
-		status = NT_STATUS_CONNECTION_DISCONNECTED;
+	gensec_init(lp_ctx);
+
+	status = gensec_client_start(conn, &conn->gensec,
+				     conn->event.event_ctx, 
+				     lpcfg_gensec_settings(conn, lp_ctx));
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(0, ("Failed to start GENSEC engine (%s)\n", nt_errstr(status)));
 		goto failed;
 	}
 
-	queue_length = tevent_queue_length(conn->sockets.send_queue);
-	if (queue_length != 0) {
-		status = NT_STATUS_INVALID_PARAMETER_MIX;
-		DEBUG(1, ("SASL bind triggered with non empty send_queue[%zu]: %s\n",
-			  queue_length, nt_errstr(status)));
-		goto failed;
+	/* require Kerberos SIGN/SEAL only if we don't use SSL
+	 * Windows seem not to like double encryption */
+	old_gensec_features = cli_credentials_get_gensec_features(creds);
+	if (tls_enabled(conn->sock)) {
+		cli_credentials_set_gensec_features(creds, old_gensec_features & ~(GENSEC_FEATURE_SIGN|GENSEC_FEATURE_SEAL));
 	}
 
-	if (conn->pending != NULL) {
-		status = NT_STATUS_INVALID_PARAMETER_MIX;
-		DEBUG(1, ("SASL bind triggered with pending requests: %s\n",
+	/* this call also sets the gensec_want_features */
+	status = gensec_set_credentials(conn->gensec, creds);
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(1, ("Failed to set GENSEC creds: %s\n", 
 			  nt_errstr(status)));
 		goto failed;
 	}
 
-	status = ildap_search(conn, "", LDAP_SEARCH_SCOPE_BASE, "", supported_sasl_mech_attrs,
+	/* reset the original gensec_features (on the credentials
+	 * context, so we don't tatoo it ) */
+	cli_credentials_set_gensec_features(creds, old_gensec_features);
+
+	if (conn->host) {
+		status = gensec_set_target_hostname(conn->gensec, conn->host);
+		if (!NT_STATUS_IS_OK(status)) {
+			DEBUG(1, ("Failed to set GENSEC target hostname: %s\n", 
+				  nt_errstr(status)));
+			goto failed;
+		}
+	}
+
+	status = gensec_set_target_service(conn->gensec, "ldap");
+	if (!NT_STATUS_IS_OK(status)) {
+		DEBUG(1, ("Failed to set GENSEC target service: %s\n", 
+			  nt_errstr(status)));
+		goto failed;
+	}
+
+	status = ildap_search(conn, "", LDAP_SEARCH_SCOPE_BASE, "", supported_sasl_mech_attrs, 
 			      false, NULL, NULL, &sasl_mechs_msgs);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to inquire of target's available sasl mechs in rootdse search: %s\n",
+		DEBUG(1, ("Failed to inquire of target's available sasl mechs in rootdse search: %s\n", 
 			  nt_errstr(status)));
 		goto failed;
 	}
-
+	
 	count = ildap_count_entries(conn, sasl_mechs_msgs);
 	if (count != 1) {
 		DEBUG(1, ("Failed to inquire of target's available sasl mechs in rootdse search: wrong number of replies: %d\n",
@@ -278,93 +297,12 @@ _PUBLIC_ NTSTATUS ldap_bind_sasl(struct ldap_connection *conn,
 			  count));
 		goto failed;
 	}
-
+		
 	for (i=0; i<search->attributes[0].num_values; i++) {
 		sasl_names[i] = (const char *)search->attributes[0].values[i].data;
 	}
 	sasl_names[i] = NULL;
-
-	gensec_init();
-
-	if (conn->sockets.active == conn->sockets.tls) {
-		/*
-		 * require Kerberos SIGN/SEAL only if we don't use SSL
-		 * Windows seem not to like double encryption
-		 */
-		wrap_flags = 0;
-	} else if (cli_credentials_is_anonymous(creds)) {
-		/*
-		 * anonymous isn't protected
-		 */
-		wrap_flags = 0;
-	} else {
-		wrap_flags = lpcfg_client_ldap_sasl_wrapping(lp_ctx);
-	}
-
-try_logon_again:
-	/*
-	  we loop back here on a logon failure, and re-create the
-	  gensec session. The logon_retries counter ensures we don't
-	  loop forever.
-	 */
-	data_blob_free(&input);
-	TALLOC_FREE(conn->gensec);
-
-	status = gensec_client_start(conn, &conn->gensec,
-				     lpcfg_gensec_settings(conn, lp_ctx));
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("Failed to start GENSEC engine (%s)\n", nt_errstr(status)));
-		goto failed;
-	}
-
-	old_gensec_features = cli_credentials_get_gensec_features(creds);
-	if (wrap_flags == 0) {
-		cli_credentials_set_gensec_features(creds, old_gensec_features & ~(GENSEC_FEATURE_SIGN|GENSEC_FEATURE_SEAL));
-	}
-
-	/* this call also sets the gensec_want_features */
-	status = gensec_set_credentials(conn->gensec, creds);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to set GENSEC creds: %s\n", 
-			  nt_errstr(status)));
-		goto failed;
-	}
-
-	/* reset the original gensec_features (on the credentials
-	 * context, so we don't tatoo it ) */
-	cli_credentials_set_gensec_features(creds, old_gensec_features);
-
-	if (wrap_flags & ADS_AUTH_SASL_SEAL) {
-		gensec_want_feature(conn->gensec, GENSEC_FEATURE_SIGN);
-		gensec_want_feature(conn->gensec, GENSEC_FEATURE_SEAL);
-	}
-	if (wrap_flags & ADS_AUTH_SASL_SIGN) {
-		gensec_want_feature(conn->gensec, GENSEC_FEATURE_SIGN);
-	}
-
-	/*
-	 * This is an indication for the NTLMSSP backend to
-	 * also encrypt when only GENSEC_FEATURE_SIGN is requested
-	 * in gensec_[un]wrap().
-	 */
-	gensec_want_feature(conn->gensec, GENSEC_FEATURE_LDAP_STYLE);
-
-	if (conn->host) {
-		status = gensec_set_target_hostname(conn->gensec, conn->host);
-		if (!NT_STATUS_IS_OK(status)) {
-			DEBUG(1, ("Failed to set GENSEC target hostname: %s\n", 
-				  nt_errstr(status)));
-			goto failed;
-		}
-	}
-
-	status = gensec_set_target_service(conn->gensec, "ldap");
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(1, ("Failed to set GENSEC target service: %s\n", 
-			  nt_errstr(status)));
-		goto failed;
-	}
-
+	
 	status = gensec_start_mech_by_sasl_list(conn->gensec, sasl_names);
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(1, ("None of the %d proposed SASL mechs were acceptable: %s\n",
@@ -379,8 +317,7 @@ try_logon_again:
 		struct ldap_request *req;
 		int result = LDAP_OTHER;
 	
-		status = gensec_update_ev(conn->gensec, tmp_ctx,
-				       conn->event.event_ctx,
+		status = gensec_update(conn->gensec, tmp_ctx,
 				       input,
 				       &output);
 		/* The status value here, from GENSEC is vital to the security
@@ -390,13 +327,7 @@ try_logon_again:
 		 * avoid mutal authentication requirements.
 		 *
 		 * Likewise, you must not feed GENSEC too much (after the OK),
-		 * it doesn't like that either.
-		 *
-		 * For SASL/EXTERNAL, there is no data to send, but we still
-		 * must send the actual Bind request the first time around.
-		 * Otherwise, a result of NT_STATUS_OK with 0 output means the
-		 * end of a multi-step authentication, and no message must be
-		 * sent.
+		 * it doesn't like that either
 		 */
 
 		gensec_status = status;
@@ -406,10 +337,8 @@ try_logon_again:
 			break;
 		}
 		if (NT_STATUS_IS_OK(status) && output.length == 0) {
-			if (!first)
-				break;
+			break;
 		}
-		first = false;
 
 		/* Perhaps we should make gensec_start_mech_by_sasl_list() return the name we got? */
 		msg = new_ldap_sasl_bind_msg(tmp_ctx, conn->gensec->ops->sasl_name, (output.data?&output:NULL));
@@ -437,45 +366,6 @@ try_logon_again:
 
 		result = response->r.BindResponse.response.resultcode;
 
-		if (result == LDAP_STRONG_AUTH_REQUIRED) {
-			if (wrap_flags == 0) {
-				wrap_flags = ADS_AUTH_SASL_SIGN;
-				goto try_logon_again;
-			}
-		}
-
-		if (result == LDAP_INVALID_CREDENTIALS) {
-			/*
-			  try a second time on invalid credentials, to
-			  give the user a chance to re-enter the
-			  password and to handle the case where our
-			  kerberos ticket is invalid as the server
-			  password has changed
-			*/
-			const char *principal;
-
-			principal = gensec_get_target_principal(conn->gensec);
-			if (principal == NULL) {
-				const char *hostname = gensec_get_target_hostname(conn->gensec);
-				const char *service  = gensec_get_target_service(conn->gensec);
-				if (hostname != NULL && service != NULL) {
-					principal = talloc_asprintf(tmp_ctx, "%s/%s", service, hostname);
-				}
-			}
-
-			if (cli_credentials_failed_kerberos_login(creds, principal, &logon_retries) ||
-			    cli_credentials_wrong_password(creds)) {
-				/*
-				  destroy our gensec session and loop
-				  back up to the top to retry,
-				  offering the user a chance to enter
-				  new credentials, or get a new ticket
-				  if using kerberos
-				 */
-				goto try_logon_again;
-			}
-		}
-
 		if (result != LDAP_SUCCESS && result != LDAP_SASL_BIND_IN_PROGRESS) {
 			status = ldap_check_response(conn, 
 						     &response->r.BindResponse.response);
@@ -493,45 +383,27 @@ try_logon_again:
 		}
 	}
 
-	TALLOC_FREE(tmp_ctx);
+	talloc_free(tmp_ctx);
 
-	if (!NT_STATUS_IS_OK(status)) {
-		goto failed;
+	if (NT_STATUS_IS_OK(status)) {
+		struct socket_context *sasl_socket;
+		status = gensec_socket_init(conn->gensec, 
+					    conn,
+					    conn->sock,
+					    conn->event.event_ctx, 
+					    ldap_read_io_handler,
+					    conn,
+					    &sasl_socket);
+		if (!NT_STATUS_IS_OK(status)) goto failed;
+
+		conn->sock = sasl_socket;
+		packet_set_socket(conn->packet, conn->sock);
+
+		conn->bind.type = LDAP_BIND_SASL;
+		conn->bind.creds = creds;
 	}
 
-	conn->bind.type = LDAP_BIND_SASL;
-	conn->bind.creds = creds;
-
-	if (wrap_flags & ADS_AUTH_SASL_SEAL) {
-		if (!gensec_have_feature(conn->gensec, GENSEC_FEATURE_SIGN)) {
-			return NT_STATUS_INVALID_NETWORK_RESPONSE;
-		}
-
-		if (!gensec_have_feature(conn->gensec, GENSEC_FEATURE_SEAL)) {
-			return NT_STATUS_INVALID_NETWORK_RESPONSE;
-		}
-	} else if (wrap_flags & ADS_AUTH_SASL_SIGN) {
-		if (!gensec_have_feature(conn->gensec, GENSEC_FEATURE_SIGN)) {
-			return NT_STATUS_INVALID_NETWORK_RESPONSE;
-		}
-	}
-
-	if (!gensec_have_feature(conn->gensec, GENSEC_FEATURE_SIGN) &&
-	    !gensec_have_feature(conn->gensec, GENSEC_FEATURE_SEAL)) {
-		return NT_STATUS_OK;
-	}
-
-	status = gensec_create_tstream(conn->sockets.raw,
-				       conn->gensec,
-				       conn->sockets.raw,
-				       &conn->sockets.sasl);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto failed;
-	}
-
-	conn->sockets.active = conn->sockets.sasl;
-
-	return NT_STATUS_OK;
+	return status;
 
 failed:
 	talloc_free(tmp_ctx);

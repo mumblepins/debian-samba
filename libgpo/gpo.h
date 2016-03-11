@@ -20,7 +20,12 @@
 #ifndef __GPO_H__
 #define __GPO_H__
 
+#if _SAMBA_BUILD_ == 4
+#include "source4/libgpo/ads_convenience.h"
+#else
+struct loadparm_context;
 #include "ads.h"
+#endif
 
 enum GPO_LINK_TYPE {
 	GP_LINK_UNKOWN	= 0,
@@ -138,6 +143,13 @@ struct gp_registry_value {
 	struct registry_value *data;
 };
 
+struct gp_registry_entry2 {
+	enum gp_reg_action action;
+	const char *key;
+	size_t num_values;
+	struct gp_registry_value **values;
+};
+
 struct gp_registry_entries {
 	size_t num_entries;
 	struct gp_registry_entry **entries;
@@ -168,8 +180,9 @@ NTSTATUS gpo_explode_filesyspath(TALLOC_CTX *mem_ctx,
 				 char **unix_path);
 NTSTATUS gpo_fetch_files(TALLOC_CTX *mem_ctx,
                          ADS_STRUCT *ads,
+                         struct loadparm_context *lp_ctx,
                          const char *cache_dir,
-			 const struct GROUP_POLICY_OBJECT *gpo);
+			 struct GROUP_POLICY_OBJECT *gpo);
 NTSTATUS gpo_get_sysvol_gpt_version(TALLOC_CTX *mem_ctx,
 				    const char *unix_path,
 				    uint32_t *sysvol_version,
@@ -221,30 +234,43 @@ const char *cse_gpo_guid_string_to_name(const char *guid);
 const char *cse_gpo_name_to_guid_string(const char *name);
 const char *cse_snapin_gpo_guid_string_to_name(const char *guid);
 void dump_gp_ext(struct GP_EXT *gp_ext, int debuglevel);
-void dump_gpo(const struct GROUP_POLICY_OBJECT *gpo,
+void dump_gpo(ADS_STRUCT *ads,
+	      TALLOC_CTX *mem_ctx,
+	      struct GROUP_POLICY_OBJECT *gpo,
 	      int debuglevel);
-void dump_gpo_list(const struct GROUP_POLICY_OBJECT *gpo_list,
+void dump_gpo_list(ADS_STRUCT *ads,
+		   TALLOC_CTX *mem_ctx,
+		   struct GROUP_POLICY_OBJECT *gpo_list,
 		   int debuglevel);
-void dump_gplink(const struct GP_LINK *gp_link);
-NTSTATUS gpo_process_gpo_list(TALLOC_CTX *mem_ctx,
-			      const struct security_token *token,
-			      const struct GROUP_POLICY_OBJECT *deleted_gpo_list,
-			      const struct GROUP_POLICY_OBJECT *changed_gpo_list,
-			      const char *extensions_guid_filter,
-			      uint32_t flags);
+void dump_gplink(ADS_STRUCT *ads, TALLOC_CTX *mem_ctx, struct GP_LINK *gp_link);
+ADS_STATUS gpo_process_a_gpo(ADS_STRUCT *ads,
+			     TALLOC_CTX *mem_ctx,
+			     const struct security_token *token,
+			     struct registry_key *root_key,
+			     struct GROUP_POLICY_OBJECT *gpo,
+			     const char *extension_guid_filter,
+			     uint32_t flags);
+ADS_STATUS gpo_process_gpo_list(ADS_STRUCT *ads,
+				TALLOC_CTX *mem_ctx,
+				const struct security_token *token,
+				struct GROUP_POLICY_OBJECT *gpo_list,
+				const char *extensions_guid_filter,
+				uint32_t flags);
 NTSTATUS check_refresh_gpo(ADS_STRUCT *ads,
 			   TALLOC_CTX *mem_ctx,
                            const char *cache_dir,
+                           struct loadparm_context *lp_ctx,
 			   uint32_t flags,
-			   const struct GROUP_POLICY_OBJECT *gpo);
+			   struct GROUP_POLICY_OBJECT *gpo);
 NTSTATUS check_refresh_gpo_list(ADS_STRUCT *ads,
 				TALLOC_CTX *mem_ctx,
                                 const char *cache_dir,
+                                struct loadparm_context *lp_ctx,
 				uint32_t flags,
-				const struct GROUP_POLICY_OBJECT *gpo_list);
+				struct GROUP_POLICY_OBJECT *gpo_list);
 NTSTATUS gpo_get_unix_path(TALLOC_CTX *mem_ctx,
                            const char *cache_dir,
-			   const struct GROUP_POLICY_OBJECT *gpo,
+			   struct GROUP_POLICY_OBJECT *gpo,
 			   char **unix_path);
 char *gpo_flag_str(TALLOC_CTX *mem_ctx, uint32_t flags);
 NTSTATUS gp_find_file(TALLOC_CTX *mem_ctx,
@@ -254,15 +280,11 @@ NTSTATUS gp_find_file(TALLOC_CTX *mem_ctx,
 		      const char **filename_out);
 ADS_STATUS gp_get_machine_token(ADS_STRUCT *ads,
 				TALLOC_CTX *mem_ctx,
+				struct loadparm_context *lp_ctx,
 				const char *dn,
 				struct security_token **token);
 
-bool gpo_get_gp_ext_from_gpo(TALLOC_CTX *mem_ctx,
-			     uint32_t flags,
-			     const struct GROUP_POLICY_OBJECT *gpo,
-			     struct GP_EXT **gp_ext);
-NTSTATUS gpo_copy(TALLOC_CTX *mem_ctx,
-		  const struct GROUP_POLICY_OBJECT *gpo_src,
-		  struct GROUP_POLICY_OBJECT **gpo_dst);
+
+#include "../libgpo/gpext/gpext.h"
 
 #endif

@@ -27,7 +27,6 @@
 #include "torture/torture.h"
 #include "cluster/cluster.h"
 #include "param/param.h"
-#include "torture/local/proto.h"
 
 const uint32_t MSG_ID1 = 1, MSG_ID2 = 2;
 
@@ -35,7 +34,7 @@ static bool test_debug;
 
 struct irpc_test_data
 {
-	struct imessaging_context *msg_ctx1, *msg_ctx2;
+	struct messaging_context *msg_ctx1, *msg_ctx2;
 	struct tevent_context *ev;
 };
 
@@ -74,9 +73,8 @@ static void deferred_echodata(struct tevent_context *ev, struct tevent_timer *te
 */
 static NTSTATUS irpc_EchoData(struct irpc_message *irpc, struct echo_EchoData *r)
 {
-	struct irpc_test_data *data = talloc_get_type_abort(irpc->private_data, struct irpc_test_data);
 	irpc->defer_reply = true;
-	tevent_add_timer(data->ev, irpc, timeval_zero(), deferred_echodata, irpc);
+	event_add_timed(irpc->ev, irpc, timeval_zero(), deferred_echodata, irpc);
 	return NT_STATUS_OK;
 }
 
@@ -102,11 +100,6 @@ static bool test_addone(struct torture_context *test, const void *_data,
 	r.in.in_data = value;
 
 	test_debug = true;
-	/*
-	 * Note: this makes use of nested event loops
-	 * as client and server use the same loop.
-	 */
-	dcerpc_binding_handle_set_sync_ev(irpc_handle, data->ev);
 	status = dcerpc_echo_AddOne_r(irpc_handle, test, &r);
 	test_debug = false;
 	torture_assert_ntstatus_ok(test, status, "AddOne failed");
@@ -141,11 +134,6 @@ static bool test_echodata(struct torture_context *tctx,
 	r.in.in_data = (unsigned char *)talloc_strdup(mem_ctx, "0123456789");
 	r.in.len = strlen((char *)r.in.in_data);
 
-	/*
-	 * Note: this makes use of nested event loops
-	 * as client and server use the same loop.
-	 */
-	dcerpc_binding_handle_set_sync_ev(irpc_handle, data->ev);
 	status = dcerpc_echo_EchoData_r(irpc_handle, mem_ctx, &r);
 	torture_assert_ntstatus_ok(tctx, status, "EchoData failed");
 
@@ -230,14 +218,14 @@ static bool test_speed(struct torture_context *tctx,
 		ping_count++;
 
 		while (ping_count > pong_count + 20) {
-			tevent_loop_once(data->ev);
+			event_loop_once(data->ev);
 		}
 	}
 
 	torture_comment(tctx, "waiting for %d remaining replies (done %d)\n", 
 	       ping_count - pong_count, pong_count);
 	while (timeval_elapsed(&tv) < 30 && pong_count < ping_count) {
-		tevent_loop_once(data->ev);
+		event_loop_once(data->ev);
 	}
 
 	torture_assert_int_equal(tctx, ping_count, pong_count, "ping test failed");
@@ -258,25 +246,25 @@ static bool irpc_setup(struct torture_context *tctx, void **_data)
 
 	data->ev = tctx->ev;
 	torture_assert(tctx, data->msg_ctx1 = 
-		       imessaging_init(tctx,
-				      tctx->lp_ctx,
+		       messaging_init(tctx, 
+				      lpcfg_messaging_path(tctx, tctx->lp_ctx),
 				      cluster_id(0, MSG_ID1),
-				      data->ev, true),
+				      data->ev),
 		       "Failed to init first messaging context");
 
 	torture_assert(tctx, data->msg_ctx2 = 
-		       imessaging_init(tctx,
-				      tctx->lp_ctx,
+		       messaging_init(tctx, 
+				      lpcfg_messaging_path(tctx, tctx->lp_ctx),
 				      cluster_id(0, MSG_ID2), 
-				      data->ev, true),
+				      data->ev),
 		       "Failed to init second messaging context");
 
 	/* register the server side function */
-	IRPC_REGISTER(data->msg_ctx1, rpcecho, ECHO_ADDONE, irpc_AddOne, data);
-	IRPC_REGISTER(data->msg_ctx2, rpcecho, ECHO_ADDONE, irpc_AddOne, data);
+	IRPC_REGISTER(data->msg_ctx1, rpcecho, ECHO_ADDONE, irpc_AddOne, NULL);
+	IRPC_REGISTER(data->msg_ctx2, rpcecho, ECHO_ADDONE, irpc_AddOne, NULL);
 
-	IRPC_REGISTER(data->msg_ctx1, rpcecho, ECHO_ECHODATA, irpc_EchoData, data);
-	IRPC_REGISTER(data->msg_ctx2, rpcecho, ECHO_ECHODATA, irpc_EchoData, data);
+	IRPC_REGISTER(data->msg_ctx1, rpcecho, ECHO_ECHODATA, irpc_EchoData, NULL);
+	IRPC_REGISTER(data->msg_ctx2, rpcecho, ECHO_ECHODATA, irpc_EchoData, NULL);
 
 	return true;
 }

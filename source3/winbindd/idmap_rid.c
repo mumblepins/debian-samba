@@ -41,7 +41,7 @@ static NTSTATUS idmap_rid_initialize(struct idmap_domain *dom)
 	struct idmap_rid_context *ctx;
 	char *config_option = NULL;
 
-	ctx = talloc_zero(dom, struct idmap_rid_context);
+	ctx = TALLOC_ZERO_P(dom, struct idmap_rid_context);
 	if (ctx == NULL) {
 		DEBUG(0, ("Out of memory!\n"));
 		return NT_STATUS_NO_MEMORY;
@@ -87,8 +87,11 @@ static NTSTATUS idmap_rid_id_to_sid(struct idmap_domain *dom, struct id_map *map
 
 	sid_compose(map->sid, &domain->sid, map->xid.id - dom->low_id + ctx->base_rid);
 
+	/* We **really** should have some way of validating 
+	   the SID exists and is the correct type here.  But 
+	   that is a deficiency in the idmap_rid design. */
+
 	map->status = ID_MAPPED;
-	map->xid.type = ID_TYPE_BOTH;
 
 	return NT_STATUS_OK;
 }
@@ -106,7 +109,6 @@ static NTSTATUS idmap_rid_sid_to_id(struct idmap_domain *dom, struct id_map *map
 
 	sid_peek_rid(map->sid, &rid);
 	map->xid.id = rid - ctx->base_rid + dom->low_id;
-	map->xid.type = ID_TYPE_BOTH;
 
 	/* apply filters before returning result */
 

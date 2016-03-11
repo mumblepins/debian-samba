@@ -19,7 +19,7 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "librpc/gen_ndr/ndr_winbind_c.h"
+#include "librpc/gen_ndr/ndr_wbint_c.h"
 
 struct wb_fill_pwent_state {
 	struct tevent_context *ev;
@@ -29,7 +29,6 @@ struct wb_fill_pwent_state {
 
 static bool fillup_pw_field(const char *lp_template,
 			    const char *username,
-			    const char *grpname,
 			    const char *domname,
 			    uid_t uid,
 			    gid_t gid,
@@ -37,7 +36,7 @@ static bool fillup_pw_field(const char *lp_template,
 			    fstring out);
 
 static void wb_fill_pwent_sid2uid_done(struct tevent_req *subreq);
-static void wb_fill_pwent_getgrsid_done(struct tevent_req *subreq);
+static void wb_fill_pwent_sid2gid_done(struct tevent_req *subreq);
 
 struct tevent_req *wb_fill_pwent_send(TALLOC_CTX *mem_ctx,
 				      struct tevent_context *ev,
@@ -55,7 +54,7 @@ struct tevent_req *wb_fill_pwent_send(TALLOC_CTX *mem_ctx,
 	state->info = info;
 	state->pw = pw;
 
-	subreq = wb_sids2xids_send(state, state->ev, &state->info->user_sid, 1);
+	subreq = wb_sid2uid_send(state, state->ev, &state->info->user_sid);
 	if (tevent_req_nomem(subreq, req)) {
 		return tevent_req_post(req, ev);
 	}
@@ -70,66 +69,40 @@ static void wb_fill_pwent_sid2uid_done(struct tevent_req *subreq)
 	struct wb_fill_pwent_state *state = tevent_req_data(
 		req, struct wb_fill_pwent_state);
 	NTSTATUS status;
-	struct unixid xids[1];
 
-	status = wb_sids2xids_recv(subreq, xids, ARRAY_SIZE(xids));
+	status = wb_sid2uid_recv(subreq, &state->pw->pw_uid);
 	TALLOC_FREE(subreq);
 	if (tevent_req_nterror(req, status)) {
 		return;
 	}
 
-	/*
-	 * We are filtering further down in sids2xids, but that filtering
-	 * depends on the actual type of the sid handed in (as determined
-	 * by lookupsids). Here we need to filter for the type of object
-	 * actually requested, in this case uid.
-	 */
-	if (!(xids[0].type == ID_TYPE_UID || xids[0].type == ID_TYPE_BOTH)) {
-		tevent_req_nterror(req, NT_STATUS_NONE_MAPPED);
-		return;
-	}
-
-	state->pw->pw_uid = (uid_t)xids[0].id;
-
-	subreq = wb_getgrsid_send(state, state->ev, &state->info->group_sid, 0);
+	subreq = wb_sid2gid_send(state, state->ev, &state->info->group_sid);
 	if (tevent_req_nomem(subreq, req)) {
 		return;
 	}
-	tevent_req_set_callback(subreq, wb_fill_pwent_getgrsid_done, req);
+	tevent_req_set_callback(subreq, wb_fill_pwent_sid2gid_done, req);
 }
 
-static void wb_fill_pwent_getgrsid_done(struct tevent_req *subreq)
+static void wb_fill_pwent_sid2gid_done(struct tevent_req *subreq)
 {
 	struct tevent_req *req = tevent_req_callback_data(
 		subreq, struct tevent_req);
 	struct wb_fill_pwent_state *state = tevent_req_data(
 		req, struct wb_fill_pwent_state);
 	struct winbindd_domain *domain;
-	const char *dom_name;
-	const char *grp_name;
+	char *dom_name;
 	fstring user_name, output_username;
 	char *mapped_name = NULL;
-	struct talloc_dict *members;
-	TALLOC_CTX *tmp_ctx = talloc_stackframe();
 	NTSTATUS status;
-	bool ok;
 
-	/* xid handling is done in getgrsid() */
-	status = wb_getgrsid_recv(subreq,
-				  tmp_ctx,
-				  &dom_name,
-				  &grp_name,
-				  &state->pw->pw_gid,
-				  &members);
+	status = wb_sid2gid_recv(subreq, &state->pw->pw_gid);
 	TALLOC_FREE(subreq);
 	if (tevent_req_nterror(req, status)) {
-		talloc_free(tmp_ctx);
 		return;
 	}
 
 	domain = find_domain_from_sid_noinit(&state->info->user_sid);
 	if (domain == NULL) {
-		talloc_free(tmp_ctx);
 		tevent_req_nterror(req, NT_STATUS_NO_SUCH_USER);
 		return;
 	}
@@ -138,10 +111,7 @@ static void wb_fill_pwent_getgrsid_done(struct tevent_req *subreq)
 	/* Username */
 
 	fstrcpy(user_name, state->info->acct_name);
-	if (!strlower_m(user_name)) {
-		tevent_req_nterror(req, NT_STATUS_INVALID_PARAMETER);
-		return;
-	}
+	strlower_m(user_name);
 	status = normalize_name_map(state, domain, user_name, &mapped_name);
 
 	/* Basic removal of whitespace */
@@ -159,39 +129,21 @@ static void wb_fill_pwent_getgrsid_done(struct tevent_req *subreq)
 				     true);
 	}
 
-	strlcpy(state->pw->pw_name,
-		output_username,
-		sizeof(state->pw->pw_name));
-	/* FIXME The full_name can be longer than 255 chars */
-	strlcpy(state->pw->pw_gecos,
-		state->info->full_name != NULL ? state->info->full_name : "",
-		sizeof(state->pw->pw_gecos));
+	fstrcpy(state->pw->pw_name, output_username);
+	fstrcpy(state->pw->pw_gecos, state->info->full_name);
 
 	/* Home directory and shell */
-	ok = fillup_pw_field(lp_template_homedir(),
-			     user_name,
-			     grp_name,
-			     dom_name,
-			     state->pw->pw_uid,
-			     state->pw->pw_gid,
-			     state->info->homedir,
-			     state->pw->pw_dir);
-	if (!ok) {
-		talloc_free(tmp_ctx);
+
+	if (!fillup_pw_field(lp_template_homedir(), user_name, dom_name,
+			     state->pw->pw_uid, state->pw->pw_gid,
+			     state->info->homedir, state->pw->pw_dir)) {
 		tevent_req_nterror(req, NT_STATUS_NO_SUCH_USER);
 		return;
 	}
 
-	ok = fillup_pw_field(lp_template_shell(),
-			     user_name,
-			     grp_name,
-			     dom_name,
-			     state->pw->pw_uid,
-			     state->pw->pw_gid,
-			     state->info->shell,
-			     state->pw->pw_shell);
-	talloc_free(tmp_ctx);
-	if (!ok) {
+	if (!fillup_pw_field(lp_template_shell(), user_name, dom_name,
+			     state->pw->pw_uid, state->pw->pw_gid,
+			     state->info->shell, state->pw->pw_shell)) {
 		tevent_req_nterror(req, NT_STATUS_NO_SUCH_USER);
 		return;
 	}
@@ -210,38 +162,38 @@ NTSTATUS wb_fill_pwent_recv(struct tevent_req *req)
 
 static bool fillup_pw_field(const char *lp_template,
 			    const char *username,
-			    const char *grpname,
 			    const char *domname,
 			    uid_t uid,
 			    gid_t gid,
 			    const char *in,
 			    fstring out)
 {
-	const char *templ;
-	char *result;
+	char *templ;
 
 	if (out == NULL)
 		return False;
 
-	templ = lp_template;
+	/* The substitution of %U and %D in the 'template
+	   homedir' is done by talloc_sub_specified() below.
+	   If we have an in string (which means the value has already
+	   been set in the nss_info backend), then use that.
+	   Otherwise use the template value passed in. */
 
 	if ((in != NULL) && (in[0] != '\0') && (lp_security() == SEC_ADS)) {
-		/*
-		 * The backend has already filled in the required value. Use
-		 * that instead of the template.
-		 */
-		templ = in;
+		templ = talloc_sub_specified(talloc_tos(), in,
+					     username, domname,
+					     uid, gid);
+	} else {
+		templ = talloc_sub_specified(talloc_tos(), lp_template,
+					     username, domname,
+					     uid, gid);
 	}
 
-	result = talloc_sub_specified(talloc_tos(), templ,
-				      username, grpname, domname,
-				      uid, gid);
-	if (result == NULL) {
+	if (!templ)
 		return False;
-	}
 
-	fstrcpy(out, result);
-	TALLOC_FREE(result);
+	safe_strcpy(out, templ, sizeof(fstring) - 1);
+	TALLOC_FREE(templ);
 
 	return True;
 

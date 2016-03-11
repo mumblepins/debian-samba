@@ -24,7 +24,6 @@
 #include "libnet/libnet.h"
 #include "lib/cmdline/popt_common.h"
 #include "librpc/gen_ndr/ndr_srvsvc_c.h"
-#include "torture/libnet/proto.h"
 
 
 #define TEST_SHARENAME "libnetsharetest"
@@ -144,7 +143,7 @@ bool torture_listshares(struct torture_context *torture)
 
 	torture_comment(torture, "Testing libnet_ListShare\n");
 
-	share.in.server_name = dcerpc_binding_get_string_option(binding, "host");
+	share.in.server_name = talloc_asprintf(mem_ctx, "%s", binding->host);
 
 	for (i = 0; i < ARRAY_SIZE(levels); i++) {
 		share.in.level = levels[i];
@@ -229,7 +228,7 @@ bool torture_delshare(struct torture_context *torture)
 		return false;
 	}
 
-	share.in.server_name	= dcerpc_binding_get_string_option(binding, "host");
+	share.in.server_name	= binding->host;
 	share.in.share_name	= TEST_SHARENAME;
 
 	status = libnet_DelShare(libnetctx, torture, &share);

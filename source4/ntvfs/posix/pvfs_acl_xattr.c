@@ -24,8 +24,6 @@
 #include "../lib/util/unix_privs.h"
 #include "librpc/gen_ndr/ndr_xattr.h"
 
-NTSTATUS pvfs_acl_xattr_init(void);
-
 /*
   load the current ACL from extended attributes
 */

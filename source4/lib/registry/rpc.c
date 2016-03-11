@@ -475,8 +475,7 @@ static struct registry_operations reg_backend_rpc = {
 	.get_key_info = rpc_get_info,
 };
 
-_PUBLIC_ WERROR reg_open_remote(TALLOC_CTX *mem_ctx,
-				struct registry_context **ctx,
+_PUBLIC_ WERROR reg_open_remote(struct registry_context **ctx,
 				struct auth_session_info *session_info,
 				struct cli_credentials *credentials,
 				struct loadparm_context *lp_ctx,
@@ -486,9 +485,9 @@ _PUBLIC_ WERROR reg_open_remote(TALLOC_CTX *mem_ctx,
 	struct dcerpc_pipe *p;
 	struct rpc_registry_context *rctx;
 
-	dcerpc_init();
+	dcerpc_init(lp_ctx);
 
-	rctx = talloc(mem_ctx, struct rpc_registry_context);
+	rctx = talloc(NULL, struct rpc_registry_context);
 	W_ERROR_HAVE_NO_MEMORY(rctx);
 
 	/* Default to local smbd if no connection is specified */

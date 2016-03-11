@@ -21,7 +21,7 @@
 
 #include "includes.h"
 #include "system/passwd.h"
-#include "../lib/util/memcache.h"
+#include "memcache.h"
 #include "../lib/util/util_pw.h"
 
 /* internal functions */
@@ -42,7 +42,7 @@ static struct passwd *getpwnam_alloc_cached(TALLOC_CTX *mem_ctx, const char *nam
 		return tcopy_passwd(mem_ctx, pw);
 	}
 
-	pw = getpwnam(name);
+	pw = sys_getpwnam(name);
 	if (pw == NULL) {
 		return NULL;
 	}
@@ -92,11 +92,11 @@ char *get_user_home_dir(TALLOC_CTX *mem_ctx, const char *user)
 }
 
 /****************************************************************************
- * A wrapper for getpwnam().  The following variations are tried:
+ * A wrapper for sys_getpwnam().  The following variations are tried:
  *   - as transmitted
  *   - in all lower case if this differs from transmitted
  *   - in all upper case if this differs from transmitted
- *   - using lp_username_level() for permutations.
+ *   - using lp_usernamelevel() for permutations.
 ****************************************************************************/
 
 static struct passwd *Get_Pwnam_internals(TALLOC_CTX *mem_ctx,
@@ -112,11 +112,7 @@ static struct passwd *Get_Pwnam_internals(TALLOC_CTX *mem_ctx,
 
 	/* Try in all lower case first as this is the most 
 	   common case on UNIX systems */
-	if (!strlower_m(user2)) {
-		DEBUG(5,("strlower_m %s failed\n", user2));
-		goto done;
-	}
-
+	strlower_m(user2);
 	DEBUG(5,("Trying _Get_Pwnam(), username as lowercase is %s\n",user2));
 	ret = getpwnam_alloc_cached(mem_ctx, user2);
 	if(ret)
@@ -132,10 +128,7 @@ static struct passwd *Get_Pwnam_internals(TALLOC_CTX *mem_ctx,
 	}
 
 	/* Try as uppercase, if username wasn't originally uppercase */
-	if (!strupper_m(user2)) {
-		goto done;
-	}
-
+	strupper_m(user2);
 	if(strcmp(user, user2) != 0) {
 		DEBUG(5,("Trying _Get_Pwnam(), username as uppercase is %s\n",
 			 user2));
@@ -145,14 +138,11 @@ static struct passwd *Get_Pwnam_internals(TALLOC_CTX *mem_ctx,
 	}
 
 	/* Try all combinations up to usernamelevel */
-	if (!strlower_m(user2)) {
-		DEBUG(5,("strlower_m %s failed\n", user2));
-		goto done;
-	}
+	strlower_m(user2);
 	DEBUG(5,("Checking combinations of %d uppercase letters in %s\n",
-		 lp_username_level(), user2));
+		 lp_usernamelevel(), user2));
 	ret = uname_string_combinations(user2, mem_ctx, getpwnam_alloc_cached,
-					lp_username_level());
+					lp_usernamelevel());
 
 done:
 	DEBUG(5,("Get_Pwnam_internals %s find user [%s]!\n",ret ?

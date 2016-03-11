@@ -2,23 +2,6 @@
 # -*- coding: utf-8 -*-
 # This is a port of the original in testprogs/ejs/ldap.js
 
-# Copyright (C) Jelmer Vernooij <jelmer@samba.org> 2008-2011
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-
 import optparse
 import sys
 import time
@@ -27,7 +10,8 @@ import os
 
 sys.path.insert(0, "bin/python")
 import samba
-from samba.tests.subunitrun import TestProgram, SubunitOptions
+samba.ensure_external_module("testtools", "testtools")
+samba.ensure_external_module("subunit", "subunit/python")
 
 import samba.getopt as options
 
@@ -42,6 +26,9 @@ from samba.samdb import SamDB
 from samba.dsdb import DS_DOMAIN_FUNCTION_2003
 from samba.tests import delete_force
 
+from subunit.run import SubunitTestRunner
+import unittest
+
 parser = optparse.OptionParser("ldap_schema.py [options] <host>")
 sambaopts = options.SambaOptions(parser)
 parser.add_option_group(sambaopts)
@@ -49,8 +36,6 @@ parser.add_option_group(options.VersionOptions(parser))
 # use command line creds if available
 credopts = options.CredentialsOptions(parser)
 parser.add_option_group(credopts)
-subunitopts = SubunitOptions(parser)
-parser.add_option_group(subunitopts)
 opts, args = parser.parse_args()
 
 if len(args) < 1:
@@ -63,14 +48,13 @@ lp = sambaopts.get_loadparm()
 creds = credopts.get_credentials(lp)
 
 
-class SchemaTests(samba.tests.TestCase):
+class SchemaTests(unittest.TestCase):
 
     def setUp(self):
         super(SchemaTests, self).setUp()
-        self.ldb = SamDB(host, credentials=creds,
-            session_info=system_session(lp), lp=lp, options=ldb_options)
-        self.base_dn = self.ldb.domain_dn()
-        self.schema_dn = self.ldb.get_schema_basedn().get_linearized()
+        self.ldb = ldb
+        self.base_dn = ldb.domain_dn()
+        self.schema_dn = ldb.get_schema_basedn().get_linearized()
 
     def test_generated_schema(self):
         """Testing we can read the generated schema via LDAP"""
@@ -83,9 +67,8 @@ class SchemaTests(samba.tests.TestCase):
 
     def test_generated_schema_is_operational(self):
         """Testing we don't get the generated schema via LDAP by default"""
-        # Must keep the "*" form
         res = self.ldb.search("cn=aggregate,"+self.schema_dn, scope=SCOPE_BASE,
-                              attrs=["*"])
+                attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertFalse("dITContentRules" in res[0])
         self.assertFalse("objectClasses" in res[0])
@@ -111,20 +94,10 @@ isSingleValued: TRUE
 systemOnly: FALSE
 """
         self.ldb.add_ldif(ldif)
-        # We must do a schemaUpdateNow otherwise it's not 100% sure that the schema
-        # will contain the new attribute
-        ldif = """
-dn:
-changetype: modify
-add: schemaUpdateNow
-schemaUpdateNow: 1
-"""
-        self.ldb.modify_ldif(ldif)
 
         # Search for created attribute
         res = []
-        res = self.ldb.search("cn=%s,%s" % (attr_name, self.schema_dn), scope=SCOPE_BASE,
-                              attrs=["lDAPDisplayName","schemaIDGUID"])
+        res = self.ldb.search("cn=%s,%s" % (attr_name, self.schema_dn), scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["lDAPDisplayName"][0], attr_ldap_display_name)
         self.assertTrue("schemaIDGUID" in res[0])
@@ -178,8 +151,7 @@ systemOnly: FALSE
 
         # Search for created objectclass
         res = []
-        res = self.ldb.search("cn=%s,%s" % (class_name, self.schema_dn), scope=SCOPE_BASE,
-                              attrs=["lDAPDisplayName", "defaultObjectCategory", "schemaIDGUID", "distinguishedName"])
+        res = self.ldb.search("cn=%s,%s" % (class_name, self.schema_dn), scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["lDAPDisplayName"][0], class_ldap_display_name)
         self.assertEquals(res[0]["defaultObjectCategory"][0], res[0]["distinguishedName"][0])
@@ -212,7 +184,7 @@ name: """ + object_name + """
 
         # Search for created object
         res = []
-        res = self.ldb.search("cn=%s,cn=Users,%s" % (object_name, self.base_dn), scope=SCOPE_BASE, attrs=["dn"])
+        res = self.ldb.search("cn=%s,cn=Users,%s" % (object_name, self.base_dn), scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         # Delete the object
         delete_force(self.ldb, "cn=%s,cn=Users,%s" % (object_name, self.base_dn))
@@ -242,9 +214,7 @@ systemOnly: FALSE
 
         # Search for created objectclass
         res = []
-        res = self.ldb.search("cn=%s,%s" % (class_name, self.schema_dn), scope=SCOPE_BASE,
-                              attrs=["lDAPDisplayName", "defaultObjectCategory",
-                                     "schemaIDGUID", "distinguishedName"])
+        res = self.ldb.search("cn=%s,%s" % (class_name, self.schema_dn), scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["lDAPDisplayName"][0], class_ldap_display_name)
         self.assertEquals(res[0]["defaultObjectCategory"][0], res[0]["distinguishedName"][0])
@@ -270,21 +240,18 @@ instanceType: 4
 
         # Search for created object
         res = []
-        res = self.ldb.search("ou=%s,%s" % (object_name, self.base_dn), scope=SCOPE_BASE, attrs=["dn"])
+        res = self.ldb.search("ou=%s,%s" % (object_name, self.base_dn), scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         # Delete the object
         delete_force(self.ldb, "ou=%s,%s" % (object_name, self.base_dn))
 
 
-class SchemaTests_msDS_IntId(samba.tests.TestCase):
+class SchemaTests_msDS_IntId(unittest.TestCase):
 
     def setUp(self):
         super(SchemaTests_msDS_IntId, self).setUp()
-        self.ldb = SamDB(host, credentials=creds,
-            session_info=system_session(lp), lp=lp, options=ldb_options)
-        res = self.ldb.search(base="", expression="", scope=SCOPE_BASE,
-                         attrs=["schemaNamingContext", "defaultNamingContext",
-                                "forestFunctionality"])
+        self.ldb = ldb
+        res = ldb.search(base="", expression="", scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.schema_dn = res[0]["schemaNamingContext"][0]
         self.base_dn = res[0]["defaultNamingContext"][0]
@@ -363,8 +330,7 @@ systemOnly: FALSE
 
         # Search for created attribute
         res = []
-        res = self.ldb.search(attr_dn, scope=SCOPE_BASE,
-                              attrs=["lDAPDisplayName", "msDS-IntId", "systemFlags"])
+        res = self.ldb.search(attr_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["lDAPDisplayName"][0], attr_ldap_name)
         if self.forest_level >= DS_DOMAIN_FUNCTION_2003:
@@ -406,8 +372,7 @@ systemOnly: FALSE
 
         # Search for created attribute
         res = []
-        res = self.ldb.search(attr_dn, scope=SCOPE_BASE,
-                              attrs=["lDAPDisplayName", "msDS-IntId"])
+        res = self.ldb.search(attr_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["lDAPDisplayName"][0], attr_ldap_name)
         if self.forest_level >= DS_DOMAIN_FUNCTION_2003:
@@ -462,7 +427,7 @@ systemOnly: FALSE
         self.ldb.add_ldif(ldif_add)
         self._ldap_schemaUpdateNow()
 
-        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["msDS-IntId"])
+        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["msDS-IntId"][0], "-1993108831")
 
@@ -474,7 +439,7 @@ systemOnly: FALSE
         self._ldap_schemaUpdateNow()
 
         # Search for created Class
-        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["msDS-IntId"])
+        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertFalse("msDS-IntId" in res[0])
 
@@ -499,7 +464,7 @@ systemOnly: FALSE
         ldif_add = ldif + "msDS-IntId: -1993108831\n"
         self.ldb.add_ldif(ldif_add)
 
-        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["msDS-IntId"])
+        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertEquals(res[0]["msDS-IntId"][0], "-1993108831")
 
@@ -512,7 +477,7 @@ systemOnly: FALSE
         self._ldap_schemaUpdateNow()
 
         # Search for created Class
-        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["msDS-IntId"])
+        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertFalse("msDS-IntId" in res[0])
 
@@ -524,7 +489,7 @@ systemOnly: FALSE
             self.fail("Modifying msDS-IntId should return error")
         except LdbError, (num, _):
             self.assertEquals(num, ERR_CONSTRAINT_VIOLATION)
-        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["msDS-IntId"])
+        res = self.ldb.search(class_dn, scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.assertFalse("msDS-IntId" in res[0])
 
@@ -553,13 +518,12 @@ systemOnly: FALSE
                 self.assertTrue("msDS-IntId" not in ldb_msg)
 
 
-class SchemaTests_msDS_isRODC(samba.tests.TestCase):
+class SchemaTests_msDS_isRODC(unittest.TestCase):
 
     def setUp(self):
         super(SchemaTests_msDS_isRODC, self).setUp()
-        self.ldb =  SamDB(host, credentials=creds,
-            session_info=system_session(lp), lp=lp, options=ldb_options)
-        res = self.ldb.search(base="", expression="", scope=SCOPE_BASE, attrs=["defaultNamingContext"])
+        self.ldb = ldb
+        res = ldb.search(base="", expression="", scope=SCOPE_BASE, attrs=["*"])
         self.assertEquals(len(res), 1)
         self.base_dn = res[0]["defaultNamingContext"][0]
 
@@ -603,4 +567,15 @@ if host.startswith("ldap://"):
     # user 'paged_search' module when connecting remotely
     ldb_options = ["modules:paged_searches"]
 
-TestProgram(module=__name__, opts=subunitopts)
+ldb = SamDB(host, credentials=creds, session_info=system_session(lp), lp=lp, options=ldb_options)
+
+runner = SubunitTestRunner()
+rc = 0
+if not runner.run(unittest.makeSuite(SchemaTests)).wasSuccessful():
+    rc = 1
+if not runner.run(unittest.makeSuite(SchemaTests_msDS_IntId)).wasSuccessful():
+    rc = 1
+if not runner.run(unittest.makeSuite(SchemaTests_msDS_isRODC)).wasSuccessful():
+    rc = 1
+
+sys.exit(rc)

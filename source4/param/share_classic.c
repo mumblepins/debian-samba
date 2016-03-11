@@ -23,8 +23,6 @@
 #include "param/share.h"
 #include "param/param.h"
 
-NTSTATUS share_classic_init(void);
-
 static NTSTATUS sclassic_init(TALLOC_CTX *mem_ctx, 
 			      const struct share_ops *ops, 
 			      struct tevent_context *event_ctx,
@@ -43,10 +41,9 @@ static NTSTATUS sclassic_init(TALLOC_CTX *mem_ctx,
 	return NT_STATUS_OK;
 }
 
-static char *sclassic_string_option(TALLOC_CTX *mem_ctx,
-				    struct share_config *scfg,
-				    const char *opt_name,
-				    const char *defval)
+static const char *sclassic_string_option(struct share_config *scfg, 
+					  const char *opt_name, 
+					  const char *defval)
 {
 	struct loadparm_service *s = talloc_get_type(scfg->opaque, 
 						     struct loadparm_service);
@@ -69,43 +66,43 @@ static char *sclassic_string_option(TALLOC_CTX *mem_ctx,
 			ret = defval;
 		}
 		talloc_free(parm);
-		return talloc_strdup(mem_ctx, ret);
+		return ret;
 	}
 
 	if (strcmp(opt_name, SHARE_NAME) == 0) {
-		return talloc_strdup(mem_ctx, scfg->name);
+		return scfg->name;
 	}
 
 	if (strcmp(opt_name, SHARE_PATH) == 0) {
-		return lpcfg_path(s, lpcfg_default_service(lp_ctx), mem_ctx);
+		return lpcfg_pathname(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_COMMENT) == 0) {
-		return lpcfg_comment(s, lpcfg_default_service(lp_ctx), mem_ctx);
+		return lpcfg_comment(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_VOLUME) == 0) {
-		return talloc_strdup(mem_ctx, lpcfg_volume_label(s, lpcfg_default_service(lp_ctx)));
+		return volume_label(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_TYPE) == 0) {
-		if (lpcfg_printable(s, lpcfg_default_service(lp_ctx))) {
-			return talloc_strdup(mem_ctx, "PRINTER");
+		if (lpcfg_print_ok(s, lpcfg_default_service(lp_ctx))) {
+			return "PRINTER";
 		}
 		if (strcmp("NTFS", lpcfg_fstype(s, lpcfg_default_service(lp_ctx))) == 0) {
-			return talloc_strdup(mem_ctx, "DISK");
+			return "DISK";
 		}
-		return talloc_strdup(mem_ctx, lpcfg_fstype(s, lpcfg_default_service(lp_ctx)));
+		return lpcfg_fstype(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_PASSWORD) == 0) {
-		return talloc_strdup(mem_ctx, defval);
+		return defval;
 	}
 
 	DEBUG(0,("request for unknown share string option '%s'\n",
 		 opt_name));
 
-	return talloc_strdup(mem_ctx, defval);
+	return defval;
 }
 
 static int sclassic_int_option(struct share_config *scfg, const char *opt_name, int defval)
@@ -147,11 +144,11 @@ static int sclassic_int_option(struct share_config *scfg, const char *opt_name, 
 	}
 
 	if (strcmp(opt_name, SHARE_DIR_MASK) == 0) {
-		return lpcfg_directory_mask(s, lpcfg_default_service(lp_ctx));
+		return lpcfg_dir_mask(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_FORCE_DIR_MODE) == 0) {
-		return lpcfg_force_directory_mode(s, lpcfg_default_service(lp_ctx));
+		return lpcfg_force_dir_mode(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_FORCE_CREATE_MODE) == 0) {
@@ -198,7 +195,7 @@ static bool sclassic_bool_option(struct share_config *scfg, const char *opt_name
 	}
 
 	if (strcmp(opt_name, SHARE_READONLY) == 0) {
-		return lpcfg_read_only(s, lpcfg_default_service(lp_ctx));
+		return lpcfg_readonly(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_MAP_SYSTEM) == 0) {
@@ -230,32 +227,7 @@ static bool sclassic_bool_option(struct share_config *scfg, const char *opt_name
 	}
 
 	if (strcmp(opt_name, SHARE_CI_FILESYSTEM) == 0) {
-		int case_sensitive = lpcfg_case_sensitive(s, lpcfg_default_service(lp_ctx));
-		/*
-		 * Yes, this confusingly named option means Samba acts
-		 * case sensitive, so that the filesystem can act case
-		 * insensitive.
-		 *
-		 */
-		if (case_sensitive == Auto) {
-			/* Auto is for unix extensions and unix
-			 * clients, which we don't support here.
-			 * Samba needs to do the case changing,
-			 * because the filesystem is case
-			 * sensitive  */
-			return false;
-		} else if (case_sensitive) {
-			/* True means that Samba won't do anything to
-			 * change the case of incoming requests.
-			 * Essentially this means we trust the file
-			 * system to be case insensitive */
-			return true;
-		} else {
-			/* False means that Smaba needs to do the case
-			 * changing, because the filesystem is case
-			 * sensitive */
-			return false;
-		}
+		return lpcfg_ci_filesystem(s, lpcfg_default_service(lp_ctx));
 	}
 
 	DEBUG(0,("request for unknown share bool option '%s'\n",
@@ -288,11 +260,11 @@ static const char **sclassic_string_list_option(TALLOC_CTX *mem_ctx, struct shar
 	}
 
 	if (strcmp(opt_name, SHARE_HOSTS_ALLOW) == 0) {
-		return lpcfg_hosts_allow(s, lpcfg_default_service(lp_ctx));
+		return lpcfg_hostsallow(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_HOSTS_DENY) == 0) {
-		return lpcfg_hosts_deny(s, lpcfg_default_service(lp_ctx));
+		return lpcfg_hostsdeny(s, lpcfg_default_service(lp_ctx));
 	}
 
 	if (strcmp(opt_name, SHARE_NTVFS_HANDLER) == 0) {

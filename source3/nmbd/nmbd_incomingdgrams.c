@@ -23,6 +23,7 @@
 #include "includes.h"
 #include "../librpc/gen_ndr/svcctl.h"
 #include "nmbd/nmbd.h"
+#include "smbprofile.h"
 
 extern bool found_lm_clients;
 
@@ -99,14 +100,14 @@ void process_host_announce(struct subnet_record *subrec, struct packet_struct *p
 	struct dgram_packet *dgram = &p->packet.dgram;
 	int ttl = IVAL(buf,1)/1000;
 	unstring announce_name;
-	uint32_t servertype = IVAL(buf,23);
+	uint32 servertype = IVAL(buf,23);
 	fstring comment;
 	struct work_record *work;
 	struct server_record *servrec;
 	unstring work_name;
 	unstring source_name;
-	ZERO_STRUCT(source_name);
-	ZERO_STRUCT(announce_name);
+
+	START_PROFILE(host_announce);
 
 	pull_ascii_fstring(comment, buf+31);
   
@@ -143,7 +144,7 @@ void process_host_announce(struct subnet_record *subrec, struct packet_struct *p
 	 * to be our primary workgroup name.
 	 */
 
-	if(strequal(work_name, lp_netbios_name()))
+	if(strequal(work_name, global_myname()))
 		unstrcpy(work_name,lp_workgroup());
 
 	/*
@@ -171,7 +172,7 @@ void process_host_announce(struct subnet_record *subrec, struct packet_struct *p
 			/* Update the record. */
 			servrec->serv.type = servertype|SV_TYPE_LOCAL_LIST_ONLY;
 			update_server_ttl( servrec, ttl);
-			strlcpy(servrec->serv.comment,comment,sizeof(servrec->serv.comment));
+			fstrcpy(servrec->serv.comment,comment);
 		}
 	} else {
 		/*
@@ -186,7 +187,8 @@ void process_host_announce(struct subnet_record *subrec, struct packet_struct *p
 
 	subrec->work_changed = True;
 done:
-	return;
+
+	END_PROFILE(host_announce);
 }
 
 /*******************************************************************
@@ -199,10 +201,12 @@ void process_workgroup_announce(struct subnet_record *subrec, struct packet_stru
 	int ttl = IVAL(buf,1)/1000;
 	unstring workgroup_announce_name;
 	unstring master_name;
-	uint32_t servertype = IVAL(buf,23);
+	uint32 servertype = IVAL(buf,23);
 	struct work_record *work;
 	unstring source_name;
 	unstring dest_name;
+
+	START_PROFILE(workgroup_announce);
 
 	pull_ascii_nstring(workgroup_announce_name,sizeof(workgroup_announce_name),buf+5);
 	pull_ascii_nstring(master_name,sizeof(master_name),buf+31);
@@ -240,7 +244,8 @@ void process_workgroup_announce(struct subnet_record *subrec, struct packet_stru
 	subrec->work_changed = True;
 
 done:
-	return;
+
+	END_PROFILE(workgroup_announce);
 }
 
 /*******************************************************************
@@ -252,12 +257,14 @@ void process_local_master_announce(struct subnet_record *subrec, struct packet_s
 	struct dgram_packet *dgram = &p->packet.dgram;
 	int ttl = IVAL(buf,1)/1000;
 	unstring server_name;
-	uint32_t servertype = IVAL(buf,23);
+	uint32 servertype = IVAL(buf,23);
 	fstring comment;
 	unstring work_name;
 	struct work_record *work = NULL;
 	struct server_record *servrec;
 	unstring source_name;
+
+	START_PROFILE(local_master_announce);
 
 	pull_ascii_nstring(server_name,sizeof(server_name),buf+5);
 	pull_ascii_fstring(comment, buf+31);
@@ -329,25 +336,12 @@ a local master browser for workgroup %s and we think we are master. Forcing elec
 				ttl, comment);
 		} else {
 			/* Update the record. */
-			if (servrec->serv.type !=
-					(servertype|SV_TYPE_LOCAL_LIST_ONLY)) {
-				servrec->serv.type =
-					servertype|SV_TYPE_LOCAL_LIST_ONLY;
-				subrec->work_changed = true;
-			}
-			if (!strequal(servrec->serv.comment,comment)) {
-				strlcpy(servrec->serv.comment,
-					comment,
-					sizeof(servrec->serv.comment));
-				subrec->work_changed = true;
-			}
+			servrec->serv.type = servertype|SV_TYPE_LOCAL_LIST_ONLY;
 			update_server_ttl(servrec, ttl);
+			fstrcpy(servrec->serv.comment,comment);
 		}
-
-		if (!strequal(work->local_master_browser_name, server_name)) {
-			set_workgroup_local_master_browser_name( work, server_name );
-			subrec->work_changed = true;
-		}
+	
+		set_workgroup_local_master_browser_name( work, server_name );
 	} else {
 		/*
 		 * This server is announcing it is going down. Remove it from the
@@ -359,8 +353,10 @@ a local master browser for workgroup %s and we think we are master. Forcing elec
 		}
 	}
 
+	subrec->work_changed = True;
 done:
-	return;
+
+	END_PROFILE(local_master_announce);
 }
 
 /*******************************************************************
@@ -376,6 +372,8 @@ void process_master_browser_announce(struct subnet_record *subrec,
 	unstring local_master_name;
 	struct work_record *work;
 	struct browse_cache_record *browrec;
+
+	START_PROFILE(master_browser_announce);
 
 	pull_ascii_nstring(local_master_name,sizeof(local_master_name),buf);
   
@@ -412,7 +410,8 @@ master - ignoring master announce.\n"));
 	}
 
 done:
-	return;
+
+	END_PROFILE(master_browser_announce);
 }
 
 /*******************************************************************
@@ -422,7 +421,7 @@ done:
 void process_lm_host_announce(struct subnet_record *subrec, struct packet_struct *p, const char *buf, int len)
 {
 	struct dgram_packet *dgram = &p->packet.dgram;
-	uint32_t servertype = IVAL(buf,1);
+	uint32 servertype = IVAL(buf,1);
 	int osmajor=CVAL(buf,5);           /* major version of node software */
 	int osminor=CVAL(buf,6);           /* minor version of node software */
 	int ttl = SVAL(buf,7);
@@ -434,6 +433,7 @@ void process_lm_host_announce(struct subnet_record *subrec, struct packet_struct
 	fstring comment;
 	char *s = get_safe_str_ptr(buf,len,discard_const_p(char, buf),9);
 
+	START_PROFILE(lm_host_announce);
 	if (!s) {
 		goto done;
 	}
@@ -484,7 +484,7 @@ originate from OS/2 Warp client. Ignoring packet.\n"));
 	 * not needed in the LanMan announce code, but it won't hurt.
 	 */
 
-	if(strequal(work_name, lp_netbios_name()))
+	if(strequal(work_name, global_myname()))
 		unstrcpy(work_name,lp_workgroup());
 
 	/*
@@ -512,7 +512,7 @@ originate from OS/2 Warp client. Ignoring packet.\n"));
 			/* Update the record. */
 			servrec->serv.type = servertype|SV_TYPE_LOCAL_LIST_ONLY;
 			update_server_ttl( servrec, ttl);
-			strlcpy(servrec->serv.comment,comment,sizeof(servrec->serv.comment));
+			fstrcpy(servrec->serv.comment,comment);
 		}
 	} else {
 		/*
@@ -529,7 +529,8 @@ originate from OS/2 Warp client. Ignoring packet.\n"));
 	found_lm_clients = True;
 
 done:
-	return;
+
+	END_PROFILE(lm_host_announce);
 }
 
 /****************************************************************************
@@ -540,7 +541,7 @@ static void send_backup_list_response(struct subnet_record *subrec,
 				      struct work_record *work,
 				      struct nmb_name *send_to_name,
 				      unsigned char max_number_requested,
-				      uint32_t token, struct in_addr sendto_ip,
+				      uint32 token, struct in_addr sendto_ip,
 				      int port)
 {
 	char outbuf[1024];
@@ -570,11 +571,8 @@ static void send_backup_list_response(struct subnet_record *subrec,
 
 	/* We always return at least one name - our own. */
 	count = 1;
-	unstrcpy(myname, lp_netbios_name());
-	if (!strupper_m(myname)) {
-		DEBUG(4,("strupper_m %s failed\n", myname));
-		return;
-	}
+	unstrcpy(myname, global_myname());
+	strupper_m(myname);
 	myname[15]='\0';
 	push_ascii(p, myname, sizeof(outbuf)-PTR_DIFF(p,outbuf)-1, STR_TERMINATE);
 
@@ -601,7 +599,7 @@ static void send_backup_list_response(struct subnet_record *subrec,
     if(count >= (unsigned int)max_number_requested)
       break;
 
-    if(strnequal(servrec->serv.name, lp_netbios_name(),15))
+    if(strnequal(servrec->serv.name, global_myname(),15))
       continue;
 
     if(!(servrec->serv.type & SV_TYPE_BACKUP_BROWSER))
@@ -627,7 +625,7 @@ static void send_backup_list_response(struct subnet_record *subrec,
 
 	send_mailslot(True, BROWSE_MAILSLOT,
 		outbuf,PTR_DIFF(p,outbuf),
-		lp_netbios_name(), 0,
+		global_myname(), 0, 
 		send_to_namestr,0,
 		sendto_ip, subrec->myip, port);
 }
@@ -648,11 +646,12 @@ void process_get_backup_list_request(struct subnet_record *subrec,
 	struct dgram_packet *dgram = &p->packet.dgram;
 	struct work_record *work;
 	unsigned char max_number_requested = CVAL(buf,0);
-	uint32_t token = IVAL(buf,1); /* Sender's key index for the workgroup. */
+	uint32 token = IVAL(buf,1); /* Sender's key index for the workgroup. */
 	int name_type = dgram->dest_name.name_type;
 	unstring workgroup_name;
 	struct subnet_record *search_subrec = subrec;
 
+	START_PROFILE(get_backup_list);
 	pull_ascii_nstring(workgroup_name, sizeof(workgroup_name), dgram->dest_name.name);
 
 	DEBUG(3,("process_get_backup_list_request: request from %s IP %s to %s.\n",
@@ -710,7 +709,8 @@ and I am not a local master browser.\n", workgroup_name));
 			max_number_requested, token, p->ip, p->port);
 
 done:
-	return;
+
+	END_PROFILE(get_backup_list);
 }
 
 /*******************************************************************
@@ -729,6 +729,8 @@ void process_reset_browser(struct subnet_record *subrec,
 	struct dgram_packet *dgram = &p->packet.dgram;
 	int state = CVAL(buf,0);
 	struct subnet_record *sr;
+
+	START_PROFILE(reset_browser);
 
 	DEBUG(1,("process_reset_browser: received diagnostic browser reset \
 request from %s IP %s state=0x%X\n",
@@ -762,6 +764,8 @@ request from %s IP %s state=0x%X\n",
 	/* Request to stop browsing altogether. */
 	if (state & 0x4)
 		DEBUG(1,("process_reset_browser: ignoring request to stop being a browser.\n"));
+
+	END_PROFILE(reset_browser);
 }
 
 /*******************************************************************
@@ -778,6 +782,8 @@ void process_announce_request(struct subnet_record *subrec, struct packet_struct
 	struct work_record *work;
 	unstring workgroup_name;
  
+	START_PROFILE(announce_request);
+
 	pull_ascii_nstring(workgroup_name, sizeof(workgroup_name), dgram->dest_name.name);
 	DEBUG(3,("process_announce_request: Announce request from %s IP %s to %s.\n",
 		nmb_namestr(&dgram->source_name), inet_ntoa(p->ip),
@@ -798,7 +804,8 @@ void process_announce_request(struct subnet_record *subrec, struct packet_struct
 
 	work->needannounce = True;
 done:
-	return;
+
+	END_PROFILE(announce_request);
 }
 
 /*******************************************************************
@@ -814,6 +821,8 @@ void process_lm_announce_request(struct subnet_record *subrec, struct packet_str
 {
 	struct dgram_packet *dgram = &p->packet.dgram;
 	unstring workgroup_name;
+
+	START_PROFILE(lm_announce_request);
 
 	pull_ascii_nstring(workgroup_name, sizeof(workgroup_name), dgram->dest_name.name);
 	DEBUG(3,("process_lm_announce_request: Announce request from %s IP %s to %s.\n",
@@ -836,5 +845,6 @@ void process_lm_announce_request(struct subnet_record *subrec, struct packet_str
 	found_lm_clients = True;
 
 done:
-	return;
+
+	END_PROFILE(lm_announce_request);
 }

@@ -105,11 +105,6 @@ static int net_changesecretpw(struct net_context *c, int argc,
 		}
 
 		trust_pw = get_pass(_("Enter machine password: "), c->opt_stdin);
-		if (trust_pw == NULL) {
-			    d_fprintf(stderr,
-				      _("Error in reading machine password\n"));
-			    return 1;
-		}
 
 		if (!secrets_store_machine_password(trust_pw, lp_workgroup(), sec_channel_type)) {
 			    d_fprintf(stderr,
@@ -248,12 +243,12 @@ static int net_getlocalsid(struct net_context *c, int argc, const char **argv)
 		name = argv[0];
         }
 	else {
-		name = lp_netbios_name();
+		name = global_myname();
 	}
 
 	if(!initialize_password_db(false, NULL)) {
-		d_fprintf(stderr, _("WARNING: Could not open passdb\n"));
-		return 1;
+		DEBUG(0, ("WARNING: Could not open passdb - local sid may not reflect passdb\n"
+			  "backend knowledge (such as the sid stored in LDAP)\n"));
 	}
 
 	/* first check to see if we can even access secrets, so we don't
@@ -291,7 +286,7 @@ static int net_setlocalsid(struct net_context *c, int argc, const char **argv)
 		return 1;
 	}
 
-	if (!secrets_store_domain_sid(lp_netbios_name(), &sid)) {
+	if (!secrets_store_domain_sid(global_myname(), &sid)) {
 		DEBUG(0,("Can't store domain SID as a pdc/bdc.\n"));
 		return 1;
 	}
@@ -332,8 +327,10 @@ static int net_getdomainsid(struct net_context *c, int argc, const char **argv)
 	}
 
 	if(!initialize_password_db(false, NULL)) {
-		d_fprintf(stderr, _("WARNING: Could not open passdb\n"));
-		return 1;
+		DEBUG(0, ("WARNING: Could not open passdb - domain SID may "
+			  "not reflect passdb\n"
+			  "backend knowledge (such as the SID stored in "
+			  "LDAP)\n"));
 	}
 
 	/* first check to see if we can even access secrets, so we don't
@@ -349,15 +346,14 @@ static int net_getdomainsid(struct net_context *c, int argc, const char **argv)
 	/* Generate one, if it doesn't exist */
 	get_global_sam_sid();
 
-	if (!IS_DC) {
-		if (!secrets_fetch_domain_sid(lp_netbios_name(), &domain_sid)) {
-			d_fprintf(stderr, _("Could not fetch local SID\n"));
-			return 1;
-		}
-		sid_to_fstring(sid_str, &domain_sid);
-		d_printf(_("SID for local machine %s is: %s\n"),
-			 lp_netbios_name(), sid_str);
+	if (!secrets_fetch_domain_sid(global_myname(), &domain_sid)) {
+		d_fprintf(stderr, _("Could not fetch local SID\n"));
+		return 1;
 	}
+	sid_to_fstring(sid_str, &domain_sid);
+	d_printf(_("SID for local machine %s is: %s\n"),
+		 global_myname(), sid_str);
+
 	if (!secrets_fetch_domain_sid(c->opt_workgroup, &domain_sid)) {
 		d_fprintf(stderr, _("Could not fetch domain SID\n"));
 		return 1;
@@ -370,10 +366,10 @@ static int net_getdomainsid(struct net_context *c, int argc, const char **argv)
 }
 
 static bool search_maxrid(struct pdb_search *search, const char *type,
-			  uint32_t *max_rid)
+			  uint32 *max_rid)
 {
 	struct samr_displayentry *entries;
-	uint32_t i, num_entries;
+	uint32 i, num_entries;
 
 	if (search == NULL) {
 		d_fprintf(stderr, _("get_maxrid: Could not search %s\n"), type);
@@ -387,9 +383,9 @@ static bool search_maxrid(struct pdb_search *search, const char *type,
 	return true;
 }
 
-static uint32_t get_maxrid(void)
+static uint32 get_maxrid(void)
 {
-	uint32_t max_rid = 0;
+	uint32 max_rid = 0;
 
 	if (!search_maxrid(pdb_search_users(talloc_tos(), 0), "users", &max_rid))
 		return 0;
@@ -407,7 +403,7 @@ static uint32_t get_maxrid(void)
 
 static int net_maxrid(struct net_context *c, int argc, const char **argv)
 {
-	uint32_t rid;
+	uint32 rid;
 
 	if (argc != 0) {
 	        d_fprintf(stderr, "%s net maxrid\n", _("Usage:"));
@@ -743,14 +739,6 @@ static struct functable net_func[] = {
 		   "'net serverid' commands.")
 	},
 
-	{	"notify",
-		net_notify,
-		NET_TRANSPORT_LOCAL,
-		N_("notifyd client code"),
-		N_("  Use 'net help notify' to get more information about "
-		   "'net notify' commands.")
-	},
-
 #ifdef WITH_FAKE_KASERVER
 	{	"afs",
 		net_afs,
@@ -775,14 +763,13 @@ static struct functable net_func[] = {
 /****************************************************************************
   main program
 ****************************************************************************/
- int main(int argc, char **argv)
+ int main(int argc, const char **argv)
 {
 	int opt,i;
 	char *p;
 	int rc = 0;
 	int argc_new = 0;
 	const char ** argv_new;
-	const char **argv_const = discard_const_p(const char *, argv);
 	poptContext pc;
 	TALLOC_CTX *frame = talloc_stackframe();
 	struct net_context *c = talloc_zero(frame, struct net_context);
@@ -833,12 +820,6 @@ static struct functable net_func[] = {
 		{"lock", 0, POPT_ARG_NONE,   &c->opt_lock},
 		{"auto", 'a', POPT_ARG_NONE,   &c->opt_auto},
 		{"repair", 0, POPT_ARG_NONE,   &c->opt_repair},
-		/* Options for 'net registry check'*/
-		{"reg-version", 0, POPT_ARG_INT, &c->opt_reg_version},
-		{"output", 'o', POPT_ARG_STRING, &c->opt_output},
-		{"wipe", 0, POPT_ARG_NONE, &c->opt_wipe},
-		/* Options for 'net registry import' */
-		{"precheck", 0, POPT_ARG_STRING, &c->opt_precheck},
 		POPT_COMMON_SAMBA
 		{ 0, 0, 0, 0}
 	};
@@ -847,7 +828,7 @@ static struct functable net_func[] = {
 
 	setup_logging(argv[0], DEBUG_STDERR);
 
-	smb_init_locale();
+	load_case_tables();
 
 	setlocale(LC_ALL, "");
 #if defined(HAVE_BINDTEXTDOMAIN)
@@ -861,7 +842,7 @@ static struct functable net_func[] = {
 	lp_set_cmdline("log level", "0");
 	c->private_data = net_func;
 
-	pc = poptGetContext(NULL, argc, argv_const, long_options,
+	pc = poptGetContext(NULL, argc, (const char **) argv, long_options,
 			    POPT_CONTEXT_KEEP_FIRST);
 
 	while((opt = poptGetNextOpt(pc)) != -1) {
@@ -882,7 +863,7 @@ static struct functable net_func[] = {
 			break;
 		case 'U':
 			c->opt_user_specified = true;
-			c->opt_user_name = talloc_strdup(c, c->opt_user_name);
+			c->opt_user_name = SMB_STRDUP(c->opt_user_name);
 			p = strchr(c->opt_user_name,'%');
 			if (p) {
 				*p = 0;
@@ -892,38 +873,12 @@ static struct functable net_func[] = {
 		default:
 			d_fprintf(stderr, _("\nInvalid option %s: %s\n"),
 				 poptBadOption(pc, 0), poptStrerror(opt));
-			net_help(c, argc, argv_const);
+			net_help(c, argc, argv);
 			exit(1);
 		}
 	}
 
-	if (!lp_load_initial_only(get_dyn_CONFIGFILE())) {
-		d_fprintf(stderr, "Can't load %s - run testparm to debug it\n",
-			  get_dyn_CONFIGFILE());
-		exit(1);
-	}
-
-	/*
-	 * Failing to init the msg_ctx isn't a fatal error. Only root-level
-	 * things (joining/leaving domains etc.) will be denied.
-	 */
-	c->msg_ctx = messaging_init(c, samba_tevent_context_init(c));
-
-	if (!lp_load_global(get_dyn_CONFIGFILE())) {
-		d_fprintf(stderr, "Can't load %s - run testparm to debug it\n",
-			  get_dyn_CONFIGFILE());
-		exit(1);
-	}
-
-#if defined(HAVE_BIND_TEXTDOMAIN_CODESET)
-	/* Bind our gettext results to 'unix charset'
-	   
-	   This ensures that the translations and any embedded strings are in the
-	   same charset.  It won't be the one from the user's locale (we no
-	   longer auto-detect that), but it will be self-consistent.
-	*/
-	bind_textdomain_codeset(MODULE_NAME, lp_unix_charset());
-#endif
+	lp_load(get_dyn_CONFIGFILE(), true, false, false, true);
 
  	argv_new = (const char **)poptGetArgs(pc);
 
@@ -940,7 +895,7 @@ static struct functable net_func[] = {
 	}
 
 	if (c->opt_requester_name) {
-		lp_set_cmdline("netbios name", c->opt_requester_name);
+		set_global_myname(c->opt_requester_name);
 	}
 
 	if (!c->opt_user_name && getenv("LOGNAME")) {
@@ -975,7 +930,11 @@ static struct functable net_func[] = {
 		c->opt_password = getenv("PASSWD");
 	}
 
-	popt_burn_cmdline_password(argc, argv);
+	/* Failing to init the msg_ctx isn't a fatal error. Only
+	   root-level things (joining/leaving domains etc.) will be denied. */
+
+	c->msg_ctx = messaging_init(c, procid_self(),
+				    event_context_init(c));
 
 	rc = net_run_function(c, argc_new-1, argv_new+1, "net", net_func);
 

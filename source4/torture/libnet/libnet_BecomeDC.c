@@ -33,7 +33,6 @@
 #include "param/param.h"
 #include "param/provision.h"
 #include "libcli/resolve/resolve.h"
-#include "torture/libnet/proto.h"
 
 bool torture_net_become_dc(struct torture_context *torture)
 {
@@ -45,7 +44,7 @@ bool torture_net_become_dc(struct torture_context *torture)
 	struct ldb_message *msg;
 	int ldb_ret;
 	uint32_t i;
-	char *private_dir;
+	char *sam_ldb_path;
 	const char *address;
 	struct nbt_name name;
 	const char *netbios_name;
@@ -68,9 +67,8 @@ bool torture_net_become_dc(struct torture_context *torture)
 	make_nbt_name_server(&name, torture_setting_string(torture, "host", NULL));
 
 	/* do an initial name resolution to find its IP */
-	status = resolve_name_ex(lpcfg_resolve_context(torture->lp_ctx),
-				 0, 0,
-				 &name, torture, &address, torture->ev);
+	status = resolve_name(lpcfg_resolve_context(torture->lp_ctx),
+			      &name, torture, &address, torture->ev);
 	torture_assert_ntstatus_ok(torture, status, talloc_asprintf(torture,
 				   "Failed to resolve %s - %s\n",
 				   name.name, nt_errstr(status)));
@@ -145,13 +143,13 @@ bool torture_net_become_dc(struct torture_context *torture)
 	talloc_unlink(s, ldb);
 
 	lp_ctx = libnet_vampire_cb_lp_ctx(s);
-	private_dir = talloc_asprintf(s, "%s/%s", location, "private");
-	lpcfg_set_cmdline(lp_ctx, "private dir", private_dir);
-	torture_comment(torture, "Reopen the SAM LDB with system credentials and all replicated data: %s\n", private_dir);
+	sam_ldb_path = talloc_asprintf(s, "%s/%s", location, "private/sam.ldb");
+	lpcfg_set_cmdline(lp_ctx, "sam database", sam_ldb_path);
+	torture_comment(torture, "Reopen the SAM LDB with system credentials and all replicated data: %s\n", sam_ldb_path);
 	ldb = samdb_connect(s, torture->ev, lp_ctx, system_session(lp_ctx), 0);
 	torture_assert_goto(torture, ldb != NULL, ret, cleanup,
 				      talloc_asprintf(torture,
-				      "Failed to open '%s/sam.ldb'\n", private_dir));
+				      "Failed to open '%s'\n", sam_ldb_path));
 
 	torture_assert_goto(torture, dsdb_uses_global_schema(ldb), ret, cleanup,
 						"Uses global schema");

@@ -2,24 +2,23 @@
    Unix SMB/CIFS implementation.
    a async DNS handler
    Copyright (C) Andrew Tridgell 1997-1998
-
+   
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-
+   
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-
+   
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
    */
 
 #include "includes.h"
 #include "nmbd/nmbd.h"
-#include "lib/sys_rw_data.h"
 
 /***************************************************************************
   Add a DNS result to the name cache.
@@ -31,7 +30,7 @@ static struct name_record *add_dns_result(struct nmb_name *question, struct in_a
 	unstring qname;
 
 	pull_ascii_nstring(qname, sizeof(qname), question->name);
-
+  
 	if (!addr.s_addr) {
 		/* add the fail to WINS cache of names. give it 1 hour in the cache */
 		DEBUG(3,("add_dns_result: Negative DNS answer for %s\n", qname));
@@ -91,7 +90,7 @@ static void asyncdns_process(void)
 	while (1) {
 		NTSTATUS status;
 
-		status = read_data_ntstatus(fd_in, (char *)&r, sizeof(r));
+		status = read_data(fd_in, (char *)&r, sizeof(r));
 
 		if (!NT_STATUS_IS_OK(status)) {
 			break;
@@ -136,7 +135,7 @@ void kill_async_dns_child(void)
 /***************************************************************************
   create a child process to handle DNS lookups
   ****************************************************************************/
-void start_async_dns(struct messaging_context *msg)
+void start_async_dns(void)
 {
 	int fd1[2], fd2[2];
 	NTSTATUS status;
@@ -148,7 +147,7 @@ void start_async_dns(struct messaging_context *msg)
 		return;
 	}
 
-	child_pid = fork();
+	child_pid = sys_fork();
 
 	if (child_pid) {
 		fd_in = fd1[0];
@@ -167,7 +166,9 @@ void start_async_dns(struct messaging_context *msg)
 	CatchSignal(SIGHUP, SIG_IGN);
         CatchSignal(SIGTERM, sig_term);
 
-	status = reinit_after_fork(msg, nmbd_event_context(), true);
+	status = reinit_after_fork(nmbd_messaging_context(),
+				   nmbd_event_context(),
+				   procid_self(), true);
 
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(0,("reinit_after_fork() failed\n"));
@@ -204,7 +205,7 @@ static bool write_child(struct packet_struct *p)
 /***************************************************************************
   check the DNS queue
   ****************************************************************************/
-void run_dns_queue(struct messaging_context *msg)
+void run_dns_queue(void)
 {
 	struct query_record r;
 	struct packet_struct *p, *p2;
@@ -217,10 +218,10 @@ void run_dns_queue(struct messaging_context *msg)
 	if (!process_exists_by_pid(child_pid)) {
 		close(fd_in);
 		close(fd_out);
-		start_async_dns(msg);
+		start_async_dns();
 	}
 
-	status = read_data_ntstatus(fd_in, (char *)&r, sizeof(r));
+	status = read_data(fd_in, (char *)&r, sizeof(r));
 
 	if (!NT_STATUS_IS_OK(status)) {
 		DEBUG(0, ("read from child failed: %s\n", nt_errstr(status)));

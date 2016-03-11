@@ -65,7 +65,7 @@ static void reg_ldb_unpack_value(TALLOC_CTX *mem_ctx,
 			/* The data should be provided as UTF16 string */
 			convert_string_talloc(mem_ctx, CH_UTF8, CH_UTF16,
 					      val->data, val->length,
-					      (void **)&data->data, &data->length);
+					      (void **)&data->data, &data->length, false);
 		} else {
 			data->data = NULL;
 			data->length = 0;
@@ -159,7 +159,8 @@ static struct ldb_message *reg_ldb_pack_value(struct ldb_context *ctx,
 			/* The data is provided as UTF16 string */
 			ret2 = convert_string_talloc(mem_ctx, CH_UTF16, CH_UTF8,
 						     (void *)data.data, data.length,
-						     (void **)&val->data, &val->length);
+						     (void **)&val->data, &val->length,
+						     false);
 			if (ret2) {
 				ret = ldb_msg_add_value(msg, "data", val, NULL);
 			} else {
@@ -408,8 +409,7 @@ static WERROR ldb_get_default_value(TALLOC_CTX *mem_ctx,
 	struct ldb_result *res;
 	int ret;
 
-	ret = ldb_search(c, mem_ctx, &res, kd->dn, LDB_SCOPE_BASE, attrs,
-			 NULL);
+	ret = ldb_search(c, mem_ctx, &res, kd->dn, LDB_SCOPE_BASE, attrs, "(dn=*)");
 
 	if (ret != LDB_SUCCESS) {
 		DEBUG(0, ("Error getting default value for '%s': %s\n",
@@ -504,8 +504,7 @@ static WERROR ldb_open_key(TALLOC_CTX *mem_ctx, const struct hive_key *h,
 	ldb_path = reg_path_to_ldb(mem_ctx, h, name, NULL);
 	W_ERROR_HAVE_NO_MEMORY(ldb_path);
 
-	ret = ldb_search(c, mem_ctx, &res, ldb_path, LDB_SCOPE_BASE, NULL,
-			 NULL);
+	ret = ldb_search(c, mem_ctx, &res, ldb_path, LDB_SCOPE_BASE, NULL, "(key=*)");
 
 	if (ret != LDB_SUCCESS) {
 		DEBUG(3, ("Error opening key '%s': %s\n",
@@ -646,23 +645,14 @@ static WERROR ldb_del_value(TALLOC_CTX *mem_ctx, struct hive_key *key,
 		W_ERROR_HAVE_NO_MEMORY(msg);
 		msg->dn = ldb_dn_copy(msg, kd->dn);
 		W_ERROR_HAVE_NO_MEMORY(msg->dn);
-		ret = ldb_msg_add_empty(msg, "data", LDB_FLAG_MOD_DELETE, NULL);
-		if (ret != LDB_SUCCESS) {
-			return WERR_FOOBAR;
-		}
-		ret = ldb_msg_add_empty(msg, "type", LDB_FLAG_MOD_DELETE,
-					NULL);
-		if (ret != LDB_SUCCESS) {
-			return WERR_FOOBAR;
-		}
+		ldb_msg_add_empty(msg, "data", LDB_FLAG_MOD_DELETE, NULL);
+		ldb_msg_add_empty(msg, "type", LDB_FLAG_MOD_DELETE, NULL);
 
 		ret = ldb_modify(kd->ldb, msg);
 
 		talloc_free(msg);
 
-		if (ret == LDB_ERR_NO_SUCH_ATTRIBUTE) {
-			return WERR_BADFILE;
-		} else if (ret != LDB_SUCCESS) {
+		if (ret != LDB_SUCCESS) {
 			DEBUG(1, ("ldb_del_value: %s\n", ldb_errstring(kd->ldb)));
 			return WERR_FOOBAR;
 		}

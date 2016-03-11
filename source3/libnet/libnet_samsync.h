@@ -75,7 +75,6 @@ struct samsync_context {
 	struct samsync_object *objects;
 
 	struct rpc_pipe_client *cli;
-	struct netlogon_creds_cli_context *netlogon_creds;
 	struct messaging_context *msg_ctx;
 
 	const struct samsync_ops *ops;

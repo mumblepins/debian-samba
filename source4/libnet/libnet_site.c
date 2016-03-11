@@ -64,13 +64,12 @@ NTSTATUS libnet_FindSite(TALLOC_CTX *ctx, struct libnet_context *lctx, struct li
 						&dest_address);
 	if (ret != 0) {
 		r->out.error_string = NULL;
-		status = map_nt_error_from_unix_common(errno);
-		talloc_free(tmp_ctx);
+		status = map_nt_error_from_unix(errno);
 		return status;
 	}
 
 	/* we want to use non async calls, so we're not passing an event context */
-	status = cldap_socket_init(tmp_ctx, NULL, dest_address, &cldap);
+	status = cldap_socket_init(tmp_ctx, NULL, NULL, dest_address, &cldap);
 	if (!NT_STATUS_IS_OK(status)) {
 		talloc_free(tmp_ctx);
 		r->out.error_string = NULL;
@@ -78,8 +77,7 @@ NTSTATUS libnet_FindSite(TALLOC_CTX *ctx, struct libnet_context *lctx, struct li
 	}
 	status = cldap_netlogon(cldap, tmp_ctx, &search);
 	if (!NT_STATUS_IS_OK(status)
-	    || search.out.netlogon.data.nt5_ex.client_site == NULL
-	    || search.out.netlogon.data.nt5_ex.client_site[0] == '\0') {
+	    || !search.out.netlogon.data.nt5_ex.client_site) {
 		/*
 		  If cldap_netlogon() returns in error,
 		  default to using Default-First-Site-Name.
@@ -152,7 +150,7 @@ NTSTATUS libnet_JoinSite(struct libnet_context *ctx,
 	int rtn;
 
 	const char *server_dn_str;
-	const char *host;
+	const char *config_dn_str;
 	struct nbt_name name;
 	const char *dest_addr = NULL;
 
@@ -169,11 +167,8 @@ NTSTATUS libnet_JoinSite(struct libnet_context *ctx,
 		return NT_STATUS_NO_MEMORY;
 	}
 
-	host = dcerpc_binding_get_string_option(libnet_r->out.samr_binding, "host");
-	make_nbt_name_client(&name, host);
-	status = resolve_name_ex(lpcfg_resolve_context(ctx->lp_ctx),
-				 0, 0,
-				 &name, r, &dest_addr, ctx->event_ctx);
+	make_nbt_name_client(&name, libnet_r->out.samr_binding->host);
+	status = resolve_name(lpcfg_resolve_context(ctx->lp_ctx), &name, r, &dest_addr, ctx->event_ctx);
 	if (!NT_STATUS_IS_OK(status)) {
 		libnet_r->out.error_string = NULL;
 		talloc_free(tmp_ctx);
@@ -194,6 +189,7 @@ NTSTATUS libnet_JoinSite(struct libnet_context *ctx,
 		return status;
 	}
 
+	config_dn_str = r->out.config_dn_str;
 	server_dn_str = r->out.server_dn_str;
 
 	/*

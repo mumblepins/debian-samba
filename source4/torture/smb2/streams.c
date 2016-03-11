@@ -72,12 +72,11 @@
 		ok = false; \
 	} \
 	if (!ok) { \
-		torture_result(tctx, TORTURE_FAIL, \
-			       "(%s) Incorrect value %s='%s' - "	\
-			       "should be '%s'\n",			\
-			       __location__, #v, (v)?(v):"NULL",	\
-			       (correct)?(correct):"NULL");		\
-		ret = false;						\
+		torture_comment(tctx,"(%s) Incorrect value %s='%s' - " \
+		    "should be '%s'\n", \
+		    __location__, #v, (v)?(v):"NULL", \
+		    (correct)?(correct):"NULL"); \
+		ret = false; \
 	}} while (0)
 
 
@@ -244,7 +243,7 @@ static bool test_stream_dir(struct torture_context *tctx,
 	sname1 = talloc_asprintf(mem_ctx, "%s:%s", fname, "Stream One");
 	torture_comment(tctx, "%s\n", sname1);
 
-	torture_comment(tctx, "(%s) opening non-existent directory stream\n",
+	torture_comment(tctx, "(%s) opening non-existant directory stream\n",
 	    __location__);
 	ZERO_STRUCT(io.smb2);
 	io.smb2.in.create_options = NTCREATEX_OPTIONS_DIRECTORY;
@@ -328,7 +327,7 @@ static bool test_stream_io(struct torture_context *tctx,
 	status = torture_smb2_testdir(tree, DNAME, &h);
 	CHECK_STATUS(status, NT_STATUS_OK);
 
-	torture_comment(tctx, "(%s) creating a stream on a non-existent file\n",
+	torture_comment(tctx, "(%s) creating a stream on a non-existant file\n",
 		__location__);
 
 	ZERO_STRUCT(io.smb2);
@@ -603,9 +602,6 @@ static bool test_stream_delete(struct torture_context *tctx,
 		goto done;
 	}
 
-	ZERO_STRUCT(h);
-	ZERO_STRUCT(h1);
-
 	sname1 = talloc_asprintf(mem_ctx, "%s:%s", fname, "Stream One");
 
 	/* clean slate .. */
@@ -616,7 +612,7 @@ static bool test_stream_delete(struct torture_context *tctx,
 	status = torture_smb2_testdir(tree, DNAME, &h);
 	CHECK_STATUS(status, NT_STATUS_OK);
 
-	torture_comment(tctx, "(%s) opening non-existent file stream\n",
+	torture_comment(tctx, "(%s) opening non-existant file stream\n",
 	    __location__);
 	ZERO_STRUCT(io.smb2);
 	io.smb2.in.create_flags = 0;
@@ -699,7 +695,6 @@ static bool test_stream_delete(struct torture_context *tctx,
 	CHECK_STATUS(status, NT_STATUS_DELETE_PENDING);
 
 	smb2_util_close(tree, h1);
-	ZERO_STRUCT(h1);
 
 	/*
 	 * After closing the stream the file is really gone.
@@ -711,9 +706,7 @@ static bool test_stream_delete(struct torture_context *tctx,
 	CHECK_STATUS(status, NT_STATUS_OBJECT_NAME_NOT_FOUND);
 
 done:
-	if (!smb2_util_handle_empty(h1)) {
-		smb2_util_close(tree, h1);
-	}
+	smb2_util_close(tree, h1);
 	smb2_util_unlink(tree, fname);
 	smb2_deltree(tree, DNAME);
 	talloc_free(mem_ctx);
@@ -736,7 +729,7 @@ static bool test_stream_names(struct torture_context *tctx,
 	const char *fname = DNAME "\\stream_names.txt";
 	const char *sname1, *sname1b, *sname1c, *sname1d;
 	const char *sname2, *snamew, *snamew2;
-	const char *snamer1;
+	const char *snamer1, *snamer2;
 	bool ret = true;
 	struct smb2_handle h, h1, h2, h3;
 	int i;
@@ -771,6 +764,7 @@ static bool test_stream_names(struct torture_context *tctx,
 				  "?Stream*");
 	snamer1 = talloc_asprintf(mem_ctx, "%s:%s:$DATA", fname,
 				  "BeforeRename");
+	snamer2 = talloc_asprintf(mem_ctx, "%s:%s:$DATA", fname, "AfterRename");
 
 	/* clean slate ...*/
 	smb2_util_unlink(tree, fname);
@@ -1128,23 +1122,23 @@ done:
 }
 
 #define CHECK_CALL_HANDLE(call, rightstatus) do { \
+	check_handle = true; \
+	call_name = #call; \
 	sfinfo.generic.level = RAW_SFILEINFO_ ## call; \
 	sfinfo.generic.in.file.handle = h1; \
 	status = smb2_setinfo_file(tree, &sfinfo); \
 	if (!NT_STATUS_EQUAL(status, rightstatus)) { \
-		torture_result(tctx, TORTURE_FAIL,			\
-			       "(%s) %s - %s (should be %s)\n",		\
-			       __location__, #call,			\
-			       nt_errstr(status), nt_errstr(rightstatus)); \
-		ret = false;						\
+		torture_comment(tctx,"(%s) %s - %s (should be %s)\n", \
+		    __location__, #call, \
+		    nt_errstr(status), nt_errstr(rightstatus)); \
+		ret = false; \
 	} \
 	finfo1.generic.level = RAW_FILEINFO_ALL_INFORMATION; \
 	finfo1.generic.in.file.handle = h1; \
 	status2 = smb2_getinfo_file(tree, tctx, &finfo1); \
 	if (!NT_STATUS_IS_OK(status2)) { \
-		torture_result(tctx, TORTURE_FAIL,	     \
-			       "(%s) %s pathinfo - %s\n",    \
-			       __location__, #call, nt_errstr(status)); \
+		torture_comment(tctx,"(%s) %s pathinfo - %s\n", \
+		    __location__, #call, nt_errstr(status)); \
 		ret = false; \
 	}} while (0)
 
@@ -1163,6 +1157,8 @@ static bool test_stream_rename(struct torture_context *tctx,
 	union smb_setfileinfo sfinfo;
 	bool ret = true;
 	struct smb2_handle h, h1;
+	bool check_handle;
+	const char *call_name;
 
 	sname1 = talloc_asprintf(mem_ctx, "%s:%s", fname, "Stream One");
 	sname2 = talloc_asprintf(mem_ctx, "%s:%s:$DaTa", fname,

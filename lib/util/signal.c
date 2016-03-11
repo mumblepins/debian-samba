@@ -18,10 +18,8 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "replace.h"
+#include "includes.h"
 #include "system/wait.h"
-#include "debug.h"
-#include "lib/util/signal.h" /* Avoid /usr/include/signal.h */
 
 /**
  * @file
@@ -131,16 +129,16 @@ void (*CatchSignal(int signum,void (*handler)(int )))(int)
  Ignore SIGCLD via whatever means is necessary for this OS.
 **/
 
-void (*CatchChild(void))(int)
+void CatchChild(void)
 {
-	return CatchSignal(SIGCLD, sig_cld);
+	CatchSignal(SIGCLD, sig_cld);
 }
 
 /**
  Catch SIGCLD but leave the child around so it's status can be reaped.
 **/
 
-void (*CatchChildLeaveStatus(void))(int)
+void CatchChildLeaveStatus(void)
 {
-	return CatchSignal(SIGCLD, sig_cld_leave_status);
+	CatchSignal(SIGCLD, sig_cld_leave_status);
 }

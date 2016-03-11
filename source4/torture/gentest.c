@@ -38,7 +38,6 @@
 #include "dynconfig/dynconfig.h"
 #include "libcli/security/security.h"
 #include "libcli/raw/raw_proto.h"
-#include "../libcli/smb/smbXcli_base.h"
 
 #define NSERVERS 2
 #define NINSTANCES 2
@@ -221,8 +220,7 @@ static bool connect_servers(struct tevent_context *ev,
 
 			printf("Connecting to \\\\%s\\%s as %s - instance %d\n",
 			       servers[i].server_name, servers[i].share_name, 
-			       cli_credentials_get_username(servers[i].credentials),
-			       j);
+			       servers[i].credentials->username, j);
 
 			cli_credentials_set_workstation(servers[i].credentials, 
 							"gentest", CRED_SPECIFIED);
@@ -281,21 +279,13 @@ static bool connect_servers(struct tevent_context *ev,
 static unsigned int time_skew(void)
 {
 	unsigned int ret;
-	NTTIME nt0, nt1;
-
 	if (options.smb2) {
-		struct smbXcli_conn *c0, *c1;
-
-		c0 = servers[0].smb2_tree[0]->session->transport->conn;
-		c1 = servers[1].smb2_tree[0]->session->transport->conn;
-
-		nt0 = smbXcli_conn_server_system_time(c0);
-		nt1 = smbXcli_conn_server_system_time(c1);
+		ret = labs(servers[0].smb2_tree[0]->session->transport->negotiate.system_time -
+			   servers[1].smb2_tree[0]->session->transport->negotiate.system_time);
 	} else {
-		nt0 = servers[0].smb_tree[0]->session->transport->negotiate.server_time;
-		nt1 = servers[1].smb_tree[0]->session->transport->negotiate.server_time;
+		ret = labs(servers[0].smb_tree[0]->session->transport->negotiate.server_time -
+			   servers[1].smb_tree[0]->session->transport->negotiate.server_time);
 	}
-	ret = labs(nt0 - nt1);
 	return ret + 300;
 }
 
@@ -2328,18 +2318,6 @@ static void gen_setfileinfo(int instance, union smb_setfileinfo *info)
 	case RAW_SFILEINFO_UNIX_INFO2:
 	case RAW_SFILEINFO_UNIX_LINK:
 	case RAW_SFILEINFO_UNIX_HLINK:
-	case RAW_SFILEINFO_LINK_INFORMATION:
-	case RAW_SFILEINFO_PIPE_INFORMATION:
-	case RAW_SFILEINFO_VALID_DATA_INFORMATION:
-	case RAW_SFILEINFO_SHORT_NAME_INFORMATION:
-	case RAW_SFILEINFO_1027:
-	case RAW_SFILEINFO_1030:
-	case RAW_SFILEINFO_1031:
-	case RAW_SFILEINFO_1036:
-	case RAW_SFILEINFO_1041:
-	case RAW_SFILEINFO_1042:
-	case RAW_SFILEINFO_1043:
-	case RAW_SFILEINFO_1044:
 		/* Untested */
 		break;
 	}
@@ -2468,12 +2446,10 @@ static void async_notify_smb(struct smbcli_request *req)
 	union smb_notify notify;
 	NTSTATUS status;
 	int i, j;
-	uint16_t tid = 0;
+	uint16_t tid;
 	struct smbcli_transport *transport = req->transport;
 
-	if (req->tree) {
-		tid = req->tree->tid;
-	}
+	tid = SVAL(req->in.hdr, HDR_TID);
 
 	notify.nttrans.level = RAW_NOTIFY_NTTRANS;
 	status = smb_raw_changenotify_recv(req, current_op.mem_ctx, &notify);
@@ -3069,17 +3045,9 @@ static bool start_gentest(struct tevent_context *ev,
 
 	/* allocate the open_handles array */
 	open_handles = calloc(options.max_open_handles, sizeof(open_handles[0]));
-	if (open_handles == NULL) {
-		printf("Unable to allocate memory for open_handles array.\n");
-		exit(1);
-	}
 
 	srandom(options.seed);
 	op_parms = calloc(options.numops, sizeof(op_parms[0]));
-	if (op_parms == NULL) {
-		printf("Unable to allocate memory for op_parms.\n");
-		exit(1);
-	}
 
 	/* generate the seeds - after this everything is deterministic */
 	if (options.use_preset_seeds) {
@@ -3155,7 +3123,7 @@ static bool split_unc_name(const char *unc, char **server, char **share)
 /****************************************************************************
   main program
 ****************************************************************************/
-int main(int argc, const char *argv[])
+ int main(int argc, char *argv[])
 {
 	int opt;
 	int i, username_count=0;
@@ -3203,7 +3171,7 @@ int main(int argc, const char *argv[])
 	options.max_open_handles = 20;
 	options.seeds_file = "gentest_seeds.dat";
 
-	pc = poptGetContext("gentest", argc, argv, long_options,
+	pc = poptGetContext("gentest", argc, (const char **) argv, long_options, 
 			    POPT_CONTEXT_KEEP_FIRST);
 
 	poptSetOtherOptionHelp(pc, "<unc1> <unc2>");
@@ -3279,7 +3247,7 @@ int main(int argc, const char *argv[])
 
 	ev = s4_event_context_init(talloc_autofree_context());
 
-	gensec_init();
+	gensec_init(lp_ctx);
 
 	ret = start_gentest(ev, lp_ctx);
 

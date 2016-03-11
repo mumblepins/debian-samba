@@ -221,7 +221,7 @@ static bool test_one(struct smbcli_state *cli[NSERVERS][NCONNECTIONS],
 	uint64_t len = rec->len;
 	enum brl_type op = rec->lock_type;
 	int server;
-	/* bool ret[NSERVERS]; */
+	bool ret[NSERVERS];
 	NTSTATUS status[NSERVERS];
 
 	switch (rec->lock_op) {
@@ -242,7 +242,7 @@ static bool test_one(struct smbcli_state *cli[NSERVERS][NCONNECTIONS],
 				parms.lockx.level = RAW_LOCK_LOCKX;
 				parms.lockx.in.file.fnum = fn;
 	
-				ltype = (rec->lock_type == READ_LOCK? 1 : 0);
+				ltype = (rec->lock_op == READ_LOCK? 1 : 0);
 				ltype |= LOCKING_ANDX_LARGE_FILES;
 				parms.lockx.in.mode = ltype;
 				parms.lockx.in.timeout = LOCK_TIMEOUT;
@@ -256,8 +256,8 @@ static bool test_one(struct smbcli_state *cli[NSERVERS][NCONNECTIONS],
 				res = smb_raw_lock(tree, &parms);
 			}
 
-			/* ret[server] = NT_STATUS_IS_OK(res); */
-			status[server] = res;
+			ret[server] = NT_STATUS_IS_OK(res); 
+			status[server] = smbcli_nt_error(cli[server][conn]->tree);
 			if (!exact_error_codes && 
 			    NT_STATUS_EQUAL(status[server], 
 					    NT_STATUS_FILE_LOCK_CONFLICT)) {
@@ -302,8 +302,8 @@ static bool test_one(struct smbcli_state *cli[NSERVERS][NCONNECTIONS],
 				res = smb_raw_lock(tree, &parms);
 			}
 
-			/* ret[server] = NT_STATUS_IS_OK(res); */
-			status[server] = res;
+			ret[server] = NT_STATUS_IS_OK(res);
+			status[server] = smbcli_nt_error(cli[server][conn]->tree);
 		}
 		if (showall || 
 		    (!hide_unlock_fails && !NT_STATUS_EQUAL(status[0],status[1]))) {
@@ -547,7 +547,7 @@ static void usage(poptContext pc)
 /****************************************************************************
   main program
 ****************************************************************************/
-int main(int argc, const char *argv[])
+ int main(int argc,char *argv[])
 {
 	char *share[NSERVERS];
 	int opt;
@@ -584,7 +584,7 @@ int main(int argc, const char *argv[])
 	setlinebuf(stdout);
 	seed = time(NULL);
 
-	pc = poptGetContext("locktest", argc, argv, long_options,
+	pc = poptGetContext("locktest", argc, (const char **) argv, long_options, 
 			    POPT_CONTEXT_KEEP_FIRST);
 
 	poptSetOtherOptionHelp(pc, "<unc1> <unc2>");
@@ -644,7 +644,7 @@ int main(int argc, const char *argv[])
 
 	ev = s4_event_context_init(talloc_autofree_context());
 
-	gensec_init();
+	gensec_init(lp_ctx);
 
 	DEBUG(0,("seed=%u base=%d range=%d min_length=%d\n", 
 		 seed, lock_base, lock_range, min_length));

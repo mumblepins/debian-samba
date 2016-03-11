@@ -161,7 +161,7 @@ static NTSTATUS cmd_lsa_query_info_policy(struct rpc_pipe_client *cli,
 	union lsa_PolicyInformation *info = NULL;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
-	uint32_t info_class = 3;
+	uint32 info_class = 3;
 
 	if (argc > 2) {
 		printf("Usage: %s [info_class]\n", argv[0]);
@@ -323,7 +323,7 @@ static NTSTATUS cmd_lsa_lookup_names4(struct rpc_pipe_client *cli,
 
 	uint32_t num_names;
 	struct lsa_String *names;
-	struct lsa_RefDomainList *domains = NULL;
+	struct lsa_RefDomainList *domains;
 	struct lsa_TransSidArray3 sids;
 	uint32_t count = 0;
 	int i;
@@ -359,10 +359,6 @@ static NTSTATUS cmd_lsa_lookup_names4(struct rpc_pipe_client *cli,
 	}
 	if (!NT_STATUS_IS_OK(result)) {
 		return result;
-	}
-
-	if (sids.count != num_names) {
-		return NT_STATUS_INVALID_NETWORK_RESPONSE;
 	}
 
 	for (i = 0; i < sids.count; i++) {
@@ -404,7 +400,7 @@ static NTSTATUS cmd_lsa_lookup_sids(struct rpc_pipe_client *cli, TALLOC_CTX *mem
 
 	/* Convert arguments to sids */
 
-	sids = talloc_array(mem_ctx, struct dom_sid, argc - 1);
+	sids = TALLOC_ARRAY(mem_ctx, struct dom_sid, argc - 1);
 
 	if (!sids) {
 		printf("could not allocate memory for %d sids\n", argc - 1);
@@ -434,16 +430,9 @@ static NTSTATUS cmd_lsa_lookup_sids(struct rpc_pipe_client *cli, TALLOC_CTX *mem
 		fstring sid_str;
 
 		sid_to_fstring(sid_str, &sids[i]);
-		if (types[i] == SID_NAME_DOMAIN) {
-			printf("%s %s (%d)\n", sid_str,
-			       domains[i] ? domains[i] : "*unknown*",
-			       types[i]);
-		} else {
-			printf("%s %s\\%s (%d)\n", sid_str,
-			       domains[i] ? domains[i] : "*unknown*",
-			       names[i] ? names[i] : "*unknown*",
-			       types[i]);
-		}
+		printf("%s %s\\%s (%d)\n", sid_str, 
+		       domains[i] ? domains[i] : "*unknown*", 
+		       names[i] ? names[i] : "*unknown*", types[i]);
 	}
 
 	dcerpc_lsa_Close(b, mem_ctx, &pol, &result);
@@ -461,7 +450,7 @@ static NTSTATUS cmd_lsa_lookup_sids3(struct rpc_pipe_client *cli,
 	NTSTATUS status = NT_STATUS_UNSUCCESSFUL, result;
 	int i;
 	struct lsa_SidArray sids;
-	struct lsa_RefDomainList *domains = NULL;
+	struct lsa_RefDomainList *domains;
 	struct lsa_TransNameArray2 names;
 	uint32_t count = 0;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
@@ -517,12 +506,9 @@ static NTSTATUS cmd_lsa_lookup_sids3(struct rpc_pipe_client *cli,
 
 	/* Print results */
 
-	for (i = 0; i < names.count; i++) {
+	for (i = 0; i < count; i++) {
 		fstring sid_str;
 
-		if (i >= sids.num_sids) {
-			break;
-		}
 		sid_to_fstring(sid_str, sids.sids[i].sid);
 		printf("%s %s (%d)\n", sid_str,
 		       names.names[i].name.string,
@@ -546,7 +532,7 @@ static NTSTATUS cmd_lsa_enum_trust_dom(struct rpc_pipe_client *cli,
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
 	/* defaults, but may be changed using params */
-	uint32_t enum_ctx = 0;
+	uint32 enum_ctx = 0;
 	int i;
 	uint32_t max_size = (uint32_t)-1;
 
@@ -617,8 +603,8 @@ static NTSTATUS cmd_lsa_enum_privilege(struct rpc_pipe_client *cli,
 	struct lsa_PrivArray priv_array;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
-	uint32_t enum_context=0;
-	uint32_t pref_max_length=0x1000;
+	uint32 enum_context=0;
+	uint32 pref_max_length=0x1000;
 	int i;
 
 	if (argc > 3) {
@@ -679,9 +665,9 @@ static NTSTATUS cmd_lsa_get_dispname(struct rpc_pipe_client *cli,
 	NTSTATUS status, result;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
-	uint16_t lang_id=0;
-	uint16_t lang_id_sys=0;
-	uint16_t lang_id_desc;
+	uint16 lang_id=0;
+	uint16 lang_id_sys=0;
+	uint16 lang_id_desc;
 	struct lsa_String lsa_name;
 	struct lsa_StringLarge *description = NULL;
 
@@ -732,8 +718,8 @@ static NTSTATUS cmd_lsa_enum_sids(struct rpc_pipe_client *cli,
 	NTSTATUS status, result;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
-	uint32_t enum_context=0;
-	uint32_t pref_max_length=0x1000;
+	uint32 enum_context=0;
+	uint32 pref_max_length=0x1000;
 	struct lsa_SidArray sid_array;
 	int i;
 
@@ -792,7 +778,7 @@ static NTSTATUS cmd_lsa_create_account(struct rpc_pipe_client *cli,
 	struct policy_handle dom_pol;
 	struct policy_handle user_pol;
 	NTSTATUS status, result;
-	uint32_t des_access = 0x000f000f;
+	uint32 des_access = 0x000f000f;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
 	struct dom_sid sid;
@@ -844,7 +830,7 @@ static NTSTATUS cmd_lsa_enum_privsaccounts(struct rpc_pipe_client *cli,
 	struct policy_handle dom_pol;
 	struct policy_handle user_pol;
 	NTSTATUS status, result;
-	uint32_t access_desired = 0x000f000f;
+	uint32 access_desired = 0x000f000f;
 	struct dom_sid sid;
 	struct lsa_PrivilegeSet *privs = NULL;
 	int i;
@@ -992,7 +978,7 @@ static NTSTATUS cmd_lsa_add_acct_rights(struct rpc_pipe_client *cli,
 		goto done;
 
 	rights.count = argc-2;
-	rights.names = talloc_array(mem_ctx, struct lsa_StringLarge,
+	rights.names = TALLOC_ARRAY(mem_ctx, struct lsa_StringLarge,
 				    rights.count);
 	if (!rights.names) {
 		return NT_STATUS_NO_MEMORY;
@@ -1050,7 +1036,7 @@ static NTSTATUS cmd_lsa_remove_acct_rights(struct rpc_pipe_client *cli,
 		goto done;
 
 	rights.count = argc-2;
-	rights.names = talloc_array(mem_ctx, struct lsa_StringLarge,
+	rights.names = TALLOC_ARRAY(mem_ctx, struct lsa_StringLarge,
 				    rights.count);
 	if (!rights.names) {
 		return NT_STATUS_NO_MEMORY;
@@ -1136,7 +1122,7 @@ static NTSTATUS cmd_lsa_query_secobj(struct rpc_pipe_client *cli,
 	struct policy_handle pol;
 	NTSTATUS status, result;
 	struct sec_desc_buf *sdb;
-	uint32_t sec_info = SECINFO_DACL;
+	uint32 sec_info = SECINFO_DACL;
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
 	if (argc < 1 || argc > 2) {
@@ -1176,15 +1162,16 @@ static NTSTATUS cmd_lsa_query_secobj(struct rpc_pipe_client *cli,
 }
 
 static void display_trust_dom_info_4(struct lsa_TrustDomainInfoPassword *p,
-				     DATA_BLOB session_key)
+				     uint8_t session_key[16])
 {
 	char *pwd, *pwd_old;
 
 	DATA_BLOB data 	   = data_blob_const(p->password->data, p->password->length);
 	DATA_BLOB data_old = data_blob_const(p->old_password->data, p->old_password->length);
+	DATA_BLOB session_key_blob = data_blob_const(session_key, sizeof(session_key));
 
-	pwd 	= sess_decrypt_string(talloc_tos(), &data, &session_key);
-	pwd_old = sess_decrypt_string(talloc_tos(), &data_old, &session_key);
+	pwd 	= sess_decrypt_string(talloc_tos(), &data, &session_key_blob);
+	pwd_old = sess_decrypt_string(talloc_tos(), &data_old, &session_key_blob);
 
 	d_printf("Password:\t%s\n", pwd);
 	d_printf("Old Password:\t%s\n", pwd_old);
@@ -1196,11 +1183,11 @@ static void display_trust_dom_info_4(struct lsa_TrustDomainInfoPassword *p,
 static void display_trust_dom_info(TALLOC_CTX *mem_ctx,
 				   union lsa_TrustedDomainInfo *info,
 				   enum lsa_TrustDomInfoEnum info_class,
-				   DATA_BLOB session_key)
+				   uint8_t nt_hash[16])
 {
 	switch (info_class) {
 		case LSA_TRUSTED_DOMAIN_INFO_PASSWORD:
-			display_trust_dom_info_4(&info->password, session_key);
+			display_trust_dom_info_4(&info->password, nt_hash);
 			break;
 		default: {
 			const char *str = NULL;
@@ -1222,10 +1209,10 @@ static NTSTATUS cmd_lsa_query_trustdominfobysid(struct rpc_pipe_client *cli,
 	struct policy_handle pol;
 	NTSTATUS status, result;
 	struct dom_sid dom_sid;
-	uint32_t access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
+	uint32 access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
 	union lsa_TrustedDomainInfo *info = NULL;
 	enum lsa_TrustDomInfoEnum info_class = 1;
-	DATA_BLOB session_key;
+	uint8_t nt_hash[16];
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
 	if (argc > 3 || argc < 2) {
@@ -1257,13 +1244,12 @@ static NTSTATUS cmd_lsa_query_trustdominfobysid(struct rpc_pipe_client *cli,
 		goto done;
 	}
 
-	status = cli_get_session_key(mem_ctx, cli, &session_key);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("Could not retrieve session key: %s\n", nt_errstr(status)));
+	if (!rpccli_get_pwd_hash(cli, nt_hash)) {
+		d_fprintf(stderr, "Could not get pwd hash\n");
 		goto done;
 	}
 
-	display_trust_dom_info(mem_ctx, info, info_class, session_key);
+	display_trust_dom_info(mem_ctx, info, info_class, nt_hash);
 
  done:
 	dcerpc_lsa_Close(b, mem_ctx, &pol, &result);
@@ -1277,12 +1263,12 @@ static NTSTATUS cmd_lsa_query_trustdominfobyname(struct rpc_pipe_client *cli,
 {
 	struct policy_handle pol;
 	NTSTATUS status, result;
-	uint32_t access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
+	uint32 access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
 	union lsa_TrustedDomainInfo *info = NULL;
 	enum lsa_TrustDomInfoEnum info_class = 1;
 	struct lsa_String trusted_domain;
+	uint8_t nt_hash[16];
 	struct dcerpc_binding_handle *b = cli->binding_handle;
-	DATA_BLOB session_key;
 
 	if (argc > 3 || argc < 2) {
 		printf("Usage: %s [name] [info_class]\n", argv[0]);
@@ -1312,85 +1298,14 @@ static NTSTATUS cmd_lsa_query_trustdominfobyname(struct rpc_pipe_client *cli,
 		goto done;
 	}
 
-	status = cli_get_session_key(mem_ctx, cli, &session_key);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("Could not retrieve session key: %s\n", nt_errstr(status)));
+	if (!rpccli_get_pwd_hash(cli, nt_hash)) {
+		d_fprintf(stderr, "Could not get pwd hash\n");
 		goto done;
 	}
 
-	display_trust_dom_info(mem_ctx, info, info_class, session_key);
+	display_trust_dom_info(mem_ctx, info, info_class, nt_hash);
 
  done:
-	dcerpc_lsa_Close(b, mem_ctx, &pol, &result);
-
-	return status;
-}
-
-static NTSTATUS cmd_lsa_set_trustdominfo(struct rpc_pipe_client *cli,
-					 TALLOC_CTX *mem_ctx, int argc,
-					 const char **argv)
-{
-	struct policy_handle pol, trustdom_pol;
-	NTSTATUS status, result;
-	uint32_t access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
-	union lsa_TrustedDomainInfo info;
-	struct dom_sid dom_sid;
-	enum lsa_TrustDomInfoEnum info_class = 1;
-	struct dcerpc_binding_handle *b = cli->binding_handle;
-
-	if (argc > 4 || argc < 3) {
-		printf("Usage: %s [sid] [info_class] [value]\n", argv[0]);
-		return NT_STATUS_OK;
-	}
-
-	if (!string_to_sid(&dom_sid, argv[1])) {
-		return NT_STATUS_NO_MEMORY;
-	}
-
-
-	info_class = atoi(argv[2]);
-
-	switch (info_class) {
-	case 13: /* LSA_TRUSTED_DOMAIN_SUPPORTED_ENCRYPTION_TYPES */
-		info.enc_types.enc_types = atoi(argv[3]);
-		break;
-	default:
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	status = rpccli_lsa_open_policy2(cli, mem_ctx, True, access_mask, &pol);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
-
-	status = dcerpc_lsa_OpenTrustedDomain(b, mem_ctx,
-					      &pol,
-					      &dom_sid,
-					      access_mask,
-					      &trustdom_pol,
-					      &result);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
-	if (!NT_STATUS_IS_OK(result)) {
-		status = result;
-		goto done;
-	}
-
-	status = dcerpc_lsa_SetInformationTrustedDomain(b, mem_ctx,
-							&trustdom_pol,
-							info_class,
-							&info,
-							&result);
-	if (!NT_STATUS_IS_OK(status)) {
-		goto done;
-	}
-	if (!NT_STATUS_IS_OK(result)) {
-		status = result;
-		goto done;
-	}
- done:
-	dcerpc_lsa_Close(b, mem_ctx, &trustdom_pol, &result);
 	dcerpc_lsa_Close(b, mem_ctx, &pol, &result);
 
 	return status;
@@ -1402,11 +1317,11 @@ static NTSTATUS cmd_lsa_query_trustdominfo(struct rpc_pipe_client *cli,
 {
 	struct policy_handle pol, trustdom_pol;
 	NTSTATUS status, result;
-	uint32_t access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
+	uint32 access_mask = SEC_FLAG_MAXIMUM_ALLOWED;
 	union lsa_TrustedDomainInfo *info = NULL;
 	struct dom_sid dom_sid;
 	enum lsa_TrustDomInfoEnum info_class = 1;
-	DATA_BLOB session_key;
+	uint8_t nt_hash[16];
 	struct dcerpc_binding_handle *b = cli->binding_handle;
 
 	if (argc > 3 || argc < 2) {
@@ -1451,13 +1366,12 @@ static NTSTATUS cmd_lsa_query_trustdominfo(struct rpc_pipe_client *cli,
 		goto done;
 	}
 
-	status = cli_get_session_key(mem_ctx, cli, &session_key);
-	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0, ("Could not retrieve session key: %s\n", nt_errstr(status)));
+	if (!rpccli_get_pwd_hash(cli, nt_hash)) {
+		d_fprintf(stderr, "Could not get pwd hash\n");
 		goto done;
 	}
 
-	display_trust_dom_info(mem_ctx, info, info_class, session_key);
+	display_trust_dom_info(mem_ctx, info, info_class, nt_hash);
 
  done:
 	dcerpc_lsa_Close(b, mem_ctx, &pol, &result);
@@ -1469,6 +1383,7 @@ static NTSTATUS cmd_lsa_get_username(struct rpc_pipe_client *cli,
                                      TALLOC_CTX *mem_ctx, int argc,
                                      const char **argv)
 {
+	struct policy_handle pol;
 	NTSTATUS status, result;
 	const char *servername = cli->desthost;
 	struct lsa_String *account_name = NULL;
@@ -1478,6 +1393,14 @@ static NTSTATUS cmd_lsa_get_username(struct rpc_pipe_client *cli,
 	if (argc > 2) {
 		printf("Usage: %s servername\n", argv[0]);
 		return NT_STATUS_OK;
+	}
+
+	status = rpccli_lsa_open_policy(cli, mem_ctx, true,
+					SEC_FLAG_MAXIMUM_ALLOWED,
+					&pol);
+
+	if (!NT_STATUS_IS_OK(status)) {
+		goto done;
 	}
 
 	status = dcerpc_lsa_GetUserName(b, mem_ctx,
@@ -1499,6 +1422,7 @@ static NTSTATUS cmd_lsa_get_username(struct rpc_pipe_client *cli,
 		account_name->string, authority_name ? authority_name->string :
 		"");
 
+	dcerpc_lsa_Close(b, mem_ctx, &pol, &result);
  done:
 	return status;
 }
@@ -1570,7 +1494,7 @@ static NTSTATUS cmd_lsa_add_priv(struct rpc_pipe_client *cli,
 		}
 
 		privs.count++;
-		set = talloc_realloc(mem_ctx, set,
+		set = TALLOC_REALLOC_ARRAY(mem_ctx, set,
 					   struct lsa_LUIDAttribute,
 					   privs.count);
 		if (!set) {
@@ -1668,7 +1592,7 @@ static NTSTATUS cmd_lsa_del_priv(struct rpc_pipe_client *cli,
 		}
 
 		privs.count++;
-		set = talloc_realloc(mem_ctx, set,
+		set = TALLOC_REALLOC_ARRAY(mem_ctx, set,
 					   struct lsa_LUIDAttribute,
 					   privs.count);
 		if (!set) {
@@ -2276,38 +2200,37 @@ struct cmd_set lsarpc_commands[] = {
 
 	{ "LSARPC" },
 
-	{ "lsaquery", 	         RPC_RTYPE_NTSTATUS, cmd_lsa_query_info_policy,  NULL, &ndr_table_lsarpc, NULL, "Query info policy",                    "" },
-	{ "lookupsids",          RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_sids,        NULL, &ndr_table_lsarpc, NULL, "Convert SIDs to names",                "" },
-	{ "lookupsids3",         RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_sids3,       NULL, &ndr_table_lsarpc, NULL, "Convert SIDs to names",                "" },
-	{ "lookupnames",         RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_names,       NULL, &ndr_table_lsarpc, NULL, "Convert names to SIDs",                "" },
-	{ "lookupnames4",        RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_names4,      NULL, &ndr_table_lsarpc, NULL, "Convert names to SIDs",                "" },
-	{ "lookupnames_level",   RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_names_level, NULL, &ndr_table_lsarpc, NULL, "Convert names to SIDs",                "" },
-	{ "enumtrust", 	         RPC_RTYPE_NTSTATUS, cmd_lsa_enum_trust_dom,     NULL, &ndr_table_lsarpc, NULL, "Enumerate trusted domains",            "Usage: [preferred max number] [enum context (0)]" },
-	{ "enumprivs", 	         RPC_RTYPE_NTSTATUS, cmd_lsa_enum_privilege,     NULL, &ndr_table_lsarpc, NULL, "Enumerate privileges",                 "" },
-	{ "getdispname",         RPC_RTYPE_NTSTATUS, cmd_lsa_get_dispname,       NULL, &ndr_table_lsarpc, NULL, "Get the privilege name",               "" },
-	{ "lsaenumsid",          RPC_RTYPE_NTSTATUS, cmd_lsa_enum_sids,          NULL, &ndr_table_lsarpc, NULL, "Enumerate the LSA SIDS",               "" },
-	{ "lsacreateaccount",    RPC_RTYPE_NTSTATUS, cmd_lsa_create_account,     NULL, &ndr_table_lsarpc, NULL, "Create a new lsa account",   "" },
-	{ "lsaenumprivsaccount", RPC_RTYPE_NTSTATUS, cmd_lsa_enum_privsaccounts, NULL, &ndr_table_lsarpc, NULL, "Enumerate the privileges of an SID",   "" },
-	{ "lsaenumacctrights",   RPC_RTYPE_NTSTATUS, cmd_lsa_enum_acct_rights,   NULL, &ndr_table_lsarpc, NULL, "Enumerate the rights of an SID",   "" },
-	{ "lsaaddpriv",          RPC_RTYPE_NTSTATUS, cmd_lsa_add_priv,           NULL, &ndr_table_lsarpc, NULL, "Assign a privilege to a SID", "" },
-	{ "lsadelpriv",          RPC_RTYPE_NTSTATUS, cmd_lsa_del_priv,           NULL, &ndr_table_lsarpc, NULL, "Revoke a privilege from a SID", "" },
-	{ "lsaaddacctrights",    RPC_RTYPE_NTSTATUS, cmd_lsa_add_acct_rights,    NULL, &ndr_table_lsarpc, NULL, "Add rights to an account",   "" },
-	{ "lsaremoveacctrights", RPC_RTYPE_NTSTATUS, cmd_lsa_remove_acct_rights, NULL, &ndr_table_lsarpc, NULL, "Remove rights from an account",   "" },
-	{ "lsalookupprivvalue",  RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_priv_value,  NULL, &ndr_table_lsarpc, NULL, "Get a privilege value given its name", "" },
-	{ "lsaquerysecobj",      RPC_RTYPE_NTSTATUS, cmd_lsa_query_secobj,       NULL, &ndr_table_lsarpc, NULL, "Query LSA security object", "" },
-	{ "lsaquerytrustdominfo",RPC_RTYPE_NTSTATUS, cmd_lsa_query_trustdominfo, NULL, &ndr_table_lsarpc, NULL, "Query LSA trusted domains info (given a SID)", "" },
-	{ "lsaquerytrustdominfobyname",RPC_RTYPE_NTSTATUS, cmd_lsa_query_trustdominfobyname, NULL, &ndr_table_lsarpc, NULL, "Query LSA trusted domains info (given a name), only works for Windows > 2k", "" },
-	{ "lsaquerytrustdominfobysid",RPC_RTYPE_NTSTATUS, cmd_lsa_query_trustdominfobysid, NULL, &ndr_table_lsarpc, NULL, "Query LSA trusted domains info (given a SID)", "" },
-	{ "lsasettrustdominfo",   RPC_RTYPE_NTSTATUS, cmd_lsa_set_trustdominfo, NULL, &ndr_table_lsarpc, NULL, "Set LSA trusted domain info", "" },
-	{ "getusername",          RPC_RTYPE_NTSTATUS, cmd_lsa_get_username, NULL, &ndr_table_lsarpc, NULL, "Get username", "" },
-	{ "createsecret",         RPC_RTYPE_NTSTATUS, cmd_lsa_create_secret, NULL, &ndr_table_lsarpc, NULL, "Create Secret", "" },
-	{ "deletesecret",         RPC_RTYPE_NTSTATUS, cmd_lsa_delete_secret, NULL, &ndr_table_lsarpc, NULL, "Delete Secret", "" },
-	{ "querysecret",          RPC_RTYPE_NTSTATUS, cmd_lsa_query_secret, NULL, &ndr_table_lsarpc, NULL, "Query Secret", "" },
-	{ "setsecret",            RPC_RTYPE_NTSTATUS, cmd_lsa_set_secret, NULL, &ndr_table_lsarpc, NULL, "Set Secret", "" },
-	{ "retrieveprivatedata",  RPC_RTYPE_NTSTATUS, cmd_lsa_retrieve_private_data, NULL, &ndr_table_lsarpc, NULL, "Retrieve Private Data", "" },
-	{ "storeprivatedata",     RPC_RTYPE_NTSTATUS, cmd_lsa_store_private_data, NULL, &ndr_table_lsarpc, NULL, "Store Private Data", "" },
-	{ "createtrustdom",       RPC_RTYPE_NTSTATUS, cmd_lsa_create_trusted_domain, NULL, &ndr_table_lsarpc, NULL, "Create Trusted Domain", "" },
-	{ "deletetrustdom",       RPC_RTYPE_NTSTATUS, cmd_lsa_delete_trusted_domain, NULL, &ndr_table_lsarpc, NULL, "Delete Trusted Domain", "" },
+	{ "lsaquery", 	         RPC_RTYPE_NTSTATUS, cmd_lsa_query_info_policy,  NULL, &ndr_table_lsarpc.syntax_id, NULL, "Query info policy",                    "" },
+	{ "lookupsids",          RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_sids,        NULL, &ndr_table_lsarpc.syntax_id, NULL, "Convert SIDs to names",                "" },
+	{ "lookupsids3",         RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_sids3,       NULL, &ndr_table_lsarpc.syntax_id, NULL, "Convert SIDs to names",                "" },
+	{ "lookupnames",         RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_names,       NULL, &ndr_table_lsarpc.syntax_id, NULL, "Convert names to SIDs",                "" },
+	{ "lookupnames4",        RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_names4,      NULL, &ndr_table_lsarpc.syntax_id, NULL, "Convert names to SIDs",                "" },
+	{ "lookupnames_level",   RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_names_level, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Convert names to SIDs",                "" },
+	{ "enumtrust", 	         RPC_RTYPE_NTSTATUS, cmd_lsa_enum_trust_dom,     NULL, &ndr_table_lsarpc.syntax_id, NULL, "Enumerate trusted domains",            "Usage: [preferred max number] [enum context (0)]" },
+	{ "enumprivs", 	         RPC_RTYPE_NTSTATUS, cmd_lsa_enum_privilege,     NULL, &ndr_table_lsarpc.syntax_id, NULL, "Enumerate privileges",                 "" },
+	{ "getdispname",         RPC_RTYPE_NTSTATUS, cmd_lsa_get_dispname,       NULL, &ndr_table_lsarpc.syntax_id, NULL, "Get the privilege name",               "" },
+	{ "lsaenumsid",          RPC_RTYPE_NTSTATUS, cmd_lsa_enum_sids,          NULL, &ndr_table_lsarpc.syntax_id, NULL, "Enumerate the LSA SIDS",               "" },
+	{ "lsacreateaccount",    RPC_RTYPE_NTSTATUS, cmd_lsa_create_account,     NULL, &ndr_table_lsarpc.syntax_id, NULL, "Create a new lsa account",   "" },
+	{ "lsaenumprivsaccount", RPC_RTYPE_NTSTATUS, cmd_lsa_enum_privsaccounts, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Enumerate the privileges of an SID",   "" },
+	{ "lsaenumacctrights",   RPC_RTYPE_NTSTATUS, cmd_lsa_enum_acct_rights,   NULL, &ndr_table_lsarpc.syntax_id, NULL, "Enumerate the rights of an SID",   "" },
+	{ "lsaaddpriv",          RPC_RTYPE_NTSTATUS, cmd_lsa_add_priv,           NULL, &ndr_table_lsarpc.syntax_id, NULL, "Assign a privilege to a SID", "" },
+	{ "lsadelpriv",          RPC_RTYPE_NTSTATUS, cmd_lsa_del_priv,           NULL, &ndr_table_lsarpc.syntax_id, NULL, "Revoke a privilege from a SID", "" },
+	{ "lsaaddacctrights",    RPC_RTYPE_NTSTATUS, cmd_lsa_add_acct_rights,    NULL, &ndr_table_lsarpc.syntax_id, NULL, "Add rights to an account",   "" },
+	{ "lsaremoveacctrights", RPC_RTYPE_NTSTATUS, cmd_lsa_remove_acct_rights, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Remove rights from an account",   "" },
+	{ "lsalookupprivvalue",  RPC_RTYPE_NTSTATUS, cmd_lsa_lookup_priv_value,  NULL, &ndr_table_lsarpc.syntax_id, NULL, "Get a privilege value given its name", "" },
+	{ "lsaquerysecobj",      RPC_RTYPE_NTSTATUS, cmd_lsa_query_secobj,       NULL, &ndr_table_lsarpc.syntax_id, NULL, "Query LSA security object", "" },
+	{ "lsaquerytrustdominfo",RPC_RTYPE_NTSTATUS, cmd_lsa_query_trustdominfo, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Query LSA trusted domains info (given a SID)", "" },
+	{ "lsaquerytrustdominfobyname",RPC_RTYPE_NTSTATUS, cmd_lsa_query_trustdominfobyname, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Query LSA trusted domains info (given a name), only works for Windows > 2k", "" },
+	{ "lsaquerytrustdominfobysid",RPC_RTYPE_NTSTATUS, cmd_lsa_query_trustdominfobysid, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Query LSA trusted domains info (given a SID)", "" },
+	{ "getusername",          RPC_RTYPE_NTSTATUS, cmd_lsa_get_username, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Get username", "" },
+	{ "createsecret",         RPC_RTYPE_NTSTATUS, cmd_lsa_create_secret, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Create Secret", "" },
+	{ "deletesecret",         RPC_RTYPE_NTSTATUS, cmd_lsa_delete_secret, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Delete Secret", "" },
+	{ "querysecret",          RPC_RTYPE_NTSTATUS, cmd_lsa_query_secret, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Query Secret", "" },
+	{ "setsecret",            RPC_RTYPE_NTSTATUS, cmd_lsa_set_secret, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Set Secret", "" },
+	{ "retrieveprivatedata",  RPC_RTYPE_NTSTATUS, cmd_lsa_retrieve_private_data, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Retrieve Private Data", "" },
+	{ "storeprivatedata",     RPC_RTYPE_NTSTATUS, cmd_lsa_store_private_data, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Store Private Data", "" },
+	{ "createtrustdom",       RPC_RTYPE_NTSTATUS, cmd_lsa_create_trusted_domain, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Create Trusted Domain", "" },
+	{ "deletetrustdom",       RPC_RTYPE_NTSTATUS, cmd_lsa_delete_trusted_domain, NULL, &ndr_table_lsarpc.syntax_id, NULL, "Delete Trusted Domain", "" },
 
 	{ NULL }
 };

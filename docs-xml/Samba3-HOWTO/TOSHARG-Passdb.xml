@@ -20,6 +20,16 @@
 <title>Account Information Databases</title>
 
 <para>
+<indexterm><primary>account backends</primary></indexterm>
+<indexterm><primary>password backends</primary></indexterm>
+<indexterm><primary>scalability</primary></indexterm>
+<indexterm><primary>ADS</primary></indexterm>
+Early releases of Samba-3 implemented new capability to work concurrently with multiple account backends. This
+capability was removed beginning with release of Samba 3.0.23. Commencing with Samba 3.0.23 it is possible to
+work with only one specified passwd backend.
+</para>
+
+<para>
 <indexterm><primary>passdb backend</primary></indexterm>
 <indexterm><primary>smbpasswd</primary></indexterm>
 <indexterm><primary>tdbsam</primary></indexterm>
@@ -56,6 +66,14 @@ entities.
 
 <sect1>
 <title>Features and Benefits</title>
+
+<para>
+Samba-3 provides for complete backward compatibility with Samba-2.2.x functionality
+as follows:
+<indexterm><primary>SAM backend</primary><secondary>smbpasswd</secondary></indexterm>
+<indexterm><primary>SAM backend</primary><secondary>ldapsam_compat</secondary></indexterm>
+<indexterm><primary>encrypted passwords</primary></indexterm>
+</para>
 
 <sect2>
 	<title>Backward Compatibility Account Storage Systems</title>
@@ -102,6 +120,21 @@ entities.
 			</para>
 		</listitem>
 	</varlistentry>
+
+	<varlistentry><term>ldapsam_compat (Samba-2.2 LDAP Compatibility)</term>
+		<listitem>
+			<para>
+<indexterm><primary>ldapsam_compat</primary></indexterm>
+<indexterm><primary>Samba-2.2.x LDAP schema</primary></indexterm>
+<indexterm><primary>OpenLDAP backend</primary></indexterm>
+			There is a password backend option that allows continued operation with
+			an existing OpenLDAP backend that uses the Samba-2.2.x LDAP schema extension.
+			This option is provided primarily as a migration tool, although there is
+			no reason to force migration at this time. This tool will eventually
+			be deprecated.
+			</para>
+		</listitem>
+	</varlistentry>
 </variablelist>
 
 </sect2>
@@ -110,7 +143,7 @@ entities.
 <title>New Account Storage Systems</title>
 
 <para>
-Samba introduces a number of new password backend capabilities.
+Samba-3 introduces a number of new password backend capabilities.
 <indexterm><primary>SAM backend</primary><secondary>tdbsam</secondary></indexterm>
 <indexterm><primary>SAM backend</primary><secondary>ldapsam</secondary></indexterm>
 </para>
@@ -137,7 +170,7 @@ Samba introduces a number of new password backend capabilities.
 			The <emphasis>tdbsam</emphasis> password backend stores the old <emphasis>
 			smbpasswd</emphasis> information plus the extended MS Windows NT/200x
 			SAM information into a binary format TDB (trivial database) file.
-			The inclusion of the extended information makes it possible for Samba
+			The inclusion of the extended information makes it possible for Samba-3
 			to implement the same account and system access controls that are possible
 			with MS Windows NT4/200x-based systems.
 			</para>
@@ -169,7 +202,7 @@ Samba introduces a number of new password backend capabilities.
 <indexterm><primary>Samba schema</primary></indexterm>
 <indexterm><primary>schema file</primary></indexterm>
 <indexterm><primary>examples/LDAP</primary></indexterm>
-			Samba has a new and extended LDAP implementation that requires configuration
+			Samba-3 has a new and extended LDAP implementation that requires configuration
 			of OpenLDAP with a new format Samba schema. The new format schema file is
 			included in the <filename class="directory">examples/LDAP</filename> directory of the Samba distribution.
 			</para>
@@ -314,10 +347,10 @@ Samba introduces a number of new password backend capabilities.
 
 		<note>
 		<para>
-<indexterm><primary>Windows Home edition</primary></indexterm>
+<indexterm><primary>Windows XP Home</primary></indexterm>
 <indexterm><primary>domain member</primary></indexterm>
 <indexterm><primary>domain logons</primary></indexterm>
- 		MS Windows Home editions do not have facilities to become a domain member, and cannot participate in domain logons.
+ 		MS Windows XP Home does not have facilities to become a domain member, and it cannot participate in domain logons.
 		</para>
 		</note>
 
@@ -328,8 +361,9 @@ Samba introduces a number of new password backend capabilities.
 		<itemizedlist>
 			<listitem><para>Windows NT 3.5x.</para></listitem>
 			<listitem><para>Windows NT 4.0.</para></listitem>
-			<listitem><para>Windows editions labeled Professional.</para></listitem>
-			<listitem><para>Windows editions labeled Server/Advanced Server.</para></listitem>
+			<listitem><para>Windows 2000 Professional.</para></listitem>
+			<listitem><para>Windows 200x Server/Advanced Server.</para></listitem>
+			<listitem><para>Windows XP Professional.</para></listitem>
 		</itemizedlist>
 
 		<para>
@@ -385,7 +419,7 @@ Samba introduces a number of new password backend capabilities.
 <indexterm><primary>password prompt</primary></indexterm>
 <indexterm><primary>SMB encryption</primary></indexterm>
 				Windows NT does not like talking to a server that does not support encrypted passwords. It will refuse to
-				browse the server. It will insist on prompting the user for
+				browse the server if the server is also in user-level security mode. It will insist on prompting the user for
 				the password on each connection, which is very annoying. The only thing you can do to stop this is to use SMB
 				encryption.
 				</para></listitem>
@@ -480,7 +514,7 @@ Samba introduces a number of new password backend capabilities.
 <indexterm><primary>domain member servers</primary></indexterm>
 <indexterm><primary>NFS</primary></indexterm>
 <indexterm><primary>rsync</primary></indexterm>
-	Samba has a special facility that makes it possible to maintain identical UIDs and GIDs
+	Samba-3 has a special facility that makes it possible to maintain identical UIDs and GIDs
 	on all servers in a distributed network. A distributed network is one where there exists
 	a PDC, one or more BDCs, and/or one or more domain member servers. Why is this important?
 	This is important if files are being shared over more than one protocol (e.g., NFS) and where
@@ -974,7 +1008,7 @@ is being added to the <command>net</command> toolset (see <link linkend="NetComm
 		The need to be familiar with the Samba tools and facilities that permit information systems operation
 		in compliance with government laws and regulations is clear to all. The <command>pdbedit</command> is
 		currently the only Samba tool that provides the capacity to manage account and systems access controls
-		and policies. During the remaining life-cycle of the Samba series it is possible the new tools may
+		and policies. During the remaining life-cycle of the Samba-3 series it is possible the new tools may
 		be implemented to aid in this important area.
 		</para>
 
@@ -1600,7 +1634,7 @@ To set the maximum (infinite) lockout time use the value of -1.
 <warning><para>
 Account policies must be set individually on each PDC and BDC. At this time (Samba 3.0.11 to Samba 3.0.14a)
 account policies are not replicated automatically. This may be fixed before Samba 3.0.20 ships or some
-time there after. Please check the WHATSNEW.txt file in the Samba tarball for specific update notiations
+time there after. Please check the WHATSNEW.txt file in the Samba-3 tarball for specific update notiations
 regarding this facility.
 </para></warning>
 
@@ -1642,6 +1676,25 @@ regarding this facility.
 
 <sect1>
 <title>Password Backends</title>
+
+<para>
+<indexterm><primary>account database</primary></indexterm>
+<indexterm><primary>SMB/CIFS server</primary></indexterm>
+Samba offers flexibility in backend account database design. The flexibility is immediately obvious as one
+begins to explore this capability. Recent changes to Samba (since 3.0.23) have removed the mulitple backend
+feature in order to simplify problems that broke some installations. This removal has made the internal
+operation of Samba-3 more consistent and predictable.
+</para>
+
+<para>
+<indexterm><primary>multiple backends</primary></indexterm>
+<indexterm><primary>tdbsam databases</primary></indexterm>
+Beginning with Samba 3.0.23 it is no longer possible to specify use of mulitple passdb backends. Earlier
+versions of Samba-3 made it possible to specify multiple password backends, and even multiple
+backends of the same type. The multiple passdb backend capability caused many problems with name to SID and
+SID to name ID resolution.  The Samba team wrestled with the challenges and decided that this feature needed
+to be removed.
+</para>
 
 	<sect2>
 	<title>Plaintext</title>
@@ -2063,7 +2116,7 @@ objectclass: dcObject
 objectclass: organization
 dc: quenya
 o: Quenya Org Network
-description: The Samba Network LDAP Example
+description: The Samba-3 Network LDAP Example
 
 # Organizational Role for Directory Management
 dn: cn=Manager,dc=quenya,dc=org
@@ -2140,7 +2193,7 @@ userPassword: {SSHA}c3ZM9tBaBo9autm1dL3waDS21+JSfQVz
 		<note><para>
 <indexterm><primary>secrets.tdb</primary></indexterm>
 		Before Samba can access the LDAP server, you need to store the LDAP admin password
-		in the Samba <filename>secrets.tdb</filename> database by:
+		in the Samba-3 <filename>secrets.tdb</filename> database by:
 <indexterm><primary>smbpasswd</primary></indexterm>
 <screen>
 &rootprompt;<userinput>smbpasswd -w <replaceable>secret</replaceable></userinput>
@@ -2270,11 +2323,11 @@ userPassword: {SSHA}c3ZM9tBaBo9autm1dL3waDS21+JSfQVz
 <indexterm><primary>posixGroup</primary></indexterm>
 <indexterm><primary>Domain Groups</primary></indexterm>
 <indexterm><primary>ADS</primary></indexterm>
-			In Samba, the group management system is based on POSIX
+			In Samba-3, the group management system is based on POSIX
 			groups. This means that Samba makes use of the posixGroup ObjectClass.
 			For now, there is no NT-like group system management (global and local
-			groups). Samba knows only about <constant>Domain Groups</constant>
-			and, unlike MS Windows 2000 and Active Directory, Samba does not
+			groups). Samba-3 knows only about <constant>Domain Groups</constant>
+			and, unlike MS Windows 2000 and Active Directory, Samba-3 does not
 			support nested groups.
 			</para>
 
@@ -2537,7 +2590,7 @@ sambaNTPassword: 878D8014606CDA29677A44EFA1353FC7
 		<title>Password Synchronization</title>
 
 		<para>
-		Samba and later can update the non-Samba (LDAP) password stored with an account. When
+		Samba-3 and later can update the non-Samba (LDAP) password stored with an account. When
 		using pam_ldap, this allows changing both UNIX and Windows passwords at once.
 		</para>
 
@@ -2605,6 +2658,18 @@ sambaNTPassword: 878D8014606CDA29677A44EFA1353FC7
 		Read the <link linkend="acctmgmttools">Account Management Tools</link> for details.</para>
 
 	</sect2>
+
+	<sect2>
+	<title>Configuration of <parameter>auth methods</parameter></title>
+
+	<para>
+	When explicitly setting an <smbconfoption name="auth methods"/> parameter,
+	<parameter>guest</parameter> must be specified as the first entry on the line &smbmdash;
+	for example, <smbconfoption name="auth methods">guest sam</smbconfoption>.
+	</para>
+
+	</sect2>
+
 </sect1>
 
 </chapter>

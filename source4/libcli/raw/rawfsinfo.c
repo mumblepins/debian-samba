@@ -33,9 +33,6 @@ static struct smbcli_request *smb_raw_dskattr_send(struct smbcli_tree *tree,
 	struct smbcli_request *req; 
 
 	req = smbcli_request_setup(tree, SMBdskattr, 0, 0);
-	if (req == NULL) {
-		return NULL;
-	}
 
 	if (!smbcli_request_send(req)) {
 		smbcli_request_destroy(req);
@@ -226,23 +223,6 @@ NTSTATUS smb_raw_fsinfo_passthru_parse(DATA_BLOB blob, TALLOC_CTX *mem_ctx,
 			fsinfo->objectid_information.out.unknown[i] = BVAL(blob.data, 16 + i*8);
 		}
 		break;
-
-	case RAW_QFS_SECTOR_SIZE_INFORMATION:
-		QFS_CHECK_SIZE(28);
-		fsinfo->sector_size_info.out.logical_bytes_per_sector
-							= IVAL(blob.data,  0);
-		fsinfo->sector_size_info.out.phys_bytes_per_sector_atomic
-							= IVAL(blob.data,  4);
-		fsinfo->sector_size_info.out.phys_bytes_per_sector_perf
-							= IVAL(blob.data,  8);
-		fsinfo->sector_size_info.out.fs_effective_phys_bytes_per_sector_atomic
-							= IVAL(blob.data, 12);
-		fsinfo->sector_size_info.out.flags	= IVAL(blob.data, 16);
-		fsinfo->sector_size_info.out.byte_off_sector_align
-							= IVAL(blob.data, 20);
-		fsinfo->sector_size_info.out.byte_off_partition_align
-							= IVAL(blob.data, 24);
-		break;
 	}
 		
 	default:
@@ -336,10 +316,6 @@ NTSTATUS smb_raw_fsinfo_recv(struct smbcli_request *req,
 	case RAW_QFS_OBJECTID_INFORMATION:
 		return smb_raw_fsinfo_passthru_parse(blob, mem_ctx, 
 						     RAW_QFS_OBJECTID_INFORMATION, fsinfo);
-
-	case RAW_QFS_SECTOR_SIZE_INFORMATION:
-		return smb_raw_fsinfo_passthru_parse(blob, mem_ctx,
-				RAW_QFS_SECTOR_SIZE_INFORMATION, fsinfo);
 	}
 
 failed:
@@ -355,77 +331,4 @@ _PUBLIC_ NTSTATUS smb_raw_fsinfo(struct smbcli_tree *tree,
 {
 	struct smbcli_request *req = smb_raw_fsinfo_send(tree, mem_ctx, fsinfo);
 	return smb_raw_fsinfo_recv(req, mem_ctx, fsinfo);
-}
-
-/****************************************************************************
- Set FSInfo raw interface (async recv)
-****************************************************************************/
-static NTSTATUS smb_raw_setfsinfo_recv(struct smbcli_request *req,
-			     TALLOC_CTX *mem_ctx,
-			     union smb_setfsinfo *set_fsinfo)
-{
-	DATA_BLOB blob = data_blob_null;
-	NTSTATUS status;
-
-	if (set_fsinfo->generic.level != RAW_SETFS_UNIX_INFO) {
-		return NT_STATUS_INVALID_PARAMETER;
-	}
-
-	status = smb_raw_qfsinfo_blob_recv(req, mem_ctx, &blob);
-	data_blob_free(&blob);
-	return status;
-}
-
-/****************************************************************************
- Set FSInfo raw interface (async send)
-****************************************************************************/
-static struct smbcli_request *smb_raw_setfsinfo_send(struct smbcli_tree *tree,
-						TALLOC_CTX *mem_ctx,
-						union smb_setfsinfo *set_fsinfo)
-{
-	struct smb_trans2 tp;
-	uint16_t info_level;
-	uint16_t setup = TRANSACT2_SETFSINFO;
-
-	if (set_fsinfo->generic.level != RAW_SETFS_UNIX_INFO) {
-		return NULL;
-	}
-	tp.in.max_setup = 0;
-	tp.in.flags = 0;
-	tp.in.timeout = 0;
-	tp.in.setup_count = 1;
-	tp.in.max_param = 0;
-	tp.in.max_data = 0xFFFF;
-	tp.in.setup = &setup;
-	tp.in.timeout = 0;
-
-	tp.in.params = data_blob_talloc(mem_ctx, NULL, 4);
-	if (!tp.in.params.data) {
-		return NULL;
-	}
-	info_level = (uint16_t)set_fsinfo->generic.level;
-	SSVAL(tp.in.params.data, 0, 0);
-	SSVAL(tp.in.params.data, 2, info_level);
-
-	tp.in.data = data_blob_talloc(mem_ctx, NULL, 12);
-	if (!tp.in.data.data) {
-		return NULL;
-	}
-
-	SSVAL(tp.in.data.data, 0, set_fsinfo->unix_info.in.major_version);
-	SSVAL(tp.in.data.data, 2, set_fsinfo->unix_info.in.minor_version);
-	SBVAL(tp.in.data.data, 4, set_fsinfo->unix_info.in.capability);
-
-	return smb_raw_trans2_send(tree, &tp);
-}
-
-/****************************************************************************
- Set FSInfo raw interface (sync interface)
-****************************************************************************/
-_PUBLIC_ NTSTATUS smb_raw_setfsinfo(struct smbcli_tree *tree,
-			TALLOC_CTX *mem_ctx,
-			union smb_setfsinfo *set_fsinfo)
-{
-	struct smbcli_request *req = smb_raw_setfsinfo_send(tree, mem_ctx, set_fsinfo);
-	return smb_raw_setfsinfo_recv(req, mem_ctx, set_fsinfo);
 }

@@ -21,7 +21,6 @@
 #include "libcli/raw/libcliraw.h"
 #include "libcli/libcli.h"
 #include "torture/util.h"
-#include "torture/raw/proto.h"
 
 #define BASEDIR "\\mkdirtest"
 
@@ -44,7 +43,9 @@ static bool test_mkdir(struct smbcli_state *cli, struct torture_context *tctx)
 	NTSTATUS status;
 	bool ret = true;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	/* 
 	   basic mkdir

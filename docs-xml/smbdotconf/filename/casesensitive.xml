@@ -1,6 +1,6 @@
 <samba:parameter name="case sensitive"
                  context="S"
-		 type="enum"
+				 type="boolean"
                  xmlns:samba="http://www.samba.org/samba/DTD/samba-doc">
 <synonym>casesignames</synonym>
 
@@ -8,5 +8,5 @@
 	<para>See the discussion in the section <smbconfoption name="name mangling"/>.</para>
 </description>
 
-<value type="default">auto</value>
+<value type="default">no</value>
 </samba:parameter>

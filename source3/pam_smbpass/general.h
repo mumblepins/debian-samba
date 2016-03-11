@@ -21,10 +21,13 @@
 #define PAM_AUTHTOK_RECOVER_ERR PAM_AUTHTOK_RECOVERY_ERR
 #endif
 
-#include "replace.h"
-#include "system/filesys.h"
-#include "system/wait.h"
-#include "system/syslog.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <syslog.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 
 /*
  * here is the string to inform the user that the new passwords they

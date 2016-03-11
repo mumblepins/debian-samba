@@ -25,7 +25,6 @@
 #include "torture/util.h"
 #include "system/time.h"
 #include "system/filesys.h"
-#include "torture/basic/proto.h"
 
 #define BASEDIR "\\locktest"
 
@@ -45,8 +44,9 @@ static bool torture_locktest1(struct torture_context *tctx,
 	time_t t1, t2;
 	unsigned int lock_timeout;
 
-	torture_assert(tctx, torture_setup_dir(cli1, BASEDIR),
-		       talloc_asprintf(tctx, "Unable to set up %s", BASEDIR));
+	if (!torture_setup_dir(cli1, BASEDIR)) {
+		return false;
+	}
 
 	fnum1 = smbcli_open(cli1->tree, fname, O_RDWR|O_CREAT|O_EXCL, DENY_NONE);
 	torture_assert(tctx, fnum1 != -1,
@@ -162,8 +162,9 @@ static bool torture_locktest2(struct torture_context *tctx,
 	const char *fname = BASEDIR "\\lockt2.lck";
 	int fnum1, fnum2, fnum3;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR),
-		       talloc_asprintf(tctx, "Unable to set up %s", BASEDIR));
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	torture_comment(tctx, "Testing pid context\n");
 	
@@ -280,8 +281,9 @@ static bool torture_locktest3(struct torture_context *tctx,
 
 	torture_comment(tctx, "Testing 32 bit offset ranges");
 
-	torture_assert(tctx, torture_setup_dir(cli1, BASEDIR),
-		       talloc_asprintf(tctx, "Unable to set up %s", BASEDIR));
+	if (!torture_setup_dir(cli1, BASEDIR)) {
+		return false;
+	}
 
 	fnum1 = smbcli_open(cli1->tree, fname, O_RDWR|O_CREAT|O_EXCL, DENY_NONE);
 	torture_assert(tctx, fnum1 != -1, 
@@ -646,7 +648,9 @@ static bool torture_locktest6(struct torture_context *tctx,
 	int fnum;
 	NTSTATUS status;
 
-	torture_assert(tctx, torture_setup_dir(cli, BASEDIR), "Failed to setup up test directory: " BASEDIR);
+	if (!torture_setup_dir(cli, BASEDIR)) {
+		return false;
+	}
 
 	for (i=0;i<1;i++) {
 		torture_comment(tctx, "Testing %s\n", fname[i]);

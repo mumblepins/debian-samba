@@ -111,9 +111,10 @@ static int next_jobnum(char *printer)
 static void set_printer_status(char *printer, int status)
 {
 	fstring keystr;
+	int result;
 
 	slprintf(keystr, sizeof(keystr) - 1, "STATUS/%s", printer);
-	tdb_store_int32(tdb, keystr, status);
+	result = tdb_store_int32(tdb, keystr, status);
 }
 
 static int get_printer_status(char *printer)
@@ -236,8 +237,7 @@ static int print_command(int argc, char **argv)
 
 	slprintf(job.jobname, sizeof(job.jobname) - 1, "%s", argv[2]);
 
-	if (!(pw = getpwuid(geteuid()))) {
-		printf("getpwuid failed\n");
+	if (!(pw = getpwuid(getuid()))) {
 		return 1;
 	}
 
@@ -393,7 +393,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	/* FIXME: We should *never* open a tdb without logging! */
 	if (!(tdb = tdb_open(printdb_path, 0, 0, O_RDWR | O_CREAT,
 			     0666))) {
 		printf("%s: unable to open %s\n", argv[0], printdb_path);

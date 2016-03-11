@@ -23,8 +23,7 @@
 #include "libcli/libcli.h"
 #include "torture/util.h"
 #include "system/filesys.h"
-#include "libcli/security/security_descriptor.h"
-#include "torture/basic/proto.h"
+#include "libcli/security/secace.h"
 
 extern int torture_failures;
 
@@ -295,7 +294,7 @@ bool torture_winattrtest(struct torture_context *tctx,
 			struct security_ace *ace1 = &sd1->dacl->aces[aceno];
 			struct security_ace *ace2 = &sd2->dacl->aces[aceno];
 
-			if (!security_ace_equal(ace1, ace2)) {
+			if(!sec_ace_equal(ace1,ace2)){
 				torture_comment(tctx,
 					"ACLs changed! Not expected!\n");
 				CHECK_MAX_FAILURES(error_exit_file);
@@ -374,7 +373,7 @@ error_exit_file:
 				[0x%x], got attr 0x%x, should be 0x%x\n",
 			        open_attrs_table[j],
 			        (uint16_t)attr,
-			        (unsigned int)(open_attrs_table[j]|FILE_ATTRIBUTE_DIRECTORY));
+			        open_attrs_table[j]|FILE_ATTRIBUTE_DIRECTORY);
 			CHECK_MAX_FAILURES(error_exit_dir);
 		}
 
@@ -414,7 +413,7 @@ error_exit_file:
 			struct security_ace *ace1 = &sd1->dacl->aces[aceno];
 			struct security_ace *ace2 = &sd2->dacl->aces[aceno];
 
-			if (!security_ace_equal(ace1, ace2)) {
+			if(!sec_ace_equal(ace1,ace2)){
 				torture_comment(tctx,
 					"ACLs changed! Not expected!\n");
 				CHECK_MAX_FAILURES(error_exit_dir);

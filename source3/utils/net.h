@@ -80,17 +80,12 @@ struct net_context {
 	int opt_lock;
 	int opt_auto;
 	int opt_repair;
-	int opt_reg_version;
-	const char *opt_output;
-	int opt_wipe;
-	const char *opt_precheck;
 
 	int opt_have_ip;
 	struct sockaddr_storage opt_dest_ip;
 	bool smb_encrypt;
 	struct libnetapi_ctx *netapi_ctx;
 	struct messaging_context *msg_ctx;
-	struct netlogon_creds_cli_context *netlogon_creds;
 
 	bool display_usage;
 	void *private_data;
@@ -133,7 +128,7 @@ typedef struct copy_clistate {
 	struct cli_state *cli_share_src;
 	struct cli_state *cli_share_dst;
 	char *cwd;
-	uint16_t attribute;
+	uint16 attribute;
 	struct net_context *c;
 }copy_clistate;
 
@@ -154,7 +149,7 @@ struct rpc_sh_cmd {
 	struct rpc_sh_cmd *(*sub)(struct net_context *c,
 				  TALLOC_CTX *mem_ctx,
 				  struct rpc_sh_ctx *ctx);
-	const struct ndr_interface_table *table;
+	const struct ndr_syntax_id *interface;
 	NTSTATUS (*fn)(struct net_context *c, TALLOC_CTX *mem_ctx,
 		       struct rpc_sh_ctx *ctx,
 		       struct rpc_pipe_client *pipe_hnd,
@@ -183,7 +178,6 @@ enum netdom_domain_t { ND_TYPE_NT4, ND_TYPE_AD };
 #define NET_FLAGS_SIGN				0x00000040	/* sign RPC connection */
 #define NET_FLAGS_SEAL				0x00000080	/* seal RPC connection */
 #define NET_FLAGS_TCP				0x00000100	/* use ncacn_ip_tcp */
-#define NET_FLAGS_EXPECT_FALLBACK		0x00000200	/* the caller will fallback */
 
 /* net share operation modes */
 #define NET_MODE_SHARE_MIGRATE 1

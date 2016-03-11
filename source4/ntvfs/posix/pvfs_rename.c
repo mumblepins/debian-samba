@@ -37,8 +37,7 @@ NTSTATUS pvfs_do_rename(struct pvfs_state *pvfs,
 	uint32_t mask;
 	NTSTATUS status;
 
-	if (pvfs_sys_rename(pvfs, name1->full_name, name2,
-			    name1->allow_override) == -1) {
+	if (pvfs_sys_rename(pvfs, name1->full_name, name2) == -1) {
 		return pvfs_map_errno(pvfs, errno);
 	}
 
@@ -625,7 +624,7 @@ static NTSTATUS pvfs_rename_nt(struct ntvfs_module_context *ntvfs,
 	case RENAME_FLAG_COPY:
 		status = pvfs_access_check_parent(pvfs, req, name2, SEC_DIR_ADD_FILE);
 		NT_STATUS_NOT_OK_RETURN(status);
-		return pvfs_copy_file(pvfs, name1, name2, name1->allow_override && name2->allow_override);
+		return pvfs_copy_file(pvfs, name1, name2);
 
 	case RENAME_FLAG_MOVE_CLUSTER_INFORMATION:
 		DEBUG(3,(__location__ ": Invalid rename cluster for %s\n",

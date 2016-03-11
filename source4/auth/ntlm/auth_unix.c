@@ -28,8 +28,6 @@
 #include "../libcli/auth/pam_errors.h"
 #include "param/param.h"
 
-_PUBLIC_ NTSTATUS auth4_unix_init(void);
-
 /* TODO: look at how to best fill in parms retrieveing a struct passwd info
  * except in case USER_INFO_DONT_CHECK_UNIX_ACCOUNT is set
  */
@@ -513,7 +511,15 @@ static NTSTATUS password_check(const char *username, const char *password,
 {
 	bool ret;
 
+#ifdef WITH_AFS
+	if (afs_auth(username, password))
+		return NT_STATUS_OK;
+#endif /* WITH_AFS */
 
+#ifdef WITH_DFS
+	if (dfs_auth(username, password))
+		return NT_STATUS_OK;
+#endif /* WITH_DFS */
 
 #ifdef OSF1_ENH_SEC
 	
@@ -542,7 +548,34 @@ static NTSTATUS password_check(const char *username, const char *password,
 	
 #endif /* ULTRIX_AUTH */
 	
+#ifdef LINUX_BIGCRYPT
+	ret = (linux_bigcrypt(password, salt, crypted));
+        if (ret) {
+		return NT_STATUS_OK;
+	} else {
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+#endif /* LINUX_BIGCRYPT */
 	
+#if defined(HAVE_BIGCRYPT) && defined(HAVE_CRYPT) && defined(USE_BOTH_CRYPT_CALLS)
+	
+	/*
+	 * Some systems have bigcrypt in the C library but might not
+	 * actually use it for the password hashes (HPUX 10.20) is
+	 * a noteable example. So we try bigcrypt first, followed
+	 * by crypt.
+	 */
+
+	if (strcmp(bigcrypt(password, salt), crypted) == 0)
+		return NT_STATUS_OK;
+	else
+		ret = (strcmp((char *)crypt(password, salt), crypted) == 0);
+	if (ret) {
+		return NT_STATUS_OK;
+	} else {
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+#else /* HAVE_BIGCRYPT && HAVE_CRYPT && USE_BOTH_CRYPT_CALLS */
 	
 #ifdef HAVE_BIGCRYPT
 	ret = (strcmp(bigcrypt(password, salt), crypted) == 0);
@@ -564,6 +597,7 @@ static NTSTATUS password_check(const char *username, const char *password,
 		return NT_STATUS_WRONG_PASSWORD;
 	}
 #endif /* HAVE_CRYPT */
+#endif /* HAVE_BIGCRYPT && HAVE_CRYPT && USE_BOTH_CRYPT_CALLS */
 }
 
 static NTSTATUS check_unix_password(TALLOC_CTX *ctx, struct loadparm_context *lp_ctx,
@@ -571,10 +605,12 @@ static NTSTATUS check_unix_password(TALLOC_CTX *ctx, struct loadparm_context *lp
 {
 	char *username;
 	char *password;
+	char *pwcopy;
 	char *salt;
 	char *crypted;
 	struct passwd *pws;
 	NTSTATUS nt_status;
+	int level = lpcfg_passwordlevel(lp_ctx);
 
 	*ret_passwd = NULL;
 
@@ -622,6 +658,15 @@ static NTSTATUS check_unix_password(TALLOC_CTX *ctx, struct loadparm_context *lp
 	}
 #endif
 
+#ifdef HAVE_GETPRPWNAM
+	{
+		struct pr_passwd *pr_pw = getprpwnam(pws->pw_name);
+		if (pr_pw && pr_pw->ufld.fd_encrypt) {
+			crypted = talloc_strdup(ctx, pr_pw->ufld.fd_encrypt);
+			NT_STATUS_HAVE_NO_MEMORY(crypted);
+		}
+	}
+#endif
 
 #ifdef HAVE_GETPWANAM
 	{
@@ -661,6 +706,11 @@ static NTSTATUS check_unix_password(TALLOC_CTX *ctx, struct loadparm_context *lp
 	}
 #endif
 
+#if defined(HAVE_TRUNCATED_SALT)
+	/* crypt on some platforms (HPUX in particular)
+	   won't work with more than 2 salt characters. */
+	salt[2] = 0;
+#endif
 
 	if (crypted[0] == '\0') {
 		if (!lpcfg_null_passwords(lp_ctx)) {
@@ -685,11 +735,46 @@ static NTSTATUS check_unix_password(TALLOC_CTX *ctx, struct loadparm_context *lp
 		return nt_status;
 	}
 
-	/* we no longer try different case combinations here. The use
-	 * of this code is now web auth, where trying different case
-	 * combinations makes no sense
-	 */
+	if ( user_info->flags | USER_INFO_CASE_INSENSITIVE_PASSWORD) {
+		return nt_status;
+	}
 
+	/* if the password was given to us with mixed case then we don't
+	 * need to proceed as we know it hasn't been case modified by the
+	 * client */
+	if (strhasupper(password) && strhaslower(password)) {
+		return nt_status;
+	}
+
+	/* make a copy of it */
+	pwcopy = talloc_strdup(ctx, password);
+	if (!pwcopy)
+		return NT_STATUS_NO_MEMORY;
+
+	/* try all lowercase if it's currently all uppercase */
+	if (strhasupper(pwcopy)) {
+		strlower(pwcopy);
+		nt_status = password_check(username, pwcopy, crypted, salt);
+		if NT_STATUS_IS_OK(nt_status) {
+			*ret_passwd = pws;
+			return nt_status;
+		}
+	}
+
+	/* give up? */
+	if (level < 1) {
+		return NT_STATUS_WRONG_PASSWORD;
+	}
+
+	/* last chance - all combinations of up to level chars upper! */
+	strlower(pwcopy);
+
+#if 0
+        if (NT_STATUS_IS_OK(nt_status = string_combinations(pwcopy, password_check, level))) {
+		*ret_passwd = pws;
+		return nt_status;
+	}
+#endif   
 	return NT_STATUS_WRONG_PASSWORD;
 }
 
@@ -747,11 +832,12 @@ static NTSTATUS authunix_check_password(struct auth_method_context *ctx,
 
 static const struct auth_operations unix_ops = {
 	.name		= "unix",
+	.get_challenge	= auth_get_challenge_not_implemented,
 	.want_check	= authunix_want_check,
 	.check_password	= authunix_check_password
 };
 
-_PUBLIC_ NTSTATUS auth4_unix_init(void)
+_PUBLIC_ NTSTATUS auth_unix_init(void)
 {
 	NTSTATUS ret;
 

@@ -19,7 +19,7 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "librpc/gen_ndr/ndr_winbind_c.h"
+#include "librpc/gen_ndr/ndr_wbint_c.h"
 
 struct wb_lookupuseraliases_state {
 	struct tevent_context *ev;
@@ -44,7 +44,7 @@ struct tevent_req *wb_lookupuseraliases_send(TALLOC_CTX *mem_ctx,
 		return NULL;
 	}
 	state->sids.num_sids = num_sids;
-	state->sids.sids = discard_const_p(struct dom_sid, sids);
+	state->sids.sids = CONST_DISCARD(struct dom_sid *, sids);
 
 	subreq = dcerpc_wbint_LookupUserAliases_send(
 		state, ev, dom_child_handle(domain), &state->sids, &state->rids);

@@ -27,9 +27,9 @@
 #include "../librpc/gen_ndr/ndr_security.h"
 #include "passdb/lookup_sid.h"
 #include "auth.h"
+#include "ntioctl.h"
 #include "smbprofile.h"
 #include "libsmb/libsmb.h"
-#include "lib/util_ea.h"
 
 extern const struct generic_mapping file_generic_mapping;
 
@@ -54,10 +54,10 @@ static char *nttrans_realloc(char **ptr, size_t size)
  HACK ! Always assumes smb_setup field is zero.
 ****************************************************************************/
 
-static void send_nt_replies(connection_struct *conn,
-			    struct smb_request *req, NTSTATUS nt_error,
-			    char *params, int paramsize,
-			    char *pdata, int datasize)
+void send_nt_replies(connection_struct *conn,
+			struct smb_request *req, NTSTATUS nt_error,
+		     char *params, int paramsize,
+		     char *pdata, int datasize)
 {
 	int data_to_send = datasize;
 	int params_to_send = paramsize;
@@ -67,8 +67,8 @@ static void send_nt_replies(connection_struct *conn,
 	int params_sent_thistime, data_sent_thistime, total_sent_thistime;
 	int alignment_offset = 1;
 	int data_alignment_offset = 0;
-	struct smbXsrv_connection *xconn = req->xconn;
-	int max_send = xconn->smb1.sessions.max_send;
+	struct smbd_server_connection *sconn = req->sconn;
+	int max_send = sconn->smb1.sessions.max_send;
 
 	/*
 	 * If there genuinely are no parameters or data to send just send
@@ -83,7 +83,7 @@ static void send_nt_replies(connection_struct *conn,
 					 __LINE__,__FILE__);
 		}
 		show_msg((char *)req->outbuf);
-		if (!srv_send_smb(xconn,
+		if (!srv_send_smb(sconn,
 				(char *)req->outbuf,
 				true, req->seqnum+1,
 				IS_CONN_ENCRYPTED(conn),
@@ -142,6 +142,11 @@ static void send_nt_replies(connection_struct *conn,
 		reply_outbuf(req, 18,
 			     total_sent_thistime + alignment_offset
 			     + data_alignment_offset);
+
+		/*
+		 * We might have had SMBnttranss in req->inbuf, fix that.
+		 */
+		SCVAL(req->outbuf, smb_com, SMBnttrans);
 
 		/*
 		 * Set total params and data to be sent.
@@ -247,7 +252,7 @@ static void send_nt_replies(connection_struct *conn,
 
 		/* Send the packet */
 		show_msg((char *)req->outbuf);
-		if (!srv_send_smb(xconn,
+		if (!srv_send_smb(sconn,
 				(char *)req->outbuf,
 				true, req->seqnum+1,
 				IS_CONN_ENCRYPTED(conn),
@@ -280,17 +285,15 @@ static void send_nt_replies(connection_struct *conn,
 ****************************************************************************/
 
 static void nt_open_pipe(char *fname, connection_struct *conn,
-			 struct smb_request *req, uint16_t *ppnum)
+			 struct smb_request *req, int *ppnum)
 {
 	files_struct *fsp;
 	NTSTATUS status;
 
 	DEBUG(4,("nt_open_pipe: Opening pipe %s.\n", fname));
 
-	/* Strip \\ off the name if present. */
-	while (fname[0] == '\\') {
-		fname++;
-	}
+	/* Strip \\ off the name. */
+	fname++;
 
 	status = open_np_file(req, fname, &fsp);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -315,9 +318,9 @@ static void do_ntcreate_pipe_open(connection_struct *conn,
 				  struct smb_request *req)
 {
 	char *fname = NULL;
-	uint16_t pnum = FNUM_FIELD_INVALID;
+	int pnum = -1;
 	char *p = NULL;
-	uint32_t flags = IVAL(req->vwv+3, 1);
+	uint32 flags = IVAL(req->vwv+3, 1);
 	TALLOC_CTX *ctx = talloc_tos();
 
 	srvstr_pull_req_talloc(ctx, req, &fname, req->buf, STR_TERMINATE);
@@ -341,7 +344,7 @@ static void do_ntcreate_pipe_open(connection_struct *conn,
 	if (flags & EXTENDED_RESPONSE_REQUIRED) {
 		/* This is very strange. We
  		 * return 50 words, but only set
-		 * the wcnt to 42 ? It's definitely
+ 		 * the wcnt to 42 ? It's definately
  		 * what happens on the wire....
  		 */
 		reply_outbuf(req, 50, 0);
@@ -349,9 +352,6 @@ static void do_ntcreate_pipe_open(connection_struct *conn,
 	} else {
 		reply_outbuf(req, 34, 0);
 	}
-
-	SSVAL(req->outbuf, smb_vwv0, 0xff); /* andx chain ends */
-	SSVAL(req->outbuf, smb_vwv1, 0);    /* no andx offset */
 
 	p = (char *)req->outbuf + smb_vwv2;
 	p++;
@@ -380,6 +380,8 @@ static void do_ntcreate_pipe_open(connection_struct *conn,
 	}
 
 	DEBUG(5,("do_ntcreate_pipe_open: open pipe = %s\n", fname));
+
+	chain_reply(req);
 }
 
 struct case_semantics_state {
@@ -438,18 +440,18 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	connection_struct *conn = req->conn;
 	struct smb_filename *smb_fname = NULL;
 	char *fname = NULL;
-	uint32_t flags;
-	uint32_t access_mask;
-	uint32_t file_attributes;
-	uint32_t share_access;
-	uint32_t create_disposition;
-	uint32_t create_options;
-	uint16_t root_dir_fid;
+	uint32 flags;
+	uint32 access_mask;
+	uint32 file_attributes;
+	uint32 share_access;
+	uint32 create_disposition;
+	uint32 create_options;
+	uint16 root_dir_fid;
 	uint64_t allocation_size;
 	/* Breakout the oplock request bits so we can set the
 	   reply bits separately. */
-	uint32_t fattr=0;
-	off_t file_len = 0;
+	uint32 fattr=0;
+	SMB_OFF_T file_len = 0;
 	int info = 0;
 	files_struct *fsp = NULL;
 	char *p = NULL;
@@ -457,6 +459,7 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	struct timespec c_timespec;
 	struct timespec a_timespec;
 	struct timespec m_timespec;
+	struct timespec write_time_ts;
 	NTSTATUS status;
 	int oplock_request;
 	uint8_t oplock_granted = NO_OPLOCK_RETURN;
@@ -476,7 +479,7 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	share_access = IVAL(req->vwv+15, 1);
 	create_disposition = IVAL(req->vwv+17, 1);
 	create_options = IVAL(req->vwv+19, 1);
-	root_dir_fid = (uint16_t)IVAL(req->vwv+5, 1);
+	root_dir_fid = (uint16)IVAL(req->vwv+5, 1);
 
 	allocation_size = BVAL(req->vwv+9, 1);
 
@@ -538,7 +541,7 @@ void reply_ntcreate_and_X(struct smb_request *req)
 				conn,
 				req->flags2 & FLAGS2_DFS_PATHNAMES,
 				fname,
-				UCF_PREP_CREATEFILE,
+				0,
 				NULL,
 				&smb_fname);
 
@@ -573,17 +576,15 @@ void reply_ntcreate_and_X(struct smb_request *req)
 		create_options,				/* create_options */
 		file_attributes,			/* file_attributes */
 		oplock_request,				/* oplock_request */
-		NULL,					/* lease */
 		allocation_size,			/* allocation_size */
 		0,					/* private_flags */
 		NULL,					/* sd */
 		NULL,					/* ea_list */
 		&fsp,					/* result */
-		&info,					/* pinfo */
-		NULL, NULL);				/* create context */
+		&info);					/* pinfo */
 
 	if (!NT_STATUS_IS_OK(status)) {
-		if (open_was_deferred(req->xconn, req->mid)) {
+		if (open_was_deferred(req->mid)) {
 			/* We have re-scheduled this call, no error. */
 			goto out;
 		}
@@ -625,7 +626,7 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	if (flags & EXTENDED_RESPONSE_REQUIRED) {
 		/* This is very strange. We
  		 * return 50 words, but only set
-		 * the wcnt to 42 ? It's definitely
+ 		 * the wcnt to 42 ? It's definately
  		 * what happens on the wire....
  		 */
 		reply_outbuf(req, 50, 0);
@@ -633,9 +634,6 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	} else {
 		reply_outbuf(req, 34, 0);
 	}
-
-	SSVAL(req->outbuf, smb_vwv0, 0xff); /* andx chain ends */
-	SSVAL(req->outbuf, smb_vwv1, 0);    /* no andx offset */
 
 	p = (char *)req->outbuf + smb_vwv2;
 
@@ -655,6 +653,14 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	fattr = dos_mode(conn, smb_fname);
 	if (fattr == 0) {
 		fattr = FILE_ATTRIBUTE_NORMAL;
+	}
+
+	/* Deal with other possible opens having a modified
+	   write time. JRA. */
+	ZERO_STRUCT(write_time_ts);
+	get_file_infos(fsp->file_id, 0, NULL, &write_time_ts);
+	if (!null_timespec(write_time_ts)) {
+		update_stat_ex_mtime(&smb_fname->st, write_time_ts);
 	}
 
 	/* Create time. */
@@ -709,10 +715,9 @@ void reply_ntcreate_and_X(struct smb_request *req)
 	SCVAL(p,0,fsp->is_directory ? 1 : 0);
 
 	if (flags & EXTENDED_RESPONSE_REQUIRED) {
-		uint32_t perms = 0;
+		uint32 perms = 0;
 		p += 25;
 		if (fsp->is_directory ||
-		    fsp->can_write ||
 		    can_write_to_file(conn, smb_fname)) {
 			perms = FILE_GENERIC_ALL;
 		} else {
@@ -721,9 +726,10 @@ void reply_ntcreate_and_X(struct smb_request *req)
 		SIVAL(p,0,perms);
 	}
 
-	DEBUG(5,("reply_ntcreate_and_X: %s, open name = %s\n",
-		fsp_fnum_dbg(fsp), smb_fname_str_dbg(smb_fname)));
+	DEBUG(5,("reply_ntcreate_and_X: fnum = %d, open name = %s\n",
+		fsp->fnum, smb_fname_str_dbg(smb_fname)));
 
+	chain_reply(req);
  out:
 	END_PROFILE(SMBntcreateX);
 	return;
@@ -735,17 +741,17 @@ void reply_ntcreate_and_X(struct smb_request *req)
 
 static void do_nt_transact_create_pipe(connection_struct *conn,
 				       struct smb_request *req,
-				       uint16_t **ppsetup, uint32_t setup_count,
-				       char **ppparams, uint32_t parameter_count,
-				       char **ppdata, uint32_t data_count)
+				       uint16 **ppsetup, uint32 setup_count,
+				       char **ppparams, uint32 parameter_count,
+				       char **ppdata, uint32 data_count)
 {
 	char *fname = NULL;
 	char *params = *ppparams;
-	uint16_t pnum = FNUM_FIELD_INVALID;
+	int pnum = -1;
 	char *p = NULL;
 	NTSTATUS status;
 	size_t param_len;
-	uint32_t flags;
+	uint32 flags;
 	TALLOC_CTX *ctx = talloc_tos();
 
 	/*
@@ -825,47 +831,19 @@ static void do_nt_transact_create_pipe(connection_struct *conn,
 	return;
 }
 
-/*********************************************************************
- Windows seems to do canonicalization of inheritance bits. Do the
- same.
-*********************************************************************/
-
-static void canonicalize_inheritance_bits(struct security_descriptor *psd)
-{
-	bool set_auto_inherited = false;
-
-	/*
-	 * We need to filter out the
-	 * SEC_DESC_DACL_AUTO_INHERITED|SEC_DESC_DACL_AUTO_INHERIT_REQ
-	 * bits. If both are set we store SEC_DESC_DACL_AUTO_INHERITED
-	 * as this alters whether SEC_ACE_FLAG_INHERITED_ACE is set
-	 * when an ACE is inherited. Otherwise we zero these bits out.
-	 * See:
-	 *
-	 * http://social.msdn.microsoft.com/Forums/eu/os_fileservices/thread/11f77b68-731e-407d-b1b3-064750716531
-	 *
-	 * for details.
-	 */
-
-	if ((psd->type & (SEC_DESC_DACL_AUTO_INHERITED|SEC_DESC_DACL_AUTO_INHERIT_REQ))
-			== (SEC_DESC_DACL_AUTO_INHERITED|SEC_DESC_DACL_AUTO_INHERIT_REQ)) {
-		set_auto_inherited = true;
-	}
-
-	psd->type &= ~(SEC_DESC_DACL_AUTO_INHERITED|SEC_DESC_DACL_AUTO_INHERIT_REQ);
-	if (set_auto_inherited) {
-		psd->type |= SEC_DESC_DACL_AUTO_INHERITED;
-	}
-}
-
 /****************************************************************************
  Internal fn to set security descriptors.
 ****************************************************************************/
 
-NTSTATUS set_sd(files_struct *fsp, struct security_descriptor *psd,
+NTSTATUS set_sd(files_struct *fsp, uint8_t *data, uint32_t sd_len,
 		       uint32_t security_info_sent)
 {
+	struct security_descriptor *psd = NULL;
 	NTSTATUS status;
+
+	if (sd_len == 0) {
+		return NT_STATUS_INVALID_PARAMETER;
+	}
 
 	if (!CAN_WRITE(fsp->conn)) {
 		return NT_STATUS_ACCESS_DENIED;
@@ -875,10 +853,10 @@ NTSTATUS set_sd(files_struct *fsp, struct security_descriptor *psd,
 		return NT_STATUS_OK;
 	}
 
-	if (S_ISLNK(fsp->fsp_name->st.st_ex_mode)) {
-		DEBUG(10, ("ACL set on symlink %s denied.\n",
-			fsp_str_dbg(fsp)));
-		return NT_STATUS_ACCESS_DENIED;
+	status = unmarshall_sec_desc(talloc_tos(), data, sd_len, &psd);
+
+	if (!NT_STATUS_IS_OK(status)) {
+		return status;
 	}
 
 	if (psd->owner_sid == NULL) {
@@ -890,8 +868,13 @@ NTSTATUS set_sd(files_struct *fsp, struct security_descriptor *psd,
 
 	/* Ensure we have at least one thing set. */
 	if ((security_info_sent & (SECINFO_OWNER|SECINFO_GROUP|SECINFO_DACL|SECINFO_SACL)) == 0) {
-		/* Just like W2K3 */
-		return NT_STATUS_OK;
+		if (security_info_sent & SECINFO_LABEL) {
+			/* Only consider SECINFO_LABEL if no other
+			   bits are set. Just like W2K3 we don't
+			   store this. */
+			return NT_STATUS_OK;
+		}
+		return NT_STATUS_INVALID_PARAMETER;
 	}
 
 	/* Ensure we have the rights to do this. */
@@ -927,8 +910,6 @@ NTSTATUS set_sd(files_struct *fsp, struct security_descriptor *psd,
 		}
 	}
 
-	canonicalize_inheritance_bits(psd);
-
 	if (DEBUGLEVEL >= 10) {
 		DEBUG(10,("set_sd for file %s\n", fsp_str_dbg(fsp)));
 		NDR_PRINT_DEBUG(security_descriptor, psd);
@@ -942,26 +923,34 @@ NTSTATUS set_sd(files_struct *fsp, struct security_descriptor *psd,
 }
 
 /****************************************************************************
- Internal fn to set security descriptors from a data blob.
+ Read a list of EA names and data from an incoming data buffer. Create an ea_list with them.
 ****************************************************************************/
 
-NTSTATUS set_sd_blob(files_struct *fsp, uint8_t *data, uint32_t sd_len,
-		       uint32_t security_info_sent)
+struct ea_list *read_nttrans_ea_list(TALLOC_CTX *ctx, const char *pdata, size_t data_size)
 {
-	struct security_descriptor *psd = NULL;
-	NTSTATUS status;
+	struct ea_list *ea_list_head = NULL;
+	size_t offset = 0;
 
-	if (sd_len == 0) {
-		return NT_STATUS_INVALID_PARAMETER;
+	if (data_size < 4) {
+		return NULL;
 	}
 
-	status = unmarshall_sec_desc(talloc_tos(), data, sd_len, &psd);
+	while (offset + 4 <= data_size) {
+		size_t next_offset = IVAL(pdata,offset);
+		struct ea_list *eal = read_ea_list_entry(ctx, pdata + offset + 4, data_size - offset - 4, NULL);
 
-	if (!NT_STATUS_IS_OK(status)) {
-		return status;
+		if (!eal) {
+			return NULL;
+		}
+
+		DLIST_ADD_END(ea_list_head, eal, struct ea_list *);
+		if (next_offset == 0) {
+			break;
+		}
+		offset += next_offset;
 	}
 
-	return set_sd(fsp, psd, security_info_sent);
+	return ea_list_head;
 }
 
 /****************************************************************************
@@ -970,35 +959,36 @@ NTSTATUS set_sd_blob(files_struct *fsp, uint8_t *data, uint32_t sd_len,
 
 static void call_nt_transact_create(connection_struct *conn,
 				    struct smb_request *req,
-				    uint16_t **ppsetup, uint32_t setup_count,
-				    char **ppparams, uint32_t parameter_count,
-				    char **ppdata, uint32_t data_count,
-				    uint32_t max_data_count)
+				    uint16 **ppsetup, uint32 setup_count,
+				    char **ppparams, uint32 parameter_count,
+				    char **ppdata, uint32 data_count,
+				    uint32 max_data_count)
 {
 	struct smb_filename *smb_fname = NULL;
 	char *fname = NULL;
 	char *params = *ppparams;
 	char *data = *ppdata;
 	/* Breakout the oplock request bits so we can set the reply bits separately. */
-	uint32_t fattr=0;
-	off_t file_len = 0;
+	uint32 fattr=0;
+	SMB_OFF_T file_len = 0;
 	int info = 0;
 	files_struct *fsp = NULL;
 	char *p = NULL;
-	uint32_t flags;
-	uint32_t access_mask;
-	uint32_t file_attributes;
-	uint32_t share_access;
-	uint32_t create_disposition;
-	uint32_t create_options;
-	uint32_t sd_len;
+	uint32 flags;
+	uint32 access_mask;
+	uint32 file_attributes;
+	uint32 share_access;
+	uint32 create_disposition;
+	uint32 create_options;
+	uint32 sd_len;
 	struct security_descriptor *sd = NULL;
-	uint32_t ea_len;
-	uint16_t root_dir_fid;
+	uint32 ea_len;
+	uint16 root_dir_fid;
 	struct timespec create_timespec;
 	struct timespec c_timespec;
 	struct timespec a_timespec;
 	struct timespec m_timespec;
+	struct timespec write_time_ts;
 	struct ea_list *ea_list = NULL;
 	NTSTATUS status;
 	size_t param_len;
@@ -1045,7 +1035,7 @@ static void call_nt_transact_create(connection_struct *conn,
 	create_options = IVAL(params,32);
 	sd_len = IVAL(params,36);
 	ea_len = IVAL(params,40);
-	root_dir_fid = (uint16_t)IVAL(params,4);
+	root_dir_fid = (uint16)IVAL(params,4);
 	allocation_size = BVAL(params,12);
 
 	/*
@@ -1053,43 +1043,6 @@ static void call_nt_transact_create(connection_struct *conn,
 	 * because we reuse some of them for internal stuff
 	 */
 	create_options &= ~NTCREATEX_OPTIONS_MUST_IGNORE_MASK;
-
-	srvstr_get_path(ctx, params, req->flags2, &fname,
-			params+53, parameter_count-53,
-			STR_TERMINATE, &status);
-	if (!NT_STATUS_IS_OK(status)) {
-		reply_nterror(req, status);
-		goto out;
-	}
-
-	if (file_attributes & FILE_FLAG_POSIX_SEMANTICS) {
-		case_state = set_posix_case_semantics(ctx, conn);
-		if (!case_state) {
-			reply_nterror(req, NT_STATUS_NO_MEMORY);
-			goto out;
-		}
-	}
-
-	status = filename_convert(ctx,
-				conn,
-				req->flags2 & FLAGS2_DFS_PATHNAMES,
-				fname,
-				UCF_PREP_CREATEFILE,
-				NULL,
-				&smb_fname);
-
-	TALLOC_FREE(case_state);
-
-	if (!NT_STATUS_IS_OK(status)) {
-		if (NT_STATUS_EQUAL(status,NT_STATUS_PATH_NOT_COVERED)) {
-			reply_botherror(req,
-				NT_STATUS_PATH_NOT_COVERED,
-				ERRSRV, ERRbadpath);
-			goto out;
-		}
-		reply_nterror(req, status);
-		goto out;
-	}
 
 	/* Ensure the data_len is correct for the sd and ea values given. */
 	if ((ea_len + sd_len > data_count)
@@ -1141,26 +1094,43 @@ static void call_nt_transact_create(connection_struct *conn,
 			reply_nterror(req, NT_STATUS_INVALID_PARAMETER);
 			goto out;
 		}
+	}
 
-		if (ea_list_has_invalid_name(ea_list)) {
-			/* Realloc the size of parameters and data we will return */
-			if (flags & EXTENDED_RESPONSE_REQUIRED) {
-				/* Extended response is 32 more byyes. */
-				param_len = 101;
-			} else {
-				param_len = 69;
-			}
-			params = nttrans_realloc(ppparams, param_len);
-			if(params == NULL) {
-				reply_nterror(req, NT_STATUS_NO_MEMORY);
-				goto out;
-			}
+	srvstr_get_path(ctx, params, req->flags2, &fname,
+			params+53, parameter_count-53,
+			STR_TERMINATE, &status);
+	if (!NT_STATUS_IS_OK(status)) {
+		reply_nterror(req, status);
+		goto out;
+	}
 
-			memset(params, '\0', param_len);
-			send_nt_replies(conn, req, STATUS_INVALID_EA_NAME,
-				params, param_len, NULL, 0);
+	if (file_attributes & FILE_FLAG_POSIX_SEMANTICS) {
+		case_state = set_posix_case_semantics(ctx, conn);
+		if (!case_state) {
+			reply_nterror(req, NT_STATUS_NO_MEMORY);
 			goto out;
 		}
+	}
+
+	status = filename_convert(ctx,
+				conn,
+				req->flags2 & FLAGS2_DFS_PATHNAMES,
+				fname,
+				0,
+				NULL,
+				&smb_fname);
+
+	TALLOC_FREE(case_state);
+
+	if (!NT_STATUS_IS_OK(status)) {
+		if (NT_STATUS_EQUAL(status,NT_STATUS_PATH_NOT_COVERED)) {
+			reply_botherror(req,
+				NT_STATUS_PATH_NOT_COVERED,
+				ERRSRV, ERRbadpath);
+			goto out;
+		}
+		reply_nterror(req, status);
+		goto out;
 	}
 
 	oplock_request = (flags & REQUEST_OPLOCK) ? EXCLUSIVE_OPLOCK : 0;
@@ -1187,17 +1157,15 @@ static void call_nt_transact_create(connection_struct *conn,
 		create_options,				/* create_options */
 		file_attributes,			/* file_attributes */
 		oplock_request,				/* oplock_request */
-		NULL,					/* lease */
 		allocation_size,			/* allocation_size */
 		0,					/* private_flags */
 		sd,					/* sd */
 		ea_list,				/* ea_list */
 		&fsp,					/* result */
-		&info,					/* pinfo */
-		NULL, NULL);				/* create context */
+		&info);					/* pinfo */
 
 	if(!NT_STATUS_IS_OK(status)) {
-		if (open_was_deferred(req->xconn, req->mid)) {
+		if (open_was_deferred(req->mid)) {
 			/* We have re-scheduled this call, no error. */
 			return;
 		}
@@ -1268,6 +1236,14 @@ static void call_nt_transact_create(connection_struct *conn,
 		fattr = FILE_ATTRIBUTE_NORMAL;
 	}
 
+	/* Deal with other possible opens having a modified
+	   write time. JRA. */
+	ZERO_STRUCT(write_time_ts);
+	get_file_infos(fsp->file_id, 0, NULL, &write_time_ts);
+	if (!null_timespec(write_time_ts)) {
+		update_stat_ex_mtime(&smb_fname->st, write_time_ts);
+	}
+
 	/* Create time. */
 	create_timespec = get_create_timespec(conn, fsp, smb_fname);
 	a_timespec = smb_fname->st.st_ex_atime;
@@ -1320,10 +1296,9 @@ static void call_nt_transact_create(connection_struct *conn,
 	SCVAL(p,0,fsp->is_directory ? 1 : 0);
 
 	if (flags & EXTENDED_RESPONSE_REQUIRED) {
-		uint32_t perms = 0;
+		uint32 perms = 0;
 		p += 25;
 		if (fsp->is_directory ||
-		    fsp->can_write ||
 		    can_write_to_file(conn, smb_fname)) {
 			perms = FILE_GENERIC_ALL;
 		} else {
@@ -1348,17 +1323,14 @@ static void call_nt_transact_create(connection_struct *conn,
 
 void reply_ntcancel(struct smb_request *req)
 {
-	struct smbXsrv_connection *xconn = req->xconn;
-	struct smbd_server_connection *sconn = req->sconn;
-
 	/*
 	 * Go through and cancel any pending change notifies.
 	 */
 
 	START_PROFILE(SMBntcancel);
-	srv_cancel_sign_response(xconn);
-	remove_pending_change_notify_requests_by_mid(sconn, req->mid);
-	remove_pending_lock_requests_by_mid_smb1(sconn, req->mid);
+	srv_cancel_sign_response(req->sconn);
+	remove_pending_change_notify_requests_by_mid(req->sconn, req->mid);
+	remove_pending_lock_requests_by_mid_smb1(req->sconn, req->mid);
 
 	DEBUG(3,("reply_ntcancel: cancel called on mid = %llu.\n",
 		(unsigned long long)req->mid));
@@ -1376,12 +1348,12 @@ static NTSTATUS copy_internals(TALLOC_CTX *ctx,
 				struct smb_request *req,
 				struct smb_filename *smb_fname_src,
 				struct smb_filename *smb_fname_dst,
-				uint32_t attrs)
+				uint32 attrs)
 {
 	files_struct *fsp1,*fsp2;
-	uint32_t fattr;
+	uint32 fattr;
 	int info;
-	off_t ret=-1;
+	SMB_OFF_T ret=-1;
 	NTSTATUS status = NT_STATUS_OK;
 	char *parent;
 
@@ -1432,14 +1404,12 @@ static NTSTATUS copy_internals(TALLOC_CTX *ctx,
 		0,					/* create_options */
 		FILE_ATTRIBUTE_NORMAL,			/* file_attributes */
 		NO_OPLOCK,				/* oplock_request */
-		NULL,					/* lease */
 		0,					/* allocation_size */
 		0,					/* private_flags */
 		NULL,					/* sd */
 		NULL,					/* ea_list */
 		&fsp1,					/* result */
-		&info,					/* pinfo */
-		NULL, NULL);				/* create context */
+		&info);					/* pinfo */
 
 	if (!NT_STATUS_IS_OK(status)) {
 		goto out;
@@ -1458,14 +1428,12 @@ static NTSTATUS copy_internals(TALLOC_CTX *ctx,
 		0,					/* create_options */
 		fattr,					/* file_attributes */
 		NO_OPLOCK,				/* oplock_request */
-		NULL,					/* lease */
 		0,					/* allocation_size */
 		0,					/* private_flags */
 		NULL,					/* sd */
 		NULL,					/* ea_list */
 		&fsp2,					/* result */
-		&info,					/* pinfo */
-		NULL, NULL);				/* create context */
+		&info);					/* pinfo */
 
 	if (!NT_STATUS_IS_OK(status)) {
 		close_file(NULL, fsp1, ERROR_CLOSE);
@@ -1500,7 +1468,7 @@ static NTSTATUS copy_internals(TALLOC_CTX *ctx,
 	file_set_dosmode(conn, smb_fname_dst, fattr, parent, false);
 	TALLOC_FREE(parent);
 
-	if (ret < (off_t)smb_fname_src->st.st_ex_size) {
+	if (ret < (SMB_OFF_T)smb_fname_src->st.st_ex_size) {
 		status = NT_STATUS_DISK_FULL;
 		goto out;
 	}
@@ -1529,10 +1497,10 @@ void reply_ntrename(struct smb_request *req)
 	NTSTATUS status;
 	bool src_has_wcard = False;
 	bool dest_has_wcard = False;
-	uint32_t attrs;
+	uint32 attrs;
 	uint32_t ucf_flags_src = 0;
 	uint32_t ucf_flags_dst = 0;
-	uint16_t rename_type;
+	uint16 rename_type;
 	TALLOC_CTX *ctx = talloc_tos();
 	bool stream_rename = false;
 
@@ -1680,7 +1648,7 @@ void reply_ntrename(struct smb_request *req)
 	}
 
 	if (!NT_STATUS_IS_OK(status)) {
-		if (open_was_deferred(req->xconn, req->mid)) {
+		if (open_was_deferred(req->mid)) {
 			/* We have re-scheduled this call. */
 			goto out;
 		}
@@ -1709,17 +1677,17 @@ static void smbd_smb1_notify_reply(struct smb_request *req,
 
 static void call_nt_transact_notify_change(connection_struct *conn,
 					   struct smb_request *req,
-					   uint16_t **ppsetup,
-					   uint32_t setup_count,
+					   uint16 **ppsetup,
+					   uint32 setup_count,
 					   char **ppparams,
-					   uint32_t parameter_count,
-					   char **ppdata, uint32_t data_count,
-					   uint32_t max_data_count,
-					   uint32_t max_param_count)
+					   uint32 parameter_count,
+					   char **ppdata, uint32 data_count,
+					   uint32 max_data_count,
+					   uint32 max_param_count)
 {
-	uint16_t *setup = *ppsetup;
+	uint16 *setup = *ppsetup;
 	files_struct *fsp;
-	uint32_t filter;
+	uint32 filter;
 	NTSTATUS status;
 	bool recursive;
 
@@ -1771,7 +1739,7 @@ static void call_nt_transact_notify_change(connection_struct *conn,
 		}
 	}
 
-	if (change_notify_fsp_has_changes(fsp)) {
+	if (fsp->notify->num_changes != 0) {
 
 		/*
 		 * We've got changes pending, respond immediately
@@ -1816,10 +1784,10 @@ static void call_nt_transact_notify_change(connection_struct *conn,
 
 static void call_nt_transact_rename(connection_struct *conn,
 				    struct smb_request *req,
-				    uint16_t **ppsetup, uint32_t setup_count,
-				    char **ppparams, uint32_t parameter_count,
-				    char **ppdata, uint32_t data_count,
-				    uint32_t max_data_count)
+				    uint16 **ppsetup, uint32 setup_count,
+				    char **ppparams, uint32 parameter_count,
+				    char **ppdata, uint32 data_count,
+				    uint32 max_data_count)
 {
 	char *params = *ppparams;
 	char *new_name = NULL;
@@ -1876,7 +1844,7 @@ static NTSTATUS get_null_nt_acl(TALLOC_CTX *mem_ctx, struct security_descriptor 
 
 /****************************************************************************
  Reply to query a security descriptor.
- Callable from SMB1 and SMB2.
+ Callable from SMB2 and SMB2.
  If it returns NT_STATUS_BUFFER_TOO_SMALL, pdata_size is initialized with
  the required size.
 ****************************************************************************/
@@ -1891,7 +1859,6 @@ NTSTATUS smbd_do_query_security_desc(connection_struct *conn,
 {
 	NTSTATUS status;
 	struct security_descriptor *psd = NULL;
-	TALLOC_CTX *frame = talloc_stackframe();
 
 	/*
 	 * Get the permissions to return.
@@ -1899,22 +1866,11 @@ NTSTATUS smbd_do_query_security_desc(connection_struct *conn,
 
 	if ((security_info_wanted & SECINFO_SACL) &&
 			!(fsp->access_mask & SEC_FLAG_SYSTEM_SECURITY)) {
-		DEBUG(10, ("Access to SACL denied.\n"));
-		TALLOC_FREE(frame);
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
 	if ((security_info_wanted & (SECINFO_DACL|SECINFO_OWNER|SECINFO_GROUP)) &&
 			!(fsp->access_mask & SEC_STD_READ_CONTROL)) {
-		DEBUG(10, ("Access to DACL, OWNER, or GROUP denied.\n"));
-		TALLOC_FREE(frame);
-		return NT_STATUS_ACCESS_DENIED;
-	}
-
-	if (S_ISLNK(fsp->fsp_name->st.st_ex_mode)) {
-		DEBUG(10, ("ACL get on symlink %s denied.\n",
-			fsp_str_dbg(fsp)));
-		TALLOC_FREE(frame);
 		return NT_STATUS_ACCESS_DENIED;
 	}
 
@@ -1926,16 +1882,15 @@ NTSTATUS smbd_do_query_security_desc(connection_struct *conn,
 	}
 
 	if (!lp_nt_acl_support(SNUM(conn))) {
-		status = get_null_nt_acl(frame, &psd);
+		status = get_null_nt_acl(mem_ctx, &psd);
 	} else if (security_info_wanted & SECINFO_LABEL) {
 		/* Like W2K3 return a null object. */
-		status = get_null_nt_acl(frame, &psd);
+		status = get_null_nt_acl(mem_ctx, &psd);
 	} else {
 		status = SMB_VFS_FGET_NT_ACL(
-			fsp, security_info_wanted, frame, &psd);
+			fsp, security_info_wanted, &psd);
 	}
 	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(frame);
 		return status;
 	}
 
@@ -1984,7 +1939,7 @@ NTSTATUS smbd_do_query_security_desc(connection_struct *conn,
 	}
 
 	if (max_data_count < *psd_size) {
-		TALLOC_FREE(frame);
+		TALLOC_FREE(psd);
 		return NT_STATUS_BUFFER_TOO_SMALL;
 	}
 
@@ -1992,11 +1947,11 @@ NTSTATUS smbd_do_query_security_desc(connection_struct *conn,
 				   ppmarshalled_sd, psd_size);
 
 	if (!NT_STATUS_IS_OK(status)) {
-		TALLOC_FREE(frame);
+		TALLOC_FREE(psd);
 		return status;
 	}
 
-	TALLOC_FREE(frame);
+	TALLOC_FREE(psd);
 	return NT_STATUS_OK;
 }
 
@@ -2006,18 +1961,18 @@ NTSTATUS smbd_do_query_security_desc(connection_struct *conn,
 
 static void call_nt_transact_query_security_desc(connection_struct *conn,
 						 struct smb_request *req,
-						 uint16_t **ppsetup,
-						 uint32_t setup_count,
+						 uint16 **ppsetup,
+						 uint32 setup_count,
 						 char **ppparams,
-						 uint32_t parameter_count,
+						 uint32 parameter_count,
 						 char **ppdata,
-						 uint32_t data_count,
-						 uint32_t max_data_count)
+						 uint32 data_count,
+						 uint32 max_data_count)
 {
 	char *params = *ppparams;
 	char *data = *ppdata;
 	size_t sd_size = 0;
-	uint32_t security_info_wanted;
+	uint32 security_info_wanted;
 	files_struct *fsp = NULL;
 	NTSTATUS status;
 	uint8_t *marshalled_sd = NULL;
@@ -2052,8 +2007,7 @@ static void call_nt_transact_query_security_desc(connection_struct *conn,
 	status = smbd_do_query_security_desc(conn,
 					talloc_tos(),
 					fsp,
-					security_info_wanted &
-					SMB_SUPPORTED_SECINFO_FLAGS,
+					security_info_wanted,
 					max_data_count,
 					&marshalled_sd,
 					&sd_size);
@@ -2103,18 +2057,18 @@ static void call_nt_transact_query_security_desc(connection_struct *conn,
 
 static void call_nt_transact_set_security_desc(connection_struct *conn,
 					       struct smb_request *req,
-					       uint16_t **ppsetup,
-					       uint32_t setup_count,
+					       uint16 **ppsetup,
+					       uint32 setup_count,
 					       char **ppparams,
-					       uint32_t parameter_count,
+					       uint32 parameter_count,
 					       char **ppdata,
-					       uint32_t data_count,
-					       uint32_t max_data_count)
+					       uint32 data_count,
+					       uint32 max_data_count)
 {
 	char *params= *ppparams;
 	char *data = *ppdata;
 	files_struct *fsp = NULL;
-	uint32_t security_info_sent = 0;
+	uint32 security_info_sent = 0;
 	NTSTATUS status;
 
 	if(parameter_count < 8) {
@@ -2146,8 +2100,8 @@ static void call_nt_transact_set_security_desc(connection_struct *conn,
 		return;
 	}
 
-	status = set_sd_blob(fsp, (uint8_t *)data, data_count,
-			     security_info_sent & SMB_SUPPORTED_SECINFO_FLAGS);
+	status = set_sd(fsp, (uint8 *)data, data_count, security_info_sent);
+
 	if (!NT_STATUS_IS_OK(status)) {
 		reply_nterror(req, status);
 		return;
@@ -2158,25 +2112,362 @@ static void call_nt_transact_set_security_desc(connection_struct *conn,
 	return;
 }
 
+/*
+ * Implement the default fsctl operation.
+ */
+
+static bool vfswrap_logged_ioctl_message = false;
+
+/*
+ * In 3.6 we do not have a SMB_VFS_FSCTL() function
+ * it's just faked to make it more look like
+ * master (4.0)
+ */
+NTSTATUS smb_fsctl(struct files_struct *fsp,
+		       TALLOC_CTX *ctx,
+		       uint32_t function,
+		       uint16_t req_flags,  /* Needed for UNICODE ... */
+		       const uint8_t *_in_data,
+		       uint32_t in_len,
+		       uint8_t **_out_data,
+		       uint32_t max_out_len,
+		       uint32_t *out_len)
+{
+	const char *in_data = (const char *)_in_data;
+	char **out_data = (char **)_out_data;
+
+	switch (function) {
+	case FSCTL_SET_SPARSE:
+	{
+		bool set_sparse = true;
+		NTSTATUS status;
+
+		if (in_len >= 1 && in_data[0] == 0) {
+			set_sparse = false;
+		}
+
+		status = file_set_sparse(fsp->conn, fsp, set_sparse);
+
+		DEBUG(NT_STATUS_IS_OK(status) ? 10 : 9,
+		      ("FSCTL_SET_SPARSE: fname[%s] set[%u] - %s\n",
+		       smb_fname_str_dbg(fsp->fsp_name), set_sparse,
+		       nt_errstr(status)));
+
+		return status;
+	}
+
+	case FSCTL_CREATE_OR_GET_OBJECT_ID:
+	{
+		unsigned char objid[16];
+		char *return_data = NULL;
+
+		/* This should return the object-id on this file.
+		 * I think I'll make this be the inode+dev. JRA.
+		 */
+
+		DEBUG(10,("FSCTL_CREATE_OR_GET_OBJECT_ID: called on FID[0x%04X]\n",fsp->fnum));
+
+		*out_len = (max_out_len >= 64) ? 64 : max_out_len;
+		/* Hmmm, will this cause problems if less data asked for? */
+		return_data = talloc_array(ctx, char, 64);
+		if (return_data == NULL) {
+			return NT_STATUS_NO_MEMORY;
+		}
+
+		/* For backwards compatibility only store the dev/inode. */
+		push_file_id_16(return_data, &fsp->file_id);
+		memcpy(return_data+16,create_volume_objectid(fsp->conn,objid),16);
+		push_file_id_16(return_data+32, &fsp->file_id);
+		*out_data = return_data;
+		return NT_STATUS_OK;
+	}
+
+	case FSCTL_GET_REPARSE_POINT:
+	{
+		/* Fail it with STATUS_NOT_A_REPARSE_POINT */
+		DEBUG(10, ("FSCTL_GET_REPARSE_POINT: called on FID[0x%04X] Status: NOT_IMPLEMENTED\n", fsp->fnum));
+		return NT_STATUS_NOT_A_REPARSE_POINT;
+	}
+
+	case FSCTL_SET_REPARSE_POINT:
+	{
+		/* Fail it with STATUS_NOT_A_REPARSE_POINT */
+		DEBUG(10, ("FSCTL_SET_REPARSE_POINT: called on FID[0x%04X] Status: NOT_IMPLEMENTED\n", fsp->fnum));
+		return NT_STATUS_NOT_A_REPARSE_POINT;
+	}
+
+	case FSCTL_GET_SHADOW_COPY_DATA:
+	{
+		/*
+		 * This is called to retrieve the number of Shadow Copies (a.k.a. snapshots)
+		 * and return their volume names.  If max_data_count is 16, then it is just
+		 * asking for the number of volumes and length of the combined names.
+		 *
+		 * pdata is the data allocated by our caller, but that uses
+		 * total_data_count (which is 0 in our case) rather than max_data_count.
+		 * Allocate the correct amount and return the pointer to let
+		 * it be deallocated when we return.
+		 */
+		struct shadow_copy_data *shadow_data = NULL;
+		bool labels = False;
+		uint32 labels_data_count = 0;
+		uint32 i;
+		char *cur_pdata = NULL;
+
+		if (max_out_len < 16) {
+			DEBUG(0,("FSCTL_GET_SHADOW_COPY_DATA: max_data_count(%u) < 16 is invalid!\n",
+				max_out_len));
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
+		if (max_out_len > 16) {
+			labels = True;
+		}
+
+		shadow_data = talloc_zero(ctx, struct shadow_copy_data);
+		if (shadow_data == NULL) {
+			DEBUG(0,("TALLOC_ZERO() failed!\n"));
+			return NT_STATUS_NO_MEMORY;
+		}
+
+		/*
+		 * Call the VFS routine to actually do the work.
+		 */
+		if (SMB_VFS_GET_SHADOW_COPY_DATA(fsp, shadow_data, labels)!=0) {
+			TALLOC_FREE(shadow_data);
+			if (errno == ENOSYS) {
+				DEBUG(5,("FSCTL_GET_SHADOW_COPY_DATA: connectpath %s, not supported.\n", 
+					fsp->conn->connectpath));
+				return NT_STATUS_NOT_SUPPORTED;
+			} else {
+				DEBUG(0,("FSCTL_GET_SHADOW_COPY_DATA: connectpath %s, failed.\n", 
+					fsp->conn->connectpath));
+				return NT_STATUS_UNSUCCESSFUL;
+			}
+		}
+
+		labels_data_count = (shadow_data->num_volumes * 2 *
+					sizeof(SHADOW_COPY_LABEL)) + 2;
+
+		if (!labels) {
+			*out_len = 16;
+		} else {
+			*out_len = 12 + labels_data_count + 4;
+		}
+
+		if (max_out_len < *out_len) {
+			DEBUG(0,("FSCTL_GET_SHADOW_COPY_DATA: max_data_count(%u) too small (%u) bytes needed!\n",
+				max_out_len, *out_len));
+			TALLOC_FREE(shadow_data);
+			return NT_STATUS_BUFFER_TOO_SMALL;
+		}
+
+		cur_pdata = talloc_array(ctx, char, *out_len);
+		if (cur_pdata == NULL) {
+			TALLOC_FREE(shadow_data);
+			return NT_STATUS_NO_MEMORY;
+		}
+
+		*out_data = cur_pdata;
+
+		/* num_volumes 4 bytes */
+		SIVAL(cur_pdata, 0, shadow_data->num_volumes);
+
+		if (labels) {
+			/* num_labels 4 bytes */
+			SIVAL(cur_pdata, 4, shadow_data->num_volumes);
+		}
+
+		/* needed_data_count 4 bytes */
+		SIVAL(cur_pdata, 8, labels_data_count + 4);
+
+		cur_pdata += 12;
+
+		DEBUG(10,("FSCTL_GET_SHADOW_COPY_DATA: %u volumes for path[%s].\n",
+			  shadow_data->num_volumes, fsp_str_dbg(fsp)));
+		if (labels && shadow_data->labels) {
+			for (i=0; i<shadow_data->num_volumes; i++) {
+				srvstr_push(cur_pdata, req_flags,
+					    cur_pdata, shadow_data->labels[i],
+					    2 * sizeof(SHADOW_COPY_LABEL),
+					    STR_UNICODE|STR_TERMINATE);
+				cur_pdata += 2 * sizeof(SHADOW_COPY_LABEL);
+				DEBUGADD(10,("Label[%u]: '%s'\n",i,shadow_data->labels[i]));
+			}
+		}
+
+		TALLOC_FREE(shadow_data);
+
+		return NT_STATUS_OK;
+	}
+
+	case FSCTL_FIND_FILES_BY_SID:
+	{
+		/* pretend this succeeded -
+		 *
+		 * we have to send back a list with all files owned by this SID
+		 *
+		 * but I have to check that --metze
+		 */
+		struct dom_sid sid;
+		uid_t uid;
+		size_t sid_len;
+
+		DEBUG(10,("FSCTL_FIND_FILES_BY_SID: called on FID[0x%04X]\n", fsp->fnum));
+
+		if (in_len < 8) {
+			/* NT_STATUS_BUFFER_TOO_SMALL maybe? */
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
+		sid_len = MIN(in_len - 4,SID_MAX_SIZE);
+
+		/* unknown 4 bytes: this is not the length of the sid :-(  */
+		/*unknown = IVAL(pdata,0);*/
+
+		if (!sid_parse(in_data + 4, sid_len, &sid)) {
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+		DEBUGADD(10, ("for SID: %s\n", sid_string_dbg(&sid)));
+
+		if (!sid_to_uid(&sid, &uid)) {
+			DEBUG(0,("sid_to_uid: failed, sid[%s] sid_len[%lu]\n",
+				 sid_string_dbg(&sid),
+				 (unsigned long)sid_len));
+			uid = (-1);
+		}
+
+		/* we can take a look at the find source :-)
+		 *
+		 * find ./ -uid $uid  -name '*'   is what we need here
+		 *
+		 *
+		 * and send 4bytes len and then NULL terminated unicode strings
+		 * for each file
+		 *
+		 * but I don't know how to deal with the paged results
+		 * (maybe we can hang the result anywhere in the fsp struct)
+		 *
+		 * but I don't know how to deal with the paged results
+		 * (maybe we can hang the result anywhere in the fsp struct)
+		 *
+		 * we don't send all files at once
+		 * and at the next we should *not* start from the beginning,
+		 * so we have to cache the result
+		 *
+		 * --metze
+		 */
+
+		/* this works for now... */
+		return NT_STATUS_OK;
+	}
+
+	case FSCTL_QUERY_ALLOCATED_RANGES:
+	{
+		/* FIXME: This is just a dummy reply, telling that all of the
+		 * file is allocated. MKS cp needs that.
+		 * Adding the real allocated ranges via FIEMAP on Linux
+		 * and SEEK_DATA/SEEK_HOLE on Solaris is needed to make
+		 * this FSCTL correct for sparse files.
+		 */
+		NTSTATUS status;
+		uint64_t offset, length;
+		char *out_data_tmp = NULL;
+
+		if (in_len != 16) {
+			DEBUG(0,("FSCTL_QUERY_ALLOCATED_RANGES: data_count(%u) != 16 is invalid!\n",
+				in_len));
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
+		if (max_out_len < 16) {
+			DEBUG(0,("FSCTL_QUERY_ALLOCATED_RANGES: max_out_len (%u) < 16 is invalid!\n",
+				max_out_len));
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
+		offset = BVAL(in_data,0);
+		length = BVAL(in_data,8);
+
+		if (offset + length < offset) {
+			/* No 64-bit integer wrap. */
+			return NT_STATUS_INVALID_PARAMETER;
+		}
+
+		/* Shouldn't this be SMB_VFS_STAT ... ? */
+		status = vfs_stat_fsp(fsp);
+		if (!NT_STATUS_IS_OK(status)) {
+			return status;
+		}
+
+		*out_len = 16;
+		out_data_tmp = talloc_array(ctx, char, *out_len);
+		if (out_data_tmp == NULL) {
+			DEBUG(10, ("unable to allocate memory for response\n"));
+			return NT_STATUS_NO_MEMORY;
+		}
+
+		if (offset > fsp->fsp_name->st.st_ex_size ||
+				fsp->fsp_name->st.st_ex_size == 0 ||
+				length == 0) {
+			memset(out_data_tmp, 0, *out_len);
+		} else {
+			uint64_t end = offset + length;
+			end = MIN(end, fsp->fsp_name->st.st_ex_size);
+			SBVAL(out_data_tmp, 0, 0);
+			SBVAL(out_data_tmp, 8, end);
+		}
+
+		*out_data = out_data_tmp;
+
+		return NT_STATUS_OK;
+	}
+
+	case FSCTL_IS_VOLUME_DIRTY:
+	{
+		DEBUG(10,("FSCTL_IS_VOLUME_DIRTY: called on FID[0x%04X] "
+			  "(but not implemented)\n", fsp->fnum));
+		/*
+		 * http://msdn.microsoft.com/en-us/library/cc232128%28PROT.10%29.aspx
+		 * says we have to respond with NT_STATUS_INVALID_PARAMETER
+		 */
+		return NT_STATUS_INVALID_PARAMETER;
+	}
+
+	default:
+		/*
+		 * Only print once ... unfortunately there could be lots of
+		 * different FSCTLs that are called.
+		 */
+		if (!vfswrap_logged_ioctl_message) {
+			vfswrap_logged_ioctl_message = true;
+			DEBUG(2, ("%s (0x%x): Currently not implemented.\n",
+			__FUNCTION__, function));
+		}
+	}
+
+	return NT_STATUS_NOT_SUPPORTED;
+}
+
 /****************************************************************************
  Reply to NT IOCTL
 ****************************************************************************/
 
 static void call_nt_transact_ioctl(connection_struct *conn,
 				   struct smb_request *req,
-				   uint16_t **ppsetup, uint32_t setup_count,
-				   char **ppparams, uint32_t parameter_count,
-				   char **ppdata, uint32_t data_count,
-				   uint32_t max_data_count)
+				   uint16 **ppsetup, uint32 setup_count,
+				   char **ppparams, uint32 parameter_count,
+				   char **ppdata, uint32 data_count,
+				   uint32 max_data_count)
 {
 	NTSTATUS status;
-	uint32_t function;
-	uint16_t fidnum;
+	uint32 function;
+	uint16 fidnum;
 	files_struct *fsp;
-	uint8_t isFSctl;
-	uint8_t compfilter;
+	uint8 isFSctl;
+	uint8 compfilter;
 	char *out_data = NULL;
-	uint32_t out_data_len = 0;
+	uint32 out_data_len = 0;
 	char *pdata = *ppdata;
 	TALLOC_CTX *ctx = talloc_tos();
 
@@ -2191,7 +2482,7 @@ static void call_nt_transact_ioctl(connection_struct *conn,
 	isFSctl = CVAL(*ppsetup, 6);
 	compfilter = CVAL(*ppsetup, 7);
 
-	DEBUG(10, ("call_nt_transact_ioctl: function[0x%08X] FID[0x%04X] isFSctl[0x%02X] compfilter[0x%02X]\n", 
+	DEBUG(10, ("call_nt_transact_ioctl: function[0x%08X] FID[0x%04X] isFSctl[0x%02X] compfilter[0x%02X]\n",
 		 function, fidnum, isFSctl, compfilter));
 
 	fsp=file_fsp(req, fidnum);
@@ -2211,18 +2502,16 @@ static void call_nt_transact_ioctl(connection_struct *conn,
 		return;
 	}
 
-	SMB_PERFCOUNT_SET_IOCTL(&req->pcd, function);
-
 	/*
 	 * out_data might be allocated by the VFS module, but talloc should be
 	 * used, and should be cleaned up when the request ends.
 	 */
-	status = SMB_VFS_FSCTL(fsp, 
+	status = smb_fsctl(fsp,
 			       ctx,
-			       function, 
+			       function,
 			       req->flags2,
-			       (uint8_t *)pdata, 
-			       data_count, 
+			       (uint8_t *)pdata,
+			       data_count,
 			       (uint8_t **)&out_data,
 			       max_data_count,
 			       &out_data_len);
@@ -2241,13 +2530,13 @@ static void call_nt_transact_ioctl(connection_struct *conn,
 
 static void call_nt_transact_get_user_quota(connection_struct *conn,
 					    struct smb_request *req,
-					    uint16_t **ppsetup,
-					    uint32_t setup_count,
+					    uint16 **ppsetup,
+					    uint32 setup_count,
 					    char **ppparams,
-					    uint32_t parameter_count,
+					    uint32 parameter_count,
 					    char **ppdata,
-					    uint32_t data_count,
-					    uint32_t max_data_count)
+					    uint32 data_count,
+					    uint32 max_data_count)
 {
 	NTSTATUS nt_status = NT_STATUS_OK;
 	char *params = *ppparams;
@@ -2257,7 +2546,7 @@ static void call_nt_transact_get_user_quota(connection_struct *conn,
 	int qt_len=0;
 	int entry_len = 0;
 	files_struct *fsp = NULL;
-	uint16_t level = 0;
+	uint16 level = 0;
 	size_t sid_len;
 	struct dom_sid sid;
 	bool start_enum = True;
@@ -2270,8 +2559,8 @@ static void call_nt_transact_get_user_quota(connection_struct *conn,
 	/* access check */
 	if (get_current_uid(conn) != 0) {
 		DEBUG(1,("get_user_quota: access_denied service [%s] user "
-			 "[%s]\n", lp_servicename(talloc_tos(), SNUM(conn)),
-			 conn->session_info->unix_info->unix_name));
+			 "[%s]\n", lp_servicename(SNUM(conn)),
+			 conn->session_info->unix_name));
 		reply_nterror(req, NT_STATUS_ACCESS_DENIED);
 		return;
 	}
@@ -2503,9 +2792,7 @@ static void call_nt_transact_get_user_quota(connection_struct *conn,
 			break;
 
 		default:
-			DEBUG(0, ("do_nt_transact_get_user_quota: %s: unknown "
-				  "level 0x%04hX\n",
-				  fsp_fnum_dbg(fsp), level));
+			DEBUG(0,("do_nt_transact_get_user_quota: fnum %d unknown level 0x%04hX\n",fsp->fnum,level));
 			reply_nterror(req, NT_STATUS_INVALID_LEVEL);
 			return;
 			break;
@@ -2521,13 +2808,13 @@ static void call_nt_transact_get_user_quota(connection_struct *conn,
 
 static void call_nt_transact_set_user_quota(connection_struct *conn,
 					    struct smb_request *req,
-					    uint16_t **ppsetup,
-					    uint32_t setup_count,
+					    uint16 **ppsetup,
+					    uint32 setup_count,
 					    char **ppparams,
-					    uint32_t parameter_count,
+					    uint32 parameter_count,
 					    char **ppdata,
-					    uint32_t data_count,
-					    uint32_t max_data_count)
+					    uint32 data_count,
+					    uint32 max_data_count)
 {
 	char *params = *ppparams;
 	char *pdata = *ppdata;
@@ -2542,8 +2829,8 @@ static void call_nt_transact_set_user_quota(connection_struct *conn,
 	/* access check */
 	if (get_current_uid(conn) != 0) {
 		DEBUG(1,("set_user_quota: access_denied service [%s] user "
-			 "[%s]\n", lp_servicename(talloc_tos(), SNUM(conn)),
-			 conn->session_info->unix_info->unix_name));
+			 "[%s]\n", lp_servicename(SNUM(conn)),
+			 conn->session_info->unix_name));
 		reply_nterror(req, NT_STATUS_ACCESS_DENIED);
 		return;
 	}
@@ -2624,7 +2911,7 @@ static void handle_nttrans(connection_struct *conn,
 {
 	if (get_Protocol() >= PROTOCOL_NT1) {
 		req->flags2 |= 0x40; /* IS_LONG_NAME */
-		SSVAL(discard_const_p(uint8_t, req->inbuf),smb_flg2,req->flags2);
+		SSVAL(req->inbuf,smb_flg2,req->flags2);
 	}
 
 
@@ -2760,7 +3047,7 @@ void reply_nttrans(struct smb_request *req)
 	uint32_t psoff;
 	uint32_t dscnt;
 	uint32_t dsoff;
-	uint16_t function_code;
+	uint16 function_code;
 	NTSTATUS result;
 	struct trans_state *state;
 
@@ -2792,7 +3079,7 @@ void reply_nttrans(struct smb_request *req)
 		return;
 	}
 
-	if ((state = talloc(conn, struct trans_state)) == NULL) {
+	if ((state = TALLOC_P(conn, struct trans_state)) == NULL) {
 		reply_nterror(req, NT_STATUS_NO_MEMORY);
 		END_PROFILE(SMBnttrans);
 		return;
@@ -2909,7 +3196,7 @@ void reply_nttrans(struct smb_request *req)
 			goto bad_param;
 		}
 
-		state->setup = (uint16_t *)TALLOC(state, state->setup_count);
+		state->setup = (uint16 *)TALLOC(state, state->setup_count);
 		if (state->setup == NULL) {
 			DEBUG(0,("reply_nttrans : Out of memory\n"));
 			SAFE_FREE(state->data);
@@ -2921,7 +3208,7 @@ void reply_nttrans(struct smb_request *req)
 		}
 
 		memcpy(state->setup, req->vwv+19, state->setup_count);
-		dump_data(10, (uint8_t *)state->setup, state->setup_count);
+		dump_data(10, (uint8 *)state->setup, state->setup_count);
 	}
 
 	if ((state->received_data == state->total_data) &&
@@ -2966,13 +3253,7 @@ void reply_nttranss(struct smb_request *req)
 
 	START_PROFILE(SMBnttranss);
 
-	show_msg((const char *)req->inbuf);
-
-	/* Windows clients expect all replies to
-	   an NT transact secondary (SMBnttranss 0xA1)
-	   to have a command code of NT transact
-	   (SMBnttrans 0xA0). See bug #8989 for details. */
-	req->cmd = SMBnttrans;
+	show_msg((char *)req->inbuf);
 
 	if (req->wct < 18) {
 		reply_nterror(req, NT_STATUS_INVALID_PARAMETER);

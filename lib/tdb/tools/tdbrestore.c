@@ -17,13 +17,15 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "replace.h"
 #include <assert.h>
+#include "replace.h"
 #include "system/locale.h"
 #include "system/time.h"
 #include "system/filesys.h"
 #include "system/wait.h"
 #include "tdb.h"
+
+#define debug_fprintf(file, fmt, ...) do {/*nothing*/} while (0)
 
 static int read_linehead(FILE *f)
 {
@@ -168,7 +170,7 @@ static int read_rec(FILE *f, TDB_CONTEXT *tdb, int *eof)
 	    || (swallow(f, "}\n", NULL) == -1)) {
 		goto fail;
 	}
-	if (tdb_store(tdb, key, data, TDB_INSERT) != 0) {
+	if (tdb_store(tdb, key, data, TDB_INSERT) == -1) {
 		fprintf(stderr, "TDB error: %s\n", tdb_errorstr(tdb));
 		goto fail;
 	}
@@ -204,6 +206,7 @@ static int restore_tdb(const char *fname)
 		fprintf(stderr, "Error closing tdb\n");
 		return 1;
 	}
+	fprintf(stderr, "EOF\n");
 	return 0;
 }
 

@@ -26,15 +26,14 @@
 
 #undef DEVELOPER
 
-
 #include "winbind_client.h"
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/param.h>
 #include <string.h>
 #include <pwd.h>
+#include "includes.h"
 #include <syslog.h>
-
 #if !defined(HPUX)
 #include <sys/syslog.h>
 #endif /*hpux*/
@@ -47,10 +46,6 @@
 #define NSS_DEBUG(str) syslog(LOG_DEBUG, "nss_winbind: %s", str);
 #else
 #define NSS_DEBUG(str) ;
-#endif
-
-#if !defined(SMB_MALLOC_P)
-#define SMB_MALLOC_P(type) (type *)malloc(sizeof(type))
 #endif
 
 #define NSS_ARGS(args) ((nss_XbyY_args_t *)args)
@@ -259,9 +254,6 @@ _nss_winbind_getgrnam_solwrap(nss_backend_t* be, void* args)
 	if(ret == NSS_STATUS_SUCCESS)
 		NSS_ARGS(args)->returnval = (void*) result;
 
-	if (NSS_ARGS(args)->erange == ERANGE && ret == NSS_STATUS_TRYAGAIN)
-		return NSS_STATUS_UNAVAIL;
-
 	return ret;
 }
 
@@ -280,9 +272,6 @@ _nss_winbind_getgrgid_solwrap(nss_backend_t* be, void* args)
 
 	if(ret == NSS_STATUS_SUCCESS)
 		NSS_ARGS(args)->returnval = (void*) result;
-
-	if (NSS_ARGS(args)->erange == ERANGE && ret == NSS_STATUS_TRYAGAIN)
-		return NSS_STATUS_UNAVAIL;
 
 	return ret;
 }
@@ -521,8 +510,7 @@ _nss_winbind_ipnodes_getbyname(nss_backend_t* be, void *args)
 	strncpy(request.data.winsreq, argp->key.name, sizeof(request.data.winsreq) - 1);
 	request.data.winsreq[sizeof(request.data.winsreq) - 1] = '\0';
 
-	if( (ret = winbindd_request_response(NULL, WINBINDD_WINS_BYNAME,
-					     &request, &response))
+	if( (ret = winbindd_request_response(WINBINDD_WINS_BYNAME, &request, &response))
 		== NSS_STATUS_SUCCESS ) {
 	  ret = parse_response(af, argp, &response);
 	}
@@ -545,8 +533,7 @@ _nss_winbind_hosts_getbyname(nss_backend_t* be, void *args)
 	strncpy(request.data.winsreq, argp->key.name, sizeof(request.data.winsreq) - 1);
 	request.data.winsreq[sizeof(request.data.winsreq) - 1] = '\0';
 
-	if( (ret = winbindd_request_response(NULL, WINBINDD_WINS_BYNAME,
-					     &request, &response))
+	if( (ret = winbindd_request_response(WINBINDD_WINS_BYNAME, &request, &response))
 		== NSS_STATUS_SUCCESS ) {
 	  ret = parse_response(AF_INET, argp, &response);
 	}
@@ -585,8 +572,7 @@ _nss_winbind_hosts_getbyaddr(nss_backend_t* be, void *args)
                 ((unsigned char *)argp->key.hostaddr.addr)[3]);
 #endif
 
-	ret = winbindd_request_response(NULL, WINBINDD_WINS_BYIP,
-					&request, &response);
+	ret = winbindd_request_response(WINBINDD_WINS_BYIP, &request, &response);
 
 	if( ret == NSS_STATUS_SUCCESS) {
 	  parse_response(argp->key.hostaddr.type, argp, &response);

@@ -25,7 +25,6 @@
 #include "system/filesys.h"
 #include "system/syslog.h"
 #include "smbd/smbd.h"
-#include "lib/param/loadparm.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_VFS
@@ -41,8 +40,7 @@ static int audit_syslog_facility(vfs_handle_struct *handle)
 		{ LOG_LOCAL4, "LOCAL4" },
 		{ LOG_LOCAL5, "LOCAL5" },
 		{ LOG_LOCAL6, "LOCAL6" },
-		{ LOG_LOCAL7, "LOCAL7" },
-		{ -1, NULL}
+		{ LOG_LOCAL7, "LOCAL7" }
 	};
 
 	int facility;
@@ -63,8 +61,7 @@ static int audit_syslog_priority(vfs_handle_struct *handle)
 		{ LOG_WARNING, "WARNING" },
 		{ LOG_NOTICE, "NOTICE" },
 		{ LOG_INFO, "INFO" },
-		{ LOG_DEBUG, "DEBUG" },
-		{ -1, NULL}
+		{ LOG_DEBUG, "DEBUG" }
 	};
 
 	int priority;
@@ -106,9 +103,9 @@ static void audit_disconnect(vfs_handle_struct *handle)
 	return;
 }
 
-static DIR *audit_opendir(vfs_handle_struct *handle, const char *fname, const char *mask, uint32_t attr)
+static SMB_STRUCT_DIR *audit_opendir(vfs_handle_struct *handle, const char *fname, const char *mask, uint32 attr)
 {
-	DIR *result;
+	SMB_STRUCT_DIR *result;
 	
 	result = SMB_VFS_NEXT_OPENDIR(handle, fname, mask, attr);
 
@@ -269,18 +266,18 @@ static int audit_fchmod_acl(vfs_handle_struct *handle, files_struct *fsp, mode_t
 
 static struct vfs_fn_pointers vfs_audit_fns = {
 	.connect_fn = audit_connect,
-	.disconnect_fn = audit_disconnect,
-	.opendir_fn = audit_opendir,
-	.mkdir_fn = audit_mkdir,
-	.rmdir_fn = audit_rmdir,
+	.disconnect = audit_disconnect,
+	.opendir = audit_opendir,
+	.mkdir = audit_mkdir,
+	.rmdir = audit_rmdir,
 	.open_fn = audit_open,
 	.close_fn = audit_close,
-	.rename_fn = audit_rename,
-	.unlink_fn = audit_unlink,
-	.chmod_fn = audit_chmod,
-	.fchmod_fn = audit_fchmod,
-	.chmod_acl_fn = audit_chmod_acl,
-	.fchmod_acl_fn = audit_fchmod_acl
+	.rename = audit_rename,
+	.unlink = audit_unlink,
+	.chmod = audit_chmod,
+	.fchmod = audit_fchmod,
+	.chmod_acl = audit_chmod_acl,
+	.fchmod_acl = audit_fchmod_acl
 };
 
 NTSTATUS vfs_audit_init(void)

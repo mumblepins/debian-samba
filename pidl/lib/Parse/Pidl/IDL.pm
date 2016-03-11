@@ -2576,9 +2576,7 @@ again:
 
 	for ($parser->YYData->{INPUT}) {
 		if (/^\#/) {
-			# Linemarker format is described at
-			# http://gcc.gnu.org/onlinedocs/cpp/Preprocessor-Output.html
-			if (s/^\# (\d+) \"(.*?)\"(( \d+){1,4}|)//) {
+			if (s/^\# (\d+) \"(.*?)\"( \d+|)//) {
 				$parser->YYData->{LINE} = $1-1;
 				$parser->YYData->{FILE} = $2;
 				goto again;

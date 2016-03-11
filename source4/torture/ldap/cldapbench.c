@@ -22,9 +22,7 @@
 #include "includes.h"
 #include "libcli/cldap/cldap.h"
 #include "libcli/resolve/resolve.h"
-#include "libcli/ldap/ldap_client.h"
 #include "torture/torture.h"
-#include "torture/ldap/proto.h"
 #include "param/param.h"
 #include "../lib/tsocket/tsocket.h"
 
@@ -73,7 +71,7 @@ static bool bench_cldap_netlogon(struct torture_context *tctx, const char *addre
 						&dest_addr);
 	CHECK_VAL(ret, 0);
 
-	status = cldap_socket_init(tctx, NULL, dest_addr, &cldap);
+	status = cldap_socket_init(tctx, tctx->ev, NULL, dest_addr, &cldap);
 	torture_assert_ntstatus_ok(tctx, status, "cldap_socket_init");
 
 	state = talloc_zero(tctx, struct bench_state);
@@ -89,8 +87,7 @@ static bool bench_cldap_netlogon(struct torture_context *tctx, const char *addre
 	while (timeval_elapsed(&tv) < timelimit) {
 		while (num_sent - (state->pass_count+state->fail_count) < 10) {
 			struct tevent_req *req;
-			req = cldap_netlogon_send(state, tctx->ev,
-						  cldap, &search);
+			req = cldap_netlogon_send(state, cldap, &search);
 
 			tevent_req_set_callback(req, request_netlogon_handler, state);
 
@@ -158,7 +155,7 @@ static bool bench_cldap_rootdse(struct torture_context *tctx, const char *addres
 	CHECK_VAL(ret, 0);
 
 	/* cldap_socket_init should now know about the dest. address */
-	status = cldap_socket_init(tctx, NULL, dest_addr, &cldap);
+	status = cldap_socket_init(tctx, tctx->ev, NULL, dest_addr, &cldap);
 	torture_assert_ntstatus_ok(tctx, status, "cldap_socket_init");
 
 	state = talloc_zero(tctx, struct bench_state);
@@ -174,7 +171,7 @@ static bool bench_cldap_rootdse(struct torture_context *tctx, const char *addres
 	while (timeval_elapsed(&tv) < timelimit) {
 		while (num_sent - (state->pass_count+state->fail_count) < 10) {
 			struct tevent_req *req;
-			req = cldap_search_send(state, tctx->ev, cldap, &search);
+			req = cldap_search_send(state, cldap, &search);
 
 			tevent_req_set_callback(req, request_rootdse_handler, state);
 
@@ -218,8 +215,7 @@ bool torture_bench_cldap(struct torture_context *torture)
 	make_nbt_name_server(&name, torture_setting_string(torture, "host", NULL));
 
 	/* do an initial name resolution to find its IP */
-	status = resolve_name_ex(lpcfg_resolve_context(torture->lp_ctx),
-				 0, 0, &name, torture, &address, torture->ev);
+	status = resolve_name(lpcfg_resolve_context(torture->lp_ctx), &name, torture, &address, torture->ev);
 	if (!NT_STATUS_IS_OK(status)) {
 		printf("Failed to resolve %s - %s\n",
 		       name.name, nt_errstr(status));

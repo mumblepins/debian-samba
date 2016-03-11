@@ -37,7 +37,7 @@ struct subnet_record *unicast_subnet = NULL;
 struct subnet_record *remote_broadcast_subnet = NULL;
 struct subnet_record *wins_server_subnet = NULL;
 
-extern uint16_t samba_nb_type; /* Samba's NetBIOS name type. */
+extern uint16 samba_nb_type; /* Samba's NetBIOS name type. */
 
 /****************************************************************************
   Add a subnet into the list.
@@ -247,11 +247,8 @@ bool create_subnets(void)
 
 	/* Only count IPv4, non-loopback interfaces. */
 	if (iface_count_v4_nl() == 0) {
-		daemon_status("nmbd",
-			      "No local IPv4 non-loopback interfaces "
-			      "available, waiting for interface ...");
-		DEBUG(0,("NOTE: NetBIOS name resolution is not supported for "
-			 "Internet Protocol Version 6 (IPv6).\n"));
+		DEBUG(0,("create_subnets: No local IPv4 non-loopback interfaces !\n"));
+		DEBUG(0,("create_subnets: Waiting for an interface to appear ...\n"));
 	}
 
 	/* We only count IPv4, non-loopback interfaces here. */
@@ -307,7 +304,7 @@ bool create_subnets(void)
 		 * ignore it here. JRA.
 		 */
 
-		if (is_loopback_addr((const struct sockaddr *)&iface->ip)) {
+		if (is_loopback_addr((struct sockaddr *)&iface->ip)) {
 			DEBUG(2,("create_subnets: Ignoring loopback interface.\n" ));
 			continue;
 		}

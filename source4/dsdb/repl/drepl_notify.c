@@ -195,7 +195,7 @@ static void dreplsrv_notify_op_callback(struct tevent_req *subreq)
 			 ldb_dn_get_linearized(op->source_dsa->partition->dn),
 			 nt_errstr(status), win_errstr(werr)));
 	} else {
-		DEBUG(2,("dreplsrv_notify: DsReplicaSync successfuly sent to %s\n",
+		DEBUG(2,("dreplsrv_notify: DsReplicaSync OK for %s\n",
 			 op->source_dsa->repsFrom1->other_info->dns_name));
 		op->source_dsa->notify_uSN = op->uSN;
 	}
@@ -255,14 +255,14 @@ static struct dreplsrv_partition_source_dsa *dreplsrv_find_notify_dsa(struct dre
 
 	/* first check the sources list */
 	for (s=p->sources; s; s=s->next) {
-		if (GUID_equal(&s->repsFrom1->source_dsa_obj_guid, guid)) {
+		if (GUID_compare(&s->repsFrom1->source_dsa_obj_guid, guid) == 0) {
 			return s;
 		}
 	}
 
 	/* then the notifies list */
 	for (s=p->notifies; s; s=s->next) {
-		if (GUID_equal(&s->repsFrom1->source_dsa_obj_guid, guid)) {
+		if (GUID_compare(&s->repsFrom1->source_dsa_obj_guid, guid) == 0) {
 			return s;
 		}
 	}
@@ -451,7 +451,7 @@ WERROR dreplsrv_notify_schedule(struct dreplsrv_service *service, uint32_t next_
 	/* reset the next scheduled timestamp */
 	service->notify.next_event = next_time;
 
-	new_te = tevent_add_timer(service->task->event_ctx, service,
+	new_te = event_add_timed(service->task->event_ctx, service,
 			         service->notify.next_event,
 			         dreplsrv_notify_handler_te, service);
 	W_ERROR_HAVE_NO_MEMORY(new_te);

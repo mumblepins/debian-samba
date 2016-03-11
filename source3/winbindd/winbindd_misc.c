@@ -22,7 +22,6 @@
 
 #include "includes.h"
 #include "winbindd.h"
-#include "libcli/security/dom_sid.h"
 
 #undef DBGC_CLASS
 #define DBGC_CLASS DBGC_WINBIND
@@ -43,9 +42,9 @@ const char *trust_type_strings[] = {"External",
 
 static enum trust_type get_trust_type(struct winbindd_tdc_domain *domain)
 {
-	if (domain->trust_attribs == LSA_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN)
+	if (domain->trust_attribs == NETR_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN)	
 		return EXTERNAL;
-	else if (domain->trust_attribs == LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE)
+	else if (domain->trust_attribs == NETR_TRUST_ATTRIBUTE_FOREST_TRANSITIVE)
 		return FOREST;
 	else if (((domain->trust_flags & NETR_TRUST_FLAG_IN_FOREST) == NETR_TRUST_FLAG_IN_FOREST) &&
 	    ((domain->trust_flags & NETR_TRUST_FLAG_PRIMARY) == 0x0))
@@ -78,9 +77,9 @@ static bool trust_is_outbound(struct winbindd_tdc_domain *domain)
 
 static bool trust_is_transitive(struct winbindd_tdc_domain *domain)
 {
-	if ((domain->trust_attribs == LSA_TRUST_ATTRIBUTE_NON_TRANSITIVE) ||
-	    (domain->trust_attribs == LSA_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN) ||
-	    (domain->trust_attribs == LSA_TRUST_ATTRIBUTE_TREAT_AS_EXTERNAL))
+	if ((domain->trust_attribs == NETR_TRUST_ATTRIBUTE_NON_TRANSITIVE) ||         
+	    (domain->trust_attribs == NETR_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN) ||
+	    (domain->trust_attribs == NETR_TRUST_ATTRIBUTE_TREAT_AS_EXTERNAL))
 		return False;
 	return True;
 }
@@ -121,7 +120,7 @@ void winbindd_list_trusted_domains(struct winbindd_cli_state *state)
 			extra_data,
 			"%s\\%s\\%s\\%s\\%s\\%s\\%s\\%s\n",
 			d->domain_name,
-			d->dns_name ? d->dns_name : "",
+			d->dns_name ? d->dns_name : d->domain_name,
 			sid_string_talloc(state->mem_ctx, &d->sid),
 			get_trust_type_string(d),
 			trust_is_transitive(d) ? "Yes" : "No",
@@ -172,14 +171,6 @@ enum winbindd_result winbindd_dual_list_trusted_domains(struct winbindd_domain *
 	extra_data = talloc_strdup(state->mem_ctx, "");
 
 	for (i=0; i<trusts.count; i++) {
-
-		if (trusts.array[i].sid == NULL) {
-			continue;
-		}
-		if (dom_sid_equal(trusts.array[i].sid, &global_sid_NULL)) {
-			continue;
-		}
-
 		extra_data = talloc_asprintf_append_buffer(
 			extra_data, "%s\\%s\\%s\n",
 			trusts.array[i].netbios_name,
@@ -200,9 +191,7 @@ enum winbindd_result winbindd_dual_list_trusted_domains(struct winbindd_domain *
 	if (state->request->data.list_all_domains && !have_own_domain) {
 		extra_data = talloc_asprintf_append_buffer(
 			extra_data, "%s\\%s\\%s\n", domain->name,
-			domain->alt_name != NULL ?
-				domain->alt_name :
-				domain->name,
+			domain->alt_name ? domain->alt_name : domain->name,
 			sid_string_talloc(state->mem_ctx, &domain->sid));
 	}
 
@@ -391,8 +380,8 @@ void winbindd_info(struct winbindd_cli_state *state)
 
 void winbindd_interface_version(struct winbindd_cli_state *state)
 {
-	DEBUG(3, ("[%5lu]: request interface version (version = %d)\n",
-		  (unsigned long)state->pid, WINBIND_INTERFACE_VERSION));
+	DEBUG(3, ("[%5lu]: request interface version\n",
+		  (unsigned long)state->pid));
 
 	state->response->data.interface_version = WINBIND_INTERFACE_VERSION;
 	request_ok(state);
@@ -415,7 +404,7 @@ void winbindd_netbios_name(struct winbindd_cli_state *state)
 	DEBUG(3, ("[%5lu]: request netbios name\n",
 		  (unsigned long)state->pid));
 
-	fstrcpy(state->response->data.netbios_name, lp_netbios_name());
+	fstrcpy(state->response->data.netbios_name, global_myname());
 	request_ok(state);
 }
 
