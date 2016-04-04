@@ -67,6 +67,11 @@ conf_args = \
 		--with-socketpath=/var/run/ctdb/ctdbd.socket \
 		--with-logdir=/var/log/ctdb
 
+# selftest build profile
+ifneq ($(filter selftest,$(DEB_BUILD_PROFILES)),)
+    conf_args += \
+        --enable-selftest
+endif
 %:
 	dh $* --with python2 --with systemd
 
@@ -90,6 +95,9 @@ override_dh_auto_build:
 override_dh_auto_test:
 	# Running make test requires configuration with --enable-selftest, which
 	# we don't want to do for production systems.
+ifneq ($(filter selftest,$(DEB_BUILD_PROFILES)),)
+	dh_auto_test
+endif
 
 override_dh_systemd_start:
 	dh_systemd_start -pctdb --no-start --no-restart-on-upgrade
