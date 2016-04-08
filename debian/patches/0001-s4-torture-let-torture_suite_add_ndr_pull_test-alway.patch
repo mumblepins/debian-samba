@@ -1,0 +1,35 @@
+#
+# This patch is required before the 2016-04-12 SECURITY patches can apply
+#
+From b61e67d9fbb5d412da31233c6cd08ebdea6718ac Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?G=C3=BCnther=20Deschner?= <gd@samba.org>
+Date: Tue, 28 Aug 2012 14:30:13 +0200
+Subject: [PATCH] s4-torture: let torture_suite_add_ndr_pull_test always work
+ with NDR_SCALARS|NDR_BUFFERS flags.
+
+I checked all the callers (one) that needs them.
+
+Guenther
+
+See bug #9026 - 3.6.6 upgrade from 3.5.x fails with "Couldn't migrate printers
+tdb file: NT_STATUS_NO_MEMORY" for details.
+---
+ source4/torture/ndr/ndr.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/source4/torture/ndr/ndr.h b/source4/torture/ndr/ndr.h
+index 3de6b8b..b248527 100644
+--- a/source4/torture/ndr/ndr.h
++++ b/source4/torture/ndr/ndr.h
+@@ -43,7 +43,7 @@ _PUBLIC_ struct torture_test *_torture_suite_add_ndr_pull_inout_test(
+ #define torture_suite_add_ndr_pull_test(suite,name,data,check_fn) \
+ 		_torture_suite_add_ndr_pull_test(suite, #name, \
+ 			 (ndr_pull_flags_fn_t)ndr_pull_ ## name, data_blob_talloc(suite, data, sizeof(data)), \
+-			 sizeof(struct name), 0, (bool (*) (struct torture_context *, void *)) check_fn);
++			 sizeof(struct name), NDR_SCALARS|NDR_BUFFERS, (bool (*) (struct torture_context *, void *)) check_fn);
+ 
+ #define torture_suite_add_ndr_pull_fn_test(suite,name,data,flags,check_fn) \
+ 		_torture_suite_add_ndr_pull_test(suite, #name "_" #flags, \
+-- 
+2.8.0.rc3
+

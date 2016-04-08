@@ -38,3 +38,4 @@ CVE-2015-5299-v3-6-bso11529.patch
 CVE-2015-5296-v3-6-bso11536.patch
 s3-smbd-fix-a-corner-case-of-the-symlink-verificatio.patch
 CVE-2015-7560-v3-6.patch
+0001-s4-torture-let-torture_suite_add_ndr_pull_test-alway.patch
