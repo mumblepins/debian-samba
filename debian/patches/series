@@ -40,6 +40,7 @@ s3-smbd-fix-a-corner-case-of-the-symlink-verificatio.patch
 CVE-2015-7560-v3-6.patch
 0001-s4-torture-let-torture_suite_add_ndr_pull_test-alway.patch
 CVE-preparation-v3-6.patch
+really-move-bitmap.c.patch
 CVE-2016-2110-v3-6.patch
 CVE-2016-2111-v3-6.patch
 CVE-2016-2112-v3-6.patch
