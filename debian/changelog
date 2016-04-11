@@ -1,3 +1,28 @@
+samba (2:3.6.6-6+deb7u7) wheezy-security; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * s3:smbd: fix a corner case of the symlink verification.
+    Address regression introduced by the patch for CVE-2015-5252. For the
+    share path "/", the introduced checks deny all operations in the share.
+    (Closes: #812429)
+  * CVE-2015-7560: Incorrect ACL get/set allowed on symlink path
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Fri, 11 Mar 2016 21:14:09 +0100
+
+samba (2:3.6.6-6+deb7u6) wheezy-security; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * Refresh waf-as-source.patch patch
+  * Add CVE-2015-5252-v3-6-bso11395.patch patch.
+    CVE-2015-5252: Insufficient symlink verification in smbd.
+  * Add CVE-2015-5299-v3-6-bso11529.patch patch.
+    CVE-2015-5299: Missing access control check in shadow copy code.
+  * Add CVE-2015-5296-v3-6-bso11536.patch patch.
+    CVE-2015-5296: Samba client requesting encryption vulnerable to
+    downgrade attack.
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Tue, 22 Dec 2015 08:33:25 +0100
+
 samba (2:3.6.6-6+deb7u5) wheezy-security; urgency=high
 
   * Security update
