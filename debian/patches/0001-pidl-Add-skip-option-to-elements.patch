@@ -1,0 +1,63 @@
+From 3395375c06ef7911da1934cf4e3d88de2b7b72bd Mon Sep 17 00:00:00 2001
+From: Andreas Schneider <asn@samba.org>
+Date: Tue, 12 Mar 2013 11:36:38 +0100
+Subject: [PATCH] pidl: Add skip option to elements.
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This option allows to skip struct elements in pull and push function.
+This can be used to pass flags to the structure e.g. for string values.
+
+Reviewed-by: Günther Deschner <gd@samba.org>
+(cherry picked from commit 7f13e139825a4363d8d304c5b86c805bb2a1b0db)
+---
+ pidl/lib/Parse/Pidl/NDR.pm               |  1 +
+ pidl/lib/Parse/Pidl/Samba4/NDR/Parser.pm | 12 ++++++++++--
+ 2 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/pidl/lib/Parse/Pidl/NDR.pm b/pidl/lib/Parse/Pidl/NDR.pm
+index 71e7228..c4cef64 100644
+--- a/pidl/lib/Parse/Pidl/NDR.pm
++++ b/pidl/lib/Parse/Pidl/NDR.pm
+@@ -1070,6 +1070,7 @@ my %property_list = (
+ 	"noprint"		=> ["FUNCTION", "TYPEDEF", "STRUCT", "UNION", "ENUM", "BITMAP", "ELEMENT", "PIPE"],
+ 	"nopython"		=> ["FUNCTION", "TYPEDEF", "STRUCT", "UNION", "ENUM", "BITMAP"],
+ 	"todo"			=> ["FUNCTION"],
++	"skip"			=> ["ELEMENT"],
+ 
+ 	# union
+ 	"switch_is"		=> ["ELEMENT"],
+diff --git a/pidl/lib/Parse/Pidl/Samba4/NDR/Parser.pm b/pidl/lib/Parse/Pidl/Samba4/NDR/Parser.pm
+index 3676d6d..10a886a 100644
+--- a/pidl/lib/Parse/Pidl/Samba4/NDR/Parser.pm
++++ b/pidl/lib/Parse/Pidl/Samba4/NDR/Parser.pm
+@@ -924,7 +924,11 @@ sub ParseDataPull($$$$$$$)
+ 
+ 		$var_name = get_pointer_to($var_name);
+ 
+-		$self->pidl("NDR_CHECK(".TypeFunctionName("ndr_pull", $l->{DATA_TYPE})."($ndr, $ndr_flags, $var_name));");
++		if (has_property($e, "skip")) {
++			$self->pidl("/* [skip] '$var_name' */");
++		} else {
++			$self->pidl("NDR_CHECK(".TypeFunctionName("ndr_pull", $l->{DATA_TYPE})."($ndr, $ndr_flags, $var_name));");
++		}
+ 
+ 		my $pl = GetPrevLevel($e, $l);
+ 
+@@ -962,7 +966,11 @@ sub ParseDataPush($$$$$$$)
+ 			$var_name = get_pointer_to($var_name);
+ 		}
+ 
+-		$self->pidl("NDR_CHECK(".TypeFunctionName("ndr_push", $l->{DATA_TYPE})."($ndr, $ndr_flags, $var_name));");
++		if (has_property($e, "skip")) {
++			$self->pidl("/* [skip] '$var_name' */");
++		} else {
++			$self->pidl("NDR_CHECK(".TypeFunctionName("ndr_push", $l->{DATA_TYPE})."($ndr, $ndr_flags, $var_name));");
++		}
+ 	} else {
+ 		$self->ParseTypePush($l->{DATA_TYPE}, $ndr, $var_name, $primitives, $deferred);
+ 	}
+-- 
+2.8.0.rc3
+
