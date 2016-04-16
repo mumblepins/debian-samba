@@ -1,3 +1,76 @@
+samba (2:3.6.6-6+deb7u10) wheezy-security; urgency=high
+
+    This Samba security release addresses both Denial of Service and Man in
+    the Middle vulnerabilities.
+
+    A significant number of patches were back-ported, and in some areas
+    of winbindd the behaviour is now more like Samba 4.2 than 3.6
+
+    This new security patch implements new smb.conf options and a
+    number of stricter behaviours to prevent Man in the Middle attacks
+    on our network services, as a client and as a server.
+
+    Between these changes, compatibility with a large number of older
+    software versions has been lost in the default configuration.
+
+    See the release notes in WHATNEW.txt for more information.
+
+
+    Here are some additional hints how to work around the new stricter default behaviors:
+
+    * As a File Server, compatibility with the Linux Kernel cifs
+      client depends on which configuration options are selected, please
+      use "sec=krb5(i)" or "sec=ntlmssp(i)", not "sec=ntlmv2".
+
+    * As a file or printer client and as a domain member, out of the
+      box compatibility with Samba less than 4.0 and other SMB/CIFS
+      servers, depends on support for SMB signing or SMB2 on the
+      server, which is often disabled or absent. You may need to
+      adjust the "client ipc signing" to "no" in these cases.
+
+    However, all of these can be worked around by setting smb.conf
+    options in Samba, see the 4.2.0 and 4.2.11 release notes (because
+    many of the fixes are backported from there) at
+    https://www.samba.org/samba/history/samba-4.2.0.html and
+    https://www.samba.org/samba/history/samba-4.2.11.html and the
+    Samba wiki for details, workarounds and suggested
+    security-improving changes to these and other software packages.
+
+
+    New smb.conf options and defaults:
+
+    * raw NTLMv2 auth = no
+    * allow dcerpc auth level connect = no
+
+
+    Suggested further improvements after patching:
+
+    It is recommended that administrators set these additional options,
+    if compatible with their network environment:
+
+        server signing = mandatory
+        ntlm auth = no
+	client signing = mandatory
+
+    Without "server signing = mandatory", Man in the Middle attacks
+    are still possible against our file server and
+    classic/NT4-like/Samba3 Domain controller. (It is now enforced on
+    Samba's AD DC.) Note that this has heavy impact on the file server
+    performance, so you need to decide between performance and
+    security. These Man in the Middle attacks for smb file servers are
+    well known for decades.
+
+    Without "ntlm auth = no", there may still be clients not using
+    NTLMv2, and these observed passwords may be brute-forced easily using
+    cloud-computing resources or rainbow tables.
+
+    Without "client signing = mandetory" we will not be able to detect
+    a MitM attack between our client tools or winbindd and the server or
+    AD DC.  Later verisions of Samba implement additional features
+    to protect these communications.  Setting this option may however
+    disable connections to servers that have smb signing disabled (the default,
+    as above).
+
 samba (2:3.6.5-2) unstable; urgency=low
 
     NSS modules have been split out from libpam-winbind to
