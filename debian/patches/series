@@ -44,7 +44,6 @@ really-move-bitmap.c.patch
 CVE-2016-2110-v3-6.patch
 CVE-2016-2111-v3-6.patch
 CVE-2016-2112-v3-6.patch
-CVE-2016-2115-v3-6.patch
 CVE-2016-2118-v3-6.patch
 CVE-2015-5370-v3-6.patch
 0001-pidl-Add-skip-option-to-elements.patch
