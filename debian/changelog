@@ -1,3 +1,13 @@
+samba (2:3.6.6-6+deb7u10) UNRELEASED; urgency=medium
+
+  * Remove patch for CVE-2016-2115 as it causes too much trouble.
+    - The 3.6 client could not talk to the 3.6 server out of the box (ACCESS_DENIED)
+    - Administrators should instead set 'client signing = required' if desired
+    - Closes: #820982
+  * Add NEWS file
+
+ -- Andrew Bartlett <abartlet+debian@catalyst.net.nz>  Sat, 16 Apr 2016 13:34:20 +1200
+
 samba (2:3.6.6-6+deb7u9) wheezy-security; urgency=high
 
   * Non-maintainer upload by the Security Team.
