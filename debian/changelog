@@ -1,4 +1,11 @@
-samba (2:3.6.6-6+deb7u8) UNRELEASED; urgency=high
+samba (2:3.6.6-6+deb7u9) wheezy-security; urgency=high
+
+  * Non-maintainer upload by the Security Team.
+  * Update CVE patchset for regression fixes
+
+ -- Salvatore Bonaccorso <carnil@debian.org>  Tue, 12 Apr 2016 18:34:07 +0200
+
+samba (2:3.6.6-6+deb7u8) wheezy-security; urgency=high
   * Security update
     + Fixes:
      - CVE-2015-5370 (Multiple errors in DCE-RPC code)
