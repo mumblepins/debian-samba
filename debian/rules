@@ -96,7 +96,13 @@ override_dh_auto_test:
 	# Running make test requires configuration with --enable-selftest, which
 	# we don't want to do for production systems.
 ifneq ($(filter selftest,$(DEB_BUILD_PROFILES)),)
-	dh_auto_test
+	mkdir -p testbed/var/log/samba
+	mkdir -p testbed/var/lib/samba
+	NMBD_OPTIONS='--log-basename /var/log/samba' \
+	SAMBA_OPTIONS='--log-basename /var/log/samba' \
+	SMBD_OPTIONS='--log-basename /var/log/samba' \
+	WINBINDD_OPTIONS='--log-basename /var/log/samba' \
+	  dh_auto_test
 endif
 
 override_dh_systemd_start:
