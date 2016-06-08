@@ -1,0 +1,33 @@
+Decription: Fix compatibility with NetAPP NAS
+Origin: backport, https://git.samba.org/?p=samba.git;a=commit;h=d97b347d041f9b5c0aa71f35526cbefd56f3500b
+Bug: https://bugzilla.samba.org/show_bug.cgi?id=11850
+Bug-Ubuntu: https://bugs.launchpad.net/samba/+bug/1576109
+
+--- a/source3/libsmb/ntlmssp.c
++++ b/source3/libsmb/ntlmssp.c
+@@ -206,7 +206,11 @@
+ 	 * also add  NTLMSSP_NEGOTIATE_SEAL here. JRA.
+ 	 */
+ 	if (in_list("NTLMSSP_FEATURE_SESSION_KEY", feature_list, True)) {
+-		ntlmssp_state->required_flags |= NTLMSSP_NEGOTIATE_SIGN;
++		/*
++		 * We don't require this here as some servers (e.g. NetAPP)
++		 * doesn't support this.
++		 */
++		ntlmssp_state->neg_flags |= NTLMSSP_NEGOTIATE_SIGN;
+ 	}
+ 	if (in_list("NTLMSSP_FEATURE_SIGN", feature_list, True)) {
+ 		ntlmssp_state->required_flags |= NTLMSSP_NEGOTIATE_SIGN;
+@@ -231,7 +235,11 @@
+ {
+ 	/* As per JRA's comment above */
+ 	if (feature & NTLMSSP_FEATURE_SESSION_KEY) {
+-		ntlmssp_state->required_flags |= NTLMSSP_NEGOTIATE_SIGN;
++		/*
++		 * We don't require this here as some servers (e.g. NetAPP)
++		 * doesn't support this.
++		 */
++		ntlmssp_state->neg_flags |= NTLMSSP_NEGOTIATE_SIGN;
+ 	}
+ 	if (feature & NTLMSSP_FEATURE_SIGN) {
+ 		ntlmssp_state->required_flags |= NTLMSSP_NEGOTIATE_SIGN;

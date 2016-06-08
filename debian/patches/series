@@ -48,3 +48,7 @@ CVE-2016-2118-v3-6.patch
 CVE-2015-5370-v3-6.patch
 0001-pidl-Add-skip-option-to-elements.patch
 0001-PIDL-fix-parsing-linemarkers-in-preprocessor-output.patch
+821811-rpc_server-regression.patch
+netlogon_credentials_regression.patch
+bug9669_regression.patch
+fix_netapp.patch

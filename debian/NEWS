@@ -50,7 +50,7 @@ samba (2:3.6.6-6+deb7u10) wheezy-security; urgency=high
 
         server signing = mandatory
         ntlm auth = no
-	client signing = mandatory
+        client signing = mandatory
 
     Without "server signing = mandatory", Man in the Middle attacks
     are still possible against our file server and
@@ -64,12 +64,12 @@ samba (2:3.6.6-6+deb7u10) wheezy-security; urgency=high
     NTLMv2, and these observed passwords may be brute-forced easily using
     cloud-computing resources or rainbow tables.
 
-    Without "client signing = mandetory" we will not be able to detect
+    Without "client signing = mandatory" we will not be able to detect
     a MitM attack between our client tools or winbindd and the server or
-    AD DC.  Later verisions of Samba implement additional features
-    to protect these communications.  Setting this option may however
-    disable connections to servers that have smb signing disabled (the default,
-    as above).
+    AD DC. Later versions of Samba implement additional features
+    to protect these communications. Setting this option may however
+    disable connections to servers that have smb signing disabled (the
+    default, as above).
 
 samba (2:3.6.5-2) unstable; urgency=low
 

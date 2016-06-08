@@ -1,0 +1,33 @@
+From: Andreas Schneider <asn@samba.org>
+Date: Fri, 15 Apr 2016 09:56:08 +0000 (+0200)
+Subject: s3:rpc_server: Fix a regression verifying the security trailer
+X-Git-Url: https://git.samba.org/?p=asn%2Fsamba.git;a=commitdiff_plain;h=82fa625540abf8b8ec23d43c41e2ca906a9928a5;hp=ea6f2386611d0a4edd65962a59b3448be976c1bb
+
+s3:rpc_server: Fix a regression verifying the security trailer
+
+We do not support header signing so we should not check verify it if a
+client sends the flag.
+
+Signed-off-by: Andreas Schneider <asn@samba.org>
+Reviewed-by: Guenther Deschner <gd@samba.org>
+---
+
+--- a/source3/rpc_server/srv_pipe.c
++++ b/source3/rpc_server/srv_pipe.c
+@@ -1748,7 +1748,6 @@
+ {
+ 	TALLOC_CTX *frame = talloc_stackframe();
+ 	struct dcerpc_sec_verification_trailer *vt = NULL;
+-	const uint32_t bitmask1 = 0;
+ 	const struct dcerpc_sec_vt_pcontext pcontext = {
+ 		.abstract_syntax = pipe_fns->syntax,
+ 		.transfer_syntax = ndr_transfer_syntax,
+@@ -1769,7 +1768,7 @@
+ 		goto done;
+ 	}
+ 
+-	ret = dcerpc_sec_verification_trailer_check(vt, &bitmask1,
++	ret = dcerpc_sec_verification_trailer_check(vt, NULL,
+ 						    &pcontext, &header2);
+ done:
+ 	TALLOC_FREE(frame);
