@@ -1,3 +1,11 @@
+samba (2:3.6.6-6+deb7u11) wheezy-security; urgency=medium
+
+  * Non-maintainer upload by the LTS Team.
+  * CVE-2016-2125: Unconditional privilege delegation to Kerberos servers in
+    trusted realms
+
+ -- Guido Günther <agx@sigxcpu.org>  Fri, 30 Dec 2016 18:27:10 +0100
+
 samba (2:3.6.6-6+deb7u10) wheezy-security; urgency=high
 
   [ Andrew Bartlett ]

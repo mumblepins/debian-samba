@@ -52,3 +52,4 @@ CVE-2015-5370-v3-6.patch
 netlogon_credentials_regression.patch
 bug9669_regression.patch
 fix_netapp.patch
+security-CVE-2016-2125-Don-t-pass-GSS_C_DELEG_FLAG-by-def.patch
