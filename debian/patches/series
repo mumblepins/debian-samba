@@ -53,3 +53,7 @@ netlogon_credentials_regression.patch
 bug9669_regression.patch
 fix_netapp.patch
 security-CVE-2016-2125-Don-t-pass-GSS_C_DELEG_FLAG-by-def.patch
+CVE-2017-2619-prerequisites.patch
+CVE-2017-2619-race-condition-fix.patch
+CVE-2017-2619-regression-bug-12721-fix.patch
+CVE-2017-2619-tests.patch

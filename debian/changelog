@@ -1,3 +1,51 @@
+samba (2:3.6.6-6+deb7u12) wheezy-security; urgency=high
+
+  * Non-maintainer upload by the LTS Team.
+    - CVE-2017-2619: symlink race permits opening files outside share directory
+  * Cherry-pick the following upstream changes required for CVE-2017-2619:
+    - s3: smbd: Maintain a back-pointer to the fsp in struct smb_Dir.
+    - s3: vfs: Change vfs_dirsort.c from MALLOC -> TALLOC.
+    - s3: vfs: Protect against early error in SMB_VFS_NEXT_READDIR.
+    - s3: vfs: Use an index i rather than re-using a state variable.
+    - s3: vfs: Protect open_and_sort_dir() from the directory changing size.
+    - s3: vfs: Clean error paths in opendir and fd_opendir.
+    - s3: vfs: Check SMB_VFS_NEXT_OPENDIR return in dirsort_opendir().
+    - s3: vfs: Convert mtime from a time_t to a struct timespec.
+    - s3: vfs: Remove the use of dirfd inside the vfs_dirsort.c.
+  * CVE-2017-2619 requires the following changes:
+    - s3: smbd: re-open directory after dptr_CloseDir()
+    - s3: vfs: dirsort doesn't handle opendir of "." correctly.
+    - s3: VFS: vfs_streams_xattr.c: Make streams_xattr_open() store the same
+      path as streams_xattr_recheck().
+    - vfs_streams_xattr: use fsp, not base_fsp
+    - s3: smbd: Create wrapper function for OpenDir in preparation for making
+      robust.
+    - s3: smbd: Opendir_internal() early return if SMB_VFS_OPENDIR failed.
+    - s3: smbd: Create and use open_dir_safely(). Use from OpenDir().
+    - s3: smbd: OpenDir_fsp() use early returns.
+    - s3: smbd: OpenDir_fsp() - Fix memory leak on error.
+    - s3: smbd: Move the reference counting and destructor setup to just before
+      retuning success.
+    - s3: smbd: Correctly fallback to open_dir_safely if FDOPENDIR not supported
+      on system.
+    - s3: smbd: Remove O_NOFOLLOW guards. We insist on O_NOFOLLOW existing.
+    - s3: smbd: Move special handling of symlink errno's into a utility
+      function.
+    - s3: smbd: Add the core functions to prevent symlink open races.
+    - s3: smbd: Use the new non_widelink_open() function.
+  * The initial CVE-2017-2619 fix caused a regression when the configuration
+    option "follow symlink = no" was set, requiring these changes:
+    - s3: smbd: Fix incorrect logic exposed by fix for the security bug 12496
+      (CVE-2017-2619).
+    - s3: smbd: Fix "follow symlink = no" regression part 2.
+    - s3: smbd: Fix "follow symlink = no" regression part 2.
+  * The regression fix was accompanied by these unit test changes/updates:
+    - s3: Test for CVE-2017-2619 regression with "follow symlinks = no".
+    - s3: Fixup test for CVE-2017-2619 regression with "follow symlinks = no"
+    - s3: Test for CVE-2017-2619 regression with "follow symlinks = no" - part 2
+
+ -- Roberto C. Sanchez <roberto@debian.org>  Fri, 31 Mar 2017 17:58:52 -0400
+
 samba (2:3.6.6-6+deb7u11) wheezy-security; urgency=medium
 
   * Non-maintainer upload by the LTS Team.
