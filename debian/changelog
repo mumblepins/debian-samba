@@ -1,3 +1,10 @@
+samba (2:3.6.6-6+deb7u13) wheezy-security; urgency=medium
+
+  * Non-maintainer upload by a now maintainer.
+  * CVE-2017-7494: rpc_server3: Refuse to open pipe names with / inside
+
+ -- Mathieu Parent <sathieu@debian.org>  Sat, 20 May 2017 23:19:09 +0200
+
 samba (2:3.6.6-6+deb7u12) wheezy-security; urgency=high
 
   * Non-maintainer upload by the LTS Team.

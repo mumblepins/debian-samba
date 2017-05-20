@@ -57,3 +57,4 @@ CVE-2017-2619-prerequisites.patch
 CVE-2017-2619-race-condition-fix.patch
 CVE-2017-2619-regression-bug-12721-fix.patch
 CVE-2017-2619-tests.patch
+CVE-2017-7494-samba3.6.x.patch
